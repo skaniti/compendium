@@ -1,0 +1,4 @@
+# husky hooks run via sh -- force LF on every platform so Windows autocrlf
+# never rewrites them to CRLF (which breaks the shell interpreter).
+.husky/** text eol=lf
+*.sh text eol=lf

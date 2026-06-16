@@ -1,0 +1,30 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# env files (real values never committed; example is allowed)
+.env*
+!.env.example
+
+# vercel
+/.vercel
+
+# testing
+/coverage
+
+# SpecStory transcripts -- never track (may contain pasted secrets / file contents)
+.specstory/
+
+# auto-commit ledger -- operational, not product
+.claude/auto-commit-log.jsonl
+
+# misc
+*.log
+.DS_Store
+*.pem

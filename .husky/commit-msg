@@ -1,0 +1,32 @@
+msg_file="$1"
+subject=$(head -n1 "$msg_file")
+
+# Allow git's auto-generated merge/revert subjects.
+case "$subject" in
+  "Merge "*|"Revert "*) exit 0 ;;
+esac
+
+# Structure: 'type: subject'. The required ': ' immediately after the type
+# rejects scoped parens (docs(plans): ...) BY CONSTRUCTION; description parens
+# later (docs: defer views (follow-up)) still pass.
+if ! printf '%s' "$subject" | grep -Eq '^(feat|fix|refactor|docs|chore|test|perf|style): [a-z]'; then
+  printf 'commit-msg: subject must be "type: lowercase subject" with no scope parens.\n  got: %s\n' "$subject" >&2
+  exit 1
+fi
+
+# No trailing period.
+case "$subject" in
+  *.) echo 'commit-msg: no trailing period in the subject.' >&2; exit 1 ;;
+esac
+
+# Length cap (<= 72).
+if [ "${#subject}" -gt 72 ]; then
+  printf 'commit-msg: subject is %s chars; keep it <= 72.\n' "${#subject}" >&2
+  exit 1
+fi
+
+# No Claude attribution / generated-by footer anywhere in the message.
+if grep -Eiq 'co-authored-by:[[:space:]]*claude|generated with[^\n]*claude' "$msg_file"; then
+  echo 'commit-msg: remove the Claude attribution / generated-by trailer.' >&2
+  exit 1
+fi
