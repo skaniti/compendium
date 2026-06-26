@@ -28,3 +28,8 @@
 *.log
 .DS_Store
 *.pem
+
+# migration: ignore local-only/junk
+.archive/
+.claude/
+/*.png
