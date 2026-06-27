@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { extractEvents } from "./agent-stream";
+import { describe, it, expect, vi } from "vitest";
+import { extractEvents, streamAgentQuery } from "./agent-stream";
 
 describe("extractEvents", () => {
   it("parses status, token, complete from standard \\n\\n framing", () => {
@@ -30,5 +30,43 @@ describe("extractEvents", () => {
     const buf = ': keep-alive\n\ndata: not-json\n\ndata: {"type":"token","text":"ok"}\n\n';
     const { events } = extractEvents(buf);
     expect(events).toHaveLength(1);
+  });
+});
+
+function sseResponse(chunks: string[]): Response {
+  const enc = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(enc.encode(c));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
+describe("streamAgentQuery", () => {
+  it("dispatches status, token, complete handlers", async () => {
+    const tokens: string[] = [];
+    let completed = false;
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      sseResponse([
+        'data: {"type":"status","text":"thinking"}\n\n',
+        'data: {"type":"token","text":"hi"}\n\n',
+        'data: {"type":"complete","sources":[],"cluster_ids":[],"images":[],"tool_calls_made":[],"total_cost_usd":0,"iterations":1,"model":"m"}\n\n',
+      ]),
+    ));
+    await streamAgentQuery("q", {
+      onToken: (t) => tokens.push(t),
+      onComplete: () => { completed = true; },
+    });
+    expect(tokens.join("")).toBe("hi");
+    expect(completed).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("throws on non-200", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500, statusText: "err" })));
+    await expect(streamAgentQuery("q", {})).rejects.toThrow(/500/);
+    vi.unstubAllGlobals();
   });
 });
