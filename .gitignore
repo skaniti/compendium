@@ -31,5 +31,4 @@
 
 # migration: ignore local-only/junk
 .archive/
-.claude/
 /*.png
