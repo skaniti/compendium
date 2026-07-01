@@ -25,6 +25,9 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
     method: req.method,
     headers,
     body: hasBody ? await req.arrayBuffer() : undefined,
+    // Propagate client cancellation: if the caller aborts, tear down the
+    // upstream backend request too (no runaway agent/LLM call).
+    signal: req.signal,
   });
 
   // Pass the (possibly streaming SSE) response straight through.
