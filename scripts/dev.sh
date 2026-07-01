@@ -13,7 +13,11 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
-BACKEND_DIR="${BACKEND_DIR:-$ROOT/../compendium-explorer}"
+# Backend repo location: an explicit env var wins; otherwise read BACKEND_DIR from
+# the gitignored .env.local so this committed script carries no machine-local path.
+if [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/.env.local" ]; then
+  BACKEND_DIR="$(grep -E '^BACKEND_DIR=' "$ROOT/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+fi
 
 TS="$(date +%Y-%m-%d-%H%M%S)"
 LOG_DIR="$ROOT/logs"; mkdir -p "$LOG_DIR"
@@ -42,7 +46,7 @@ if [ "${FRONTEND_ONLY:-}" = "1" ]; then
   say "FRONTEND_ONLY=1 -> not starting the backend."
 elif backend_up; then
   say "backend already up at $BACKEND_URL"
-elif [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; then
+elif [ -n "${BACKEND_DIR:-}" ] && [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; then
   say "starting backend from $BACKEND_DIR -> $BE_LOG"
   ( cd "$BACKEND_DIR" && bash scripts/start_app.sh ) >"$BE_LOG" 2>&1 &
   PIDS+=("$!")
@@ -50,8 +54,8 @@ elif [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; then
   for _ in $(seq 1 120); do backend_up && break; printf '.'; sleep 1; done; echo
   backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $BE_LOG)"
 else
-  say "WARN: backend down and none found at $BACKEND_DIR."
-  say "      set BACKEND_DIR=/path/to/backend, run FRONTEND_ONLY=1, or start it yourself."
+  say "WARN: backend is down and no BACKEND_DIR with scripts/start_app.sh was found."
+  say "      add BACKEND_DIR=/path/to/compendium-explorer to .env.local, or run FRONTEND_ONLY=1."
 fi
 
 # --- frontend: Next auto-picks a free port; we parse and print it ---
