@@ -32,6 +32,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "dompurify": "^3.4.11",
     "markdown-it": "^14.2.0",
     "next": "^16.2.9",
     "react": "^19.2.7",

@@ -15,4 +15,9 @@ describe("renderMarkdown", () => {
   it("escapes raw HTML (no injection)", () => {
     expect(renderMarkdown("<script>x</script>")).not.toContain("<script>");
   });
+
+  it("neutralizes raw HTML event-handler injection (no live tag survives)", () => {
+    const html = renderMarkdown('<img src=x onerror="alert(1)">');
+    expect(html).not.toMatch(/<img[^>]*onerror/i);
+  });
 });
