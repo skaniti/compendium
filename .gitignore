@@ -18,6 +18,9 @@
 # testing
 /coverage
 
+# typescript (incremental build cache)
+*.tsbuildinfo
+
 # SpecStory transcripts -- never track (may contain pasted secrets / file contents)
 .specstory/
 
