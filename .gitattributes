@@ -1,3 +1,7 @@
+# Normalize all text files to LF in the repo and on checkout so the public
+# repo stays consistent across platforms (Windows checkouts otherwise get CRLF).
+* text=auto eol=lf
+
 # husky hooks run via sh -- force LF on every platform so Windows autocrlf
 # never rewrites them to CRLF (which breaks the shell interpreter).
 .husky/** text eol=lf
