@@ -27,6 +27,10 @@
 # auto-commit ledger -- operational, not product
 .claude/auto-commit-log.jsonl
 
+# local dev logs (timestamped; keep the README, drop the logs)
+logs/*
+!logs/README.md
+
 # misc
 *.log
 .DS_Store
