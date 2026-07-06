@@ -1,8 +1,7 @@
 {
   "name": "compendium",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Web frontend for Compendium -- a topic-based knowledge compendium built from curiosity-driven browsing",
   "scripts": {
     "test": "vitest run",
     "prepare": "husky",
@@ -12,9 +11,15 @@
     "lint": "next lint",
     "test:watch": "vitest"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "compendium",
+    "knowledge-base",
+    "browsing",
+    "rag",
+    "nextjs"
+  ],
+  "author": "skaniti",
+  "license": "MIT",
   "type": "module",
   "private": true,
   "devDependencies": {
