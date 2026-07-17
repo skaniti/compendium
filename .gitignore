@@ -27,6 +27,10 @@
 # auto-commit ledger -- operational, not product
 .claude/auto-commit-log.jsonl
 
+# hookify rules -- local operational guards, never product
+# (canonical copies live with the migration plans; see routing-guard-handoff.md)
+.claude/*.local.md
+
 # local dev logs (timestamped; keep the README, drop the logs)
 logs/*
 !logs/README.md
