@@ -1,0 +1,681 @@
+/* Ported verbatim from explorer frontend/dash/assets/search_bar.css -- see compendium CLAUDE.md for the port contract */
+/* ===== Search Bar (overlay at bottom of center panel) ===== */
+
+/* Wrapper needed because .search-bar has overflow:hidden which clips the tab.
+   The wrapper positions both the tab (above) and the bar (below). */
+.search-bar-wrapper {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 4;
+  pointer-events: none; /* pass clicks through to graph */
+}
+.search-bar-wrapper > * {
+  pointer-events: auto; /* re-enable on children */
+}
+
+.search-bar {
+  display: flex;
+  flex-direction: column;
+  background: var(--accent);
+  border: none;
+  border-radius: 12px 0 12px 12px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+  max-height: 70vh;
+  overflow: hidden;
+  /* Spring-overshoot easing: accelerates, overshoots ~8%, settles back */
+  transition:
+    height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.search-bar.resizing {
+  transition: none; /* disable animation during drag */
+}
+
+/* ===== Tab: "COMPENDIUM SEARCH" toggle ===== */
+
+.search-tab {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: var(--highlight);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 8px 8px 0 0;
+  padding: 5px 14px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  z-index: 5;
+  white-space: nowrap;
+  transition: filter 0.15s;
+}
+.search-tab:hover {
+  filter: brightness(0.88);
+}
+
+/* ===== Drag handle for vertical resize ===== */
+
+.search-resize-handle {
+  height: 5px;
+  cursor: ns-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+}
+.search-resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.search-resize-handle:hover::after,
+.search-bar.resizing .search-resize-handle::after {
+  opacity: 1;
+}
+
+/* ===== Conversation log (scrollable chat history) ===== */
+
+.search-conversation {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 12px;
+  display: none;
+}
+.search-conversation.has-messages {
+  display: block;
+}
+.search-bar.minimized .search-conversation {
+  display: none !important;
+}
+
+/* User message bubble (right-aligned) */
+.search-msg-user {
+  text-align: right;
+  margin: 6px 0 2px;
+}
+.search-msg-user-text {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--on-primary);
+  padding: 4px 10px;
+  border-radius: 10px 10px 2px 10px;
+  font-size: 0.8rem;
+  max-width: 85%;
+  text-align: left;
+  word-break: break-word;
+}
+
+/* Assistant message */
+.search-msg-assistant {
+  margin: 2px 0 6px;
+}
+.search-msg-assistant-text {
+  line-height: 1.5;
+  font-size: 0.8rem;
+  color: var(--text);
+  word-break: break-word;
+}
+.search-msg-assistant-text code {
+  font-family: Consolas, Menlo, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  background: var(--surface);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text);
+}
+.search-msg-assistant-text pre.search-msg-code-block {
+  font-family: Consolas, Menlo, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--surface);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 6px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.search-msg-assistant-text pre.search-msg-code-block code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+.search-msg-status {
+  display: flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text);
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* Status-line spinner, adapted from .topic-spinner (same shape + the
+   shared @keyframes topic-spin) but on --accent chrome instead of --bg,
+   so the ring uses --on-primary the same way search-icon-btn/search-tab
+   do for accent-background contrast (see Rule 6 note above). */
+.search-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--on-primary);
+  border-radius: 50%;
+  animation: topic-spin 0.7s linear infinite;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* Error message style, reused by the client inactivity timeout now and
+   intended for backend SSE error events in a later phase. Red tone
+   matches the existing error-color precedent in log_stream.css
+   (.log-level-error / .log-status-error). */
+.search-msg-error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.search-msg-timing {
+  font-size: 0.7rem;
+  color: var(--text);
+  opacity: 0.45;
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+/* Restored-from-sessionStorage assistant bubble (P4). Subtle-only marker --
+   these turns lack the pills/trace/images a live run captures, and the
+   dimmed text + muted left rule read as "by design" rather than a
+   rendering bug, without adding a text label. */
+.search-msg-restored {
+  opacity: 0.8;
+}
+.search-msg-restored .search-msg-assistant-text {
+  border-left: 2px solid rgba(128, 128, 128, 0.25);
+  padding-left: 6px;
+}
+
+/* Sources inline */
+.search-msg-sources {
+  margin-top: 4px;
+  padding-left: 14px;
+  font-size: 0.72rem;
+}
+.search-msg-sources li {
+  margin-bottom: 2px;
+}
+.search-msg-sources a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+  font-size: 0.72rem;
+}
+.search-msg-sources a:hover {
+  text-decoration-color: var(--text);
+}
+
+/* Source-pill locate glyph (P7): jumps to the cited page's node on the
+   starfield. Sits inside a .chat-source-pill-group wrapper alongside the
+   pill itself (see makeLocatePillGroup in search_stream.js). White at the
+   sources-label scale so the affordance is discoverable (the earlier muted
+   0.68rem version was near-invisible); disabled state (page not resolvable
+   on the current graph) dims hard rather than hiding, so enabled-vs-not
+   stays legible and hovering still surfaces the "not on the map" title. */
+.chat-source-locate-btn {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+.chat-source-locate-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--highlight);
+}
+.chat-source-locate-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* ===== Input row ===== */
+
+.search-bar-input-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 11px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.search-bar-input-row textarea {
+  flex: 1;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  line-height: 1.3;
+  resize: none;
+  overflow: hidden;
+  height: 26px; /* single-line height */
+  min-height: 26px;
+  max-height: 80px;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+.search-bar-input-row textarea::placeholder {
+  color: var(--panel-caption);
+}
+.search-bar-input-row textarea:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.search-bar-input-row textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Rule 6: focus outline on accent-band chrome uses `var(--on-primary)`
+   since the chrome sits on `var(--accent)` and inherits on-accent text color.
+   Keeping the outline within ±0.2 luminance of the local text token.
+   Using :focus-visible for textarea (keyboard-only) so the caret stays
+   clean during mouse click; buttons get :focus too so programmatic
+   focus (a11y tooling) surfaces the same ring. */
+.search-bar-input-row textarea:focus-visible,
+.search-icon-btn:focus,
+.search-icon-btn:focus-visible,
+.search-clear-btn:focus,
+.search-clear-btn:focus-visible,
+.search-gear-btn:focus,
+.search-gear-btn:focus-visible,
+.search-tab:focus,
+.search-tab:focus-visible {
+  outline: 2px solid var(--on-primary);
+  outline-offset: 1px;
+}
+
+/* Search icon button (CSS-only magnifying glass, box shape) */
+.search-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: var(--on-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  position: relative;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.search-icon-btn:hover {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--on-primary);
+}
+/* Magnifying glass lens (circle) */
+.search-icon-btn::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+/* Magnifying glass handle (line) */
+.search-icon-btn::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: 16px;
+  width: 6px;
+  height: 2px;
+  background: currentColor;
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+
+/* Stop-button state (while a query is streaming): swap the lens/handle for
+   a filled square, same box footprint. Stays enabled/clickable -- clicking
+   aborts the in-flight request. */
+.search-icon-btn.is-stop::before {
+  top: 8px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 2px;
+  background: currentColor;
+}
+.search-icon-btn.is-stop::after {
+  content: none;
+}
+
+/* ===== Gear button (Agent Internals toggle) ===== */
+
+.search-gear-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: var(--on-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.search-gear-btn:hover {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--on-primary);
+}
+
+/* ===== Clear-chat button (P4) =====
+ * Same box/border/hover treatment as .search-gear-btn (same row, same
+ * accent chrome) -- unlike the gear button this one is never hidden.
+ */
+
+.search-clear-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: var(--on-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.search-clear-btn:hover {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--on-primary);
+}
+
+/* ===== Topic spinner (loading indicator for new topics) =====
+ * Rendered inside #topic-panel (bg: var(--bg)) so the spinner must
+ * contrast against the panel surface in both light and dark palettes.
+ * A white spinner was invisible on light backgrounds; use the
+ * highlight token so it inherits the active palette's accent color.
+ */
+
+.topic-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(128, 128, 128, 0.25);
+  border-top-color: var(--highlight);
+  border-radius: 50%;
+  animation: topic-spin 0.7s linear infinite;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+@keyframes topic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== Topic icon picker grid ===== */
+
+.icon-picker-grid {
+  display: none;
+}
+.icon-picker-grid.show {
+  display: grid !important;
+}
+
+/* Scrollbar: transparent track, subtle thumb matching icon color */
+.icon-picker-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.icon-picker-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+.icon-picker-grid::-webkit-scrollbar-thumb {
+  background: rgba(204, 204, 204, 0.3);
+  border-radius: 3px;
+}
+.icon-picker-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(204, 204, 204, 0.5);
+}
+/* Firefox */
+.icon-picker-grid {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(204, 204, 204, 0.3) transparent;
+}
+
+.icon-pick-cell:hover:not(.icon-pick-used) {
+  background: rgba(128, 128, 128, 0.15);
+}
+.icon-pick-used {
+  opacity: 0.5;
+}
+
+/* Category-grouped picker sections (iOS-style sticky headers) */
+.icon-picker-category-section {
+  /* Wrapper exists purely so the sticky header has a bounding box. */
+}
+.icon-picker-category-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding: 6px 0 4px 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.7;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.topic-icon-btn:hover {
+  background: rgba(128, 128, 128, 0.2);
+  opacity: 1 !important;
+}
+
+/* ===== Topic add button (matches search bar buttons) ===== */
+
+.topic-add-btn {
+  margin-left: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+}
+.topic-add-btn:hover {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--on-primary);
+}
+
+/* ===== Agent Internals overlay panel ===== */
+
+.internals-panel {
+  position: absolute;
+  bottom: calc(100% + 4px); /* sit above the search bar wrapper */
+  right: 0;
+  width: 380px;
+  max-width: 90%;
+  max-height: 50vh;
+  z-index: 6;
+}
+.internals-panel-inner {
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 50vh;
+  color: var(--text);
+}
+.internals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.internals-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  opacity: 0.5;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.internals-close-btn:hover {
+  opacity: 1;
+  background: var(--surface);
+}
+.internals-panel-inner summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.7;
+}
+.internals-panel-inner summary:hover {
+  opacity: 1;
+}
+.internals-panel-inner details {
+  margin-top: 6px;
+  margin-left: 8px;
+}
+.internals-panel-inner pre {
+  font-size: 0.7rem;
+  background: var(--surface);
+  padding: 8px;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow: auto;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 4px 0 0 0;
+}
+
+/* ===== Inline trace (inside conversation per-response) ===== */
+
+.search-trace-summary {
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text);
+  margin-top: 6px;
+  opacity: 0.4;
+}
+.search-trace-summary:hover {
+  opacity: 0.7;
+}
+
+/* ===== Debug-badge interactive toggles =====
+ *
+ * The noise- and topic-toggle spans in graph_canvas.py live in a row
+ * with `opacity: 0.5` on the parent; compositing means child opacity
+ * rules have no effect. Add a filter shift on hover so the clickable
+ * items surface visibly without altering the underlying color token.
+ * Filter establishes its own compositing context and is measurable
+ * by hover-regression tests via getComputedStyle(el).filter.
+ */
+
+#noise-toggle-btn,
+#topic-toggle-btn {
+  transition: filter 0.15s ease;
+}
+#noise-toggle-btn:hover,
+#topic-toggle-btn:hover {
+  filter: brightness(1.35) contrast(1.1);
+}
+/* Rule 6: focus outline anchored to `var(--text)` so it tracks palette
+   luminance (light palettes → dark outline, dark palettes → light).
+   Using both :focus and :focus-visible so programmatic focus (a11y
+   tooling / screen readers) surfaces the same ring as keyboard focus. */
+#noise-toggle-btn:focus,
+#noise-toggle-btn:focus-visible,
+#topic-toggle-btn:focus,
+#topic-toggle-btn:focus-visible,
+.topic-add-btn:focus,
+.topic-add-btn:focus-visible,
+.internals-close-btn:focus,
+.internals-close-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ===== Scrollbar ===== */
+
+.search-conversation {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.search-conversation:hover {
+  scrollbar-color: var(--accent) transparent;
+}
+.search-conversation::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+.search-conversation::-webkit-scrollbar-track {
+  background: transparent;
+}
+.search-conversation::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.search-conversation:hover::-webkit-scrollbar-thumb {
+  background: var(--accent);
+}
+.search-conversation:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--text);
+}

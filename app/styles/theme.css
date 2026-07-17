@@ -1,0 +1,304 @@
+/* Ported verbatim from explorer frontend/dash/assets/theme.css -- see compendium CLAUDE.md for the port contract */
+/* Base tokens injected dynamically via html.Style in app.py */
+
+/* ===== Dash wrapper — pass height through ===== */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===== App shell ===== */
+.app-container {
+    display: flex;
+    flex-direction: row;
+    /* Header is 118px (.app-header inline height in app.py) + 1px bottom border = 119px.
+       Was 84+1=85px before the 2026-07-13 header-scaling pass (84 -> 118, ~40%
+       taller); updating per the actual measured value (verified via
+       .app-header.getBoundingClientRect()). Symptom of stale value:
+       compendium-search bar got clipped at the bottom of the viewport. */
+    height: calc(100vh - 119px);
+    width: 100%;
+    overflow: hidden;
+}
+
+/* ===== Palette Picker ===== */
+.palette-grid {
+    opacity: 0;
+    transform: translateY(-4px);
+    visibility: hidden;
+    transition: opacity 0.2s ease 0.35s, transform 0.2s ease 0.35s, visibility 0s linear 0.55s;
+}
+.palette-picker:hover .palette-grid {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+    transition: opacity 0.2s ease 0s, transform 0.2s ease 0s, visibility 0s linear 0s;
+}
+
+/* Active-swatch ring. Color is row-scoped because the row background is
+   fixed regardless of the active palette: the dark row sits on a charcoal
+   tint (needs a light ring). box-shadow draws an outer ring without
+   affecting layout, so the 8-column grid stays aligned whether or not a
+   cell is active. The .active class is toggled by the palette-sync
+   clientside callback in app.py. */
+.palette-row-dark .palette-swatch.active {
+    box-shadow: 0 0 0 2px #ffffff;
+}
+
+/* Clip the swatch row to a rounded rectangle so the charcoal row
+   background doesn't run to the dropdown edge. Geometry mirrors the
+   .palette-picker-action buttons (8px from each dropdown edge, 6px
+   corner radius) so the THEME block and the TUTORIAL / DISPLAY TUNERS
+   buttons read as the same visual rhythm. overflow: hidden is what does
+   the clipping; without it the inner row bg would square-corner past
+   the wrapper's radius. */
+.palette-rows-wrapper {
+    margin: 8px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+/* ===== Panels ===== */
+.panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+}
+
+.panel-left {
+    flex: 0 0 var(--panel-left-width, 20%);
+    background: var(--panel-bg);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    min-width: 240px;
+    overflow: hidden;
+}
+
+.panel-right {
+    flex: 0 0 var(--panel-right-width, 20%);
+    background: var(--panel-bg);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    min-width: 240px;
+    overflow: hidden;
+}
+
+.panel-center {
+    flex: 1 1 auto;
+    min-width: 200px;
+    background: var(--container-bg);
+    position: relative;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Rethink R3.3: canvas edges fade instead of hard-clipping glyphs (stray
+   constellation-letter fragments read as noise). Masks the svg only --
+   d3_graph.js appends `svg = d3.select(container).append('svg')` as a
+   direct child of #d3-graph-container (graph_canvas.py), and appends the
+   zoom-indicator div (.d3-zoom-indicator) as a SIBLING of that svg on the
+   same container -- so `> svg` leaves sibling overlays (zoom indicator,
+   search bar, which lives outside this container entirely) crisp. */
+#d3-graph-container > svg {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%),
+        linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%),
+        linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+    mask-composite: intersect;
+}
+
+/* Resize handles between panels */
+.panel-resize-handle {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+    transition: background 0.15s ease;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle.active {
+    background: var(--accent, #6648D2);
+    opacity: 0.35;
+}
+/* Wider invisible hit area for easier grabbing */
+.panel-resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+}
+
+.panel-header-band {
+    padding: 12px;
+    flex-shrink: 0;
+    background: var(--accent);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel-header {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--on-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+}
+
+.granularity-selector {
+    display: flex;
+    gap: 2px;
+}
+
+.granularity-btn {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border: 1px solid var(--on-primary);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--on-primary);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.granularity-btn:hover {
+    opacity: 0.9;
+}
+
+.granularity-btn.active {
+    opacity: 1;
+    background: var(--on-primary);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* Responsive: swap full labels for short at narrow viewports */
+.gran-short { display: none; }
+@media (max-width: 1100px) {
+    .gran-full  { display: none; }
+    .gran-short { display: inline; }
+}
+
+.panel-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: var(--panel-bg);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ===== App header ===== */
+.app-header {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.placeholder-text {
+    color: var(--panel-caption);
+    font-size: 0.85rem;
+}
+
+/* Folded in from explorer frontend/dash/assets/_supercluster_font.css
+ * (originally auto-generated by app.py on startup from the newest .ttf in
+ * frontend/dash/assets/fonts/). src: path rewritten from /assets/fonts/...
+ * to /fonts/... to match this repo's public/ asset layout.
+ * Active font: MilkyWay-71P.ttf */
+@font-face {
+    font-family: "SuperclusterLabel";
+    src: url("/fonts/MilkyWay-71P.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ===== Super-cluster watermark label =====
+ * The @font-face for "SuperclusterLabel" is generated at app startup by
+ * frontend/dash/app.py::_regenerate_supercluster_font_css(), which scans
+ * frontend/dash/assets/fonts/*.ttf and picks the most recently modified
+ * file. Drop a new .ttf in that folder, restart, and it becomes active. */
+.supercluster-label {
+    font-family: "SuperclusterLabel", "Georgia", serif;
+    font-size: 30px;
+    /* var(--ink) flips with theme: white on dark, black on light.
+       Was hardcoded #ffffff which became invisible on light themes. */
+    fill: var(--ink);
+    stroke: none;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+/* Watermark icon path stroke — same theme-aware treatment as the SC
+   name above. Applied as a CSS rule (rather than JS .attr) so it
+   updates automatically when the user switches palettes. */
+.watermark path {
+    stroke: var(--ink);
+}
+
+/* Collapsed-group caption (batch C C1, hybrid mode): the single caption
+   over a casual/binge dense mass. UI sans at full strength — the decorative
+   SuperclusterLabel face is reserved for supercluster names; captions carry
+   information (label + counts) and must be readable at fit zoom (design
+   audit 2026-07-11 §2: the old 15px italic display face at opacity 0.55
+   painted ~8px ghost text). Font size comes from d3 as an inline style
+   (screen-constant via SCALE_THRESHOLDS.groupLabel — no font-size here, it
+   would override the attr). The --bg halo stroke keeps text legible over
+   bright nebula cores. pointer-events stay ON — clicking toggles
+   collapse/expand (the "▸/▾" affordance in the caption text). */
+.group-label {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 600;
+    font-style: normal;
+    fill: var(--ink);
+    opacity: 0.92;
+    stroke: var(--bg);
+    stroke-width: 3px;
+    stroke-opacity: 0.55;
+    paint-order: stroke;
+    text-anchor: middle;
+}
+/* Expanded keeps the caption a full-strength territory header — the old
+   dim-on-expand (0.3, 12px) inverted hierarchy exactly when the user asked
+   for more detail. */
+.group-label-group.expanded .group-label {
+    opacity: 0.8;
+}
+.group-label-group:hover .group-label {
+    opacity: 1;
+}
+
+/* Rethink R6.2: edge chip -- HTML overlay (sibling of the svg, appended to
+   #d3-graph-container by ensureEdgeChipLayer), not an SVG element, so its
+   size/position never fights the zoom transform. Points back to a
+   supercluster whose nameplate has panned offscreen while the user is
+   still near/inside its content. theme-aware via --ink/--bg/--border so it
+   reads correctly on both palettes. */
+.sc-edge-chip {
+    position: absolute;
+    font-family: "SuperclusterLabel", "Georgia", serif;
+    font-size: 14px;
+    color: var(--ink);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    border: 1px solid var(--border, #444);
+    border-radius: 999px;
+    padding: 2px 10px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* All page nodes render as theme-ink stars (white on dark palettes, near-
+   black on light) — cluster identity lives in nebula tint + labels, not
+   the star color (rethink R1.2, checkpoint-A iteration). */
+circle.page, use.star-spikes {
+    color: var(--ink);
+}

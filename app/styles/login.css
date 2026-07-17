@@ -1,0 +1,31 @@
+/* Ported verbatim from explorer frontend/dash/assets/login.css -- see compendium CLAUDE.md for the port contract */
+/* login.css
+ *
+ * Login-page-specific overrides. Loaded globally by Dash but only
+ * matches elements rendered by _build_login_layout in app.py (the
+ * #login-email / #login-password inputs and the form's submit button
+ * inside the dark login wrapper).
+ */
+
+/* Disable the browser's default :invalid red on empty required fields.
+   The form intentionally renders before user input, so :invalid would
+   paint the inputs red on first paint. We keep the theme border instead.
+   :user-invalid is the modern equivalent (only fires after focus+blur),
+   covered too for browsers that support it. */
+#login-email:invalid,
+#login-email:user-invalid,
+#login-password:invalid,
+#login-password:user-invalid {
+    color: var(--text);
+    border-color: var(--border);
+    box-shadow: none;
+    outline: none;
+}
+
+/* Fix email/password input bottom-cropped descenders. Default inline-block
+   inputs with padding can clip glyph descenders ("g", "y", "p") on some
+   font stacks. Explicit line-height stabilizes the visible character box. */
+#login-email,
+#login-password {
+    line-height: 1.4;
+}

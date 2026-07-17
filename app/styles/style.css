@@ -1,0 +1,1460 @@
+/* Ported verbatim from explorer frontend/dash/assets/style.css -- see compendium CLAUDE.md for the port contract */
+/* ===== Global design tokens + accessibility ============================
+ * Tokens here are non-palette (don't live in the dynamic theme.css since
+ * they don't change with the active palette). Palette-driven colors live
+ * in utils/theme.py -> generate_css_text() -> injected into <head>.
+ */
+
+:root {
+    /* Softer dim for "filtered-out" states - ADHD-friendly (peripheral
+     * content stays legible for re-reading rather than fully vanishing).
+     * Used by evidence search-dim; adopt for any future filter/dim UX. */
+    --dim-opacity: 0.55;
+
+    /* Evidence card state-chip tokens (shared across views; used by L10 + L11). */
+    --chip-mitigated: var(--highlight);
+    --chip-acknowledged: color-mix(in srgb, var(--accent) 40%, var(--highlight) 60%);
+    --chip-na: var(--border);
+}
+
+/* Respect OS-level reduced-motion preference. Kills all transitions and
+ * near-zeroes animations across the entire app. One-liner beats hunting
+ * down every per-element transition rule. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        transition: none !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+
+/* ===== App pill (global pastel-capsule primitive) =========================
+ * Reusable opaque-pastel pill. Mirrors the Models page mechanism (one base
+ * color + filter: hue-rotate / saturate / brightness for slot variation),
+ * but the base is HARDCODED to the Grey theme's --highlight (#A8A1DE) so
+ * pills don't shift when the user changes themes. Frozen by design --
+ * domain consumers (action_type, self-classification, etc.) want stable
+ * color identity, not theme-coupled drift.
+ *
+ * Usage:
+ *   <span class="app-pill" data-pill-hue="11">dedupe</span>          -> blue
+ *   <span class="app-pill" data-pill-hue="5"  data-pill-shade="2">flag</span>
+ *   <span class="app-pill" data-pill-tone="muted">unknown</span>     -> gray
+ *
+ * Slot reference (post-rotation appearance from #A8A1DE base):
+ *   0 lavender (base)  1 purple  2 magenta  3 coral-pink  4 salmon
+ *   5 amber-brown      6 olive   7 green    8 mid-green   9 teal
+ *  10 cyan-teal       11 blue
+ * Tone "muted" desaturates to neutral gray; use for unknown/default values.
+ * Shade modifies saturation+brightness (0=pale, 1=base, 2=deeper, 3=vivid).
+ *
+ * To retune: change --app-pill-base in one place to remap every consumer.
+ * To migrate Models pills onto this primitive: rebase their base var to
+ * --app-pill-base and reuse the same data-pill-hue slot system. */
+.app-pill {
+    display: inline-block;
+    background: var(--app-pill-base, #A8A1DE);
+    color: #000;
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    font-family: monospace;
+    white-space: nowrap;
+    border: none;
+    --pill-hue-rot: 0deg;
+    --pill-saturate: 1.0;
+    --pill-brightness: 1.0;
+    filter:
+        hue-rotate(var(--pill-hue-rot))
+        saturate(var(--pill-saturate))
+        brightness(var(--pill-brightness));
+}
+.app-pill[data-pill-hue="0"]  { --pill-hue-rot:   0deg; }
+.app-pill[data-pill-hue="1"]  { --pill-hue-rot:  30deg; }
+.app-pill[data-pill-hue="2"]  { --pill-hue-rot:  60deg; }
+.app-pill[data-pill-hue="3"]  { --pill-hue-rot:  90deg; }
+.app-pill[data-pill-hue="4"]  { --pill-hue-rot: 120deg; }
+.app-pill[data-pill-hue="5"]  { --pill-hue-rot: 150deg; }
+.app-pill[data-pill-hue="6"]  { --pill-hue-rot: 180deg; }
+.app-pill[data-pill-hue="7"]  { --pill-hue-rot: 210deg; }
+.app-pill[data-pill-hue="8"]  { --pill-hue-rot: 240deg; }
+.app-pill[data-pill-hue="9"]  { --pill-hue-rot: 270deg; }
+.app-pill[data-pill-hue="10"] { --pill-hue-rot: 300deg; }
+.app-pill[data-pill-hue="11"] { --pill-hue-rot: 330deg; }
+.app-pill[data-pill-shade="0"] { --pill-saturate: 0.85; --pill-brightness: 1.05; }
+.app-pill[data-pill-shade="1"] { --pill-saturate: 1.0;  --pill-brightness: 1.0; }
+.app-pill[data-pill-shade="2"] { --pill-saturate: 1.2;  --pill-brightness: 0.92; }
+.app-pill[data-pill-shade="3"] { --pill-saturate: 1.4;  --pill-brightness: 0.85; }
+.app-pill[data-pill-tone="muted"] { --pill-saturate: 0; }
+
+
+/* ===== Session Cards ===== */
+.session-card {
+    margin-bottom: 16px;
+    border-radius: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+}
+
+.session-header {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 8px 8px 0 0;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: filter 0.15s;
+}
+.session-header:hover {
+    filter: brightness(0.88);
+}
+.session-header.active {
+    background: var(--highlight);
+}
+
+.session-card-body {
+    background: var(--surface);
+    border-radius: 0 0 8px 8px;
+    padding: 6px 12px 10px;
+}
+
+.card-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.card-summary {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* ===== Tag Pills =====
+   Pills inside a .tag-container stack vertically and fill the container
+   width, so multi-word names that would otherwise wrap to two lines
+   render as an evenly-sized column instead of a ragged mix of widths.
+   The 999px border-radius is an idiom for a size-independent capsule:
+   any value >= half the element's short side rounds to a true capsule,
+   so pills of any height read as the same shape.
+   The DB viewer uses .db-tags-cell (not .tag-container), so its compact
+   inline-block pills are unaffected by these rules. */
+.tag-container {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tag-pill {
+    display: inline-block;  /* default; overridden to block inside .tag-container */
+    padding: 4px 12px;
+    border-radius: 12px;    /* default; overridden to 999px inside .tag-container */
+    border: none;
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    transition: filter 0.15s, transform 0.1s ease;
+}
+.tag-pill:hover {
+    filter: brightness(0.92);
+}
+.tag-pill:active {
+    transform: scale(0.98);
+}
+
+.tag-container .tag-pill {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    border-radius: 999px;
+    margin: 0;
+}
+.tag-pill.highlighted {
+    background: var(--highlight-bg) !important;
+    color: var(--on-primary) !important;
+    font-weight: 600;
+}
+
+.tag-overflow {
+    padding: 2px 8px;  /* compact default — used inside DB viewer cells */
+    font-size: 0.72rem;
+    color: var(--panel-caption);
+    opacity: 0.7;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.tag-overflow:hover {
+    opacity: 1;
+}
+.tag-container .tag-overflow {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin: 0;
+}
+
+/* ===== Narrative ===== */
+.narrative-text {
+    font-size: 0.82rem;
+    color: var(--text);
+    line-height: 1.6;
+    padding: 10px 14px;
+    background: var(--surface-alt);
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+/* ===== Topic Detail Panel ===== */
+.detail-header {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 2px 0;
+    line-height: 1.3;
+}
+
+.detail-caption {
+    font-size: 0.72rem;
+    color: var(--panel-caption);
+    margin: 0 0 6px 0;
+}
+
+.section-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 14px 0 6px 0;
+}
+
+/* ===== Header Nav Buttons (Back/Forward) ===== */
+.header-nav-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--on-primary);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.15s, opacity 0.15s;
+}
+.header-nav-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+}
+.header-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ===== Mode-switch bar (header inner bar: toggle button + view widgets) =====
+   Fixed-width container that anchors the Dev/Graph toggle button on one
+   side and the active view's widget set on the opposite side. Panels are
+   absolute-positioned inside the bar so both can animate simultaneously
+   on mode change -- outgoing slides off one edge while incoming slides
+   in from the opposite edge, giving a genuine "push each other out"
+   effect. Transitions (not @keyframes) are used so a cold page load
+   renders settled without initial-state flicker. Container queries
+   (container-type: inline-size) let the button's translation reference
+   the bar's current width via 100cqw, so the math stays correct when
+   max-width clamps the bar on narrow headers.
+
+   --bar-pad is the single source of truth for the bar's interior margin:
+   used for padding on all four sides, and for the left/right anchors of
+   the absolutely-positioned children. Change it in one place to rescale. */
+.mode-switch-bar {
+    --bar-pad: 9px;
+    /* --bar-h grew from 68 to 74 (scrollbar clearance), then 74 to 104
+       (2026-07-13 header-scaling pass, ~40% taller alongside the 84->118px
+       header), then restored to 108 (2026-07-13 tweak pass, item 1: header
+       stays 118px, so the widget cards absorb all the growth instead --
+       this restores the old 5px header->bar gap on each side:
+       (118-108)/2 = 5px, matching the 84/74-era proportions). --card-h
+       moved from 67 to 82 in the same tweak pass, restoring the old 12px
+       cards-row top offset and 14px scrollbar zone (see the worked example
+       in the .hbar-cards-row comment below for the exact derivation). The
+       scrollbar itself is only 4px tall (line ~389;
+       Firefox's thin scrollbar and Edge's ~9-11px thin-with-chevrons both
+       still fit comfortably in the 14px zone). */
+    --bar-h: 108px;
+    /* Card height is decoupled from bar height: bumping --bar-h doesn't
+       silently resize cards. Change this if you want differently-sized
+       cards while keeping bar geometry constant (or vice versa). */
+    --card-h: 82px;
+    /* Width of the Dev button plus its left/right gutter. The scroll
+       container's right edge stops short of this so the button stays
+       visible and unaffected as widgets scroll behind it.
+       54 -> 76 (2026-07-13 tweak pass, item 2/4.5: widen the Dev/Graph
+       toggle + Settings gear pair). Leaving this at 54 while the button
+       itself grows to 76 would let widgets slide under the wider button,
+       since this var is what reserves the toggle's column. */
+    --dev-zone: calc(76px + 2 * var(--bar-pad));
+    position: relative;
+    container-type: inline-size;
+    /* 2026-05-22: width is now flex:1 (filled by the app-header flex
+       parent) rather than fixed 960px. Bar visually blends with the
+       header (no own bg / border) so the "container" outline is gone --
+       the widgets are framed by their own cards instead. */
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--bar-h);
+    box-sizing: border-box;
+    /* No CSS padding -- each absolute child fakes its own --bar-pad
+       via top/left/right/bottom offsets so the scroll container can
+       extend full-height for the scrollbar to live in the bottom gap. */
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+/* All bar children (panels + Dev button) are absolute-positioned and
+   inset by --bar-pad on top and bottom. They span the same vertical zone
+   regardless of internal content height, so widgets sit at uniform
+   x and y offsets from the bar's edges. */
+/* Widget panels are pure scroll containers spanning the bar's full
+   vertical height. The flex/padding/layout lives on .hbar-cards-row
+   inside, which is independent of scrollbar appearance -- so cards
+   never jostle vertically when the scrollbar shows. */
+.mode-switch-bar > #header-graph-controls,
+.mode-switch-bar > #header-dev-tabs {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* scrollbar-gutter: stable is set as a hint, but Edge's horizontal-
+       scrollbar gutter reservation is inconsistent -- so we don't rely
+       on it for layout stability. Card position is locked via the
+       absolute offsets on .hbar-cards-row instead, which guarantees no
+       jostle whether or not the scrollbar is rendered. */
+    scrollbar-gutter: stable;
+    box-sizing: border-box;
+    transition:
+        transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1),
+        opacity 260ms ease-out;
+    will-change: transform, opacity;
+}
+.hbar-cards-row {
+    /* Absolute-positioned at a manually-chosen offset so cards have
+       equal top/bottom space in the no-scrollbar state AND don't jostle
+       when the scrollbar appears. The top offset is calc'd to land cards
+       at the bar's vertical midpoint: with --bar-h: 108, --card-h: 82
+       (2026-07-13 tweak pass, item 1; was 104/67 in the same-day scaling
+       pass, and 74/48 before that), symmetric placement =
+       (108 - 82) / 2 = 13, minus 1px to account for the bar's top
+       border = 12 -- restoring the old 12px cards-row top offset from the
+       74/48 era. When the scrollbar appears, it lives in the
+       108 - 12 - 82 = 14px gap below cards -- also restoring the old
+       14px scrollbar zone. The scrollbar itself is only 4px tall (line
+       ~389; Firefox's thin scrollbar and Edge's ~9-11px thin-with-chevrons
+       both still fit comfortably in the 14px zone). This offset is
+       formula-driven (calc() below), so it auto-adapts if --bar-h/--card-h
+       change again -- only this worked-example comment needs updating. */
+    position: absolute;
+    top: calc((var(--bar-h) - var(--card-h)) / 2 - 1px);
+    left: 0;
+    height: var(--card-h);
+    width: max-content;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+}
+/* Dev button stays inset by --bar-pad on top/bottom -- it's outside the
+   scroll container so it never moves. */
+.mode-switch-bar > .dev-menu {
+    position: absolute;
+    top: var(--bar-pad);
+    height: calc(100% - 2 * var(--bar-pad));
+    right: var(--bar-pad);
+    transition: transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: transform;
+    z-index: 5;
+}
+
+/* Custom scrollbar: thin track in the bar's bottom padding zone, neutral
+   thumb. Hidden when not overflowing. */
+.mode-switch-bar > #header-graph-controls,
+.mode-switch-bar > #header-dev-tabs {
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    scrollbar-width: thin;
+}
+.mode-switch-bar > #header-graph-controls::-webkit-scrollbar,
+.mode-switch-bar > #header-dev-tabs::-webkit-scrollbar {
+    /* 4px sits comfortably below the bar's bottom border within the
+       --bar-pad zone -- the scrollbar gutter no longer overlaps the
+       cards' bottom border line. Firefox uses scrollbar-width: thin
+       (~6-8px depending on OS) which still fits in the same zone. */
+    height: 4px;
+}
+.mode-switch-bar > #header-graph-controls::-webkit-scrollbar-track,
+.mode-switch-bar > #header-dev-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mode-switch-bar > #header-graph-controls::-webkit-scrollbar-thumb,
+.mode-switch-bar > #header-dev-tabs::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 3px;
+}
+
+/* Panel: graph-controls -- anchored at bar left. */
+.mode-switch-bar > #header-graph-controls { left: var(--bar-pad); right: var(--dev-zone); }
+.mode-switch-bar.mode-graph > #header-graph-controls {
+    transform: translateX(0);
+    opacity: 1;
+}
+.mode-switch-bar.mode-dev > #header-graph-controls {
+    transform: translateX(calc(-100% - 40px));
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Panel: dev-tabs -- anchored to fill space AFTER the toggle.
+   In dev mode, the toggle slides to the LEFT side of the bar; if dev-tabs
+   started at left:var(--bar-pad) it would overlap the toggle (same x).
+   Anchoring left:var(--dev-zone) reserves the toggle's 94px column
+   (76px button + 2*9px --bar-pad gutter, 2026-07-13 tweak pass; was
+   72px = 54+2*9), leaving the rest for the tabs flex container. */
+.mode-switch-bar > #header-dev-tabs { left: var(--dev-zone); right: var(--bar-pad); }
+.mode-switch-bar.mode-dev > #header-dev-tabs {
+    transform: translateX(0);
+    opacity: 1;
+}
+.mode-switch-bar.mode-graph > #header-dev-tabs {
+    transform: translateX(calc(100% + 40px));
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Button: anchored at the right edge in both states; in dev mode the
+   transform slides it leftward by (bar_width - button_width - 2 * pad).
+   100cqw = bar's inline width, so this stays correct under max-width
+   clamping. z-index keeps the button above panels as they pass under. */
+.mode-switch-bar > .dev-menu {
+    right: var(--bar-pad);
+    z-index: 2;
+}
+.mode-switch-bar.mode-graph > .dev-menu {
+    transform: translateX(0);
+}
+.mode-switch-bar.mode-dev > .dev-menu {
+    transform: translateX(calc(-100cqw + 100% + 2 * var(--bar-pad)));
+}
+
+/* ===== Graph-mode mini-cards (inside mode-switch-bar) =====
+   Three compact cards (CLUSTERING / DATE RANGE / VIEW) that sit inside
+   #header-graph-controls. Each card has an uppercase spaced label on top
+   (echoing .panel-header from theme.css) and a single-row body below.
+   Cards are compact (not the full side-pane header-band style) so the
+   mode-switch-bar can stay under ~54px tall without eating canvas. */
+
+.hbar-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    /* Fill the cards-row height (= scroll-container - 2*--bar-pad). */
+    height: 100%;
+    /* padding: 4px 12px -> 8px 10px (2026-07-13 tweak pass, item 4). User
+       report: left/right read much wider than top/bottom (12px vs 4px,
+       3:1 ratio) -- the +4px top/bottom also does double duty as the
+       "shift the title down" fix (item 4's first ask), since the title
+       sits flush against padding-top with no margin of its own. Landing
+       on 10px horizontal (not matching 8 exactly) keeps a little more
+       breathing room for the pill/tile rows, which run closer to the
+       card's side edges than the title text does; 8/10 (1.25:1) reads as
+       balanced at a glance where 4/12 (3:1) didn't. The new --card-h: 82px
+       (+15px over the old 67px) comfortably absorbs both the padding
+       growth (+8px total, 4px x2) and leaves the rest for body breathing
+       room instead of crowding card contents. */
+    padding: 8px 10px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+}
+/* Body fills remaining height and centers its contents so the row visually
+   balances under the title. */
+.hbar-card-body {
+    flex: 1;
+    min-height: 0;
+}
+
+.hbar-card-title {
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--on-primary);
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.hbar-card-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--on-primary);
+    font-size: 0.68rem;
+}
+
+/* CLUSTERING card: left column is the ● freshness + refresh icon,
+   right column is two small-font stat lines. */
+.hbar-clustering-body {
+    gap: 10px;
+}
+.hbar-clustering-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 8px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 28px;
+}
+.hbar-recluster-ago {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--on-primary);
+    white-space: nowrap;
+}
+.hbar-recluster-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+    background: transparent;
+    color: var(--on-primary);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.3s ease;
+}
+/* :not(.is-spinning) so the static 60deg hover-tilt can't fight the
+   continuous spin animation below -- without this guard, hovering the
+   button mid-recluster froze/jumped the rotation each frame the :hover
+   rule's transform re-applied. */
+.hbar-recluster-btn:not(.is-spinning):hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: rotate(60deg);
+}
+.hbar-recluster-btn.is-spinning {
+    animation: recluster-spin 1s linear infinite;
+}
+@keyframes recluster-spin {
+    to { transform: rotate(360deg); }
+}
+.hbar-recluster-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.hbar-clustering-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 0.6rem;
+    line-height: 1.2;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+.hbar-stat-line {
+    color: var(--on-primary);
+}
+
+/* Pill rows (DATE RANGE and VIEW cards). Reuse one set of rules so both
+   cards share visual language with the existing .granularity-btn pattern. */
+.hbar-pill-row {
+    display: flex;
+    gap: 4px;
+}
+.hbar-pill {
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 3px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--on-primary);
+    opacity: 0.65;
+    cursor: pointer;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+}
+.hbar-pill:hover {
+    opacity: 0.95;
+}
+.hbar-pill.active {
+    opacity: 1;
+    background: var(--on-primary);
+    color: var(--accent);
+    font-weight: 700;
+    border-color: var(--on-primary);
+}
+
+/* Highlight styling for the toggle button. Uses --highlight so it reads
+   as a deliberate toggle affordance, not a generic header-nav-btn.
+   min-width equalizes "Dev" and "Graph" so the button footprint doesn't
+   shift between modes. 54 -> 76 (2026-07-13 tweak pass, item 2/4.5:
+   widen the Dev/Graph toggle + Settings gear pair -- see the matching
+   --dev-zone update above and the gear's width/minWidth in app.py). */
+#dev-graph-toggle-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 76px;
+    min-width: 76px;
+    height: 100%;       /* match the .dev-menu wrapper which fills inset zone */
+    padding: 0;
+    background: var(--highlight);
+    color: var(--on-primary);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    transition: filter 0.15s, transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#dev-graph-toggle-btn:hover {
+    filter: brightness(1.08);
+    background: var(--highlight);
+}
+.hbar-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+.hbar-nav-icon-img {
+    /* 22 -> 31 (2026-07-13 header-scaling pass, ~1.405x with the header).
+       Shared by the Dev/Graph toggle, every .dev-tab-btn, AND the
+       SETTINGS gear -- all three grew taller in this pass (--bar-h,
+       .dev-tab-btn height, and the gear/toggle matched-pair height), so
+       their icons scale up together rather than looking undersized
+       inside the larger buttons. */
+    width: 31px;
+    height: 31px;
+    display: none;  /* both icons mounted; CSS selects active one */
+}
+/* Graph view: show the "Dev" arrows (forward action); Dev view: show the
+   graph glyph (return action). */
+.mode-switch-bar.mode-graph #dev-graph-toggle-btn .hbar-nav-icon-dev { display: block; }
+.mode-switch-bar.mode-dev   #dev-graph-toggle-btn .hbar-nav-icon-graph { display: block; }
+.hbar-nav-caption {
+    /* 0.55rem -> 0.78rem, same pass/reasoning as .hbar-nav-icon-img above. */
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    line-height: 1;
+}
+
+/* ===== Navigation Buttons ===== */
+.nav-btn {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--panel-caption);
+    font-size: 0.78rem;
+    text-align: left;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+}
+.nav-btn:hover {
+    border-color: var(--secondary);
+}
+
+/* ===== Child Items ===== */
+.child-item {
+    display: block;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.child-item:hover {
+    border-color: var(--secondary);
+}
+
+/* ===== Page Links ===== */
+.page-link {
+    color: var(--panel-caption);
+    text-decoration: none;
+    font-size: 0.8rem;
+    display: block;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+a.page-link:hover {
+    text-decoration: underline;
+}
+
+/* ===== Breadcrumbs ===== */
+.breadcrumb {
+    font-size: 0.78rem;
+    color: var(--panel-caption);
+    margin-bottom: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+.breadcrumb::-webkit-scrollbar {
+    display: none;
+}
+
+.breadcrumb-link {
+    background: none;
+    border: none;
+    color: var(--panel-caption);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+}
+.breadcrumb-link:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-sep {
+    color: var(--panel-caption);
+    margin: 0 2px;
+}
+
+.breadcrumb-current {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Filter chip: rendered above the breadcrumb when a time-window filter is
+ * active. Per the 2026-05-02 nav-state cleanup (Decision 1A), sessions/
+ * windows are SEPARATE from selection and render as their own chip rather
+ * than appearing in the breadcrumb path. */
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    margin-bottom: 6px;
+    background: var(--card-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+.filter-chip-label {
+    line-height: 1;
+}
+.filter-chip-clear {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+}
+.filter-chip-clear:hover {
+    color: var(--highlight, #ff6600);
+}
+
+/* ===== Diary / Detail containers ===== */
+#diary-container,
+#detail-container {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* ===== Scrollbar Styling ===== */
+/* Target every scrollable panel surface */
+/* Side-panel scroll bars use a hue-neutral token (var(--chrome-neutral))
+   instead of var(--border) so the thumb doesn't pick up the palette's
+   primary hue. (Was: brown thumb on Brown palette, pink thumb on Pink, etc.
+   Now: white-translucent on all dark palettes, black-translucent on all
+   light palettes.) */
+#diary-container,
+#detail-container,
+.panel-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+#diary-container:hover,
+#detail-container:hover,
+.panel-scroll:hover {
+    scrollbar-color: var(--chrome-neutral-strong) transparent;
+}
+
+#diary-container::-webkit-scrollbar,
+#detail-container::-webkit-scrollbar,
+.panel-scroll::-webkit-scrollbar {
+    width: 6px;
+    background: transparent;
+}
+#diary-container::-webkit-scrollbar-track,
+#detail-container::-webkit-scrollbar-track,
+.panel-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+#diary-container::-webkit-scrollbar-thumb,
+#detail-container::-webkit-scrollbar-thumb,
+.panel-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+}
+#diary-container:hover::-webkit-scrollbar-thumb,
+#detail-container:hover::-webkit-scrollbar-thumb,
+.panel-scroll:hover::-webkit-scrollbar-thumb {
+    background: var(--chrome-neutral);
+}
+#diary-container:hover::-webkit-scrollbar-thumb:hover,
+#detail-container:hover::-webkit-scrollbar-thumb:hover,
+.panel-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background: var(--chrome-neutral-strong);
+}
+
+/* ===== Panel content fade-in ===== */
+@keyframes panel-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+#diary-container > *,
+#detail-container > * {
+    animation: panel-fade-in 0.25s ease-out;
+}
+
+/* ===== SUPERCLUSTERS bar card (tiles + anchored popovers) =====
+   6 tile slots laid out as a flex row inside .hbar-sc-body, plus a hidden
+   popover sibling per slot. Popovers hang beneath the bar at an absolute
+   offset tied to slot index. The tile click opens its popover; clicks
+   inside the popover don't bubble to the tile because tile and popover
+   are siblings, not nested. */
+.hbar-sc-card { position: relative; }
+.hbar-sc-body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-top: 2px;
+    /* 12 slots (2026-07-11): single row fits comfortably, but wrap
+       gracefully instead of overflowing the header on narrow windows.
+       Width math (2026-07-13 header-scaling pass, MEASURED not derived:
+       tiles are content-box with a 1px border all around, so each
+       renders 31+2 = 33px): 12 x 33 + 11 x 4px gap = 440px. The
+       22px-era 340px cap forced a clipped second row after the tile
+       bump -- 444px restores the single row with 4px slack. Wrap
+       remains only the degradation path; normal narrow-window handling
+       is the cards-row's horizontal scroll. */
+    flex-wrap: wrap;
+    max-width: 444px;
+}
+.hbar-sc-tile {
+    /* 22 -> 31 (2026-07-13 header-scaling pass, ~1.405x with the header). */
+    width: 31px;
+    height: 31px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex: 0 0 auto;
+}
+.hbar-sc-tile-allocated {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.hbar-sc-tile-allocated:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+/* Allocated keyword with zero member clusters in the latest completed run
+   (2026-07-13). Canvas parity: d0f6902 removed the on-canvas dashed/dimmed
+   "empty supercluster" watermark treatment (group opacity 0.5, path
+   stroke-dasharray "4,3") and moved allocation state to this header card.
+   This re-adds the "empty" signal here, scoped to the tile: dim via
+   opacity only (icon dasharray is applied per-path in Python via
+   icon_helpers.icon_svg_data_uri, see callbacks/topics.py _render_sc_tile).
+   Deliberately NO dashed border here -- .hbar-sc-tile-empty (below) already
+   owns the dashed-border look for unallocated "+" slots, and the two
+   states must stay visually distinguishable (allocated-but-empty vs.
+   truly-empty).
+   0.5 -> 0.42 (2026-07-13 tweak pass, item 3: user asked to dim "a TINY
+   bit more"). Deliberate divergence from the canvas's 0.5 baseline noted
+   above -- this is tile-size legibility tuning at the 34px render size,
+   not a canvas-parity value, so it's allowed to drift from that anchor. */
+.hbar-sc-tile-allocated-empty {
+    opacity: 0.42;
+}
+.hbar-sc-tile-empty {
+    background: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    color: var(--on-primary);
+    opacity: 0.55;
+}
+.hbar-sc-tile-empty:hover {
+    opacity: 0.95;
+    border-color: rgba(255, 255, 255, 0.55);
+}
+.hbar-sc-plus {
+    font-size: 1.1rem;
+    line-height: 1;
+    font-weight: 300;
+    color: inherit;
+}
+.hbar-sc-title-overflow {
+    color: #ef4444 !important;
+    opacity: 1 !important;
+}
+
+/* Popover: fixed-positioned below its tile so it escapes the overflow:hidden
+   clips on .mode-switch-bar (line ~312) and #header-graph-controls (line
+   ~329). Without position:fixed, the absolute popover is clipped at the
+   bar's bottom edge. Top/left are written by assets/sc_popover_position.js
+   on open from the matching tile's getBoundingClientRect(). The off-screen
+   defaults below prevent a one-frame flash at viewport top-left if the
+   element is briefly visible before JS positions it. */
+.hbar-sc-popover {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    z-index: 120;
+    min-width: 220px;
+    max-width: 280px;
+    padding: 10px 12px;
+    background: var(--surface, #1f2227);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    display: none;
+    color: var(--text);
+}
+/* When mode-switch-bar slides to dev mode, force any open popover hidden.
+   Dash's open_close_sc_popover callback only listens for tile clicks +
+   d3-graph-container clicks -- a mode swap doesn't clear sc-popover-open-
+   slot, so without this rule a popover stranded as display:block would
+   still paint mid-screen during the transition (anchored to its last-
+   computed tile position). The .hide-popovers class is toggled on the
+   portal by sc_popover_position.js whenever the bar's class flips between
+   mode-graph and mode-dev. */
+#sc-popovers-portal.hide-popovers .hbar-sc-popover {
+    display: none !important;
+}
+
+/* SUPERCLUSTERS hover tooltip (2026-07-13): content for an allocated
+   tile's mouseover, built per-slot in topics.py's _render_sc_tooltip and
+   shown/positioned/hidden by assets/sc_tooltip_hover.js. Shares the
+   popover's dark-card look (position:fixed off-screen default, same
+   surface/border/radius/shadow) so it reads as a polished native
+   tooltip rather than a debug box; z-index sits above the popover so a
+   tooltip that hasn't been suppressed yet never gets clipped under it. */
+.hbar-sc-tooltip {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    z-index: 130;
+    min-width: 160px;
+    max-width: 260px;
+    padding: 8px 10px;
+    background: var(--surface, #1f2227);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    color: var(--text);
+    display: none;
+    /* Hover-intent lives on the tile (mouseover/mouseout), not the
+       tooltip itself -- pointer-events:none so the tooltip can never
+       become the mouseout target and cause flicker if it happens to
+       render under the cursor. */
+    pointer-events: none;
+}
+/* Same dev-mode safety net as .hbar-sc-popover above -- a tooltip left
+   display:block by a stray hover shouldn't paint mid-screen during the
+   mode-switch-bar's dev-mode slide. */
+#sc-popovers-portal.hide-popovers .hbar-sc-tooltip {
+    display: none !important;
+}
+.hbar-sc-tooltip-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+    word-break: break-word;
+}
+.hbar-sc-tooltip-count {
+    font-size: 0.62rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    margin-bottom: 6px;
+}
+.hbar-sc-tooltip-empty {
+    font-size: 0.65rem;
+    font-style: italic;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+}
+.hbar-sc-tooltip-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.65rem;
+}
+.hbar-sc-tooltip-th {
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.45));
+    text-align: left;
+    padding: 2px 8px 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.hbar-sc-tooltip-th-pages {
+    text-align: right;
+    padding-right: 8px;
+}
+/* Conf column (2026-07-13, migration 038): mean HDBSCAN membership
+   probability, the tooltip's "importance" metric. Narrower than Pages --
+   fixed "0.00" / em-dash width, no wrapping. */
+.hbar-sc-tooltip-th-conf {
+    text-align: right;
+    padding-right: 0;
+    width: 3ch;
+}
+.hbar-sc-tooltip-name {
+    padding: 3px 8px 3px 0;
+    max-width: 24ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hbar-sc-tooltip-pages {
+    padding: 3px 8px 3px 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.hbar-sc-tooltip-conf {
+    padding: 3px 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.hbar-sc-popover-title {
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    margin: 6px 0 4px 0;
+}
+.hbar-sc-popover-title:first-child {
+    margin-top: 0;
+}
+
+/* Rename + delete row, and the empty-slot add row, share input styling */
+.hbar-sc-rename-row,
+.hbar-sc-add-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.hbar-sc-input {
+    flex: 1;
+    font-size: 0.78rem;
+    padding: 5px 8px;
+    background: var(--bg, rgba(0, 0, 0, 0.2));
+    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+.hbar-sc-input:focus {
+    outline: none;
+    border-color: var(--highlight, #7c5bff);
+}
+.hbar-sc-delete-btn {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.hbar-sc-delete-btn:hover {
+    color: #ef4444;
+    border-color: #ef4444;
+}
+.hbar-sc-add-btn {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    background: var(--highlight, #7c5bff);
+    color: var(--on-primary);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.hbar-sc-add-btn:hover {
+    filter: brightness(1.1);
+}
+
+/* Popover-local spinner (add-supercluster + delete-supercluster).
+ *
+ * The spinner overlays the right edge of the input box (not the gap
+ * between input and the Add/× button). The input is wrapped in
+ * .hbar-sc-input-wrapper which provides the positioning context.
+ *
+ * Color override: .topic-spinner uses var(--highlight) so it picks up
+ * the palette accent (red/purple/etc.). Inside the input box, we want
+ * a neutral white spinner that reads against the dark input bg
+ * regardless of theme. */
+.hbar-sc-input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.hbar-sc-input-wrapper .hbar-sc-input {
+    /* Reserve room on the right so typed text never slides under
+     * the spinner. 12px spinner + 8px right-offset + 6px breathing
+     * room ≈ 26px. */
+    padding-right: 26px;
+}
+.hbar-sc-popover-spinner {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    margin: 0;
+    border-top-color: #ffffff;
+    /* Variant-specific animation that COMPOSES the centering translate with
+     * the spin rotation. The plain .topic-spinner animation defines only
+     * `to { transform: rotate(360deg); }`, which conflicts with a static
+     * `transform: translateY(-50%)` (CSS only allows one transform per
+     * element; the browser interpolates between two unrelated transform
+     * functions and collapses to translate-only most of the cycle). Keeping
+     * both translate and rotate in every keyframe makes the rotation work
+     * while the spinner stays vertically centered. */
+    animation: topic-spin-popover 0.7s linear infinite;
+}
+@keyframes topic-spin-popover {
+    from { transform: translateY(-50%) rotate(0deg); }
+    to   { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Icon picker grid inside the popover: flat scrollable list with category
+   dividers (not sticky — fewer DOM bells, keeps height predictable). */
+.hbar-sc-pick-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-top: 4px;
+}
+.hbar-sc-pick-section {
+    grid-column: 1 / -1;
+    font-size: 0.52rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.5));
+    padding: 4px 0 2px;
+}
+.hbar-sc-pick-cell {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.hbar-sc-pick-cell:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.hbar-sc-pick-cell.active {
+    background: rgba(124, 91, 255, 0.25);
+    box-shadow: inset 0 0 0 1px var(--highlight, #7c5bff);
+}
+.hbar-sc-pick-cell.used {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+/* Icon glyph injected by assets/sc_icon_hydrate.js (<svg><use>). Stroke is
+   driven by the grid's inline --scpick-* vars (palette-aware, set server-side
+   in _render_sc_icon_picker_flat) so opening a popover no longer rebuilds 246
+   data-URI <img>. pointer-events:none lets clicks fall through to the cell so
+   the Dash n_clicks pattern-callback still fires. */
+.hbar-sc-pick-glyph {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: var(--scpick-idle, var(--text-muted, rgba(255, 255, 255, 0.55)));
+    pointer-events: none;
+}
+.hbar-sc-pick-cell.active .hbar-sc-pick-glyph {
+    stroke: var(--scpick-active, var(--highlight, #7c5bff));
+}
+.hbar-sc-pick-cell.used .hbar-sc-pick-glyph {
+    stroke: var(--scpick-used, var(--text-muted, #666666));
+}
+
+/* MEMBERS / EXCLUDED lists inside the popover (class-e negative feedback,
+   sc-followups 2026-07-16): the topic's member clusters with a "doesn't
+   belong here" exclude action, plus a below-the-fold EXCLUDED subsection
+   with restore actions. Scrollable + height-capped like .hbar-sc-pick-grid
+   above so a topic with many members doesn't blow out the popover. */
+.hbar-sc-member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+.hbar-sc-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 2px 0;
+}
+.hbar-sc-member-name {
+    flex: 1;
+    font-size: 0.68rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+}
+.hbar-sc-member-row-excluded .hbar-sc-member-name {
+    color: var(--text-muted, rgba(255, 255, 255, 0.5));
+    text-decoration: line-through;
+}
+.hbar-sc-member-exclude-btn,
+.hbar-sc-member-restore-btn {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.72rem;
+    line-height: 1;
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.5));
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.hbar-sc-member-exclude-btn:hover {
+    color: #ef4444;
+    border-color: #ef4444;
+}
+.hbar-sc-member-restore-btn:hover {
+    color: var(--highlight, #7c5bff);
+    border-color: var(--highlight, #7c5bff);
+}
+
+/* ---------------------------------------------------------------------
+   Plain-demo structural-mutation UX hiding (2026-07-13 roles rework,
+   item 2). SERVER-SIDE authority for these mutations lives in
+   frontend/dash/callbacks/role_guard.is_plain_demo() -- the callbacks
+   themselves early-return no_update for a plain-demo session regardless
+   of what the client sends. This stylesheet rule is UX-only: it hides
+   the controls so a plain-demo viewer isn't invited to click something
+   that server-side no-ops.
+
+   .plain-demo is toggled on <body> by a clientside callback in app.py
+   keyed off the user-role-ctx Store (role === 'demo' with no
+   admin_launched_demo marker). Hidden here:
+     - #recluster-btn            -- run_recluster is guarded
+     - #suggested-topics-panel   -- accept/dismiss/split-accept guarded
+     - .hbar-sc-popover          -- the SUPERCLUSTERS tile popovers (both
+                                     the allocated rename/delete/icon-pick
+                                     body and the empty-slot add-keyword
+                                     body are exclusively mutation UI, so
+                                     the whole popover is hidden rather
+                                     than picking apart its children)
+     - #icon-picker-grid,
+       #topic-panel              -- the legacy "Topic Interests" overlay;
+                                     unreachable via any visible click path
+                                     today, hidden anyway for defense in
+                                     depth since its callbacks still mutate
+                                     preferences.
+   .hbar-sc-tooltip (hover-info, read-only) is intentionally NOT in this
+   list -- it isn't a mutation control. --------------------------------- */
+body.plain-demo #recluster-btn,
+body.plain-demo #suggested-topics-panel,
+body.plain-demo .hbar-sc-popover,
+body.plain-demo #icon-picker-grid,
+body.plain-demo #topic-panel {
+    display: none !important;
+}
+
+/* [hidden] on the debug-strip forms must actually hide (2026-07-13).
+   Their VISIBLE state needs display:inline (inline style on the form) to
+   sit in the monospace strip, but any author/inline `display` overrides
+   the UA stylesheet's `[hidden] { display: none }` -- which is why the
+   "view demo" link rendered in demo views all along despite its
+   hidden=True gate (confirmed in the 2026-07-11 tranche-e captures;
+   harmless server-side because /__view_as_demo no-ops when already
+   viewing-as, but visually wrong). This author rule restores the
+   contract: the clientside gates write the `hidden` attribute, and
+   [hidden] wins over the inline display. */
+#graph-debug-overlay form[hidden] {
+    display: none !important;
+}
+
+/* ── Node hover tooltip (#node-tooltip) ─────────────────────────────
+   Shared card for the two content modes in d3_graph.js:
+     - page hover (showTooltip): structured children below
+       (.nt-title-row / .nt-meta / .nt-grid)
+     - line-list hover (showLinesTooltip): plain textContent; .nt-lines
+       restores pre-line whitespace so \n-joined lines still break.
+   Visuals live here; app.py keeps only display:none inline and
+   d3_graph.js drives left/top. Translucent surface + backdrop blur so
+   the starfield glows through the card. ----------------------------- */
+.node-tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 200;
+    max-width: 280px;
+    padding: 9px 12px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    color: var(--text);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.node-tooltip.nt-lines {
+    white-space: pre-line;
+}
+
+.node-tooltip .nt-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.node-tooltip .nt-meta {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+/* Title row: constellation watermark icon (when the page's cluster has a
+   supercluster) inline-left of the page title. var(--ink), not literal
+   #fff: same lesson as the canvas watermarks (d3_graph.js watermark
+   stroke comment) — hardcoded white vanishes on light palettes; --ink IS
+   white on dark themes. Stroke is screen-px via vector-effect:
+   non-scaling-stroke (set per-path in buildPageTip); slightly translucent
+   so it sits with the title weight instead of outshining it. */
+.node-tooltip .nt-title-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 3px;
+}
+
+.node-tooltip .nt-sc-icon {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    opacity: 0.72;
+}
+
+.node-tooltip .nt-sc-icon path {
+    fill: none;
+    stroke: var(--ink, #fff);
+    stroke-width: 1.2px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Granularity table: three fixed columns (page / cluster / supercluster),
+   headers always present, dim dash for absent levels — scannable depth
+   check without reading. */
+.node-tooltip .nt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.node-tooltip .nt-grid > :nth-child(3n + 2),
+.node-tooltip .nt-grid > :nth-child(3n) {
+    border-left: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.node-tooltip .nt-th {
+    padding: 1px 6px;
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
+
+.node-tooltip .nt-td {
+    padding: 1px 6px 2px;
+    font-size: 0.66rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+
+.node-tooltip .nt-td.nt-empty {
+    color: color-mix(in srgb, var(--text-muted) 40%, transparent);
+}

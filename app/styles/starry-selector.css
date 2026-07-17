@@ -1,0 +1,90 @@
+/* Ported verbatim from explorer frontend/dash/assets/starry_selector.css -- see compendium CLAUDE.md for the port contract */
+/* starry_selector.css
+ *
+ * Styles for the STARFIELD section of the palette picker dropdown
+ * (app.py:_build_palette_picker) plus the canvas-scoped <starry-sky>
+ * placement rules.
+ *
+ * Three concerns:
+ *   1. Section headers ("THEME" / "STARFIELD") inside the picker
+ *      dropdown — typography mirrors .hbar-card-title (uppercase,
+ *      tight, opacity 0.6).
+ *   2. The starfield pills themselves (.starry-sky-selector-pill) —
+ *      transparent borders + mint-on-active highlight.
+ *   3. Canvas-scoped overrides that pin the <starry-sky> element
+ *      inside .panel-center instead of covering the viewport.
+ */
+
+/* ── Picker section headers ──────────────────────────────────────── */
+/* Class name is generic so it works for any future picker section. */
+
+.picker-section-header {
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--on-primary);
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    padding: 8px 10px 4px;
+}
+
+/* ── Starfield pill row inside the dropdown ──────────────────────── */
+
+.starfield-pills-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px 16px;
+}
+
+/* ── Pill button ──────────────────────────────────────────────────── */
+
+.starry-sky-selector-pill {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    font-family: inherit;        /* match the dropdown's sans-serif, not monospace */
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 5px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.starry-sky-selector-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 1);
+}
+
+.starry-sky-selector-pill.active {
+    background: var(--highlight, #49C1B1);
+    color: #1A1A1A;
+    border-color: var(--highlight, #49C1B1);
+}
+
+/* ── Canvas-scoped <starry-sky> placement ────────────────────────────
+ *
+ * Inside .panel-center, override the component's default
+ * position: fixed (full viewport) → position: absolute (panel only).
+ * The <starry-sky> element itself is created at runtime by
+ * starry_selector.js into #starry-sky-mount, so we target both the
+ * mount and the custom element to make sure the layering holds.
+ */
+
+.panel-center #starry-sky-mount {
+    position: absolute;
+    inset: 0;
+    z-index: 0;          /* above panel bg, below graph (z:1) and overlays */
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.panel-center starry-sky {
+    position: absolute !important;  /* override :host { position: fixed } */
+    inset: 0;
+}
