@@ -1,0 +1,45 @@
+{
+  "active": "Brown",
+  "palettes": [
+    {
+      "name": "Pink",
+      "primary": "#734B54",
+      "highlight": "#EA8E7F"
+    },
+    {
+      "name": "Orange",
+      "primary": "#734E39",
+      "highlight": "#DCA657"
+    },
+    {
+      "name": "Brown",
+      "primary": "#665541",
+      "highlight": "#BAA675"
+    },
+    {
+      "name": "Green",
+      "primary": "#415D47",
+      "highlight": "#67C7A4"
+    },
+    {
+      "name": "Teal",
+      "primary": "#315E60",
+      "highlight": "#55C7BA"
+    },
+    {
+      "name": "Blue",
+      "primary": "#385971",
+      "highlight": "#58BED5"
+    },
+    {
+      "name": "Purple",
+      "primary": "#5D4A66",
+      "highlight": "#D68CBD"
+    },
+    {
+      "name": "Grey",
+      "primary": "#434C5A",
+      "highlight": "#A8A1DE"
+    }
+  ]
+}
