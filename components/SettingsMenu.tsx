@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { getSwatches, type Swatch } from "@/lib/theme";
 import { useTheme } from "./ThemeProvider";
-import { useStarfield } from "./StarfieldProvider";
+import { useStarfield, STARFIELD_VARIANTS } from "./StarfieldProvider";
 
 // Mirrors app.py's _format_palette_caption: strips a legacy trailing
 // " Dark" suffix (pre-2026-07-17 persisted value) so old and new palette
@@ -14,8 +14,6 @@ export function formatPaletteCaption(name: string): string {
   const SUFFIX = " Dark";
   return name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : name;
 }
-
-const STARFIELD_VARIANTS = ["none", "twinkle", "pan", "hyperspace"] as const;
 
 const PALETTE_GRID_STYLE: CSSProperties = {
   position: "absolute",

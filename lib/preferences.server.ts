@@ -20,7 +20,12 @@ export interface InitialPanelWidths {
 
 // Same validated starfield values + default as the Dash side (app.py:76-85
 // validates against this exact tuple; graph_canvas.py:75's STARRY_SKY_VARIANT
-// is "twinkle") and the client-side pill list in SettingsMenu.tsx.
+// is "twinkle") and components/StarfieldProvider.tsx's client-side copy.
+// Kept as a SEPARATE literal here rather than importing StarfieldProvider's
+// export: this module pulls in next/headers (`cookies()` below), and that's
+// a server-only import a client component can never take on, even
+// transitively through an unrelated named export -- so the two copies
+// can't be unified without breaking one side of the boundary.
 const STARFIELD_VARIANTS = ["none", "twinkle", "pan", "hyperspace"] as const;
 export const DEFAULT_STARFIELD_VARIANT = "twinkle";
 

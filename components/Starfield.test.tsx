@@ -1,7 +1,8 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
 import StarfieldProvider, { useStarfield } from "./StarfieldProvider";
 import Starfield from "./Starfield";
+import * as preferences from "@/lib/preferences";
 
 // Drives StarfieldProvider's context from outside so tests can trigger
 // variant changes the same way SettingsMenu's pills do.
@@ -36,8 +37,21 @@ function getSky(): Element | null {
 }
 
 describe("Starfield", () => {
+  beforeEach(() => {
+    // Several cases below click through StarfieldProvider's real setVariant,
+    // which calls patchPreferences -- mock it so those clicks don't fire
+    // real fetches in jsdom (they'd fail and get silently swallowed by
+    // patchPreferences' own try/catch, which is exactly the kind of
+    // spurious-failure-if-the-swallow-ever-changes noise this guards
+    // against). Persistence itself is StarfieldProvider's contract, covered
+    // in StarfieldProvider.test.tsx -- this file only cares about the DOM
+    // side (mount/attribute/visibility), so a resolved no-op is enough.
+    vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+  });
+
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it("renders the #starry-sky-mount div immediately", () => {

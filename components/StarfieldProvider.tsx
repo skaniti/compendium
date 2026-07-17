@@ -13,13 +13,15 @@ import { patchPreferences } from "@/lib/preferences";
 // panel widths, so it reads the starfield variant the same way and passes
 // it down as `initialVariant` here -- no client-side GET, nothing to race.
 
-// Not imported from lib/preferences.server.ts: that module pulls in
-// next/headers (server-only) via `cookies()`, and this is a client
-// component -- Next forbids that module boundary crossing even for an
-// unrelated named export. Same literal, kept separately on each side (the
-// two modules already don't share their cookie/fetch pattern either, per
-// preferences.server.ts's own header comment -- duplication by convention).
-const STARFIELD_VARIANTS = ["none", "twinkle", "pan", "hyperspace"] as const;
+// Canonical client-side copy of the validated starfield values (Dash:
+// app.py:76-85 validates against this exact tuple; graph_canvas.py:75's
+// STARRY_SKY_VARIANT default is "twinkle"). SettingsMenu.tsx imports this
+// export rather than keeping its own copy. lib/preferences.server.ts keeps
+// a SEPARATE copy of the same literal instead of importing from here:
+// that module pulls in next/headers (server-only) via `cookies()`, and
+// this is a client component -- Next forbids that module boundary
+// crossing even for an unrelated named export (see that file's comment).
+export const STARFIELD_VARIANTS = ["none", "twinkle", "pan", "hyperspace"] as const;
 export const DEFAULT_STARFIELD_VARIANT = "twinkle";
 
 interface StarfieldContextValue {
