@@ -18,7 +18,16 @@ export async function getPreferences(): Promise<Record<string, unknown>> {
       console.error(`getPreferences: ${res.status} ${res.statusText}`);
       return {};
     }
-    return (await res.json()) as Record<string, unknown>;
+    const parsed: unknown = await res.json();
+    // A 200 with a non-object body (null, a scalar, an array) satisfies the
+    // return type via a bare cast but breaks every consumer doing
+    // `prefs.someKey` -- guard down to `{}` so callers can always treat the
+    // result as a plain object.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      console.error("getPreferences: expected a JSON object, got:", parsed);
+      return {};
+    }
+    return parsed as Record<string, unknown>;
   } catch (err) {
     console.error("getPreferences failed:", err);
     return {};

@@ -38,6 +38,24 @@ describe("getPreferences", () => {
 
     await expect(getPreferences()).resolves.toEqual({});
   });
+
+  it("returns {} instead of null when the body is a JSON null", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("null", { status: 200 })));
+
+    await expect(getPreferences()).resolves.toEqual({});
+  });
+
+  it("returns {} instead of a scalar when the body is a bare JSON number", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("42", { status: 200 })));
+
+    await expect(getPreferences()).resolves.toEqual({});
+  });
+
+  it("returns {} instead of an array when the body is a JSON array", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[1,2,3]", { status: 200 })));
+
+    await expect(getPreferences()).resolves.toEqual({});
+  });
 });
 
 describe("patchPreferences", () => {

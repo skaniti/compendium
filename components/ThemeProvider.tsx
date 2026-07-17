@@ -65,7 +65,17 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
   // #theme-root -- and since no DOM here depends on `variant` directly,
   // that transient SSR-vs-client difference is not a hydration mismatch.
   const [variant, setVariantState] = useState<string>(() => readStoredVariant());
+  // Mirrors `variant` so the async hydration callback below can read the
+  // *latest* value (it may run well after mount, after a user setVariant
+  // call) without relying on a state-updater closure. Every place that
+  // calls setVariantState updates this in the same synchronous step.
+  const variantRef = useRef(variant);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function updateVariant(next: string): void {
+    variantRef.current = next;
+    setVariantState(next);
+  }
 
   // Server preference wins over localStorage when they disagree (e.g. the
   // user switched palettes on another device). Applies the server value and
@@ -80,12 +90,26 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         const serverTheme = prefs.theme;
         if (typeof serverTheme !== "string") return;
         const serverVariant = normalizeVariant(serverTheme);
-        setVariantState((current) => {
-          if (serverVariant === current) return current;
-          applyToDom(serverVariant);
-          writeStoredVariant(serverVariant);
-          return serverVariant;
-        });
+        // Read the latest variant via the ref, not the `variant` closed
+        // over at mount -- a setVariant() call can race this in-flight GET
+        // and land first. Decision computed here, outside any state
+        // updater (state updaters must stay pure / can double-invoke under
+        // StrictMode); the actual setVariantState call below is a plain,
+        // side-effect-free call.
+        if (serverVariant === variantRef.current) return;
+
+        // Server fully wins: if a setVariant() call raced this GET and
+        // already scheduled a debounced PATCH, cancel it. Otherwise that
+        // stale PATCH fires ~400ms later and writes the user's overridden
+        // choice back to the server, ping-ponging the palette across
+        // reloads (server value here, user's old value there).
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+          debounceRef.current = null;
+        }
+        updateVariant(serverVariant);
+        applyToDom(serverVariant);
+        writeStoredVariant(serverVariant);
       } catch (err) {
         // A failed preference read must never break the UI -- keep
         // whatever variant is already applied (pre-paint/localStorage).
@@ -105,12 +129,13 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setVariant = (next: string) => {
     const normalized = normalizeVariant(next);
-    setVariantState(normalized);
+    updateVariant(normalized);
     applyToDom(normalized);
     writeStoredVariant(normalized);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
       void patchPreferences({ theme: normalized });
     }, PATCH_DEBOUNCE_MS);
   };

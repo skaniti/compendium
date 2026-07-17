@@ -109,6 +109,47 @@ describe("ThemeProvider", () => {
     expect(preferences.patchPreferences).not.toHaveBeenCalled();
   });
 
+  it("cancels a pending user-triggered PATCH when the server wins after racing an in-flight GET", async () => {
+    vi.useFakeTimers();
+    let resolveGetPreferences!: (value: Record<string, unknown>) => void;
+    vi.spyOn(preferences, "getPreferences").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGetPreferences = resolve;
+        })
+    );
+
+    renderProvider();
+
+    // User picks "Pink" while the mount-time GET is still in flight; this
+    // schedules a debounced PATCH({theme: "Pink"}).
+    act(() => fireEvent.click(screen.getByText("pink")));
+    expect(screen.getByTestId("variant")).toHaveTextContent("Pink");
+
+    // Server responds with a different value after the user's pick.
+    await act(async () => {
+      resolveGetPreferences({ theme: "Teal" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("variant")).toHaveTextContent("Teal");
+    expect(document.getElementById("theme-root")?.textContent).toBe(
+      generateCssText(getTokens("Teal"))
+    );
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("Teal");
+
+    // Advance past the debounce window the user's setVariant("Pink")
+    // scheduled -- server-wins must have cancelled it, so no PATCH fires
+    // with the stale "Pink" value (which would ping-pong the palette
+    // across reloads: UI/localStorage = server value, server = user value).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(preferences.patchPreferences).not.toHaveBeenCalled();
+  });
+
   it("leaves the current variant intact if getPreferences rejects", async () => {
     vi.spyOn(preferences, "getPreferences").mockRejectedValue(new Error("network down"));
 
