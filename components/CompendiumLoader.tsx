@@ -174,8 +174,9 @@ export default function CompendiumLoader({
       // migration slice has no graph load yet, so per this batch's brief
       // the trigger is "the shell has mounted and chat is interactive" --
       // approximated here as "the vendor module finished initializing",
-      // since components/Chat.tsx has no async readiness gate of its own
-      // to wait on yet. Calling dismiss() early is safe for every mode:
+      // since components/SearchBar.tsx (the re-homed chat overlay, Task 10)
+      // has no async readiness gate of its own to wait on yet. Calling
+      // dismiss() early is safe for every mode:
       // the vendor module's own MutationObserver defers first-run/replay
       // finalization until their animation cycle completes regardless of
       // when dismiss() is called (see lib/vendor/compendium-loader.js's

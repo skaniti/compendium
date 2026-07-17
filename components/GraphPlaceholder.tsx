@@ -7,9 +7,20 @@ import type { CSSProperties } from "react";
 // DOM order). This component nests the empty-state inside the container
 // instead -- both are position:relative/absolute so the rendered result is
 // identical, and nesting lets this single component drop into the center
-// panel's content slot in app/page.tsx alongside <Chat /> without owning
-// the rest of .panel-center (starry-sky mount, debug overlay, topic panel,
-// search bar) the way graph_canvas.py's render_graph_canvas() does.
+// panel's content slot in app/page.tsx without owning the rest of
+// .panel-center (starry-sky mount, debug overlay, topic panel, search bar)
+// the way graph_canvas.py's render_graph_canvas() does.
+//
+// Since Task 10 (chat re-home into the search-bar overlay), this is the
+// SOLE flex child of .panel-center's content slot -- <SearchBar /> is a
+// position:absolute overlay (.search-bar-wrapper, search-bar.css) and no
+// longer a flex sibling here, so this component's height:100% resolves
+// against .panel-center's own definite height (theme.css: html/body/
+// .app-container/.panel all chain to a real height) instead of being
+// squeezed by a sibling competing for the same flex column. Before the
+// re-home, the full-page <Chat /> WAS a flex sibling in this slot and
+// collapsed this container's flex-basis, which in turn let .panel's
+// overflow:hidden clip the centered empty-state.
 //
 // TODO(mig-03): remove this dev note when the graph lands. Dash's
 // #compendium-empty-state starts `hidden=True` and is only revealed by a
