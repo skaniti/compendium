@@ -8,12 +8,19 @@
 // something that should ever crash the UI. Failures are logged and callers
 // get a safe fallback (`{}` for a failed GET, a resolved no-op for a failed
 // PATCH).
+//
+// fetch -> apiFetch: a 401 here means the access_token cookie expired mid-
+// session, so the interceptor bounces to /login (D1, batch 04) -- the
+// swallow-and-fallback contract below is unchanged, apiFetch still returns
+// the (401) Response for the existing !res.ok branch to log and fall back on.
+
+import { apiFetch } from "./api";
 
 const PREFERENCES_PATH = "/api/auth/preferences";
 
 export async function getPreferences(): Promise<Record<string, unknown>> {
   try {
-    const res = await fetch(PREFERENCES_PATH);
+    const res = await apiFetch(PREFERENCES_PATH);
     if (!res.ok) {
       console.error(`getPreferences: ${res.status} ${res.statusText}`);
       return {};
@@ -36,7 +43,7 @@ export async function getPreferences(): Promise<Record<string, unknown>> {
 
 export async function patchPreferences(partial: Record<string, unknown>): Promise<void> {
   try {
-    const res = await fetch(PREFERENCES_PATH, {
+    const res = await apiFetch(PREFERENCES_PATH, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       // Backend contract (PreferencesRequest, backend/api/main.py): the
