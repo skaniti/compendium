@@ -162,6 +162,22 @@ export default function CompendiumLoader({
       void patchPreferences({ compendium_loader_seen: true });
     };
 
+    // TODO(mig-02/03) LOAD-BEARING CONSTRAINT: lib/vendor/compendium-loader.js
+    // initializes ONCE per module load -- its top-level IIFE polls for
+    // #compendium-loader, binds window.__compendiumLoader to THAT node, and
+    // never re-arms. The dynamic import() below is ESM-cached, so across this
+    // app's whole lifetime the vendor module's init logic only ever runs
+    // against the FIRST #compendium-loader node it finds. If this component
+    // ever unmounts and remounts against a fresh node -- client-side route
+    // navigation, a conditional shell re-render (neither exists yet; today
+    // sign-out/login are full page loads, which reset the module registry
+    // for free) -- the new node's overlay never initializes, and
+    // window.__compendiumLoader.dismiss() keeps toggling classes on the OLD,
+    // now-detached node. Net effect: the new node's pointer-events-active
+    // full-screen curtain stays up permanently with no working dismiss path.
+    // A re-init guard (reset the "already initialized" flag on remount) or a
+    // vendor `reinit(el)` hook that re-binds to the fresh node must land
+    // before any client-side navigation is introduced into this app.
     void import("@/lib/vendor/compendium-loader.js").then(() => {
       if (cancelled) return;
       // TODO(mig-03): this is a stand-in dismiss trigger, not the real

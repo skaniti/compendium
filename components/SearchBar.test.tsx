@@ -70,4 +70,29 @@ describe("SearchBar", () => {
 
     await waitFor(() => expect(bar).not.toHaveClass("minimized"));
   });
+
+  it("does not expand or send when the search button is clicked with an empty input while minimized", async () => {
+    const streamSpy = vi.spyOn(stream, "streamAgentQuery");
+    const { container } = render(<SearchBar />);
+    const bar = container.querySelector("#search-bar")!;
+    expect(bar).toHaveClass("minimized");
+
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(bar).toHaveClass("minimized");
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not expand or send when the input is whitespace-only while minimized", async () => {
+    const streamSpy = vi.spyOn(stream, "streamAgentQuery");
+    const { container } = render(<SearchBar />);
+    const bar = container.querySelector("#search-bar")!;
+    expect(bar).toHaveClass("minimized");
+
+    await userEvent.type(screen.getByPlaceholderText(/ask/i), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(bar).toHaveClass("minimized");
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
 });

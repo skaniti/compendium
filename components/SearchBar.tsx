@@ -33,12 +33,17 @@ export default function SearchBar() {
   const { userMsgs, assistant, busy, input, setInput, send, cancel } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
 
-  // search_stream.js's runStreamingQuery(): `if (bar && !isMaximized(bar))
-  // setMaximized(bar, true);` -- sending a query while collapsed expands it.
+  // search_stream.js's runStreamingQuery() validates FIRST -- `if (!query ||
+  // isStreaming) return;` -- and only then auto-maximizes (`if (bar &&
+  // !isMaximized(bar)) setMaximized(bar, true);`). So an empty/whitespace
+  // send while idle is a no-op in Dash, not an expand. Mirror that: bail
+  // before expand() when there's nothing to send and we're not already busy
+  // (a non-empty in-flight send still expands/sends as before).
   const handleSend = useCallback(() => {
+    if (!busy && !input.trim()) return;
     expand();
     void send();
-  }, [expand, send]);
+  }, [busy, input, expand, send]);
 
   const hasMessages = userMsgs.length > 0 || assistant != null;
 
@@ -140,11 +145,18 @@ export default function SearchBar() {
             placeholder="Ask about your browsing history..."
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              // Enter sends (Shift+Enter for a newline) -- carried over from
-              // the pre-rehome Chat.tsx's single-line <input> UX. Dash's own
-              // dcc.Textarea has no keydown wiring at all (search only sends
-              // via #agent-search-btn); this is a deliberate, low-risk
-              // convenience kept on top of the verbatim markup port.
+              // Enter sends (Shift+Enter for a newline) -- this is PARITY,
+              // not an addition: Dash's assets/search_keyboard.js (:22-31)
+              // wires the identical behavior onto #agent-query-input in the
+              // capture phase (so it fires before React's synthetic
+              // handlers), calling window.__searchStreamQuery() on a bare
+              // Enter. This handler is the port of that wiring.
+              //
+              // KNOWN UNPORTED GAP: search_keyboard.js:34-38 also auto-grows
+              // the textarea 26px -> 80px on input as the query gets
+              // longer. Not implemented here -- flagged for the batch
+              // acceptance gate's fix-or-defer triage, not addressed in
+              // this pass.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();

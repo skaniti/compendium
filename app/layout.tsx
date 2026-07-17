@@ -23,7 +23,12 @@ const THEME_STORAGE_KEY = "compendium-theme";
 // #theme-root's textContent to the localStorage-selected variant's CSS, so
 // there is no flash of the server-rendered default palette. All 8 variants'
 // CSS is embedded here (~6KB total) so the swap needs no network round trip.
-function buildThemeBootstrapScript(): string {
+// Exported test-only: app/layout.test.tsx evals the generated IIFE in jsdom
+// to pin it against lib/theme.ts's normalizeVariant/getTokens/generateCssText
+// -- the hand-rolled string logic below (strip trailing " Dark", unknown ->
+// default) has to stay byte-for-byte in sync with that module by hand, since
+// this script is inlined with no import of it.
+export function buildThemeBootstrapScript(): string {
   const names = getPaletteNames();
   const cssByVariant: Record<string, string> = {};
   for (const name of names) {
