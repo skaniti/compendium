@@ -47,3 +47,6 @@ logs/*
 # private migration plans -- symlink into compendium-explorer; never commit
 # (this repo's history goes public at the batch-08 flip; plans stay private)
 /docs/project-plans
+
+# sdd scratch
+.superpowers/
