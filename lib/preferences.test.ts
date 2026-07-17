@@ -61,7 +61,9 @@ describe("getPreferences", () => {
 describe("patchPreferences", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("PATCHes /api/auth/preferences with a JSON-encoded body", async () => {
+  it("PATCHes /api/auth/preferences with the partial wrapped as {preferences: ...}", async () => {
+    // Backend contract: PreferencesRequest expects {"preferences": {...}},
+    // not the bare partial -- an unwrapped body 422s.
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -70,7 +72,19 @@ describe("patchPreferences", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: "Teal" }),
+      body: JSON.stringify({ preferences: { theme: "Teal" } }),
+    });
+  });
+
+  it("callers still pass the bare partial -- wrapping is patchPreferences's job", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await patchPreferences({ panel_left_width: "25.00%", panel_right_width: "20%" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      preferences: { panel_left_width: "25.00%", panel_right_width: "20%" },
     });
   });
 

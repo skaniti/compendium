@@ -39,7 +39,12 @@ export async function patchPreferences(partial: Record<string, unknown>): Promis
     const res = await fetch(PREFERENCES_PATH, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(partial),
+      // Backend contract (PreferencesRequest, backend/api/main.py): the
+      // PATCH body must be wrapped as {"preferences": {...}} -- an
+      // unwrapped partial 422s. Callers here still pass the bare partial;
+      // wrapping is this function's job so every call site (ThemeProvider,
+      // usePanelResize, ...) stays simple.
+      body: JSON.stringify({ preferences: partial }),
     });
     if (!res.ok) {
       console.error(`patchPreferences: ${res.status} ${res.statusText}`);
