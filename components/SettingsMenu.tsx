@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { getSwatches, type Swatch } from "@/lib/theme";
 import { useTheme } from "./ThemeProvider";
+import { useStarfield } from "./StarfieldProvider";
 
 // Mirrors app.py's _format_palette_caption: strips a legacy trailing
 // " Dark" suffix (pre-2026-07-17 persisted value) so old and new palette
@@ -71,11 +72,6 @@ function swatchStyle(swatch: Swatch, size = 28): CSSProperties {
 }
 
 export interface SettingsMenuProps {
-  // Starfield variant switching lands in a later task; the pills render
-  // for real now (structure/classes match Dash) but are wired to a no-op
-  // by default until then.
-  activeStarfield?: string;
-  onStarfieldChange?: (variant: string) => void;
   // Replay-tutorial behavior (window.__compendiumLoader.replay()) lands in
   // a later task alongside the loader port.
   onReplayTutorial?: () => void;
@@ -86,16 +82,17 @@ export interface SettingsMenuProps {
 }
 
 export default function SettingsMenu({
-  // Dash's STARRY_SKY_VARIANT default (frontend/dash/layouts/graph_canvas.py).
-  activeStarfield = "twinkle",
-  // TODO(mig-01 task 8): wire to real starfield state/persistence.
-  onStarfieldChange = () => {},
   // TODO(mig-01 task 9): wire to window.__compendiumLoader.replay().
   onReplayTutorial = () => {},
   // TODO(mig-03/05): tuner open behavior arrives with the dev-tuner port/disposition.
   onOpenTuners = () => {},
 }: SettingsMenuProps) {
   const { variant, setVariant } = useTheme();
+  // STARFIELD pills read/drive StarfieldProvider directly, same pattern as
+  // the THEME swatches above -- no prop plumbing (mig-01 task 8; this used
+  // to be a no-op `activeStarfield`/`onStarfieldChange` prop pair before
+  // StarfieldProvider existed).
+  const { variant: activeStarfield, setVariant: setStarfieldVariant } = useStarfield();
   const swatches = getSwatches();
 
   return (
@@ -157,7 +154,7 @@ export default function SettingsMenu({
               type="button"
               data-variant={v}
               className={`starry-sky-selector-pill${v === activeStarfield ? " active" : ""}`}
-              onClick={() => onStarfieldChange(v)}
+              onClick={() => setStarfieldVariant(v)}
             >
               {v}
             </button>

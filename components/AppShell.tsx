@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import Header from "./Header";
 import PanelGrid from "./PanelGrid";
-import { getInitialPanelWidths } from "@/lib/preferences.server";
+import StarfieldProvider from "./StarfieldProvider";
+import { getInitialPanelWidths, getInitialStarfieldVariant } from "@/lib/preferences.server";
 
 interface AppShellProps {
   left?: ReactNode;
@@ -16,9 +17,16 @@ interface AppShellProps {
 // backend-down falls back to the ported CSS's own 20% default, same as Dash.
 export default async function AppShell({ left, center, right }: AppShellProps) {
   const { panelLeftWidth, panelRightWidth } = await getInitialPanelWidths();
+  // Same "read before first paint" role as the panel widths above, so the
+  // STARFIELD pills (Header -> SettingsMenu) and the mounted background
+  // (PanelGrid's center slot -> Starfield) agree on the persisted variant
+  // from the very first render -- no client-side GET, no flash of the
+  // wrong variant. StarfieldProvider wraps both here since they're
+  // siblings below this point, not nested in one another.
+  const initialStarfieldVariant = await getInitialStarfieldVariant();
 
   return (
-    <>
+    <StarfieldProvider initialVariant={initialStarfieldVariant}>
       <Header />
       {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
           .app-header. #header-graph-controls animates its mode-swap via
@@ -35,6 +43,6 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
         center={center}
         right={right}
       />
-    </>
+    </StarfieldProvider>
   );
 }

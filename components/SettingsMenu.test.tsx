@@ -1,19 +1,38 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsMenu, { formatPaletteCaption } from "./SettingsMenu";
 import * as ThemeProviderModule from "./ThemeProvider";
+import * as StarfieldProviderModule from "./StarfieldProvider";
 import { getSwatches } from "@/lib/theme";
 
+// SettingsMenu now consumes StarfieldProvider's context directly (mig-01
+// task 8, same pattern as the THEME section's useTheme()) -- every test
+// needs it mocked or the render throws "must be used within a
+// StarfieldProvider". A sensible default lives in beforeEach; tests that
+// care about the starfield variant/click behavior override it locally.
+function mockStarfield(variant = "twinkle", setVariant = vi.fn()) {
+  vi.spyOn(StarfieldProviderModule, "useStarfield").mockReturnValue({ variant, setVariant });
+  return setVariant;
+}
+
+function mockTheme(variant = "Green", setVariant = vi.fn()) {
+  vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant, setVariant });
+  return setVariant;
+}
+
 describe("SettingsMenu", () => {
+  beforeEach(() => {
+    mockStarfield();
+  });
+
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
   });
 
   it("clicking a swatch calls setVariant with that swatch's name", async () => {
-    const setVariant = vi.fn();
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant: "Green", setVariant });
+    const setVariant = mockTheme("Green");
 
     render(<SettingsMenu />);
     await userEvent.click(screen.getByTitle("Pink"));
@@ -22,10 +41,7 @@ describe("SettingsMenu", () => {
   });
 
   it("renders one swatch button per getSwatches() entry, in order", () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+    mockTheme("Green");
 
     const { container } = render(<SettingsMenu />);
     const swatches = getSwatches();
@@ -38,10 +54,7 @@ describe("SettingsMenu", () => {
   });
 
   it("marks the active-variant swatch with the .active class", () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Teal",
-      setVariant: vi.fn(),
-    });
+    mockTheme("Teal");
 
     render(<SettingsMenu />);
     expect(screen.getByTitle("Teal")).toHaveClass("active");
@@ -49,46 +62,53 @@ describe("SettingsMenu", () => {
   });
 
   it("shows the current variant name in #theme-active-name", () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Blue",
-      setVariant: vi.fn(),
-    });
+    mockTheme("Blue");
 
     const { container } = render(<SettingsMenu />);
     expect(container.querySelector("#theme-active-name")).toHaveTextContent("Blue");
   });
 
-  it("renders the four starfield pills and does not throw when clicked with no handler wired", async () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+  it("renders the four starfield pills", () => {
+    mockTheme();
 
     render(<SettingsMenu />);
     for (const label of ["none", "twinkle", "pan", "hyperspace"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    await userEvent.click(screen.getByText("hyperspace"));
   });
 
-  it("calls onStarfieldChange when a starfield pill is clicked", async () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
-    const onStarfieldChange = vi.fn();
+  it("marks the active-variant starfield pill with the .active class", () => {
+    mockTheme();
+    mockStarfield("pan");
 
-    render(<SettingsMenu onStarfieldChange={onStarfieldChange} />);
+    render(<SettingsMenu />);
+    expect(screen.getByText("pan")).toHaveClass("active");
+    expect(screen.getByText("twinkle")).not.toHaveClass("active");
+    expect(screen.getByText("none")).not.toHaveClass("active");
+    expect(screen.getByText("hyperspace")).not.toHaveClass("active");
+  });
+
+  it("calls the starfield context's setVariant when a pill is clicked", async () => {
+    mockTheme();
+    const setStarfieldVariant = mockStarfield("twinkle");
+
+    render(<SettingsMenu />);
+    await userEvent.click(screen.getByText("hyperspace"));
+
+    expect(setStarfieldVariant).toHaveBeenCalledWith("hyperspace");
+  });
+
+  it("does not throw when a starfield pill is clicked", async () => {
+    mockTheme();
+    mockStarfield();
+
+    render(<SettingsMenu />);
+    await userEvent.click(screen.getByText("none"));
     await userEvent.click(screen.getByText("pan"));
-
-    expect(onStarfieldChange).toHaveBeenCalledWith("pan");
   });
 
   it("calls onReplayTutorial when the replay-tutorial button is clicked", async () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+    mockTheme();
     const onReplayTutorial = vi.fn();
 
     render(<SettingsMenu onReplayTutorial={onReplayTutorial} />);
@@ -98,10 +118,7 @@ describe("SettingsMenu", () => {
   });
 
   it("renders the palette-picker trigger and dropdown structure", () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+    mockTheme();
 
     const { container } = render(<SettingsMenu />);
     expect(container.querySelector(".palette-picker")).toBeInTheDocument();
@@ -111,10 +128,7 @@ describe("SettingsMenu", () => {
   });
 
   it("renders the DISPLAY TUNERS section with the tuner-open button", () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+    mockTheme();
 
     const { container } = render(<SettingsMenu />);
     expect(screen.getByText("DISPLAY TUNERS")).toBeInTheDocument();
@@ -125,10 +139,7 @@ describe("SettingsMenu", () => {
   });
 
   it("calls onOpenTuners when the tuner-open button is clicked, and does not throw with no handler wired", async () => {
-    vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({
-      variant: "Green",
-      setVariant: vi.fn(),
-    });
+    mockTheme();
     const onOpenTuners = vi.fn();
 
     render(<SettingsMenu onOpenTuners={onOpenTuners} />);
