@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { DEFAULT_VARIANT, generateCssText, getPaletteNames, getTokens } from "@/lib/theme";
 import ThemeProvider from "@/components/ThemeProvider";
+import SessionKeeper from "@/components/SessionKeeper";
 
 import "./styles/theme.css";
 import "./styles/style.css";
@@ -73,6 +74,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: buildThemeBootstrapScript() }} />
       </head>
       <body>
+        {/* Renders null -- activity-scoped sliding refresh (D2, batch 04).
+            No suspended prop here; the next task wires it to actingAsDemo
+            once that state exists. */}
+        <SessionKeeper />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

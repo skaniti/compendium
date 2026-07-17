@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { applySessionCookies } from "@/lib/session-cookies";
 
 export const runtime = "nodejs";
 
@@ -12,14 +13,15 @@ export async function POST(req: Request): Promise<Response> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    return Response.json({ error: "Invalid credentials" }, { status: res.status });
+    // Copy aligned with Dash's _do_login (trailing period) -- empty-field
+    // validation stays browser-side, this is only the auth-failure string.
+    return Response.json({ error: "Invalid credentials." }, { status: res.status });
   }
-  const data = (await res.json()) as { access_token: string; user: { id: number; email: string; name: string } };
-  (await cookies()).set("access_token", data.access_token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  });
+  const data = (await res.json()) as {
+    access_token: string;
+    refresh_token: string;
+    user: { id: number; email: string; name: string };
+  };
+  applySessionCookies(await cookies(), { accessToken: data.access_token, refreshToken: data.refresh_token });
   return Response.json({ user: data.user });
 }
