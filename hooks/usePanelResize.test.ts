@@ -34,7 +34,7 @@ function Harness() {
 }
 
 function renderHarness() {
-  const { container } = render(createElement(Harness));
+  const { container, unmount } = render(createElement(Harness));
   const appContainer = container.querySelector(".app-container") as HTMLElement;
   const leftPanel = container.querySelector(".panel-left") as HTMLElement;
   const rightPanel = container.querySelector(".panel-right") as HTMLElement;
@@ -43,7 +43,7 @@ function renderHarness() {
   stubOffsetWidth(appContainer, 1000);
   stubOffsetWidth(leftPanel, 200);
   stubOffsetWidth(rightPanel, 200);
-  return { appContainer, leftPanel, rightPanel, leftHandle, rightHandle };
+  return { appContainer, leftPanel, rightPanel, leftHandle, rightHandle, unmount };
 }
 
 describe("usePanelResize", () => {
@@ -130,6 +130,27 @@ describe("usePanelResize", () => {
     fireEvent.mouseUp(document);
     fireEvent.mouseMove(document, { clientX: 900 }); // should be ignored -- no listener anymore
 
+    expect(appContainer.style.getPropertyValue("--panel-left-width")).toBe("25.00%");
+  });
+
+  it("detaches drag listeners and resets body style when unmounted mid-drag", () => {
+    const { appContainer, leftHandle, unmount } = renderHarness();
+
+    fireEvent.mouseDown(leftHandle, { clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 150 }); // -> 25.00%
+    expect(appContainer.style.getPropertyValue("--panel-left-width")).toBe("25.00%");
+    expect(document.body.style.cursor).toBe("col-resize");
+    expect(document.body.style.userSelect).toBe("none");
+
+    unmount(); // no mouseup ever fired -- drag was still in flight
+
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.style.userSelect).toBe("");
+
+    // A leaked onMove would still be attached to `document` and would
+    // still mutate appContainer (the node reference is still live even
+    // though it's been removed from the DOM by unmount).
+    fireEvent.mouseMove(document, { clientX: 900 });
     expect(appContainer.style.getPropertyValue("--panel-left-width")).toBe("25.00%");
   });
 });

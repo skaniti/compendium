@@ -9,7 +9,7 @@ import { useTheme } from "./ThemeProvider";
 // names both render the same caption. None of the current 8 swatch names
 // carry the suffix, but the strip is cheap insurance against a stale
 // persisted value round-tripping through here.
-function formatPaletteCaption(name: string): string {
+export function formatPaletteCaption(name: string): string {
   const SUFFIX = " Dark";
   return name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : name;
 }
@@ -79,6 +79,10 @@ export interface SettingsMenuProps {
   // Replay-tutorial behavior (window.__compendiumLoader.replay()) lands in
   // a later task alongside the loader port.
   onReplayTutorial?: () => void;
+  // Opens the live scale / LOD / shape tuner panel (Dash: assets/
+  // _dev_tuner.js attaches a click listener to #tuner-open-btn directly,
+  // no callback). Panel port/disposition lands with the dev-tuner work.
+  onOpenTuners?: () => void;
 }
 
 export default function SettingsMenu({
@@ -88,6 +92,8 @@ export default function SettingsMenu({
   onStarfieldChange = () => {},
   // TODO(mig-01 task 9): wire to window.__compendiumLoader.replay().
   onReplayTutorial = () => {},
+  // TODO(mig-03/05): tuner open behavior arrives with the dev-tuner port/disposition.
+  onOpenTuners = () => {},
 }: SettingsMenuProps) {
   const { variant, setVariant } = useTheme();
   const swatches = getSwatches();
@@ -168,6 +174,19 @@ export default function SettingsMenu({
             onClick={() => onReplayTutorial()}
           >
             Replay tutorial
+          </button>
+        </div>
+
+        {/* DISPLAY TUNERS */}
+        <div className="picker-section-header">DISPLAY TUNERS</div>
+        <div className="tutorial-row">
+          <button
+            type="button"
+            id="tuner-open-btn"
+            className="palette-picker-action"
+            onClick={() => onOpenTuners()}
+          >
+            Open display tuners
           </button>
         </div>
       </div>

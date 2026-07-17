@@ -17,12 +17,24 @@ const MAX_PANEL_WIDTH_FRACTION = 0.4;
 
 type Side = "left" | "right";
 
+interface ActiveDrag {
+  onMove: (ev: MouseEvent) => void;
+  onUp: () => void;
+}
+
 export function usePanelResize() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const leftHandleRef = useRef<HTMLDivElement | null>(null);
   const rightHandleRef = useRef<HTMLDivElement | null>(null);
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
+  // Handlers for whichever drag is currently in progress (at most one at a
+  // time -- a single mouse can't start a second drag before releasing the
+  // first). Unmounting mid-drag never fires the handle's own onUp (that
+  // only runs on a real mouseup), so without this the document-level
+  // mousemove/mouseup listeners -- and the cursor/userSelect body styles --
+  // would leak past the component's lifetime.
+  const activeDragRef = useRef<ActiveDrag | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -32,11 +44,20 @@ export function usePanelResize() {
     const rightPanel = rightPanelRef.current;
     if (!container || !leftHandle || !rightHandle || !leftPanel || !rightPanel) return;
 
-    const detachLeft = attachHandle(leftHandle, container, leftPanel, "left");
-    const detachRight = attachHandle(rightHandle, container, rightPanel, "right");
+    const detachLeft = attachHandle(leftHandle, container, leftPanel, "left", activeDragRef);
+    const detachRight = attachHandle(rightHandle, container, rightPanel, "right", activeDragRef);
     return () => {
       detachLeft();
       detachRight();
+
+      const active = activeDragRef.current;
+      if (active) {
+        document.removeEventListener("mousemove", active.onMove);
+        document.removeEventListener("mouseup", active.onUp);
+        activeDragRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
     };
   }, []);
 
@@ -48,6 +69,7 @@ function attachHandle(
   container: HTMLElement,
   panel: HTMLElement,
   side: Side,
+  activeDragRef: { current: ActiveDrag | null },
 ): () => void {
   function onMouseDown(e: MouseEvent): void {
     e.preventDefault();
@@ -78,6 +100,7 @@ function attachHandle(
       document.body.style.userSelect = "";
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      activeDragRef.current = null;
 
       const computed = getComputedStyle(container);
       const leftPct = computed.getPropertyValue("--panel-left-width").trim() || "20%";
@@ -86,6 +109,7 @@ function attachHandle(
       void patchPreferences({ panel_left_width: leftPct, panel_right_width: rightPct });
     }
 
+    activeDragRef.current = { onMove, onUp };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }
