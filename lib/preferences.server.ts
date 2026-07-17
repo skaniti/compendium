@@ -96,3 +96,60 @@ export async function getInitialStarfieldVariant(): Promise<string> {
     return DEFAULT_STARFIELD_VARIANT;
   }
 }
+
+export interface InitialCompendiumLoaderState {
+  // Drives components/CompendiumLoader.tsx's first-run/return mode split
+  // -- mirrors compendium_loader.py's `"return" if has_seen else
+  // "first-run"`. false on any auth/fetch failure, same "swallow and fall
+  // back" contract as the rest of this module (falls back to showing the
+  // first-run tutorial, not silently skipping it).
+  hasSeen: boolean;
+  // Mirrors compendium_loader.py's `user_id is not None` -> non-empty
+  // data-user-id -> canPersist gate in the vendor JS: true once we have a
+  // resolvable authenticated session (a valid token AND a successful
+  // preferences read), so the loader's first-run dismiss knows whether
+  // persisting the seen-flag is meaningful. false on any auth/fetch
+  // failure -- same fallback direction as hasSeen (degrade to "don't
+  // persist" rather than risk writing on an unauthenticated request).
+  canPersist: boolean;
+}
+
+// Server-side counterpart to CompendiumLoader's client-side seeding: reads
+// the signed-in user's persisted `compendium_loader_seen` preference
+// before first paint (mirrors compendium_loader.py's `has_seen` resolution,
+// its own comment on :152-155 explains why this must happen server-side --
+// "eliminates the brief first-run flash that a pure-localStorage
+// implementation can't avoid") so AppShell can pass both fields down as
+// CompendiumLoader's initialHasSeen/canPersist props with no client-side
+// GET and no flash of the wrong mode. Same cookie-JWT-direct-to-backend
+// pattern as getInitialPanelWidths/getInitialStarfieldVariant above
+// (duplicated per that established per-concern-fetch convention, not
+// shared).
+export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiumLoaderState> {
+  // Deliberately outside the try/catch below -- see the comment on the
+  // equivalent line in getInitialPanelWidths.
+  const token = (await cookies()).get("access_token")?.value;
+  if (!token) return { hasSeen: false, canPersist: false };
+
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/preferences`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return { hasSeen: false, canPersist: false };
+
+    const prefs: unknown = await res.json();
+    if (typeof prefs !== "object" || prefs === null) {
+      // A valid, authenticated session is still confirmed even though the
+      // body was unusable -- canPersist reflects "do we have a real
+      // user", not "did we manage to read has_seen".
+      return { hasSeen: false, canPersist: true };
+    }
+
+    const seen = (prefs as Record<string, unknown>).compendium_loader_seen;
+    return { hasSeen: seen === true, canPersist: true };
+  } catch (err) {
+    console.error("getInitialCompendiumLoaderSeen failed:", err);
+    return { hasSeen: false, canPersist: false };
+  }
+}

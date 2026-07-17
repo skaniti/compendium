@@ -70,8 +70,9 @@ function swatchStyle(swatch: Swatch, size = 28): CSSProperties {
 }
 
 export interface SettingsMenuProps {
-  // Replay-tutorial behavior (window.__compendiumLoader.replay()) lands in
-  // a later task alongside the loader port.
+  // Default no-op so SettingsMenu stays renderable standalone (tests,
+  // ad-hoc use); components/Header.tsx wires this to
+  // window.__compendiumLoader?.replay() (mig-01 task 9).
   onReplayTutorial?: () => void;
   // Opens the live scale / LOD / shape tuner panel (Dash: assets/
   // _dev_tuner.js attaches a click listener to #tuner-open-btn directly,
@@ -80,7 +81,6 @@ export interface SettingsMenuProps {
 }
 
 export default function SettingsMenu({
-  // TODO(mig-01 task 9): wire to window.__compendiumLoader.replay().
   onReplayTutorial = () => {},
   // TODO(mig-03/05): tuner open behavior arrives with the dev-tuner port/disposition.
   onOpenTuners = () => {},

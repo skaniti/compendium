@@ -159,7 +159,15 @@ export default function Header() {
         </button>
       </div>
 
-      <SettingsMenu />
+      <SettingsMenu
+        // window.__compendiumLoader is attached by lib/vendor/
+        // compendium-loader.js once CompendiumLoader.tsx's mount effect
+        // finishes loading it (see that component + lib/vendor/vendor.d.ts
+        // for the shared ambient type). Optional-chained: a click before
+        // the vendor module has initialized is a no-op rather than a
+        // throw, which can only happen in the first ~100ms after mount.
+        onReplayTutorial={() => window.__compendiumLoader?.replay()}
+      />
     </div>
   );
 }
