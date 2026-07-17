@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api";
+import { SESSION_EXPIRES_AT_COOKIE } from "@/lib/session-cookies";
 
 // D2 (batch 04 auth/session parity): activity-scoped sliding refresh.
 //
@@ -25,7 +26,6 @@ import { apiFetch } from "@/lib/api";
 const CHECK_INTERVAL_MS = 60_000; // 1 minute
 const NEAR_EXPIRY_MS = 3 * 60_000; // 3 minutes
 const DEFAULT_IDLE_MINUTES = 60;
-const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";
 
 // Passive, non-blocking activity signals -- deliberately excludes anything
 // that could fire from background/programmatic activity (no `focus`, no
@@ -106,6 +106,14 @@ export default function SessionKeeper({ suspended = false }: SessionKeeperProps)
         refreshInFlightRef.current = false;
       }
     }
+
+    // Immediate check on mount: a fresh page load (or a tab restored after
+    // being asleep) might already be within the near-expiry window --
+    // don't make it wait up to a full CHECK_INTERVAL_MS for the first
+    // check. Re-fires whenever `suspended` flips (this effect's only dep),
+    // which also covers "resumed from suspension" getting an immediate
+    // check rather than waiting for the next tick.
+    void maybeRefresh();
 
     const intervalId = window.setInterval(() => {
       void maybeRefresh();

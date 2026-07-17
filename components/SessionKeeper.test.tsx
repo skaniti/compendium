@@ -58,16 +58,40 @@ describe("SessionKeeper", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("refreshes when near expiry and the user was recently active", async () => {
+  it("checks immediately on mount, without waiting for the first interval tick", async () => {
     const fetchMock = mockFetch();
     const now = Date.now();
-    setSessionExpiresAtCookie(now + 2 * 60_000); // 2 min out -- inside the 3-min window
+    setSessionExpiresAtCookie(now + 2 * 60_000); // near expiry from the start
 
     render(<SessionKeeper />);
 
+    // No timer advance at all -- flush only the microtask the mount-time
+    // check's internal `await apiFetch(...)` needs to actually invoke fetch.
     await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("refreshes on the periodic check when near expiry and the user was recently active", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    // Far out at mount so the mount-time immediate check (tested above) is
+    // a no-op here -- isolates this test to the recurring interval path,
+    // not the mount-time check.
+    setSessionExpiresAtCookie(now + 90 * 60_000);
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled(); // sanity: mount check found "not near expiry"
+
+    await act(async () => {
+      setSessionExpiresAtCookie(Date.now() + 2 * 60_000); // now near expiry
       window.dispatchEvent(new Event("pointerdown")); // recent activity
-      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // first 1-min check tick
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // first periodic tick
     });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
@@ -168,16 +192,24 @@ describe("SessionKeeper", () => {
     setSessionExpiresAtCookie(now + 2 * 60_000);
 
     render(<SessionKeeper />);
-
+    // The mount-time immediate check already starts a refresh here (cookie
+    // is near expiry, no idle time yet) and it never resolves (resolveFetch
+    // is never called mid-test) -- fetchMock is at 1 call before the first
+    // act() block below even runs.
     await act(async () => {
-      window.dispatchEvent(new Event("pointerdown"));
-      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // tick 1: starts a refresh, stays pending
+      await Promise.resolve();
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       window.dispatchEvent(new Event("pointerdown"));
-      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // tick 2: previous refresh still in flight
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // tick 1: previous refresh still in flight
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("pointerdown"));
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // tick 2: still in flight
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 

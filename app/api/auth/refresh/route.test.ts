@@ -36,7 +36,7 @@ function makeFakeCookieJar(initial?: Record<string, string>) {
   };
 }
 
-function mockFetchResponse(response: { ok: boolean; json: () => Promise<unknown> }) {
+function mockFetchResponse(response: { ok: boolean; status?: number; json: () => Promise<unknown> }) {
   const fn = vi.fn().mockResolvedValue(response);
   vi.stubGlobal("fetch", fn);
   return fn;
@@ -97,7 +97,7 @@ describe("POST /api/auth/refresh", () => {
       session_expires_at: "12345",
     });
     vi.mocked(cookies).mockResolvedValue(jar as never);
-    mockFetchResponse({ ok: false, json: async () => ({ error: "invalid" }) });
+    mockFetchResponse({ ok: false, status: 401, json: async () => ({ error: "invalid" }) });
 
     const res = await POST();
 
@@ -105,5 +105,64 @@ describe("POST /api/auth/refresh", () => {
     expect(jar.get("access_token")).toBeUndefined();
     expect(jar.get("refresh_token")).toBeUndefined();
     expect(jar.get("session_expires_at")).toBeUndefined();
+  });
+
+  it("on backend 403 (revoked token), also clears all three session cookies and returns 401", async () => {
+    const jar = makeFakeCookieJar({
+      access_token: "old-access",
+      refresh_token: "revoked-refresh",
+      session_expires_at: "12345",
+    });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 403, json: async () => ({ error: "revoked" }) });
+
+    const res = await POST();
+
+    expect(res.status).toBe(401);
+    expect(jar.get("access_token")).toBeUndefined();
+    expect(jar.get("refresh_token")).toBeUndefined();
+    expect(jar.get("session_expires_at")).toBeUndefined();
+  });
+
+  it("on a transient backend error (500), leaves cookies intact and returns a non-401 error", async () => {
+    const jar = makeFakeCookieJar({
+      access_token: "old-access",
+      refresh_token: "still-good-refresh",
+      session_expires_at: "12345",
+    });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
+
+    const res = await POST();
+
+    // Must NOT be 401: apiFetch's client-side interceptor (lib/api.ts)
+    // treats any 401 as "session is dead, bounce to /login" -- a transient
+    // backend blip must not trigger that.
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(502);
+    expect(jar.get("access_token")?.value).toBe("old-access");
+    expect(jar.get("refresh_token")?.value).toBe("still-good-refresh");
+    expect(jar.get("session_expires_at")?.value).toBe("12345");
+  });
+
+  it("when the backend is unreachable (fetch rejects), returns 502 without touching cookies", async () => {
+    const jar = makeFakeCookieJar({
+      access_token: "old-access",
+      refresh_token: "still-good-refresh",
+      session_expires_at: "12345",
+    });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED"))
+    );
+
+    const res = await POST();
+
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(502);
+    expect(jar.get("access_token")?.value).toBe("old-access");
+    expect(jar.get("refresh_token")?.value).toBe("still-good-refresh");
+    expect(jar.get("session_expires_at")?.value).toBe("12345");
   });
 });
