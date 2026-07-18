@@ -131,6 +131,46 @@ describe("SessionKeeper", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("latches an idle lapse permanently: no refresh even after activity resumes post-expiry", async () => {
+    // Batch-04 fix-round bug: idle-lapse is supposed to be FINAL (D2) -- once
+    // a session lapses, only re-authenticating should revive it. Before this
+    // fix, maybeRefresh treated an ALREADY-EXPIRED token the same as a
+    // near-expiry one (a negative expiresAtMs-nowMs gap still satisfies
+    // "< NEAR_EXPIRY_MS"), so a user who idled past the window and only
+    // returns hours later -- resetting lastActivityRef on the very
+    // pointerdown that "returns" them -- got idleMinutes reading ~0 on the
+    // next check, silently resurrecting the lapsed session via the still-live
+    // 7-day refresh token. The fix refuses refresh outright once
+    // expiresAtMs <= nowMs, independent of any activity that follows.
+    process.env.NEXT_PUBLIC_IDLE_MINUTES = "5";
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    // Same setup as the idle-lapse test above: expiry crosses into the
+    // 3-min near-expiry window only at t=6min, by which point idle (6min,
+    // measured from mount with no activity dispatched) already exceeds the
+    // 5-min threshold -- the lapse fires correctly here too (pre-fix
+    // behavior), same sanity check as that test.
+    setSessionExpiresAtCookie(now + 8 * 60_000);
+
+    render(<SessionKeeper />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS * 9); // t=9min: idle-lapsed, token now expired too
+    });
+    expect(fetchMock).not.toHaveBeenCalled(); // sanity: matches the plain idle-lapse test
+
+    // The user returns hours later (well outside any idle window in
+    // spirit) and starts interacting again. This resets lastActivityRef to
+    // "now" -- exactly the condition that resurrected the lapsed session
+    // pre-fix. It must not, regardless of how many periodic checks follow.
+    await act(async () => {
+      window.dispatchEvent(new Event("pointerdown"));
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS * 2);
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("does not treat a visibilitychange as user activity (anti-Dash-quirk)", async () => {
     process.env.NEXT_PUBLIC_IDLE_MINUTES = "5";
     const fetchMock = mockFetch();

@@ -1,4 +1,5 @@
 import type { AgentEvent, CompleteEvent } from "./types";
+import { redirectToLogin } from "./api";
 
 /**
  * Pure: pull complete SSE events out of an accumulated text buffer.
@@ -37,7 +38,23 @@ export async function streamAgentQuery(
     body: JSON.stringify({ query }),
     signal,
   });
-  if (!res.ok) throw new Error(`Agent request failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    // Batch-04 fix-round bug: this talks to fetch directly (not apiFetch,
+    // since it needs the raw stream body) so a post-lapse 401 here never
+    // went through apiFetch's bounce-to-/login handling -- it just threw
+    // a generic Error that useAgentChat rendered as a chat error bubble,
+    // stranding the user on a dead page instead of sending them to
+    // /login. res.status is already the structured signal (no need to
+    // string-match the thrown message downstream): on 401, reuse the same
+    // guarded navigate lib/api.ts's apiFetch uses and return without
+    // throwing, since the caller is about to navigate away and an error
+    // bubble would be pointless. Any other non-ok status still throws.
+    if (res.status === 401) {
+      redirectToLogin();
+      return;
+    }
+    throw new Error(`Agent request failed: ${res.status} ${res.statusText}`);
+  }
   if (!res.body) throw new Error("Agent response had no body");
 
   const reader = res.body.getReader();

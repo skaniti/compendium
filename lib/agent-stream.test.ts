@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { extractEvents, streamAgentQuery } from "./agent-stream";
+import * as api from "./api";
 
 describe("extractEvents", () => {
   it("parses status, token, complete from standard \\n\\n framing", () => {
@@ -68,5 +69,23 @@ describe("streamAgentQuery", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500, statusText: "err" })));
     await expect(streamAgentQuery("q", {})).rejects.toThrow(/500/);
     vi.unstubAllGlobals();
+  });
+
+  // Batch-04 fix-round bug: this function talks to fetch directly (not
+  // apiFetch, since it needs the raw stream body), so a post-lapse 401
+  // response never went through apiFetch's bounce-to-/login handling -- it
+  // just threw a generic Error that useAgentChat rendered as a chat error
+  // bubble, leaving the user stranded on a dead page instead of sent to
+  // /login. Fix: on a 401, reuse lib/api.ts's guarded redirectToLogin and
+  // resolve without throwing (a 500 still throws, unchanged -- see above).
+  it("on a 401, navigates to /login via the shared guard instead of throwing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401, statusText: "Unauthorized" })));
+    const redirectSpy = vi.spyOn(api, "redirectToLogin").mockImplementation(() => {});
+
+    await expect(streamAgentQuery("q", {})).resolves.toBeUndefined();
+
+    expect(redirectSpy).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+    redirectSpy.mockRestore();
   });
 });

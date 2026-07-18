@@ -91,6 +91,20 @@ export default function SessionKeeper({ suspended = false }: SessionKeeperProps)
       if (expiresAtMs === null) return; // No cookie -- dev no-auth mode, inert.
 
       const nowMs = Date.now();
+      // Batch-04 fix-round bug: an ALREADY-EXPIRED token (expiresAtMs <=
+      // nowMs) also satisfies "expiresAtMs - nowMs < NEAR_EXPIRY_MS" (the
+      // gap is negative), so a user who idled PAST the window and only
+      // returns hours later -- well outside IDLE_MINUTES -- would still
+      // hit the idle check below with a huge idleMinutes... except the
+      // real bug is activity on return resets lastActivityRef BEFORE this
+      // runs, so idleMinutes reads ~0 and the lapse gets silently
+      // resurrected via the 7-day refresh token, defeating D2's
+      // idle-lapse-is-final design. The lapse must latch once the token
+      // has actually expired: refuse to refresh, full stop, and let the
+      // 401 interceptor (lib/api.ts apiFetch) handle the bounce on the
+      // next authed request. Sliding refresh for still-active users is
+      // unchanged -- near-expiry-but-not-yet-expired still refreshes.
+      if (expiresAtMs <= nowMs) return;
       const nearExpiry = expiresAtMs - nowMs < NEAR_EXPIRY_MS;
       if (!nearExpiry) return;
 

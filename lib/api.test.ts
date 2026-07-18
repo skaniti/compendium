@@ -52,6 +52,35 @@ describe("apiFetch", () => {
     expect(res.status).toBe(401);
   });
 
+  it("on a 401 while already on /login, does not navigate (no reload loop)", async () => {
+    // Batch-04 fix-round bug: the root layout wraps /login in
+    // SessionProvider/ThemeProvider too. ThemeProvider's mount effect
+    // calls getPreferences() -> apiFetch; an unauthenticated prod visitor
+    // landing on /login got a 401 -> assign("/login") -> full reload ->
+    // remount -> 401 again, forever. Still returns the 401 Response so
+    // callers' existing swallow-and-fallback contracts (lib/preferences.ts)
+    // hold.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, pathname: "/login", assign: assignMock });
+
+    const res = await apiFetch("/api/foo");
+
+    expect(assignMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+  });
+
+  it("on a 401 elsewhere, still navigates to /login exactly once", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, pathname: "/graph", assign: assignMock });
+
+    await apiFetch("/api/foo");
+
+    expect(assignMock).toHaveBeenCalledWith("/login");
+    expect(assignMock).toHaveBeenCalledTimes(1);
+  });
+
   it("on a 500, does not navigate", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
     const assignMock = vi.fn();
