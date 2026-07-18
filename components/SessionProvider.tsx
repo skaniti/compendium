@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import SessionKeeper from "@/components/SessionKeeper";
 
@@ -15,6 +15,13 @@ import SessionKeeper from "@/components/SessionKeeper";
 
 export type SessionRole = "admin" | "demo" | "user";
 
+// pending: mount, before the first GET /api/auth/me has resolved either
+// way. hydrated: last attempt succeeded -- role/account/actingAsDemo/
+// adminOriginEmail reflect the backend's response. failed: last attempt
+// (non-2xx, network error, or an unparseable/non-object body) did not
+// resolve -- a retry is scheduled (see HYDRATION_RETRY_MS below).
+export type SessionHydrationStatus = "pending" | "hydrated" | "failed";
+
 export interface SessionState {
   // null = signed out / unknown (backend unreachable, a non-2xx /me, or a
   // response shape/role string we don't recognize) -- deliberately
@@ -25,6 +32,7 @@ export interface SessionState {
   account: string;
   actingAsDemo: boolean;
   adminOriginEmail?: string;
+  status: SessionHydrationStatus;
   refresh: () => Promise<void>;
 }
 
@@ -40,14 +48,30 @@ const INITIAL_STATE: Omit<SessionState, "refresh"> = {
   account: ACCOUNT_PLACEHOLDER,
   actingAsDemo: false,
   adminOriginEmail: undefined,
+  status: "pending",
 };
 
-const SIGNED_OUT_STATE: Omit<SessionState, "refresh"> = {
+const FAILED_STATE: Omit<SessionState, "refresh"> = {
   role: null,
   account: ACCOUNT_EMPTY,
   actingAsDemo: false,
   adminOriginEmail: undefined,
+  status: "failed",
 };
+
+// Retry cadence for a failed hydration attempt (security-review fix,
+// batch 04 task 5 fix round). A transient /me blip must not permanently
+// strand a normal, non-acting user in the fail-closed "no refresh" state
+// the `suspended` derivation below produces for anything short of a
+// CONFIRMED successful hydration -- so a failure keeps retrying here
+// until one succeeds. Deliberately NOT the same value as SessionKeeper's
+// own CHECK_INTERVAL_MS (60_000): these are two independent timers for
+// two different concerns ("how often do we retry a failed hydration" vs.
+// "how often do we check whether the access token needs refreshing"), and
+// giving them different periods keeps their firing order unambiguous
+// (useful for reasoning about behavior, and for tests that exercise both
+// without needing to arbitrate a tie).
+export const HYDRATION_RETRY_MS = 45_000;
 
 const SessionContext = createContext<SessionState | undefined>(undefined);
 
@@ -64,9 +88,12 @@ function isSessionRole(value: unknown): value is SessionRole {
 }
 
 // Same fallback chain Header's own fetch used to compute directly
-// (user.name || user.email || "—") -- centralized here now.
-function deriveState(data: unknown): Omit<SessionState, "refresh"> {
-  if (typeof data !== "object" || data === null) return SIGNED_OUT_STATE;
+// (user.name || user.email || "—") -- centralized here now. Returns null
+// for a body we can't make sense of (non-object) -- explicit signal to the
+// caller that this is a failed hydration, not a "hydrated" state with
+// generic fallback field values.
+function deriveState(data: unknown): Omit<SessionState, "refresh" | "status"> | null {
+  if (typeof data !== "object" || data === null) return null;
   const me = data as MeResponse;
   const name = typeof me.name === "string" && me.name ? me.name : undefined;
   const email = typeof me.email === "string" && me.email ? me.email : undefined;
@@ -84,21 +111,50 @@ function deriveState(data: unknown): Omit<SessionState, "refresh"> {
 
 export default function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Omit<SessionState, "refresh">>(INITIAL_STATE);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
+    function scheduleRetryIfNeeded() {
+      if (retryTimeoutRef.current !== null) return; // already scheduled
+      retryTimeoutRef.current = setTimeout(() => {
+        retryTimeoutRef.current = null;
+        void refresh();
+      }, HYDRATION_RETRY_MS);
+    }
+
+    function markFailedAndRetry() {
+      setState(FAILED_STATE);
+      scheduleRetryIfNeeded();
+    }
+
     try {
       const res = await apiFetch("/api/auth/me");
       if (!res.ok) {
-        setState(SIGNED_OUT_STATE);
+        markFailedAndRetry();
         return;
       }
       const data: unknown = await res.json();
-      setState(deriveState(data));
+      const derived = deriveState(data);
+      if (derived === null) {
+        // 2xx but a body we can't make sense of (non-object) -- still a
+        // failure for suspension purposes, NOT a confirmed
+        // actingAsDemo=false: treating this as "hydrated" would unsuspend
+        // SessionKeeper on the strength of a response we couldn't parse.
+        markFailedAndRetry();
+        return;
+      }
+      setState({ ...derived, status: "hydrated" });
+      // A previously scheduled retry (from an earlier failure) is now
+      // moot -- this success already re-hydrated.
+      if (retryTimeoutRef.current !== null) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
     } catch (err) {
       // Backend unreachable, dev-bypass returning something unparseable,
       // whatever -- never let a failed hydration throw past this provider.
       console.error("SessionProvider: failed to hydrate session:", err);
-      setState(SIGNED_OUT_STATE);
+      markFailedAndRetry();
     }
   }, []);
 
@@ -116,17 +172,47 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Cleanup on unmount: don't let a scheduled retry fire (and call
+  // setState) after this provider is gone.
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current !== null) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fail-closed, not fail-open (security-review fix, batch 04 task 5 fix
+  // round). SessionKeeper may refresh ONLY once hydration has SETTLED
+  // SUCCESSFULLY and confirmed actingAsDemo === false -- everything else
+  // suspends:
+  //   - status "pending": SessionKeeper's own mount-time immediate check
+  //     (see SessionKeeper.tsx) can fire before this provider's async /me
+  //     call has any chance to resolve. If a page loads/reloads during an
+  //     acting token's final 3 minutes and this were still keyed off the
+  //     stale-until-proven-otherwise actingAsDemo=false initial value, a
+  //     refresh would fire against the admin's own STILL-LIVE, untouched
+  //     refresh_token cookie (view-as never touches it -- see
+  //     app/api/auth/view-as/route.ts) and silently swap the jar back to
+  //     the admin. Suspending while pending closes that window.
+  //   - status "failed": a transient /me blip must NOT be read as "safe
+  //     to refresh" just because the LAST successful read happened to
+  //     say actingAsDemo=false, or because the failure path's fallback
+  //     state defaults actingAsDemo to false -- an in-progress acting
+  //     session's admin refresh_token cookie is just as live during a
+  //     backend hiccup as it is any other time. HYDRATION_RETRY_MS above
+  //     is what keeps this from permanently stranding a normal user after
+  //     one blip: it keeps retrying until a hydration actually succeeds
+  //     one way or the other.
+  const suspended = !(state.status === "hydrated" && !state.actingAsDemo);
+
   return (
     <SessionContext.Provider value={{ ...state, refresh }}>
       {/* SessionKeeper is mounted HERE (not in app/layout.tsx, a server
           component that can't read this context) so its suspended prop can
-          be wired straight to actingAsDemo. Suspension exists because an
-          acting-as-demo access token is deliberately non-renewable
-          (app/api/auth/view-as/route.ts mints it with a 60-min hard cap
-          and no refresh_token) -- if SessionKeeper's sliding refresh ran
-          anyway, its rotation would mint a fresh ADMIN token pair and
-          silently resurrect the admin's own identity mid-view-as. */}
-      <SessionKeeper suspended={state.actingAsDemo} />
+          be wired straight to the derivation above. */}
+      <SessionKeeper suspended={suspended} />
       {children}
     </SessionContext.Provider>
   );

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import SessionProvider, { useSession } from "./SessionProvider";
+import SessionProvider, { HYDRATION_RETRY_MS, useSession } from "./SessionProvider";
 import Header from "./Header";
 import * as api from "@/lib/api";
 import * as ThemeProviderModule from "./ThemeProvider";
@@ -22,7 +22,10 @@ function setSessionExpiresAtCookie(epochMs: number) {
   document.cookie = `${SESSION_EXPIRES_AT_COOKIE}=${epochMs}; path=/`;
 }
 
-function clearAllCookies() {
+// Named for what it actually clears (fix-round minor: the old name
+// "clearAllCookies" overclaimed -- this file only ever sets/reads
+// session_expires_at).
+function clearSessionExpiresAtCookie() {
   document.cookie = `${SESSION_EXPIRES_AT_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 }
 
@@ -60,7 +63,7 @@ describe("SessionProvider / useSession", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
-    clearAllCookies();
+    clearSessionExpiresAtCookie();
   });
 
   // Regression guard: SessionProvider wraps the ENTIRE app in app/layout.tsx
@@ -268,7 +271,7 @@ describe("Header role-gated UI (via SessionProvider)", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.useRealTimers();
-    clearAllCookies();
+    clearSessionExpiresAtCookie();
   });
 
   it("admin: sees the view-demo action, not the return-to-admin button", async () => {
@@ -422,5 +425,190 @@ describe("Header role-gated UI (via SessionProvider)", () => {
       return url.includes("/api/auth/refresh");
     });
     expect(refreshCalls.length).toBeGreaterThan(0);
+  });
+
+  // Fix-round regression guards (design review, batch 04 task 5): the
+  // review found the actingAsDemo-only derivation above had two reachable
+  // holes where SessionKeeper could still refresh mid-acting-session --
+  // rotating the admin's still-live, untouched refresh_token cookie and
+  // silently resurrecting the admin identity. The fix flips `suspended`
+  // to fail-closed: refresh is allowed ONLY once hydration has SETTLED
+  // successfully and confirmed actingAsDemo === false (status ===
+  // "hydrated" && !actingAsDemo). These three tests are the ones the
+  // review specifically asked for.
+  describe("fail-closed suspension (fix round)", () => {
+    function refreshCallCount(fetchMock: ReturnType<typeof mockApiFetch>): number {
+      return fetchMock.mock.calls.filter(([input]) => {
+        const url = typeof input === "string" ? input : (input as RequestInfo | URL).toString();
+        return url.includes("/api/auth/refresh");
+      }).length;
+    }
+
+    it("(1) no refresh fires while hydration is still pending, even with near-expiry + the mount-time check", async () => {
+      vi.useFakeTimers();
+      // Near-expiry from the very start (not "far out, then updated
+      // later" like the tests above) -- SessionKeeper's own "checks
+      // immediately on mount" behavior (SessionKeeper.test.tsx) fires in
+      // the SAME tick SessionProvider mounts it, before the async /me
+      // hydration below has any chance to resolve. This is exactly the
+      // mount-time race the fix closes: a page load/reload during the
+      // acting token's final 3 minutes must not slip a refresh through
+      // while status is still "pending".
+      setSessionExpiresAtCookie(Date.now() + 2 * 60_000);
+      window.dispatchEvent(new Event("pointerdown")); // recent activity, pre-mount
+
+      let resolveMe!: (body: unknown) => void;
+      const fetchMock = vi.spyOn(api, "apiFetch").mockImplementation(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/auth/me")) {
+          return new Promise<Response>((resolve) => {
+            resolveMe = (body) => resolve(jsonResponse(body));
+          });
+        }
+        return jsonResponse({ ok: true });
+      });
+
+      render(
+        <SessionProvider>
+          <Header />
+        </SessionProvider>
+      );
+
+      // Flush the synchronous mount + SessionKeeper's mount-time immediate
+      // check without ever letting /me resolve -- status stays "pending".
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(refreshCallCount(fetchMock)).toBe(0);
+
+      // Resolve the hanging /me so this test doesn't leak an unresolved
+      // promise/act warning into later tests.
+      await act(async () => {
+        resolveMe({ id: 1, email: "a@example.com", role: "user", acting_as_demo: false });
+      });
+    });
+
+    it("(2) a hydration FAILURE while acting does NOT un-suspend", async () => {
+      vi.useFakeTimers();
+      setSessionExpiresAtCookie(Date.now() + 90 * 60_000); // far out for the first (successful) hydration
+
+      const spy = vi.spyOn(api, "apiFetch").mockImplementation(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/auth/me")) {
+          return jsonResponse({
+            id: 2,
+            email: "demo@example.com",
+            role: "demo",
+            acting_as_demo: true,
+            admin_origin_email: "admin@example.com",
+          });
+        }
+        return jsonResponse({ ok: true });
+      });
+
+      function RefreshTrigger() {
+        const { refresh } = useSession();
+        return <button onClick={() => void refresh()}>manual-refresh</button>;
+      }
+
+      render(
+        <SessionProvider>
+          <Header />
+          <RefreshTrigger />
+        </SessionProvider>
+      );
+
+      // Let the first hydration (successful, acting) settle: status
+      // "hydrated", actingAsDemo true, suspended true -- as expected.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Now a transient /me failure on the NEXT attempt -- the pre-fix bug
+      // reset actingAsDemo to false here (SIGNED_OUT_STATE) and, since
+      // suspended used to be derived from actingAsDemo alone, that
+      // silently un-suspended SessionKeeper even though the acting
+      // session (and the admin's still-live refresh_token cookie) is very
+      // much still real.
+      spy.mockRejectedValue(new Error("network down"));
+      await act(async () => {
+        screen.getByText("manual-refresh").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        setSessionExpiresAtCookie(Date.now() + 2 * 60_000); // now near expiry
+        window.dispatchEvent(new Event("pointerdown")); // recent activity
+        await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // periodic tick
+      });
+
+      expect(refreshCallCount(spy)).toBe(0);
+    });
+
+    it("(3) a failed hydration retries and un-suspends a normal user once the retry succeeds", async () => {
+      vi.useFakeTimers();
+      setSessionExpiresAtCookie(Date.now() + 90 * 60_000); // far out during the failed first attempt
+
+      const spy = vi.spyOn(api, "apiFetch").mockImplementation(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/auth/me")) return new Response("boom", { status: 500 });
+        return jsonResponse({ ok: true });
+      });
+
+      render(
+        <SessionProvider>
+          <Header />
+        </SessionProvider>
+      );
+
+      // First hydration attempt fails -- status "failed", fail-closed.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Phase A -- proves suspension is REAL while consistently failing,
+      // not just "never suspended in the first place" (a naive version of
+      // this test that skips straight to the success case would pass even
+      // against the pre-fix code, since ITS mount-time race already leaves
+      // SessionKeeper unsuspended from t=0 regardless of hydration
+      // outcome -- confirmed by literally reverting the fix and re-running
+      // this suite during the fix review). This window is long enough
+      // (CHECK_INTERVAL_MS = 60s) that at least one scheduled retry
+      // (HYDRATION_RETRY_MS = 45s) fires and fails again in the middle of
+      // it -- still suspended throughout.
+      await act(async () => {
+        setSessionExpiresAtCookie(Date.now() + 2 * 60_000); // near expiry
+        window.dispatchEvent(new Event("pointerdown")); // recent activity
+        await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS);
+      });
+      expect(refreshCallCount(spy)).toBe(0);
+
+      // Phase B -- now let the NEXT scheduled retry succeed, as a normal
+      // (non-acting) user.
+      spy.mockImplementation(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/auth/me")) {
+          return jsonResponse({ id: 1, email: "a@example.com", role: "user", acting_as_demo: false });
+        }
+        return jsonResponse({ ok: true });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HYDRATION_RETRY_MS);
+      });
+
+      // status is now "hydrated", actingAsDemo false -> no longer suspended.
+      await act(async () => {
+        setSessionExpiresAtCookie(Date.now() + 2 * 60_000); // near expiry again
+        window.dispatchEvent(new Event("pointerdown")); // recent activity
+        await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS); // periodic tick
+      });
+
+      expect(refreshCallCount(spy)).toBeGreaterThan(0);
+    });
   });
 });

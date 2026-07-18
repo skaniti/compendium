@@ -92,9 +92,9 @@ const SIGN_OUT_BUTTON_STYLE: CSSProperties = {
 // strip's styling.
 // TODO(mig-03): move into the graph debug overlay once it lands; drop this
 // header placement then.
-const VIEW_DEMO_BUTTON_STYLE: CSSProperties = {
-  ...SIGN_OUT_BUTTON_STYLE,
-};
+// Aliased, not copied -- CSSProperties objects passed to `style` are never
+// mutated by React, so there's nothing a copy would protect against.
+const VIEW_DEMO_BUTTON_STYLE: CSSProperties = SIGN_OUT_BUTTON_STYLE;
 
 // Mirrors the PRE-2026-07-13 Dash floating "Return to admin" pill
 // (frontend/dash/app.py, retired in explorer commit 5644ebe -- "the
@@ -107,6 +107,12 @@ const VIEW_DEMO_BUTTON_STYLE: CSSProperties = {
 // rather than the current debug-strip version. top:150px clears this
 // app's own 118px header (see APP_HEADER_STYLE's comment above) with the
 // same clearance Dash's own 2026-07-13 header-scaling remeasurement used.
+// Honest caveat: the style VALUES below are byte-matched to the pill, but
+// the DOM SHAPE isn't -- Dash wrapped a <button> in a <form method="POST"
+// action="/__return_to_admin">, with the position:fixed style on the
+// <form> and the button styling nested inside it; this merges both into a
+// single <button>, same reasoning as Sign out's own form-vs-fetch note
+// above (no Dash-style router interception here to route around).
 const RETURN_TO_ADMIN_BUTTON_STYLE: CSSProperties = {
   position: "fixed",
   top: "150px",
@@ -132,16 +138,16 @@ export default function Header() {
   }
 
   // JWT port of Dash's admin-only /__view_as_demo switch (D5, batch 04).
+  // No body: app/api/auth/view-as/route.ts doesn't read the request at
+  // all -- it hardcodes {profile: "demo"} itself before calling the
+  // backend (the only profile this UI ever offers), so sending one here
+  // would be dead weight.
   // Non-2xx (403 not-admin/already-acting/demo-unavailable, 401, 5xx) is
   // logged and left for the admin to retry -- the route contract
   // deliberately leaves cookies untouched on failure, so there's no
   // session to recover from here.
   async function handleViewDemo(): Promise<void> {
-    const res = await apiFetch("/api/auth/view-as", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile: "demo" }),
-    });
+    const res = await apiFetch("/api/auth/view-as", { method: "POST" });
     if (!res.ok) {
       // TODO(mig-03): richer inline error UX once this trigger moves into
       // the graph debug overlay -- kept minimal here per spec.md D4.
