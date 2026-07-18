@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { DEFAULT_VARIANT, generateCssText, getPaletteNames, getTokens } from "@/lib/theme";
 import ThemeProvider from "@/components/ThemeProvider";
-import SessionKeeper from "@/components/SessionKeeper";
+import SessionProvider from "@/components/SessionProvider";
 
 import "./styles/theme.css";
 import "./styles/style.css";
@@ -74,11 +74,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: buildThemeBootstrapScript() }} />
       </head>
       <body>
-        {/* Renders null -- activity-scoped sliding refresh (D2, batch 04).
-            No suspended prop here; the next task wires it to actingAsDemo
-            once that state exists. */}
-        <SessionKeeper />
-        <ThemeProvider>{children}</ThemeProvider>
+        {/* SessionProvider (D4/D5, batch 04) hydrates {role, account,
+            actingAsDemo, ...} from GET /api/auth/me and mounts
+            SessionKeeper (D2, activity-scoped sliding refresh) internally
+            with suspended={actingAsDemo} -- this file is a server
+            component and can't read that context itself, so the wiring
+            lives inside SessionProvider.tsx (see its own comment for why
+            suspension exists). Wraps ThemeProvider/{children} too so
+            Header (nested further down, in AppShell) can call
+            useSession(). */}
+        <SessionProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -101,6 +101,32 @@ describe("applySessionCookies", () => {
 
     expect(jar.get(SESSION_EXPIRES_AT_COOKIE)).toBeUndefined();
   });
+
+  // D5 (batch 04 auth/session parity): view-as/return-to-admin responses
+  // deliberately omit refresh_token (the backend never renews it for an
+  // acting-as-demo session -- rotation would resurrect the admin identity
+  // past the acting token's 60-min cap). Those two routes must still be
+  // able to swap the access token without forking a second cookie writer,
+  // so refreshToken becomes optional here rather than required.
+  it("sets only access_token + session_expires_at, and does NOT call set() for refresh_token, when refreshToken is omitted", () => {
+    const jar = makeFakeCookieJar();
+    const token = makeJwtWithExp(1_700_000_000);
+
+    applySessionCookies(jar, { accessToken: token });
+
+    expect(jar.get(ACCESS_TOKEN_COOKIE)?.value).toBe(token);
+    expect(jar.get(SESSION_EXPIRES_AT_COOKIE)?.value).toBe("1700000000000");
+    expect(jar._store.has(REFRESH_TOKEN_COOKIE)).toBe(false);
+  });
+
+  it("preserves an existing refresh_token cookie untouched when refreshToken is omitted", () => {
+    const jar = makeFakeCookieJar();
+    jar.set(REFRESH_TOKEN_COOKIE, "admins-existing-refresh", { httpOnly: true });
+
+    applySessionCookies(jar, { accessToken: makeJwtWithExp(1_700_000_000) });
+
+    expect(jar.get(REFRESH_TOKEN_COOKIE)?.value).toBe("admins-existing-refresh");
+  });
 });
 
 describe("clearSessionCookies", () => {

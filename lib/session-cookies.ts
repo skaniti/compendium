@@ -20,7 +20,13 @@ type CookieStore = Pick<Awaited<ReturnType<typeof cookies>>, "set" | "get" | "de
 
 export interface SessionTokens {
   accessToken: string;
-  refreshToken: string;
+  // Optional: view-as/return-to-admin (D5, batch 04) deliberately don't get
+  // a refresh_token back from the backend (rotation would resurrect the
+  // acting-as-demo identity past its 60-min TTL cap -- see those two
+  // routes). When omitted, applySessionCookies leaves whatever
+  // refresh_token cookie is already in the jar untouched instead of
+  // clobbering it with undefined.
+  refreshToken?: string;
 }
 
 const baseCookieOptions = {
@@ -55,7 +61,10 @@ export function decodeJwtExpiryMs(token: string): number | null {
 // route (rotation).
 export function applySessionCookies(cookieStore: CookieStore, tokens: SessionTokens): void {
   cookieStore.set(ACCESS_TOKEN_COOKIE, tokens.accessToken, { ...baseCookieOptions, httpOnly: true });
-  cookieStore.set(REFRESH_TOKEN_COOKIE, tokens.refreshToken, { ...baseCookieOptions, httpOnly: true });
+  if (tokens.refreshToken !== undefined) {
+    cookieStore.set(REFRESH_TOKEN_COOKIE, tokens.refreshToken, { ...baseCookieOptions, httpOnly: true });
+  }
+  // else: no-op -- see the SessionTokens.refreshToken doc comment above.
 
   const expiresAtMs = decodeJwtExpiryMs(tokens.accessToken);
   if (expiresAtMs !== null) {
