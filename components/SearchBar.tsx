@@ -17,30 +17,29 @@ import { renderMarkdown } from "@/lib/markdown";
 //
 // Deliberately NOT ported (out of scope for this slice -- see Dash's own
 // comments on _render_search_bar and search_stream.js):
-//   - #search-clear-btn (P4 clear-chat -- needs sessionStorage persistence
-//     this migration hasn't built yet) and the restored-from-sessionStorage
-//     .search-msg-restored rendering it pairs with.
-//   - #agent-internals-panel content (admin-gated by a role context this
-//     app doesn't resolve yet) -- the gear button itself is rendered
-//     `hidden`, matching Dash's own default (hidden=True until a
-//     clientside callback unhides it for admin-context viewers), so there's
-//     nothing behind it to build yet.
+//   - sessionStorage persistence of chat history + the
+//     restored-from-sessionStorage .search-msg-restored rendering it pairs
+//     with (search_stream.js's restoreHistory()/pushHistoryTurn()). The
+//     #search-clear-btn control itself IS ported below (clears in-memory
+//     state); only the cross-reload persistence layer it also resets in
+//     Dash is out of scope here.
 //   - .chat-source-pill / .chat-source-locate-btn (P7 locate-on-graph
 //     glyph) and .chat-images-row -- the pre-existing Chat.tsx never
 //     rendered these either; sources stay the plain-link list it already
 //     had (now styled via the ported .search-msg-sources list class).
 export default function SearchBar() {
-  const { userMsgs, assistant, busy, input, setInput, send, cancel } = useAgentChat();
+  const { userMsgs, assistant, busy, input, setInput, send, cancel, clear } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
 
   // search_stream.js's runStreamingQuery() validates FIRST -- `if (!query ||
   // isStreaming) return;` -- and only then auto-maximizes (`if (bar &&
-  // !isMaximized(bar)) setMaximized(bar, true);`). So an empty/whitespace
-  // send while idle is a no-op in Dash, not an expand. Mirror that: bail
-  // before expand() when there's nothing to send and we're not already busy
-  // (a non-empty in-flight send still expands/sends as before).
+  // !isMaximized(bar)) setMaximized(bar, true);`). So both an empty/
+  // whitespace send AND a send while already streaming are no-ops in Dash
+  // (busy is ALWAYS a no-op -- no expand, no send), not just the former.
+  // Mirror that ordering exactly: busy short-circuits before the input is
+  // even checked.
   const handleSend = useCallback(() => {
-    if (!busy && !input.trim()) return;
+    if (busy || !input.trim()) return;
     expand();
     void send();
   }, [busy, input, expand, send]);
@@ -143,7 +142,21 @@ export default function SearchBar() {
             id="agent-query-input"
             value={input}
             placeholder="Ask about your browsing history..."
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Port of search_keyboard.js:34-38's auto-grow: reset to the
+              // 26px single-line floor first, then grow to scrollHeight
+              // clamped to 80px (~4 rows). Direct style mutation (no React
+              // state) -- matches the source's direct DOM write on the
+              // 'input' listener. Faithful quirk KEPT: this only runs on a
+              // real user input event, so useAgentChat's programmatic
+              // setInput("") after send does NOT reset the height (Dash's
+              // listener is 'input', which a controlled-value React update
+              // never dispatches either).
+              const ta = e.target;
+              ta.style.height = "26px";
+              ta.style.height = `${Math.max(26, Math.min(ta.scrollHeight, 80))}px`;
+            }}
             onKeyDown={(e) => {
               // Enter sends (Shift+Enter for a newline) -- this is PARITY,
               // not an addition: Dash's assets/search_keyboard.js (:22-31)
@@ -151,12 +164,6 @@ export default function SearchBar() {
               // capture phase (so it fires before React's synthetic
               // handlers), calling window.__searchStreamQuery() on a bare
               // Enter. This handler is the port of that wiring.
-              //
-              // KNOWN UNPORTED GAP: search_keyboard.js:34-38 also auto-grows
-              // the textarea 26px -> 80px on input as the query gets
-              // longer. Not implemented here -- flagged for the batch
-              // acceptance gate's fix-or-defer triage, not addressed in
-              // this pass.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
@@ -171,6 +178,20 @@ export default function SearchBar() {
             aria-label={busy ? "Stop" : "Search"}
             onClick={busy ? cancel : handleSend}
           />
+          {/* Clear-chat (P4): NOT admin-gated in Dash (no hidden=True,
+              unlike the gear button below) -- every viewer gets it.
+              graph_canvas.py's clearHistory() only resets chatHistory +
+              empties #search-conversation; it never touches the textarea. */}
+          <button
+            id="search-clear-btn"
+            type="button"
+            className="search-clear-btn"
+            title="Clear conversation"
+            aria-label="Clear conversation"
+            onClick={clear}
+          >
+            {"↺"}
+          </button>
           {/* Admin-gated in Dash (hidden=True until a clientside callback
               unhides it for admin-context viewers) -- rendered hidden here
               too since there's no role context to gate on yet. */}
