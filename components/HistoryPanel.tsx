@@ -39,23 +39,29 @@ export default function HistoryPanel() {
   const [granularity, setGranularity] = useState<Granularity>(DEFAULT_GRANULARITY);
 
   return (
-    <div className="panel-header-band">
-      <p className="panel-header">History</p>
-      <div className="granularity-selector">
-        {GRANULARITY_OPTIONS.map(({ label, short, value }) => (
-          <button
-            key={value}
-            type="button"
-            className={value === granularity ? "granularity-btn active" : "granularity-btn"}
-            onClick={() => setGranularity(value)}
-          >
-            <span>
-              <span className="gran-full">{label}</span>
-              <span className="gran-short">{short}</span>
-            </span>
-          </button>
-        ))}
+    <>
+      <div className="panel-header-band">
+        <p className="panel-header">History</p>
+        <div className="granularity-selector">
+          {GRANULARITY_OPTIONS.map(({ label, short, value }) => (
+            <button
+              key={value}
+              type="button"
+              className={value === granularity ? "granularity-btn active" : "granularity-btn"}
+              onClick={() => setGranularity(value)}
+            >
+              <span>
+                <span className="gran-full">{label}</span>
+                <span className="gran-short">{short}</span>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+      {/* #diary-container (app.py:1963-1966) wraps render_session_diary's
+          output in Dash; empty here until the mig-02 diary lands -- kept for
+          DOM parity with TopicDetailPanel's #detail-container analog. */}
+      <div id="diary-container" />
+    </>
   );
 }
