@@ -71,6 +71,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* Content may be overwritten by the bootstrap script below before
             hydration -- suppress the resulting (harmless) hydration warning. */}
         <style id="theme-root" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: defaultCss }} />
+        {/* Raw <script>, deliberately NOT next/script: the no-flash guarantee
+            requires a synchronous head script that blocks first paint, and
+            next/script's beforeInteractive executes via the framework's async
+            loader with no pre-paint guarantee ("does not block page
+            hydration"). React DEV logs "Encountered a script tag while
+            rendering" for this element on hydration -- known, dev-only, and
+            harmless: the SSR'd copy has already executed by then. */}
         <script dangerouslySetInnerHTML={{ __html: buildThemeBootstrapScript() }} />
       </head>
       <body>
