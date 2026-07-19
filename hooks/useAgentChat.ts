@@ -26,6 +26,7 @@ export interface UseAgentChat {
   setInput: (value: string) => void;
   send: () => Promise<void>;
   cancel: () => void;
+  clear: () => void;
 }
 
 export function useAgentChat(): UseAgentChat {
@@ -82,5 +83,27 @@ export function useAgentChat(): UseAgentChat {
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
 
-  return { userMsgs, assistant, busy, input, setInput, send, cancel };
+  // Port of search_stream.js's clearHistory() (P4), called from the
+  // #search-clear-btn handler in attach(): resets the turn history and
+  // empties #search-conversation, leaving the input text untouched --
+  // Dash's clearHistory() only clears chatHistory/sessionStorage, never
+  // touches the textarea. Sane deviation from Dash: Dash's clearHistory()
+  // doesn't itself cancel an in-flight stream (the DOM it was writing into
+  // just gets wiped out from under it by the click handler's own
+  // `conv.innerHTML = ''`, a detached-node write that's harmless in raw
+  // DOM). React has no equivalent "orphan the node" affordance -- an
+  // in-flight send() would keep calling setAssistant/setUserMsgs against
+  // state this hook still owns after clear(), which would silently
+  // resurrect the just-cleared turn as soon as the next token/complete
+  // event arrived. Cancelling first avoids that: abort() is synchronous,
+  // so the in-flight send()'s catch/finally only ever sees assistant
+  // already null (its `a ? ... : a` update pattern is already a no-op
+  // once that happens).
+  const clear = useCallback(() => {
+    abortRef.current?.abort();
+    setUserMsgs([]);
+    setAssistant(null);
+  }, []);
+
+  return { userMsgs, assistant, busy, input, setInput, send, cancel, clear };
 }
