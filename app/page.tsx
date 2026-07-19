@@ -1,7 +1,9 @@
 import AppShell from "@/components/AppShell";
 import GraphPlaceholder from "@/components/GraphPlaceholder";
+import HistoryPanel from "@/components/HistoryPanel";
 import SearchBar from "@/components/SearchBar";
 import Starfield from "@/components/Starfield";
+import TopicDetailPanel from "@/components/TopicDetailPanel";
 
 // Task 10: chat re-homed into the search-bar overlay. GraphPlaceholder now
 // fills the panel (it's the sole flex child of .panel-center's content
@@ -10,9 +12,14 @@ import Starfield from "@/components/Starfield";
 // sits OVER the graph rather than sharing flex space with it, matching
 // graph_canvas.py's render_graph_canvas() layering (search bar is the last
 // child appended, absolutely positioned at the bottom of .panel-center, not
-// a flex sibling competing for height). Left/right panels render
-// empty-but-classed until their own content (History diary / Topic Detail)
-// is ported.
+// a flex sibling competing for height).
+//
+// Left/right slots now carry their header-band chrome (HistoryPanel,
+// TopicDetailPanel -- mig-01 batch-01 acceptance-gate fix) mirroring
+// app.py's .panel-left/.panel-right (:1926-2005). The actual panel
+// CONTENT below each band -- the session diary, the real topic-detail
+// views -- stays mig-02/explorer-owned (surface-ledger.md) until that
+// batch lands; see each component's own comment for the exact TODO.
 //
 // Starfield renders first, matching Dash's sibling order in
 // render_graph_canvas() (starry-sky-mount, then #d3-graph-container) --
@@ -24,6 +31,7 @@ import Starfield from "@/components/Starfield";
 export default function Home() {
   return (
     <AppShell
+      left={<HistoryPanel />}
       center={
         <>
           <Starfield />
@@ -31,6 +39,7 @@ export default function Home() {
           <SearchBar />
         </>
       }
+      right={<TopicDetailPanel />}
     />
   );
 }
