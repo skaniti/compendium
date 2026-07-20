@@ -153,3 +153,58 @@ export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiu
     return { hasSeen: false, canPersist: false };
   }
 }
+
+export interface InitialSessionRole {
+  // Backend's `role` field off GET /api/auth/me -- "admin" | "demo" |
+  // "user", or null when unauthenticated, the /me read failed, or the
+  // role string wasn't one of the three recognized values. Deliberately
+  // mirrors components/SessionProvider.tsx's own isSessionRole/deriveState
+  // mapping (that module's comment explains why an unrecognized role is
+  // never trusted) -- duplicated here rather than imported, same reasoning
+  // as this file's STARFIELD_VARIANTS duplicate above: SessionProvider.tsx
+  // is a "use client" module, and this file pulls in next/headers, so
+  // there's no shared runtime module the two sides could both import from
+  // without breaking one side of the boundary.
+  role: "admin" | "demo" | "user" | null;
+  // Backend's `acting_as_demo` claim (true only for an admin-launched
+  // view-as-demo session) -- false on any auth/fetch failure, same
+  // "swallow and fall back" contract as the rest of this module.
+  actingAsDemo: boolean;
+}
+
+// Server-side counterpart to SessionProvider's client-side hydration
+// (GET /api/auth/me): reads the signed-in user's role + acting-as-demo
+// state before first paint so AppShell can force CompendiumLoader straight
+// to "return" mode for the demo role (gate-2 walkthrough fix 3, Dash
+// parity -- Dash bakes data-mode="return" for role demo unconditionally,
+// it NEVER serves the first-run tutorial to a demo session, admin-launched
+// or direct). Same cookie-JWT-direct-to-backend pattern as the other
+// getInitialX functions in this module; same "swallow and fall back"
+// contract (role: null, actingAsDemo: false) on any auth/fetch failure --
+// AppShell's own composition falls back to compendiumLoaderSeen/
+// compendiumLoaderCanPersist unchanged in that case (see its own comment).
+export async function getInitialSessionRole(): Promise<InitialSessionRole> {
+  // Deliberately outside the try/catch below -- see the comment on the
+  // equivalent line in getInitialPanelWidths.
+  const token = (await cookies()).get("access_token")?.value;
+  if (!token) return { role: null, actingAsDemo: false };
+
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return { role: null, actingAsDemo: false };
+
+    const data: unknown = await res.json();
+    if (typeof data !== "object" || data === null) return { role: null, actingAsDemo: false };
+
+    const rawRole = (data as Record<string, unknown>).role;
+    const role = rawRole === "admin" || rawRole === "demo" || rawRole === "user" ? rawRole : null;
+    const actingAsDemo = (data as Record<string, unknown>).acting_as_demo === true;
+    return { role, actingAsDemo };
+  } catch (err) {
+    console.error("getInitialSessionRole failed:", err);
+    return { role: null, actingAsDemo: false };
+  }
+}

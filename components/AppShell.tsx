@@ -6,6 +6,7 @@ import StarfieldProvider from "./StarfieldProvider";
 import {
   getInitialCompendiumLoaderSeen,
   getInitialPanelWidths,
+  getInitialSessionRole,
   getInitialStarfieldVariant,
 } from "@/lib/preferences.server";
 
@@ -28,6 +29,7 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
     { panelLeftWidth, panelRightWidth },
     initialStarfieldVariant,
     { hasSeen: compendiumLoaderSeen, canPersist: compendiumLoaderCanPersist },
+    { role: sessionRole, actingAsDemo },
   ] = await Promise.all([
     getInitialPanelWidths(),
     // Same "read before first paint" role as the panel widths above, so
@@ -41,7 +43,31 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
     // getInitialCompendiumLoaderSeen's own comment for why this must be
     // resolved server-side (avoids a first-run/return flash).
     getInitialCompendiumLoaderSeen(),
+    // Gate-2 walkthrough fix 3 (Dash parity): the demo role must NEVER see
+    // the first-run tutorial. Dash bakes data-mode="return" for role demo
+    // unconditionally -- direct demo login AND admin-launched view-as-demo
+    // both get "return" mode, regardless of that account's own
+    // compendium_loader_seen preference. Without this, "admin -> view
+    // demo" showed first-run whenever the demo account's OWN prefs row
+    // happened to have compendium_loader_seen unset (observed live).
+    getInitialSessionRole(),
   ]);
+
+  const isPlainDemo = sessionRole === "demo" && !actingAsDemo;
+  // Force return mode for any demo-role view (direct login or
+  // admin-launched acting session) even if this account's own
+  // compendium_loader_seen preference says otherwise.
+  const forceReturnMode = sessionRole === "demo" || actingAsDemo;
+  const initialHasSeen = compendiumLoaderSeen || forceReturnMode;
+  // Plain (direct-login, non-acting) demo can never persist preferences
+  // server-side -- the backend's update_preferences 403s that PATCH (see
+  // its own is_plain_demo gate) -- so skip the pointless write attempt
+  // client-side rather than let CompendiumLoader's first-run dismiss fire
+  // one anyway. Acting-as-demo is NOT narrowed here: it already resolves
+  // canPersist=true via getInitialCompendiumLoaderSeen (a valid token +
+  // successful preferences read), and Dash's own behavior is that an
+  // admin-launched demo session's writes land on the demo row.
+  const canPersist = isPlainDemo ? false : compendiumLoaderCanPersist;
 
   return (
     <StarfieldProvider initialVariant={initialStarfieldVariant}>
@@ -49,10 +75,7 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           app/styles/compendium-loader.css) -- rendered first so it's the
           first thing painted, though its own z-index (not DOM order) is
           what actually pins it above Header/PanelGrid. */}
-      <CompendiumLoader
-        initialHasSeen={compendiumLoaderSeen}
-        canPersist={compendiumLoaderCanPersist}
-      />
+      <CompendiumLoader initialHasSeen={initialHasSeen} canPersist={canPersist} />
       <Header />
       {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
           .app-header. #header-graph-controls animates its mode-swap via
