@@ -20,15 +20,21 @@ const THEME_STORAGE_KEY = "compendium-theme";
 // suffix, then fall back to the default for anything still unrecognized
 // (e.g. a retired palette name persisted from old prefs).
 //
-// Runs before first paint (a head script blocks paint) and swaps
-// #theme-root's textContent to the localStorage-selected variant's CSS, so
-// there is no flash of the server-rendered default palette. All 8 variants'
-// CSS is embedded here (~6KB total) so the swap needs no network round trip.
-// Exported test-only: app/layout.test.tsx evals the generated IIFE in jsdom
-// to pin it against lib/theme.ts's normalizeVariant/getTokens/generateCssText
-// -- the hand-rolled string logic below (strip trailing " Dark", unknown ->
-// default) has to stay byte-for-byte in sync with that module by hand, since
-// this script is inlined with no import of it.
+// Runs before first paint (a head script blocks paint) and swaps every
+// #theme-root style node's textContent to the localStorage-selected
+// variant's CSS, so there is no flash of the server-rendered default
+// palette. Targets ALL matching nodes via querySelectorAll, not just the
+// first: React hydration later inserts a SECOND #theme-root into <head>
+// (after the font style) alongside this server-emitted one, and the
+// cascade only honors the LAST style element in document order -- writing
+// to a single node (getElementById returns the first) left the second,
+// React-owned node holding stale CSS that silently won. All 8 variants'
+// CSS is embedded here (~6KB total) so the swap needs no network round
+// trip. Exported test-only: app/layout.test.tsx evals the generated IIFE in
+// jsdom to pin it against lib/theme.ts's normalizeVariant/getTokens/
+// generateCssText -- the hand-rolled string logic below (strip trailing "
+// Dark", unknown -> default) has to stay byte-for-byte in sync with that
+// module by hand, since this script is inlined with no import of it.
 export function buildThemeBootstrapScript(): string {
   const names = getPaletteNames();
   const cssByVariant: Record<string, string> = {};
@@ -53,8 +59,10 @@ export function buildThemeBootstrapScript(): string {
     var variant = d.names.indexOf(stripped) !== -1 ? stripped : d.default;
     var css = d.css[variant];
     if (css) {
-      var el = document.getElementById("theme-root");
-      if (el) el.textContent = css;
+      var els = document.querySelectorAll('style#theme-root');
+      for (var i = 0; i < els.length; i++) {
+        els[i].textContent = css;
+      }
     }
   } catch (e) {
     // localStorage can throw (disabled, private mode); leave the

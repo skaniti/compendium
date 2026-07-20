@@ -24,6 +24,23 @@ function seedThemeRoot(): HTMLStyleElement {
   return style;
 }
 
+// React hydration inserts a SECOND #theme-root into <head> (after the font
+// style) alongside the server-emitted one this script mutates -- see
+// buildThemeBootstrapScript's own comment. Seeds two nodes so the
+// querySelectorAll-based write is pinned to touch both, not just the first
+// (document.getElementById would silently miss the second).
+function seedTwoThemeRoots(): [HTMLStyleElement, HTMLStyleElement] {
+  document.body.innerHTML = "";
+  const nodes = [0, 1].map(() => {
+    const style = document.createElement("style");
+    style.id = "theme-root";
+    style.textContent = generateCssText(getTokens(DEFAULT_VARIANT));
+    document.body.appendChild(style);
+    return style;
+  });
+  return nodes as [HTMLStyleElement, HTMLStyleElement];
+}
+
 function runBootstrapScript(): void {
   // Test-only eval of a string this same test file's own build step
   // produced (buildThemeBootstrapScript() over lib/theme-goldens.json) --
@@ -93,5 +110,23 @@ describe("buildThemeBootstrapScript stays in sync with lib/theme.ts", () => {
     runBootstrapScript();
 
     expect(style.textContent).toBe(before);
+  });
+
+  it("writes the swapped CSS onto EVERY #theme-root node, not just the first (React-inserted duplicate)", () => {
+    // Regression: React hydration inserts a second #theme-root into <head>
+    // alongside the server-emitted one this script mutates pre-paint. A
+    // getElementById-based write only reaches the first node; the browser
+    // cascade honors the LAST style element in document order, so the
+    // second node's stale CSS silently won even though the "first" node
+    // looked correct in the DOM.
+    const stored = "Pink";
+    localStorage.setItem(STORAGE_KEY, stored);
+    const [first, second] = seedTwoThemeRoots();
+
+    runBootstrapScript();
+
+    const expectedCss = generateCssText(getTokens(normalizeVariant(stored)));
+    expect(first.textContent).toBe(expectedCss);
+    expect(second.textContent).toBe(expectedCss);
   });
 });

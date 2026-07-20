@@ -51,9 +51,20 @@ function writeStoredVariant(variant: string): void {
   }
 }
 
+// Targets EVERY #theme-root style node, not just the first: React
+// hydration inserts a SECOND #theme-root into <head> (after the font
+// style) alongside the server-emitted one the pre-paint bootstrap script
+// (app/layout.tsx's buildThemeBootstrapScript) mutated. The cascade only
+// honors the LAST style element in document order, so document
+// .getElementById (first match only) would write CSS the browser then
+// silently ignores -- observed live as a palette pick that "took" in the
+// DOM but never changed anything on screen. Writing to both nodes is
+// harmless: once they agree, which one "wins" the cascade doesn't matter.
 function applyToDom(variant: string): void {
-  const el = document.getElementById("theme-root");
-  if (el) el.textContent = generateCssText(getTokens(variant));
+  const css = generateCssText(getTokens(variant));
+  document.querySelectorAll("style#theme-root").forEach((el) => {
+    el.textContent = css;
+  });
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
@@ -81,6 +92,16 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
   // user switched palettes on another device). Applies the server value and
   // writes it back to localStorage; deliberately does NOT re-PATCH, since
   // the value just came from the server.
+  //
+  // Every exit path below ends with an applyToDom(variantRef.current) call
+  // (except the true early-out at `cancelled`, which unmounted before there
+  // was anything left to correct) -- an idempotent re-assert onto every
+  // #theme-root node, including a React-inserted stale duplicate. Without
+  // this, a mount where the server value equals what's already applied
+  // (the common case) took the early-return branches below and never
+  // re-wrote the DOM at all, so a stale second #theme-root node from
+  // hydration was left holding the wrong CSS indefinitely -- see
+  // applyToDom's own comment for the full mechanism.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -88,7 +109,10 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         const prefs = await getPreferences();
         if (cancelled) return;
         const serverTheme = prefs.theme;
-        if (typeof serverTheme !== "string") return;
+        if (typeof serverTheme !== "string") {
+          applyToDom(variantRef.current);
+          return;
+        }
         const serverVariant = normalizeVariant(serverTheme);
         // Read the latest variant via the ref, not the `variant` closed
         // over at mount -- a setVariant() call can race this in-flight GET
@@ -96,7 +120,10 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         // updater (state updaters must stay pure / can double-invoke under
         // StrictMode); the actual setVariantState call below is a plain,
         // side-effect-free call.
-        if (serverVariant === variantRef.current) return;
+        if (serverVariant === variantRef.current) {
+          applyToDom(variantRef.current);
+          return;
+        }
 
         // Server fully wins: if a setVariant() call raced this GET and
         // already scheduled a debounced PATCH, cancel it. Otherwise that
@@ -112,8 +139,10 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         writeStoredVariant(serverVariant);
       } catch (err) {
         // A failed preference read must never break the UI -- keep
-        // whatever variant is already applied (pre-paint/localStorage).
+        // whatever variant is already applied (pre-paint/localStorage), but
+        // still re-assert it onto every #theme-root node.
         console.error("ThemeProvider: failed to hydrate server preference:", err);
+        if (!cancelled) applyToDom(variantRef.current);
       }
     })();
     return () => {

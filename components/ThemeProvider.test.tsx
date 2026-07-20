@@ -159,6 +159,56 @@ describe("ThemeProvider", () => {
     expect(screen.getByTestId("variant")).toHaveTextContent(DEFAULT_VARIANT);
   });
 
+  it("setVariant rewrites EVERY #theme-root node, not just the first (React-inserted duplicate)", async () => {
+    // Regression for the confirmed live bug: React hydration inserts a
+    // SECOND #theme-root into <head> alongside the server-emitted one the
+    // pre-paint bootstrap mutated. document.getElementById returns only the
+    // FIRST node, so a single-node write left the cascade-winning LAST node
+    // stuck on stale CSS -- a palette pick that visibly did nothing.
+    document.body.innerHTML =
+      '<style id="theme-root"></style><style id="theme-root"></style><div id="root"></div>';
+    render(
+      <ThemeProvider>
+        <Consumer />
+      </ThemeProvider>
+    );
+
+    await userEvent.click(screen.getByText("pink"));
+
+    const nodes = document.querySelectorAll("style#theme-root");
+    expect(nodes).toHaveLength(2);
+    const expectedCss = generateCssText(getTokens("Pink"));
+    nodes.forEach((node) => expect(node.textContent).toBe(expectedCss));
+  });
+
+  it("re-asserts onto a stale duplicate #theme-root node after hydration, even when the server value matches the current variant", async () => {
+    // Same duplicate-node scenario, but exercising the hydration effect's
+    // early-return path (server value === current variant) rather than
+    // setVariant -- this is the branch that used to skip applyToDom
+    // entirely, leaving a React-inserted stale second node uncorrected
+    // forever since nothing else ever re-asserts onto it.
+    document.body.innerHTML =
+      '<style id="theme-root"></style>' +
+      '<style id="theme-root">stale-stand-in-for-a-different-palette</style>' +
+      '<div id="root"></div>';
+    vi.spyOn(preferences, "getPreferences").mockResolvedValue({ theme: DEFAULT_VARIANT });
+
+    render(
+      <ThemeProvider>
+        <Consumer />
+      </ThemeProvider>
+    );
+
+    await waitFor(() => expect(preferences.getPreferences).toHaveBeenCalled());
+
+    const expectedCss = generateCssText(getTokens(DEFAULT_VARIANT));
+    await waitFor(() => {
+      document.querySelectorAll("style#theme-root").forEach((node) => {
+        expect(node.textContent).toBe(expectedCss);
+      });
+    });
+  });
+
   it("throws when useTheme is called outside a ThemeProvider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     function Bare() {
