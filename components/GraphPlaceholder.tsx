@@ -1,4 +1,8 @@
+"use client";
+
 import type { CSSProperties } from "react";
+import { useSession } from "./SessionProvider";
+import { apiFetch } from "@/lib/api";
 
 // Ports graph_canvas.py's #d3-graph-container (:769-778) + the
 // #compendium-empty-state overlay (:787-843) it hosts. Dash renders these
@@ -76,9 +80,21 @@ const EMPTY_STATE_CTA_STYLE: CSSProperties = {
   pointerEvents: "auto",
 };
 
-// TODO(mig-03): remove this dev note (and DEV_NOTE_STYLE above it) when the
-// graph lands.
-const DEV_NOTE_STYLE: CSSProperties = {
+// Ports graph_canvas.py's #graph-debug-overlay wrapper (:735-745) -- an
+// admin-context-only monospace strip in the same top-left corner this
+// component already used for its (mig-03 TODO) dev-note placeholder text.
+// Dash gates the WHOLE wrapper's visibility to role==='admin' ||
+// admin_launched_demo (app.py's #5 clientside callback, 2026-07-13); this
+// port deliberately does NOT replicate that outer gate -- the placeholder
+// text below still has to be visible to every role until the real graph
+// lands (nothing else occupies this slot), so only the two trigger links
+// inside are individually gated, mirroring Dash's own per-link callbacks
+// (#3, same file) exactly. Unlike the "graph arrives in a later slice" dev
+// note, this wrapper is NOT temporary -- Dash's own #graph-debug-overlay
+// persists indefinitely as the home for these two triggers, so it survives
+// past the TODO(mig-03) graph landing even though the dev-note text itself
+// gets deleted then.
+const GRAPH_DEBUG_OVERLAY_STYLE: CSSProperties = {
   position: "absolute",
   top: "8px",
   left: "8px",
@@ -87,6 +103,27 @@ const DEV_NOTE_STYLE: CSSProperties = {
   opacity: 0.5,
   zIndex: 3,
   fontFamily: "monospace",
+};
+
+// Verbatim port of the inline button style dict graph_canvas.py uses for
+// both "view demo" and "return to admin" (:660-670, :693-703).
+const DEBUG_LINK_BUTTON_STYLE: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: "0",
+  margin: "0",
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+  textDecoration: "none",
+};
+
+// Verbatim port of the " | " separator span style following each trigger
+// (:672-677, :705-710).
+const DEBUG_LINK_SEPARATOR_STYLE: CSSProperties = {
+  opacity: 0.3,
+  marginLeft: "4px",
+  marginRight: "4px",
 };
 
 // Verbatim copy from graph_canvas.py's _EMPTY_STATE_BODY / _PRIVACY / _CTA
@@ -104,6 +141,45 @@ const EMPTY_STATE_CTA = "Get the extension ->";
 const EMPTY_STATE_CTA_HREF = "";
 
 export default function GraphPlaceholder() {
+  const { role, actingAsDemo } = useSession();
+
+  // JWT port of Dash's admin-only /__view_as_demo switch (D5, batch 04) --
+  // moved here from components/Header.tsx (2026-07-13 Dash relocation into
+  // the graph-canvas debug overlay; this is that same move, ported). No
+  // body: app/api/auth/view-as/route.ts doesn't read the request at all --
+  // it hardcodes {profile: "demo"} itself before calling the backend (the
+  // only profile this UI ever offers), so sending one here would be dead
+  // weight.
+  // Non-2xx (403 not-admin/already-acting/demo-unavailable, 401, 5xx) is
+  // logged and left for the admin to retry -- the route contract
+  // deliberately leaves cookies untouched on failure, so there's no
+  // session to recover from here.
+  async function handleViewDemo(): Promise<void> {
+    const res = await apiFetch("/api/auth/view-as", { method: "POST" });
+    if (!res.ok) {
+      console.error("view-as failed:", res.status);
+      return;
+    }
+    // Full navigation, not client-side state surgery -- Dash's own
+    // /__view_as_demo redirects to "/" for the same reason: every
+    // server-read preference/role needs to re-hydrate against the new
+    // (demo-scoped) identity, not just the parts of the UI this component
+    // happens to own.
+    window.location.assign("/");
+  }
+
+  // JWT port of Dash's /__return_to_admin (D5, batch 04) -- same
+  // full-navigation rationale as handleViewDemo above, also moved here from
+  // Header.tsx.
+  async function handleReturnToAdmin(): Promise<void> {
+    const res = await apiFetch("/api/auth/return", { method: "POST" });
+    if (!res.ok) {
+      console.error("return-to-admin failed:", res.status);
+      return;
+    }
+    window.location.assign("/");
+  }
+
   return (
     <div id="d3-graph-container" style={D3_GRAPH_CONTAINER_STYLE}>
       <div id="compendium-empty-state" style={EMPTY_STATE_STYLE}>
@@ -113,8 +189,32 @@ export default function GraphPlaceholder() {
           {EMPTY_STATE_CTA}
         </a>
       </div>
-      {/* TODO(mig-03): remove when the graph lands. */}
-      <div style={DEV_NOTE_STYLE}>graph arrives in a later slice</div>
+      <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
+        {role === "admin" && !actingAsDemo && (
+          <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
+            <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
+              view demo
+            </button>
+            <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+          </span>
+        )}
+        {actingAsDemo && (
+          <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
+            <button
+              type="button"
+              style={DEBUG_LINK_BUTTON_STYLE}
+              onClick={() => void handleReturnToAdmin()}
+            >
+              return to admin
+            </button>
+            <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+          </span>
+        )}
+        {/* TODO(mig-03): remove this placeholder text (not the wrapper
+            above -- see GRAPH_DEBUG_OVERLAY_STYLE's comment) when the graph
+            lands. */}
+        graph arrives in a later slice
+      </div>
     </div>
   );
 }

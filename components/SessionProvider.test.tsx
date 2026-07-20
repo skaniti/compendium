@@ -9,11 +9,13 @@ import * as StarfieldProviderModule from "./StarfieldProvider";
 // D4/D5 (batch 04 auth/session parity): useSession() context, hydrated from
 // GET /api/auth/me via apiFetch (established mock convention -- see
 // lib/api.test.ts, components/SessionKeeper.test.tsx). Header consumes the
-// context directly now (no more of its own fetch), so the role-gating
-// matrix (admin sees "view demo", an acting session sees the floating
-// "Return to admin" button, a plain user/demo sees neither) is exercised
-// here by rendering Header inside a real SessionProvider rather than
-// against a bare Consumer -- that's the only place the gated DOM lives.
+// context directly now (no more of its own fetch) for `account` and to host
+// SettingsMenu -- the admin/demo view-as/return-to-admin role-gating matrix
+// that used to live (and get tested) here moved into GraphPlaceholder (gate
+// 2 walkthrough fix 2, Dash parity: the graph-canvas debug overlay), so
+// that gating coverage now lives in GraphPlaceholder.test.tsx instead. What
+// remains here is SessionKeeper suspension wiring, which only needs SOME
+// useSession() consumer in the tree -- Header still qualifies.
 
 const CHECK_INTERVAL_MS = 60_000;
 const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";
@@ -256,7 +258,7 @@ describe("SessionProvider / useSession", () => {
   });
 });
 
-describe("Header role-gated UI (via SessionProvider)", () => {
+describe("Header + session wiring (via SessionProvider)", () => {
   // Header renders SettingsMenu, which consumes useTheme()/useStarfield()
   // directly -- same mocking convention SettingsMenu.test.tsx already
   // established (mock the hooks rather than standing up real
@@ -272,80 +274,6 @@ describe("Header role-gated UI (via SessionProvider)", () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     clearSessionExpiresAtCookie();
-  });
-
-  it("admin: sees the view-demo action, not the return-to-admin button", async () => {
-    mockApiFetch({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false });
-
-    render(
-      <SessionProvider>
-        <Header />
-      </SessionProvider>
-    );
-
-    await waitFor(() => expect(screen.getByText("view demo")).toBeInTheDocument());
-    expect(screen.queryByText("Return to admin")).not.toBeInTheDocument();
-  });
-
-  it("acting-as-demo: sees the floating return-to-admin button, not the view-demo action", async () => {
-    mockApiFetch({
-      id: 2,
-      email: "demo@example.com",
-      role: "demo",
-      acting_as_demo: true,
-      admin_origin_email: "admin@example.com",
-    });
-
-    render(
-      <SessionProvider>
-        <Header />
-      </SessionProvider>
-    );
-
-    await waitFor(() => expect(screen.getByText("Return to admin")).toBeInTheDocument());
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-  });
-
-  it("plain user: sees neither the view-demo action nor the return-to-admin button", async () => {
-    mockApiFetch({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false });
-
-    render(
-      <SessionProvider>
-        <Header />
-      </SessionProvider>
-    );
-
-    await waitFor(() => expect(document.getElementById("account-display")).toHaveTextContent("user@example.com"));
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-    expect(screen.queryByText("Return to admin")).not.toBeInTheDocument();
-  });
-
-  it("plain (direct) demo login: sees neither -- role demo but acting_as_demo false", async () => {
-    mockApiFetch({ id: 2, email: "demo@example.com", role: "demo", acting_as_demo: false });
-
-    render(
-      <SessionProvider>
-        <Header />
-      </SessionProvider>
-    );
-
-    await waitFor(() => expect(document.getElementById("account-display")).toHaveTextContent("demo@example.com"));
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-    expect(screen.queryByText("Return to admin")).not.toBeInTheDocument();
-  });
-
-  it("signed-out default: renders safely with neither gated action", async () => {
-    mockApiFetch({ error: "unauthorized" }, 401);
-
-    render(
-      <SessionProvider>
-        <Header />
-      </SessionProvider>
-    );
-
-    await waitFor(() => expect(document.getElementById("account-display")).toHaveTextContent("—"));
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-    expect(screen.queryByText("Return to admin")).not.toBeInTheDocument();
   });
 
   // Wiring regression guard (design decision 2): SessionProvider mounts
