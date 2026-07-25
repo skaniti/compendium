@@ -41,11 +41,15 @@ export function getPaletteNames(): string[] {
 }
 
 function requireVariantEntry(variant: string): VariantEntry {
-  const entry = goldens.variants[variant];
-  if (!entry) {
+  // Object.hasOwn, not `goldens.variants[variant]` truthiness: a
+  // caller-supplied key like "constructor" or "__proto__" resolves through
+  // the prototype chain to a real (truthy) value -- Object, Object.prototype
+  // -- so a bare `!entry` check would silently treat those as valid variants
+  // instead of falling back like any other unknown name.
+  if (!Object.hasOwn(goldens.variants, variant)) {
     throw new Error(`Unknown palette variant: "${variant}"`);
   }
-  return entry;
+  return goldens.variants[variant];
 }
 
 export function getTokens(variant: string): Record<string, string> {

@@ -10,11 +10,17 @@ import {
   normalizeVariant,
 } from "./theme";
 
-const VARIANT_NAMES = Object.keys(goldens.variants);
+// Pinned as LITERAL strings (not Object.keys(goldens.variants), which the
+// implementation under test also derives its own list from) -- comparing
+// against the goldens module's own keys is tautological, since a goldens
+// regeneration that accidentally drops or renames a palette would shift
+// both sides together and the test would keep passing. Read directly from
+// theme-goldens.json (`active` + `variants` keys) at the time of writing.
+const PALETTE_NAMES = ["Pink", "Orange", "Brown", "Green", "Teal", "Blue", "Purple", "Grey"];
 
 describe("getPaletteNames", () => {
   it("returns the 8 bare palette names in goldens order", () => {
-    expect(getPaletteNames()).toEqual(VARIANT_NAMES);
+    expect(getPaletteNames()).toEqual(PALETTE_NAMES);
     expect(getPaletteNames()).toHaveLength(8);
   });
 
@@ -37,7 +43,7 @@ describe("getTokens", () => {
   });
 
   it("matches the golden entry for every variant", () => {
-    for (const name of VARIANT_NAMES) {
+    for (const name of PALETTE_NAMES) {
       expect(getTokens(name)).toEqual(
         goldens.variants[name as keyof typeof goldens.variants].tokens
       );
@@ -65,9 +71,29 @@ describe("getGalaxyStops", () => {
   });
 });
 
+describe("prototype-key hardening (requireVariantEntry)", () => {
+  // A plain `goldens.variants[variant]` truthiness check resolves
+  // "constructor"/"__proto__"/etc. through the prototype chain to a real,
+  // truthy value instead of undefined -- these must fall back to throwing
+  // like any other unknown variant name, not resolve to a prototype member.
+  it.each(["constructor", "__proto__", "hasOwnProperty", "toString", "valueOf"])(
+    "getTokens falls back to throwing for the prototype-key %s",
+    (key) => {
+      expect(() => getTokens(key)).toThrow(/Unknown palette variant/);
+    }
+  );
+
+  it.each(["constructor", "__proto__", "hasOwnProperty", "toString", "valueOf"])(
+    "getGalaxyStops falls back to throwing for the prototype-key %s",
+    (key) => {
+      expect(() => getGalaxyStops(key)).toThrow(/Unknown palette variant/);
+    }
+  );
+});
+
 describe("generateCssText", () => {
   it("reproduces the golden css_text byte-for-byte for every variant", () => {
-    for (const name of VARIANT_NAMES) {
+    for (const name of PALETTE_NAMES) {
       const entry = goldens.variants[name as keyof typeof goldens.variants];
       expect(generateCssText(entry.tokens)).toBe(entry.css_text);
     }
