@@ -32,4 +32,16 @@ interface Window {
   // comment for why this replaces Dash's window.dash_clientside.set_props
   // store write.
   __compendiumLoaderOnSeen?: () => void;
+  // Explicit idempotence latch (mig-02 carryover) owned entirely by
+  // components/CompendiumLoader.tsx's mount effect -- true once that
+  // effect has started the vendor bootstrap (dynamic import + tryDismiss
+  // trigger) once, so a later remount's effect run skips re-entering that
+  // flow instead of re-running it against a vendor instance that already
+  // finished initializing (see that effect's own comment for the hazard
+  // this prevents). Window-scoped rather than a module-level variable so
+  // it behaves identically to window.__compendiumLoader's own lifetime
+  // (persists across a real unmount/remount within the same page load,
+  // resets on an actual page reload) -- and so it can be reset per-test
+  // the same way the other two globals here already are.
+  __compendiumLoaderVendorInitStarted?: boolean;
 }

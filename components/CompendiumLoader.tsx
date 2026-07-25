@@ -141,6 +141,53 @@ export default function CompendiumLoader({
   const mode = initialHasSeen ? "return" : "first-run";
 
   useEffect(() => {
+    // Bridge for lib/vendor/compendium-loader.js's finishDismiss() (see
+    // that file's header comment on this edit): the Dash original writes
+    // a `compendium-loader-seen-store` value that a server callback
+    // observes and persists as {compendium_loader_seen: true} (a BOOLEAN
+    // -- corrected fact #1, not the store write's `{ts: Date.now()}}`
+    // payload shape). Registered before the dynamic import below so it's
+    // always in place before the vendor module's initLoader() can run.
+    // Re-registered on every mount (unlike the guarded block below) --
+    // the cleanup at the bottom of this effect deletes it on every
+    // unmount, so a later remount needs it put back or finishDismiss()'s
+    // `typeof window.__compendiumLoaderOnSeen === 'function'` check would
+    // silently stop persisting the seen-flag after any unmount/remount.
+    window.__compendiumLoaderOnSeen = () => {
+      void patchPreferences({ compendium_loader_seen: true });
+    };
+
+    // Explicit idempotence latch (mig-02 carryover -- previously an
+    // unstated side effect of lib/vendor/compendium-loader.js's dynamic
+    // import() being ESM-cached, documented only in this test file's own
+    // comment, not in source). LOAD-BEARING CONSTRAINT: the vendor
+    // module's top-level IIFE initializes ONCE per module load -- it polls
+    // for #compendium-loader, binds window.__compendiumLoader to THAT
+    // node, and never re-arms. Even though the IIFE itself only ever runs
+    // once (ESM caching), without this guard a SECOND mount's .then()
+    // callback below (this file's own tryDismiss trigger, not the vendor
+    // file's) would still re-run and call window.__compendiumLoader.dismiss()
+    // -- harmless today (nothing remounts yet; batch 02 keeps nav
+    // state-only), but wrong the moment a remount can target a genuinely
+    // fresh #compendium-loader node (client-side route navigation): that
+    // node's overlay would never initialize, and dismiss() would keep
+    // toggling classes on the OLD, now-detached node, leaving the new
+    // node's pointer-events-active full-screen curtain stuck up forever
+    // with no working dismiss path. This guard makes the "don't re-run
+    // vendor init" latch explicit and skips the whole flow on a remount;
+    // it does NOT yet solve remounting itself -- a real vendor `reinit(el)`
+    // hook that re-binds to the fresh node is still required before this
+    // guard's skip becomes correct instead of merely inert. That hook must
+    // land before any client-side navigation is introduced into this app.
+    // (window-scoped, not a module-level variable -- see vendor.d.ts's own
+    // comment on this flag for why.)
+    if (window.__compendiumLoaderVendorInitStarted) {
+      return () => {
+        delete window.__compendiumLoaderOnSeen;
+      };
+    }
+    window.__compendiumLoaderVendorInitStarted = true;
+
     let cancelled = false;
     // Bare setTimeout/clearTimeout (not window.*), matching
     // ThemeProvider.tsx's debounceRef pattern -- ReturnType<typeof
@@ -151,33 +198,6 @@ export default function CompendiumLoader({
     // number-vs-Timeout mismatch during `next build`'s type check.
     let pollId: ReturnType<typeof setTimeout> | undefined;
 
-    // Bridge for lib/vendor/compendium-loader.js's finishDismiss() (see
-    // that file's header comment on this edit): the Dash original writes
-    // a `compendium-loader-seen-store` value that a server callback
-    // observes and persists as {compendium_loader_seen: true} (a BOOLEAN
-    // -- corrected fact #1, not the store write's `{ts: Date.now()}}`
-    // payload shape). Registered before the dynamic import below so it's
-    // always in place before the vendor module's initLoader() can run.
-    window.__compendiumLoaderOnSeen = () => {
-      void patchPreferences({ compendium_loader_seen: true });
-    };
-
-    // TODO(mig-02/03) LOAD-BEARING CONSTRAINT: lib/vendor/compendium-loader.js
-    // initializes ONCE per module load -- its top-level IIFE polls for
-    // #compendium-loader, binds window.__compendiumLoader to THAT node, and
-    // never re-arms. The dynamic import() below is ESM-cached, so across this
-    // app's whole lifetime the vendor module's init logic only ever runs
-    // against the FIRST #compendium-loader node it finds. If this component
-    // ever unmounts and remounts against a fresh node -- client-side route
-    // navigation, a conditional shell re-render (neither exists yet; today
-    // sign-out/login are full page loads, which reset the module registry
-    // for free) -- the new node's overlay never initializes, and
-    // window.__compendiumLoader.dismiss() keeps toggling classes on the OLD,
-    // now-detached node. Net effect: the new node's pointer-events-active
-    // full-screen curtain stays up permanently with no working dismiss path.
-    // A re-init guard (reset the "already initialized" flag on remount) or a
-    // vendor `reinit(el)` hook that re-binds to the fresh node must land
-    // before any client-side navigation is introduced into this app.
     void import("@/lib/vendor/compendium-loader.js").then(() => {
       if (cancelled) return;
       // TODO(mig-03): this is a stand-in dismiss trigger, not the real
