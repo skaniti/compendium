@@ -92,9 +92,11 @@ export async function getInitialPanelWidths(): Promise<InitialPanelWidths> {
 // (mirrors app.py's _active_starfield resolution, :74-85) so AppShell can
 // pass it down as StarfieldProvider's initialVariant prop with no
 // client-side GET and no flash of the wrong variant. Same
-// cookie-JWT-direct-to-backend pattern as getInitialPanelWidths above
-// (duplicated rather than shared, matching that function's own established
-// per-concern-fetch shape); falls back to DEFAULT_STARFIELD_VARIANT on any
+// cookie-JWT-direct-to-backend pattern as getInitialPanelWidths above --
+// the underlying fetch itself IS shared with it (and with
+// getInitialCompendiumLoaderSeen) through fetchPreferencesRow's
+// React.cache() wrapper above, so calling this alongside those costs no
+// extra network round-trip; falls back to DEFAULT_STARFIELD_VARIANT on any
 // failure or invalid/missing persisted value, same "swallow and fall back"
 // contract as the rest of this module.
 export async function getInitialStarfieldVariant(): Promise<string> {
@@ -141,9 +143,10 @@ export interface InitialCompendiumLoaderState {
 // implementation can't avoid") so AppShell can pass both fields down as
 // CompendiumLoader's initialHasSeen/canPersist props with no client-side
 // GET and no flash of the wrong mode. Same cookie-JWT-direct-to-backend
-// pattern as getInitialPanelWidths/getInitialStarfieldVariant above
-// (duplicated per that established per-concern-fetch convention, not
-// shared).
+// pattern as getInitialPanelWidths/getInitialStarfieldVariant above -- and,
+// like those two, the underlying fetch itself IS shared with them through
+// fetchPreferencesRow's React.cache() wrapper above (one round-trip backs
+// all three readers when called together, as AppShell does).
 export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiumLoaderState> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.

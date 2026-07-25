@@ -33,15 +33,26 @@ interface Window {
   // store write.
   __compendiumLoaderOnSeen?: () => void;
   // Explicit idempotence latch (mig-02 carryover) owned entirely by
-  // components/CompendiumLoader.tsx's mount effect -- true once that
-  // effect has started the vendor bootstrap (dynamic import + tryDismiss
-  // trigger) once, so a later remount's effect run skips re-entering that
-  // flow instead of re-running it against a vendor instance that already
-  // finished initializing (see that effect's own comment for the hazard
-  // this prevents). Window-scoped rather than a module-level variable so
-  // it behaves identically to window.__compendiumLoader's own lifetime
-  // (persists across a real unmount/remount within the same page load,
-  // resets on an actual page reload) -- and so it can be reset per-test
-  // the same way the other two globals here already are.
+  // components/CompendiumLoader.tsx's mount effect -- true once a mount's
+  // vendor bootstrap (dynamic import + tryDismiss trigger) has reached a
+  // TERMINAL state (found window.__compendiumLoader and dismissed it, or
+  // gave up after MAX_TRIES), so a later remount's effect run skips
+  // re-entering that flow instead of re-running it against a vendor
+  // instance that already finished initializing (see that effect's own
+  // comment for the hazard this prevents). Deliberately NOT set permanently
+  // just because a run STARTED the flow: if a run's cleanup fires before
+  // its flow reaches a terminal state (e.g. React StrictMode's dev-mode
+  // synchronous mount -> cleanup -> mount, which this repo gets for free
+  // since next.config.ts never overrides the App Router's
+  // reactStrictMode-defaults-true), that run's own effect rolls this flag
+  // back to false so the NEXT mount starts fresh -- otherwise the second,
+  // real, persisted mount would see this already "started" by a run that
+  // never got anywhere and skip initializing entirely, leaving the loader
+  // curtain stuck up forever in every dev session. Window-scoped rather
+  // than a module-level variable so it behaves identically to
+  // window.__compendiumLoader's own lifetime (persists across a real
+  // unmount/remount within the same page load, resets on an actual page
+  // reload) -- and so it can be reset per-test the same way the other two
+  // globals here already are.
   __compendiumLoaderVendorInitStarted?: boolean;
 }

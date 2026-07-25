@@ -181,6 +181,19 @@ export default function CompendiumLoader({
     // land before any client-side navigation is introduced into this app.
     // (window-scoped, not a module-level variable -- see vendor.d.ts's own
     // comment on this flag for why.)
+    //
+    // IMPORTANT: this only latches PERMANENTLY once this run's bootstrap
+    // flow actually reaches a terminal state (see `completed` below) --
+    // Next's App Router defaults reactStrictMode to true, and this repo's
+    // next.config.ts never overrides it, so every dev mount runs
+    // effect -> cleanup -> effect synchronously before the dynamic
+    // import's microtask chain gets a turn. Without the rollback in the
+    // cleanup below, the FIRST (discarded) run would set this flag and
+    // then immediately be cancelled before its tryDismiss ever ran; the
+    // SECOND (real, persisted) run would see the flag already set, skip
+    // starting its own flow entirely, and the curtain would never
+    // dismiss -- in every dev session, not just a hypothetical future
+    // remount.
     if (window.__compendiumLoaderVendorInitStarted) {
       return () => {
         delete window.__compendiumLoaderOnSeen;
@@ -189,6 +202,14 @@ export default function CompendiumLoader({
     window.__compendiumLoaderVendorInitStarted = true;
 
     let cancelled = false;
+    // True once THIS run's bootstrap flow has reached a terminal state --
+    // either tryDismiss found window.__compendiumLoader and called
+    // dismiss(), or it gave up after MAX_TRIES. Lets the cleanup below
+    // tell "this mount's flow genuinely finished (or is still legitimately
+    // live)" apart from "this mount was torn down before its flow got
+    // anywhere" -- see the latch comment above for why that distinction is
+    // load-bearing under StrictMode's synchronous double-invoke.
+    let completed = false;
     // Bare setTimeout/clearTimeout (not window.*), matching
     // ThemeProvider.tsx's debounceRef pattern -- ReturnType<typeof
     // window.setTimeout> resolves to the DOM lib's `number`, but this
@@ -226,9 +247,19 @@ export default function CompendiumLoader({
         if (cancelled) return;
         if (window.__compendiumLoader) {
           window.__compendiumLoader.dismiss();
+          completed = true;
           return;
         }
-        if (++tries > MAX_TRIES) return; // give up silently -- the div is already in the DOM by the time this effect runs, so the vendor module's own poll (same ~10s ceiling) failing here would mean it never armed its own watchdog either; not worth a second failure path for a case this unlikely
+        if (++tries > MAX_TRIES) {
+          // give up silently -- the div is already in the DOM by the time
+          // this effect runs, so the vendor module's own poll (same ~10s
+          // ceiling) failing here would mean it never armed its own
+          // watchdog either; not worth a second failure path for a case
+          // this unlikely. Still a TERMINAL state either way -- the latch
+          // stays permanent rather than retrying on a future remount.
+          completed = true;
+          return;
+        }
         pollId = setTimeout(tryDismiss, 50);
       };
       tryDismiss();
@@ -238,6 +269,14 @@ export default function CompendiumLoader({
       cancelled = true;
       if (pollId !== undefined) clearTimeout(pollId);
       delete window.__compendiumLoaderOnSeen;
+      if (!completed) {
+        // This run's bootstrap flow was torn down before it reached a
+        // terminal state (StrictMode's synchronous mount -> cleanup, or
+        // any other very-early unmount) -- roll the latch back so the
+        // NEXT mount starts the flow fresh instead of finding it falsely
+        // "already started" by a run that never actually got anywhere.
+        window.__compendiumLoaderVendorInitStarted = false;
+      }
     };
   }, []);
 

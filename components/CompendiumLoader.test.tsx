@@ -166,6 +166,32 @@ describe("CompendiumLoader vendor init guard (remount)", () => {
 
     expect(typeof window.__compendiumLoaderOnSeen).toBe("function");
   });
+
+  it("still initializes and dismisses after a React StrictMode-shaped mount -> immediate cleanup -> mount cycle", async () => {
+    // Regression: Next's App Router defaults reactStrictMode to true, and
+    // this repo's next.config.ts never overrides it, so every dev mount
+    // runs effect -> cleanup -> effect SYNCHRONOUSLY (React double-invokes
+    // effects in dev to surface exactly this class of bug), before the
+    // dynamic import's microtask chain gets a single turn. Calling
+    // unmount() immediately after render() below (no `await` in between)
+    // reproduces that exact ordering: the first run's cleanup fires
+    // before its import().then() has resolved.
+    //
+    // Without rolling the vendor-init latch back when a flow is torn down
+    // before completing, the first run would set the latch and then be
+    // cancelled before tryDismiss ever ran (so its own later-resolving
+    // .then() callback is a no-op forever, guarded by its `cancelled`
+    // closure); the second (real, persisted) run would see the latch
+    // already set and skip starting its own flow entirely -- net result,
+    // the curtain never dismisses, in every dev session.
+    const { unmount } = render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+    unmount();
+
+    render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+
+    await waitForVendorReady();
+    await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
+  });
 });
 
 describe("CompendiumLoader seen-flag persistence", () => {
