@@ -82,6 +82,14 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
   // calls setVariantState updates this in the same synchronous step.
   const variantRef = useRef(variant);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set once setVariant has been called explicitly by the user (never
+  // cleared -- there's no "un-choosing" a palette this session). Guards
+  // against the residual hydration race: a SLOW mount-time preferences GET
+  // that resolves AFTER the user has already picked a palette must not
+  // clobber that fresh choice with whatever was persisted before the
+  // click -- see the hydration effect below, which checks this ref before
+  // doing anything with the server's response.
+  const userDirtyRef = useRef(false);
 
   function updateVariant(next: string): void {
     variantRef.current = next;
@@ -108,6 +116,21 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
       try {
         const prefs = await getPreferences();
         if (cancelled) return;
+        if (userDirtyRef.current) {
+          // The user explicitly picked a variant (setVariant) sometime
+          // between mount and this GET resolving -- their choice wins
+          // outright, full stop. In particular this must NOT fall through
+          // to the "server fully wins" branch below: that branch cancels
+          // any pending debounced PATCH, which here would silently drop
+          // the user's own in-flight write (the exact bug this guards
+          // against -- a slow GET landing after a click used to both
+          // revert the visible variant AND cancel the PATCH that would
+          // have persisted it). Still re-assert onto every #theme-root
+          // node (74c4da0) since a React-inserted duplicate node may not
+          // have this variant's CSS yet.
+          applyToDom(variantRef.current);
+          return;
+        }
         const serverTheme = prefs.theme;
         if (typeof serverTheme !== "string") {
           applyToDom(variantRef.current);
@@ -158,6 +181,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setVariant = (next: string) => {
     const normalized = normalizeVariant(next);
+    userDirtyRef.current = true;
     updateVariant(normalized);
     applyToDom(normalized);
     writeStoredVariant(normalized);

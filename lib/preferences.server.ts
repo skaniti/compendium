@@ -9,9 +9,44 @@
 // `except Exception: pass`: an unauthenticated request or any backend
 // failure returns {} so the panel CSS's own `var(--panel-left-width, 20%)`
 // fallback takes over -- this never breaks the shell render.
+import { cache } from "react";
 import { cookies } from "next/headers";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
+
+// getInitialPanelWidths / getInitialStarfieldVariant /
+// getInitialCompendiumLoaderSeen all read different fields off the SAME
+// GET /api/auth/preferences row for the same token -- AppShell calls all
+// three (plus getInitialSessionRole, a different endpoint) concurrently via
+// Promise.all, which without this would fire three duplicate GETs per page
+// load. React.cache() memoizes this per Server render pass (a per-request
+// cache in the real Next.js RSC runtime -- see the "no-op outside of it"
+// note in preferences.server.test.ts, where it's verified via a mocked
+// `cache` instead), so the three readers below share one round-trip. Keyed
+// on the token (not on nothing), since a differently-authenticated
+// concurrent request must never share another request's cached response.
+//
+// Returns a discriminated result rather than throwing/returning a bare
+// value: callers need to tell "fetch failed / non-ok" apart from "fetch
+// succeeded but the body wasn't a usable object" (getInitialCompendiumLoaderSeen's
+// canPersist is true in the latter case -- a real authenticated session was
+// confirmed even though the body was unusable -- but false in the former).
+type PreferencesFetchResult = { ok: true; body: unknown } | { ok: false };
+
+const fetchPreferencesRow = cache(async (token: string): Promise<PreferencesFetchResult> => {
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/preferences`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false };
+    const body: unknown = await res.json();
+    return { ok: true, body };
+  } catch (err) {
+    console.error("preferences fetch failed:", err);
+    return { ok: false };
+  }
+});
 
 export interface InitialPanelWidths {
   panelLeftWidth?: string;
@@ -38,26 +73,18 @@ export async function getInitialPanelWidths(): Promise<InitialPanelWidths> {
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return {};
 
-  try {
-    const res = await fetch(`${BACKEND}/api/auth/preferences`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return {};
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return {};
 
-    const prefs: unknown = await res.json();
-    if (typeof prefs !== "object" || prefs === null) return {};
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) return {};
 
-    const result: InitialPanelWidths = {};
-    const left = (prefs as Record<string, unknown>).panel_left_width;
-    const right = (prefs as Record<string, unknown>).panel_right_width;
-    if (typeof left === "string" && left) result.panelLeftWidth = left;
-    if (typeof right === "string" && right) result.panelRightWidth = right;
-    return result;
-  } catch (err) {
-    console.error("getInitialPanelWidths failed:", err);
-    return {};
-  }
+  const result: InitialPanelWidths = {};
+  const left = (prefs as Record<string, unknown>).panel_left_width;
+  const right = (prefs as Record<string, unknown>).panel_right_width;
+  if (typeof left === "string" && left) result.panelLeftWidth = left;
+  if (typeof right === "string" && right) result.panelRightWidth = right;
+  return result;
 }
 
 // Server-side counterpart to StarfieldProvider's client-side seeding: reads
@@ -76,25 +103,17 @@ export async function getInitialStarfieldVariant(): Promise<string> {
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return DEFAULT_STARFIELD_VARIANT;
 
-  try {
-    const res = await fetch(`${BACKEND}/api/auth/preferences`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return DEFAULT_STARFIELD_VARIANT;
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return DEFAULT_STARFIELD_VARIANT;
 
-    const prefs: unknown = await res.json();
-    if (typeof prefs !== "object" || prefs === null) return DEFAULT_STARFIELD_VARIANT;
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) return DEFAULT_STARFIELD_VARIANT;
 
-    const starfield = (prefs as Record<string, unknown>).starfield;
-    return typeof starfield === "string" &&
-      (STARFIELD_VARIANTS as readonly string[]).includes(starfield)
-      ? starfield
-      : DEFAULT_STARFIELD_VARIANT;
-  } catch (err) {
-    console.error("getInitialStarfieldVariant failed:", err);
-    return DEFAULT_STARFIELD_VARIANT;
-  }
+  const starfield = (prefs as Record<string, unknown>).starfield;
+  return typeof starfield === "string" &&
+    (STARFIELD_VARIANTS as readonly string[]).includes(starfield)
+    ? starfield
+    : DEFAULT_STARFIELD_VARIANT;
 }
 
 export interface InitialCompendiumLoaderState {
@@ -131,27 +150,19 @@ export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiu
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return { hasSeen: false, canPersist: false };
 
-  try {
-    const res = await fetch(`${BACKEND}/api/auth/preferences`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return { hasSeen: false, canPersist: false };
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return { hasSeen: false, canPersist: false };
 
-    const prefs: unknown = await res.json();
-    if (typeof prefs !== "object" || prefs === null) {
-      // A valid, authenticated session is still confirmed even though the
-      // body was unusable -- canPersist reflects "do we have a real
-      // user", not "did we manage to read has_seen".
-      return { hasSeen: false, canPersist: true };
-    }
-
-    const seen = (prefs as Record<string, unknown>).compendium_loader_seen;
-    return { hasSeen: seen === true, canPersist: true };
-  } catch (err) {
-    console.error("getInitialCompendiumLoaderSeen failed:", err);
-    return { hasSeen: false, canPersist: false };
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) {
+    // A valid, authenticated session is still confirmed even though the
+    // body was unusable -- canPersist reflects "do we have a real
+    // user", not "did we manage to read has_seen".
+    return { hasSeen: false, canPersist: true };
   }
+
+  const seen = (prefs as Record<string, unknown>).compendium_loader_seen;
+  return { hasSeen: seen === true, canPersist: true };
 }
 
 export interface InitialSessionRole {

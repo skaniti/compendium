@@ -109,7 +109,15 @@ describe("ThemeProvider", () => {
     expect(preferences.patchPreferences).not.toHaveBeenCalled();
   });
 
-  it("cancels a pending user-triggered PATCH when the server wins after racing an in-flight GET", async () => {
+  it("keeps the user's variant when a slow-resolving GET arrives after an explicit setVariant call, and still lets the pending PATCH fire", async () => {
+    // Batch-02 carryover fix for a residual race left by the server-wins
+    // reconciliation above: a SLOW mount-time GET that resolves AFTER the
+    // user has already picked a palette used to overwrite that fresh
+    // choice (server "won" against a value it predates) AND cancel the
+    // debounced PATCH that would have persisted it -- silently reverting
+    // the user's click until reload, with no way for their choice to ever
+    // reach the server. The user-dirty ref now makes the user's own
+    // explicit choice win outright once they've made one.
     vi.useFakeTimers();
     let resolveGetPreferences!: (value: Record<string, unknown>) => void;
     vi.spyOn(preferences, "getPreferences").mockImplementation(
@@ -126,28 +134,64 @@ describe("ThemeProvider", () => {
     act(() => fireEvent.click(screen.getByText("pink")));
     expect(screen.getByTestId("variant")).toHaveTextContent("Pink");
 
-    // Server responds with a different value after the user's pick.
+    // Server responds with a stale value (persisted before the user's
+    // click) after the user's pick -- must NOT overwrite it.
     await act(async () => {
       resolveGetPreferences({ theme: "Teal" });
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("variant")).toHaveTextContent("Teal");
+    expect(screen.getByTestId("variant")).toHaveTextContent("Pink");
     expect(document.getElementById("theme-root")?.textContent).toBe(
-      generateCssText(getTokens("Teal"))
+      generateCssText(getTokens("Pink"))
     );
-    expect(localStorage.getItem(STORAGE_KEY)).toBe("Teal");
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("Pink");
 
-    // Advance past the debounce window the user's setVariant("Pink")
-    // scheduled -- server-wins must have cancelled it, so no PATCH fires
-    // with the stale "Pink" value (which would ping-pong the palette
-    // across reloads: UI/localStorage = server value, server = user value).
+    // The debounced PATCH for the user's own choice was never touched by
+    // the (skipped) server-wins branch, so it still fires normally.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
 
-    expect(preferences.patchPreferences).not.toHaveBeenCalled();
+    expect(preferences.patchPreferences).toHaveBeenCalledTimes(1);
+    expect(preferences.patchPreferences).toHaveBeenCalledWith({ theme: "Pink" });
+  });
+
+  it("still re-asserts onto every #theme-root node when a slow GET resolves after the user's own click", async () => {
+    // Same slow-GET-after-click race as above, but exercising the
+    // duplicate-node scenario (74c4da0) -- the user-dirty branch must keep
+    // reasserting onto every node, not just skip DOM work entirely.
+    document.body.innerHTML =
+      '<style id="theme-root"></style>' +
+      '<style id="theme-root">stale-stand-in-for-a-different-palette</style>' +
+      '<div id="root"></div>';
+    let resolveGetPreferences!: (value: Record<string, unknown>) => void;
+    vi.spyOn(preferences, "getPreferences").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGetPreferences = resolve;
+        })
+    );
+
+    render(
+      <ThemeProvider>
+        <Consumer />
+      </ThemeProvider>
+    );
+
+    await userEvent.click(screen.getByText("teal"));
+
+    await act(async () => {
+      resolveGetPreferences({ theme: "Pink" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const expectedCss = generateCssText(getTokens("Teal"));
+    document.querySelectorAll("style#theme-root").forEach((node) => {
+      expect(node.textContent).toBe(expectedCss);
+    });
   });
 
   it("leaves the current variant intact if getPreferences rejects", async () => {

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
-import { getInitialSessionRole } from "./preferences.server";
+import {
+  getInitialCompendiumLoaderSeen,
+  getInitialPanelWidths,
+  getInitialSessionRole,
+  getInitialStarfieldVariant,
+} from "./preferences.server";
 
 // Gate-2 walkthrough fix 3: AppShell's new server-side session read, used to
 // force CompendiumLoader into "return" mode for the demo role (Dash never
@@ -13,6 +18,32 @@ import { getInitialSessionRole } from "./preferences.server";
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
+
+// react's `cache()` only memoizes inside a real React Server Component
+// render pass (a per-request cache the RSC runtime sets up) -- the plain
+// client "react" package Vitest resolves here is a pure passthrough (no
+// memoization at all, verified against node_modules/react/cjs directly).
+// So this module's own dedup can't be observed by calling its exported
+// functions directly in this test file the way it behaves in production;
+// instead, mock `cache` with a real per-argument memoizer for these tests
+// only, which lets us verify that lib/preferences.server.ts actually wires
+// its three preferences readers through ONE shared cache() call (the thing
+// that matters for correctness) independent of react's real runtime
+// behavior, which is out of this module's control either way.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    cache: <Args extends unknown[], R>(fn: (...args: Args) => R) => {
+      const store = new Map<string, R>();
+      return ((...args: Args) => {
+        const key = JSON.stringify(args);
+        if (!store.has(key)) store.set(key, fn(...args));
+        return store.get(key) as R;
+      }) as typeof fn;
+    },
+  };
+});
 
 function makeFakeCookieJar(initial?: Record<string, string>) {
   const store = new Map(Object.entries(initial ?? {}));
@@ -112,5 +143,100 @@ describe("getInitialSessionRole", () => {
     mockFetchResponse({ ok: true, json: async () => ({ id: 1, role: "superuser", acting_as_demo: true }) });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: null, actingAsDemo: true });
+  });
+});
+
+describe("preferences fetch deduplication (React.cache)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  // Each test below uses its own unique token so the mocked cache()'s Map
+  // (module-scoped, created once when preferences.server.ts's top-level
+  // `cache(...)` call runs) can't accidentally serve one test's cached
+  // response to another.
+
+  it("shares a single backend fetch across getInitialPanelWidths, getInitialStarfieldVariant, and getInitialCompendiumLoaderSeen for the same token", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "dedup-token-1" }) as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        panel_left_width: "24%",
+        panel_right_width: "18%",
+        starfield: "pan",
+        compendium_loader_seen: true,
+      }),
+    });
+
+    await Promise.all([
+      getInitialPanelWidths(),
+      getInitialStarfieldVariant(),
+      getInitialCompendiumLoaderSeen(),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/preferences"),
+      expect.objectContaining({ headers: { authorization: "Bearer dedup-token-1" } })
+    );
+  });
+
+  it("still returns each reader's own fields correctly off the shared fetch", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "dedup-token-2" }) as never);
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        panel_left_width: "30%",
+        panel_right_width: "15%",
+        starfield: "hyperspace",
+        compendium_loader_seen: true,
+      }),
+    });
+
+    const [panels, starfield, loaderSeen] = await Promise.all([
+      getInitialPanelWidths(),
+      getInitialStarfieldVariant(),
+      getInitialCompendiumLoaderSeen(),
+    ]);
+
+    expect(panels).toEqual({ panelLeftWidth: "30%", panelRightWidth: "15%" });
+    expect(starfield).toBe("hyperspace");
+    expect(loaderSeen).toEqual({ hasSeen: true, canPersist: true });
+  });
+
+  it("does not share a cached fetch across two DIFFERENT tokens", async () => {
+    vi.mocked(cookies).mockResolvedValueOnce(makeFakeCookieJar({ access_token: "dedup-token-3a" }) as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ starfield: "none" }),
+    });
+
+    await getInitialStarfieldVariant();
+
+    vi.mocked(cookies).mockResolvedValueOnce(makeFakeCookieJar({ access_token: "dedup-token-3b" }) as never);
+    await getInitialStarfieldVariant();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("still falls back to each reader's own default when the shared fetch is not ok, without caching a false canPersist across a later non-object body", async () => {
+    // Regression for a shortcut that would have collapsed
+    // getInitialCompendiumLoaderSeen's ok-but-non-object-body branch
+    // (canPersist: true) into the same bucket as a non-ok response
+    // (canPersist: false) -- the shared fetcher must keep these
+    // distinguishable even though it now backs three call sites.
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "dedup-token-4" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ["not", "an", "object"] });
+
+    const [panels, starfield, loaderSeen] = await Promise.all([
+      getInitialPanelWidths(),
+      getInitialStarfieldVariant(),
+      getInitialCompendiumLoaderSeen(),
+    ]);
+
+    expect(panels).toEqual({});
+    expect(starfield).toBe("twinkle");
+    expect(loaderSeen).toEqual({ hasSeen: false, canPersist: true });
   });
 });
