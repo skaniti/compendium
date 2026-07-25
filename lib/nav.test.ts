@@ -70,12 +70,16 @@ describe("navReducer", () => {
     expect(next).toEqual(initialNavState);
   });
 
-  // Dash row 2 continued: a tap with a kind but no id is ALSO a background
-  // tap (the brief's binding-point note: "kind null (or missing id) =
-  // background tap -> full clear").
-  it("row 2 -- resolveCanvasTapAction with a kind but a missing id is also treated as a background tap", () => {
-    expect(resolveCanvasTapAction("node", undefined)).toEqual({ type: "HOME" });
-    expect(resolveCanvasTapAction("cluster", "")).toEqual({ type: "HOME" });
+  // Dash row 2, tap-present-but-no-id case: `node_id = tap_data.get("id");
+  // if not node_id: result = no_update` -- tap_data IS present (kind is
+  // non-null) but the id is falsy, so Dash's own branch takes the no_update
+  // path, NOT the "no tap_data" background-clear path above. The tap is
+  // ignored outright: nothing clears, nothing selects. resolveCanvasTapAction
+  // ports that as a null return (a no-op), distinct from the null-kind ->
+  // HOME case in the previous test.
+  it("row 2 -- resolveCanvasTapAction with a kind but a missing id is a no-op (Dash no_update), not a background tap", () => {
+    expect(resolveCanvasTapAction("node", undefined)).toBeNull();
+    expect(resolveCanvasTapAction("cluster", "")).toBeNull();
   });
 
   it("resolveCanvasTapAction resolves node/cluster kinds to the matching select action", () => {

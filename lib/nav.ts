@@ -111,14 +111,25 @@ export function parseTagBtnIndex(idxStr: string): string {
 
 // The d3 canvas tap binding point -- batch 03 wires the D3 click handler to
 // this via useNav()'s selectFromCanvas convenience (components/NavProvider.tsx).
-// A null kind, or a missing/empty id, is a BACKGROUND tap: Dash's
-// d3-tap-node branch clears selection AND filter on a background click (the
-// SVG walk-up only sends a null tap when nothing is already selected, so at
-// that point it reads as "go Home", not "drop selection, keep filter").
-// That's why this resolves to HOME rather than CLEAR_SELECTION --
-// CLEAR_SELECTION is reserved for batch 03's Esc-key path, a distinct,
-// selection-only-clear user action Dash has no equivalent of.
-export function resolveCanvasTapAction(kind: "node" | "cluster" | null, id?: string): NavAction {
-  if (kind === null || !id) return { type: "HOME" };
+// Two distinct Dash cases here, per navigation.py's d3-tap-node branch
+// (explorer frontend/dash/callbacks/navigation.py:164-179):
+//   - kind === null (no tap_data at all) is a BACKGROUND tap: `if not
+//     tap_data: result = _clear_all()`. The SVG walk-up only sends a null
+//     tap when nothing is already selected, so at that point it reads as
+//     "go Home" -- this resolves to HOME (not CLEAR_SELECTION;
+//     CLEAR_SELECTION is reserved for batch 03's Esc-key path, a distinct,
+//     selection-only-clear user action Dash has no equivalent of).
+//   - kind non-null but id missing/empty is tap_data PRESENT with a falsy
+//     id: `node_id = tap_data.get("id"); if not node_id: result =
+//     no_update`. Dash IGNORES this tap entirely -- the tap is a no-op,
+//     nothing clears and nothing selects. This resolves to null; callers
+//     MUST skip dispatching when they get null back (see NavProvider.tsx's
+//     selectFromCanvas).
+export function resolveCanvasTapAction(
+  kind: "node" | "cluster" | null,
+  id?: string
+): NavAction | null {
+  if (kind === null) return { type: "HOME" };
+  if (!id) return null;
   return kind === "cluster" ? { type: "SELECT_CLUSTER", id } : { type: "SELECT_NODE", id };
 }

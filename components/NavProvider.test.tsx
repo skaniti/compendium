@@ -90,13 +90,14 @@ describe("NavProvider", () => {
     expect(screen.getByTestId("filter-ids")).toHaveTextContent("");
   });
 
-  it("selectFromCanvas with a kind but a missing id is also treated as a background tap", async () => {
+  it("selectFromCanvas with a kind but a missing id is a no-op (Dash no_update) -- selection survives", async () => {
     renderProvider();
     await userEvent.click(screen.getByText("select-node"));
+    expect(screen.getByTestId("selected")).toHaveTextContent("node-a");
 
     await userEvent.click(screen.getByText("canvas-missing-id"));
 
-    expect(screen.getByTestId("selected")).toHaveTextContent("none");
+    expect(screen.getByTestId("selected")).toHaveTextContent("node-a");
   });
 
   it("throws when useNav is called outside a NavProvider", () => {

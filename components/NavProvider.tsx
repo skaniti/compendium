@@ -21,7 +21,10 @@ export interface NavContextValue {
   // The batch 03 binding point for the D3 canvas tap handler -- resolves a
   // (kind, id) tap into the right NavAction via lib/nav.ts's
   // resolveCanvasTapAction (see that function's comment for the
-  // background-tap-clears-both rationale) and dispatches it.
+  // background-tap-clears-both rationale) and dispatches it. A kind with a
+  // missing/empty id resolves to null (Dash's `if not node_id: no_update` --
+  // the tap is ignored, nothing clears or selects): selectFromCanvas is a
+  // no-op in that case, it does not dispatch anything.
   selectFromCanvas: (kind: "node" | "cluster" | null, id?: string) => void;
 }
 
@@ -40,7 +43,10 @@ export default function NavProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       dispatch,
-      selectFromCanvas: (kind, id) => dispatch(resolveCanvasTapAction(kind, id)),
+      selectFromCanvas: (kind, id) => {
+        const action = resolveCanvasTapAction(kind, id);
+        if (action) dispatch(action);
+      },
     }),
     [state]
   );
