@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import CompendiumLoader from "./CompendiumLoader";
 import Header from "./Header";
+import NavProvider from "./NavProvider";
 import PanelGrid from "./PanelGrid";
 import StarfieldProvider from "./StarfieldProvider";
 import {
@@ -85,13 +86,25 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           escapes to the viewport. Empty until a later batch mounts
           supercluster tooltip content into it. */}
       <div id="sc-popovers-portal" />
-      <PanelGrid
-        initialLeftWidth={panelLeftWidth}
-        initialRightWidth={panelRightWidth}
-        left={left}
-        center={center}
-        right={right}
-      />
+      {/* NavProvider (Task 5, lib/nav.ts's reducer) mounted here -- the
+          lowest common ancestor covering both DiaryPanel (left slot, task
+          6) and the future real TopicDetailPanel content (right slot,
+          batch 03) that will consume useNav(). Wraps PanelGrid rather than
+          each panel slot individually: left/center/right are
+          already-rendered ReactNode props built by app/page.tsx (a server
+          component), so NavProvider only needs to be a client-boundary
+          ancestor somewhere above them in the tree -- it doesn't need to
+          construct or touch those nodes itself, same as PanelGrid (also
+          "use client") already doesn't. */}
+      <NavProvider>
+        <PanelGrid
+          initialLeftWidth={panelLeftWidth}
+          initialRightWidth={panelRightWidth}
+          left={left}
+          center={center}
+          right={right}
+        />
+      </NavProvider>
     </StarfieldProvider>
   );
 }

@@ -107,6 +107,12 @@ export interface NodeDetail {
   subtree: GraphNode[];
 }
 
+// Task 6 (batch 02): shared literal union for the day/week/month
+// granularity toggle -- lives here (not inline in HistoryPanel/DiaryPanel)
+// so both components import the same type instead of two independently
+// drifting copies of the same three-string union.
+export type Granularity = "day" | "week" | "month";
+
 // GET /api/diary/windows?granularity=&filter_node_id= -- response is
 // DiaryWindow[]. Both node_ids (numeric page ids as text) and
 // graph_node_ids (title slugs) are present; they index different tables

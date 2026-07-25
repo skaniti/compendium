@@ -1,7 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HistoryPanel from "./HistoryPanel";
+
+// DiaryPanel (task 6) calls useNav(), which throws outside a NavProvider --
+// these band/granularity-toggle tests predate the diary and don't want to
+// stand up a NavProvider + mock fetchDiaryWindows just to render HistoryPanel.
+// Mock the child directly (same tradeoff HistoryPanel.tsx's own now-removed
+// TODO(mig-02) comment anticipated) and assert only that it receives the
+// right `granularity` prop -- DiaryPanel's own behavior is covered by
+// DiaryPanel.test.tsx.
+vi.mock("./DiaryPanel", () => ({
+  default: ({ granularity }: { granularity: string }) => (
+    <div data-testid="diary-panel-mock" data-granularity={granularity} />
+  ),
+}));
 
 describe("HistoryPanel", () => {
   it("renders the panel-header-band with the History label", () => {
@@ -53,5 +66,21 @@ describe("HistoryPanel", () => {
 
     expect(screen.getByText("Month").closest("button")).toHaveClass("active");
     expect(screen.getByText("Week").closest("button")).not.toHaveClass("active");
+  });
+
+  it("renders DiaryPanel inside #diary-container, passed the current granularity", async () => {
+    const { container } = render(<HistoryPanel />);
+
+    const diaryContainer = container.querySelector("#diary-container");
+    expect(diaryContainer).toBeInTheDocument();
+    const mock = diaryContainer?.querySelector('[data-testid="diary-panel-mock"]');
+    expect(mock).toHaveAttribute("data-granularity", "day");
+
+    await userEvent.click(screen.getByText("Month"));
+
+    expect(diaryContainer?.querySelector('[data-testid="diary-panel-mock"]')).toHaveAttribute(
+      "data-granularity",
+      "month"
+    );
   });
 });

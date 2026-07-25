@@ -1,25 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import DiaryPanel from "./DiaryPanel";
+import type { Granularity } from "@/lib/types";
 
 // Ports the left panel's header band from app.py's graph-view layout
 // (:1926-1969) -- the "History" label plus the day/week/month granularity
-// selector that sits above the session diary. The diary itself
-// (render_session_diary, #diary-container at app.py:1963-1966) is
-// mig-02/explorer-owned (Session diary row, surface-ledger.md); this batch
-// only ports the chrome the diary will render into, so .panel-left's
-// content slot below the band is left for that later batch to fill.
+// selector that sits above the session diary -- plus the diary itself
+// (render_session_diary, #diary-container at app.py:1963-1966; ported in
+// components/DiaryPanel.tsx, task 6).
 //
 // Dash wires each button's id as a pattern-matching
 // {"type": "granularity-btn", "index": value} (callbacks/session.py) so the
 // server can single out which one fired and drive a dcc.Store -- there's no
 // React equivalent to port byte-for-byte, so this component owns the active
-// state locally instead. TODO(mig-02): replace this local toggle with the
-// real wiring once the session diary lands -- granularity needs to drive
-// PageStoreAdapter.get_time_windows()'s `granularity` argument (session.py:37-61)
-// the way the Store does today.
-
-type Granularity = "day" | "week" | "month";
+// state locally instead, same as before DiaryPanel landed. That local state
+// is passed straight down as DiaryPanel's `granularity` prop, which is what
+// actually drives PageStoreAdapter.get_time_windows()'s `granularity`
+// argument now (session.py:37-61) -- the way the Store did in Dash.
 
 // (label, short, value) triples, in the exact order rendered at
 // app.py:1952-1956. The full/short split feeds the .gran-full/.gran-short
@@ -59,9 +57,10 @@ export default function HistoryPanel() {
         </div>
       </div>
       {/* #diary-container (app.py:1963-1966) wraps render_session_diary's
-          output in Dash; empty here until the mig-02 diary lands -- kept for
-          DOM parity with TopicDetailPanel's #detail-container analog. */}
-      <div id="diary-container" />
+          output in Dash; DiaryPanel (task 6) is the ported equivalent. */}
+      <div id="diary-container">
+        <DiaryPanel granularity={granularity} />
+      </div>
     </>
   );
 }
