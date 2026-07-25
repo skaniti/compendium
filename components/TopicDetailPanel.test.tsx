@@ -1,6 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import TopicDetailPanel from "./TopicDetailPanel";
+
+// TopicDetail (task 7) calls useNav()/useGraph(), which need a NavProvider
+// and a mocked fetchGraph to render meaningfully -- these band/container
+// tests don't want to stand up all of that just to render TopicDetailPanel.
+// Mock the child directly (same tradeoff HistoryPanel.test.tsx takes with
+// DiaryPanel) and assert only that it's mounted inside #detail-container --
+// TopicDetail's own behavior is covered by TopicDetail.test.tsx.
+vi.mock("./TopicDetail", () => ({
+  default: () => <div data-testid="topic-detail-mock" />,
+}));
 
 describe("TopicDetailPanel", () => {
   it("renders the panel-header-band with the Topic Detail label", () => {
@@ -11,18 +21,12 @@ describe("TopicDetailPanel", () => {
     expect(band?.querySelector(".panel-header")).toHaveTextContent("Topic Detail");
   });
 
-  it("renders the nothing-selected placeholder inside #detail-container", () => {
+  it("renders TopicDetail inside #detail-container", () => {
     const { container } = render(<TopicDetailPanel />);
 
     const detailContainer = container.querySelector("#detail-container");
     expect(detailContainer).toBeInTheDocument();
-
-    const scroll = detailContainer?.querySelector(".panel-scroll");
-    expect(scroll).toBeInTheDocument();
-
-    const placeholder = scroll?.querySelector(".placeholder-text");
-    expect(placeholder).toBeInTheDocument();
-    expect(placeholder).toHaveTextContent("Click a node in the graph to see details.");
+    expect(detailContainer?.querySelector('[data-testid="topic-detail-mock"]')).toBeInTheDocument();
   });
 
   it("does not render the debug console or suggested-topics panel (batch mig-02)", () => {
@@ -32,11 +36,8 @@ describe("TopicDetailPanel", () => {
     expect(container.querySelector("#suggested-topics-panel")).not.toBeInTheDocument();
   });
 
-  it("matches the exact placeholder copy via screen query", () => {
+  it("renders exactly one TopicDetail instance", () => {
     render(<TopicDetailPanel />);
-
-    expect(
-      screen.getByText("Click a node in the graph to see details."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByTestId("topic-detail-mock")).toHaveLength(1);
   });
 });
