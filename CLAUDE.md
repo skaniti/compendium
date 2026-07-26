@@ -26,8 +26,11 @@ On EVERY request that would change code, styles, or behavior (feature, bugfix,
 tweak, refactor — anything beyond reading/answering):
 
 1. **Classify** which surface(s) the request touches.
-2. **Check the ledger:** `docs/project-plans/surface-ledger.md` — the single
-   source of truth for surface -> live home -> batch -> status.
+2. **Check the ledger.** Current rows are already in context — the SessionStart
+   hook injects them, grouped into implement-here vs wrong-repo. Read
+   `docs/project-plans/surface-ledger.md` itself for Notes / parity-debt detail,
+   or whenever that injection is missing. It is the single source of truth for
+   surface -> live home -> batch -> status.
 3. **Live home is THIS repo (`compendium`)** -> proceed normally. Say nothing
    about routing; the guard is silent when the repo is correct.
 4. **Live home is `explorer`** -> DO NOT implement, not even "just a small
@@ -63,10 +66,26 @@ Paste this into a Claude Code session rooted at <owning repo path>:
 
 ### Guard layers (how this stays ADHD-proof)
 
-- This section (loaded every session in this repo).
-- Hookify `UserPromptSubmit` rule `.claude/hookify.surface-routing.local.md` —
-  re-injects the check on every single prompt; zero reliance on anyone
-  remembering. Gitignored; canonical copy + reinstall instructions live in
-  `docs/project-plans/2026-07-07-220615-nextjs-mig-00-roadmap-and-status/routing-guard-handoff.md`.
-- The explorer repo carries the mirror-image section + twin hookify rule
-  (installed from the same handoff doc), so the guard fires in BOTH directions.
+Two layers, split by volatility — this file holds the protocol, the hook holds
+the state:
+
+- **This section** — the decision protocol + warning template. Static; loaded
+  every session; survives any plugin being disabled.
+- **`SessionStart` hook `.claude/hooks/routing-ledger.mjs`** (wired in
+  `.claude/settings.json`) — injects the CURRENT ledger rows at session start,
+  grouped into implement-here vs wrong-repo, so the routing answer is in context
+  instead of being a file someone has to remember to open. Volatile: rows flip
+  every batch, and the hook re-reads them every session so it cannot go stale.
+  Tracked, so a fresh clone gets it with no install step; degrades to a short
+  notice (never a crash) when the gitignored `docs/project-plans` symlink is
+  absent, and fails closed — an underivable repo identity groups everything as
+  wrong-repo rather than guessing.
+- The explorer repo carries the mirror-image section + a byte-identical copy of
+  the hook, so the guard fires in BOTH directions. The hook derives which repo
+  it is running in from the ledger's own live-home table; there is no
+  per-repo variant to install wrong.
+
+Removed 2026-07-26: a hookify `UserPromptSubmit` rule that re-injected this whole
+checklist on every prompt. It restated this section verbatim and added no
+information — only recency — at the cost of firing on every prompt including the
+reads and questions it exempts. The ledger injection replaces it.
