@@ -35,7 +35,8 @@ bash scripts/dev.sh          # frontend + auto-started backend, logs in logs/
 
 ## Conventions
 
-- Commit format: `COMMIT-FORMAT.md` (enforced by the husky `commit-msg` hook).
+- Commit format: `docs/references/COMMIT-FORMAT.md` (enforced by the husky
+  `commit-msg` hook).
 - Pushes are explicitly gated: the `pre-push` hook exits unless `ALLOW_PUSH=1`
   is set. Deliberate -- pushing is a conscious action in this repo.
 - Line endings are LF repo-wide via `.gitattributes`.

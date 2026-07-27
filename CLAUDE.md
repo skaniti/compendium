@@ -12,8 +12,9 @@ remind the user to commit them from an explorer session at milestones. Never
 `git add -f` anything under it.
 
 - Never push. Pushes are user-run only (`ALLOW_PUSH=1`); the guard stack enforces this.
-- Commit format per `COMMIT-FORMAT.md`: parens-free `type: subject`, lowercase,
-  <= 72 chars, no AI attribution of any kind (enforced by hooks).
+- Commit format per `docs/references/COMMIT-FORMAT.md`: parens-free
+  `type: subject`, lowercase, <= 72 chars, no AI attribution of any kind
+  (enforced by hooks).
 - No real user data in fixtures — synthetic or scrubbed only.
 
 ## Dual-repo routing guard (check before implementing ANY request)
