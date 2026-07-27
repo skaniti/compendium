@@ -67,15 +67,49 @@ function applyToDom(variant: string): void {
   });
 }
 
-export default function ThemeProvider({ children }: { children: ReactNode }) {
-  // Lazy initializer runs in the real browser during the first client
-  // render, so this already matches whatever the pre-paint script painted
-  // (localStorage-derived) -- no extra rewrite/flash on mount. During SSR
-  // `localStorage` doesn't exist, readStoredVariant's try/catch falls back
-  // to DEFAULT_VARIANT, which is also what the server rendered into
-  // #theme-root -- and since no DOM here depends on `variant` directly,
-  // that transient SSR-vs-client difference is not a hydration mismatch.
-  const [variant, setVariantState] = useState<string>(() => readStoredVariant());
+interface ThemeProviderProps {
+  children: ReactNode;
+  // Server-persisted theme variant (lib/preferences.server.ts's
+  // getInitialThemeVariant, already validated/normalized -- a bare palette
+  // name or null), passed down from app/layout.tsx for an authed SSR
+  // render. When present, it seeds BOTH the server render and the client's
+  // first render, so they agree even if localStorage disagrees (e.g. the
+  // user changed palettes on another device) -- see the comment on the
+  // lazy initializer below for why this matters and what happens when it's
+  // null/absent.
+  initialVariant?: string | null;
+}
+
+export default function ThemeProvider({ children, initialVariant }: ThemeProviderProps) {
+  // Two distinct init paths, chosen once at mount and never revisited by
+  // this initializer (it's a lazy useState initializer -- runs exactly once):
+  //
+  // - `initialVariant` present (authed SSR): use it verbatim, normalized,
+  //   on BOTH the server render and the client's first render -- do NOT
+  //   read localStorage here. This is the actual fix for the hydration
+  //   mismatch that used to exist: SettingsMenu.tsx renders `variant` as
+  //   DOM text (`#theme-active-name`), so a server render that always used
+  //   DEFAULT_VARIANT while the client read a *different* persisted value
+  //   from localStorage produced mismatched SSR/CSR text -- a real React
+  //   hydration error, not merely a same-render inert value. Seeding both
+  //   renders from the same server-known value closes that gap. If
+  //   localStorage is desynced from the server value (a cross-device
+  //   edit), the caption + pre-paint bootstrap-script CSS show the seed
+  //   until the mount-time hydration GET below reconciles -- same
+  //   self-healing window that already existed for any other
+  //   server-vs-localStorage disagreement, just now starting from the
+  //   seed instead of from localStorage.
+  //
+  // - `initialVariant` null/absent (unauthed pages, or the seed read
+  //   itself failed): behave exactly as before this prop existed --
+  //   readStoredVariant() -> localStorage -> DEFAULT_VARIANT. Unauthed
+  //   pages never render the caption (SettingsMenu lives inside the authed
+  //   AppShell), so a localStorage-derived client init can never disagree
+  //   with anything the server rendered into the DOM there -- there is no
+  //   hydration mismatch to close for that case.
+  const [variant, setVariantState] = useState<string>(() =>
+    initialVariant != null ? normalizeVariant(initialVariant) : readStoredVariant()
+  );
   // Mirrors `variant` so the async hydration callback below can read the
   // *latest* value (it may run well after mount, after a user setVariant
   // call) without relying on a state-updater closure. Every place that

@@ -18,10 +18,10 @@ function Consumer() {
   );
 }
 
-function renderProvider() {
+function renderProvider(initialVariant?: string | null) {
   document.body.innerHTML = '<style id="theme-root"></style><div id="root"></div>';
   return render(
-    <ThemeProvider>
+    <ThemeProvider initialVariant={initialVariant}>
       <Consumer />
     </ThemeProvider>
   );
@@ -250,6 +250,39 @@ describe("ThemeProvider", () => {
       document.querySelectorAll("style#theme-root").forEach((node) => {
         expect(node.textContent).toBe(expectedCss);
       });
+    });
+  });
+
+  describe("initialVariant seed (server-seeded theme)", () => {
+    it("uses the seed for the first render even when localStorage holds a different value, and does not read localStorage for init", async () => {
+      localStorage.setItem(STORAGE_KEY, "Teal");
+      const getItemSpy = vi.spyOn(Storage.prototype, "getItem");
+
+      renderProvider("Purple");
+
+      expect(screen.getByTestId("variant")).toHaveTextContent("Purple");
+      expect(getItemSpy).not.toHaveBeenCalledWith(STORAGE_KEY);
+
+      await waitFor(() => expect(preferences.getPreferences).toHaveBeenCalled());
+    });
+
+    it("normalizes a legacy ' Dark'-suffixed seed before first render", () => {
+      renderProvider("Purple Dark");
+
+      expect(screen.getByTestId("variant")).toHaveTextContent("Purple");
+    });
+
+    it("applies existing server-wins semantics when the hydration GET resolves with a value that differs from the seed", async () => {
+      vi.spyOn(preferences, "getPreferences").mockResolvedValue({ theme: "Teal" });
+
+      renderProvider("Purple");
+      expect(screen.getByTestId("variant")).toHaveTextContent("Purple");
+
+      await waitFor(() => expect(screen.getByTestId("variant")).toHaveTextContent("Teal"));
+      expect(document.getElementById("theme-root")?.textContent).toBe(
+        generateCssText(getTokens("Teal"))
+      );
+      expect(localStorage.getItem(STORAGE_KEY)).toBe("Teal");
     });
   });
 

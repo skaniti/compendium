@@ -5,6 +5,7 @@ import {
   getInitialPanelWidths,
   getInitialSessionRole,
   getInitialStarfieldVariant,
+  getInitialThemeVariant,
 } from "./preferences.server";
 
 // Gate-2 walkthrough fix 3: AppShell's new server-side session read, used to
@@ -146,6 +147,67 @@ describe("getInitialSessionRole", () => {
   });
 });
 
+describe("getInitialThemeVariant", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("returns null without calling the backend when there is no access_token cookie", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
+
+    await expect(getInitialThemeVariant()).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the normalized, validated theme name from the preferences row", async () => {
+    // Unique token per test below -- fetchPreferencesRow is memoized by
+    // token via the mocked react.cache() (see that mock's own comment
+    // above), so reusing a token across tests in this describe block would
+    // silently serve one test's cached fetch response to the next.
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-1" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ theme: "Purple" }) });
+
+    await expect(getInitialThemeVariant()).resolves.toBe("Purple");
+  });
+
+  it("normalizes a legacy ' Dark'-suffixed theme name", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-2" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ theme: "Purple Dark" }) });
+
+    await expect(getInitialThemeVariant()).resolves.toBe("Purple");
+  });
+
+  it("returns null when the theme value doesn't match any known palette", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-3" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ theme: "not-a-real-palette-!!" }) });
+
+    await expect(getInitialThemeVariant()).resolves.toBeNull();
+  });
+
+  it("returns null when the response is not ok", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-4" }) as never);
+    mockFetchResponse({ ok: false, status: 401, json: async () => ({ detail: "Unauthorized" }) });
+
+    await expect(getInitialThemeVariant()).resolves.toBeNull();
+  });
+
+  it("returns null when the body isn't a JSON object", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-5" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ["not", "an", "object"] });
+
+    await expect(getInitialThemeVariant()).resolves.toBeNull();
+  });
+
+  it("returns null when the theme field is missing", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "theme-token-6" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({}) });
+
+    await expect(getInitialThemeVariant()).resolves.toBeNull();
+  });
+});
+
 describe("preferences fetch deduplication (React.cache)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -157,7 +219,7 @@ describe("preferences fetch deduplication (React.cache)", () => {
   // `cache(...)` call runs) can't accidentally serve one test's cached
   // response to another.
 
-  it("shares a single backend fetch across getInitialPanelWidths, getInitialStarfieldVariant, and getInitialCompendiumLoaderSeen for the same token", async () => {
+  it("shares a single backend fetch across getInitialPanelWidths, getInitialStarfieldVariant, getInitialCompendiumLoaderSeen, and getInitialThemeVariant for the same token", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "dedup-token-1" }) as never);
     const fetchMock = mockFetchResponse({
       ok: true,
@@ -166,6 +228,7 @@ describe("preferences fetch deduplication (React.cache)", () => {
         panel_right_width: "18%",
         starfield: "pan",
         compendium_loader_seen: true,
+        theme: "Purple",
       }),
     });
 
@@ -173,6 +236,7 @@ describe("preferences fetch deduplication (React.cache)", () => {
       getInitialPanelWidths(),
       getInitialStarfieldVariant(),
       getInitialCompendiumLoaderSeen(),
+      getInitialThemeVariant(),
     ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -191,18 +255,21 @@ describe("preferences fetch deduplication (React.cache)", () => {
         panel_right_width: "15%",
         starfield: "hyperspace",
         compendium_loader_seen: true,
+        theme: "Teal",
       }),
     });
 
-    const [panels, starfield, loaderSeen] = await Promise.all([
+    const [panels, starfield, loaderSeen, theme] = await Promise.all([
       getInitialPanelWidths(),
       getInitialStarfieldVariant(),
       getInitialCompendiumLoaderSeen(),
+      getInitialThemeVariant(),
     ]);
 
     expect(panels).toEqual({ panelLeftWidth: "30%", panelRightWidth: "15%" });
     expect(starfield).toBe("hyperspace");
     expect(loaderSeen).toEqual({ hasSeen: true, canPersist: true });
+    expect(theme).toBe("Teal");
   });
 
   it("does not share a cached fetch across two DIFFERENT tokens", async () => {

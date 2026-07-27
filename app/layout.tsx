@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { DEFAULT_VARIANT, generateCssText, getPaletteNames, getTokens } from "@/lib/theme";
+import { getInitialThemeVariant } from "@/lib/preferences.server";
 import ThemeProvider from "@/components/ThemeProvider";
 import SessionProvider from "@/components/SessionProvider";
 
@@ -71,8 +72,17 @@ export function buildThemeBootstrapScript(): string {
 })();`;
 }
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
   const defaultCss = generateCssText(getTokens(DEFAULT_VARIANT));
+  // Server-persisted theme seed (lib/preferences.server.ts's
+  // getInitialThemeVariant) -- see ThemeProvider's own comment for why this
+  // closes the authed-hydration-mismatch gap: SettingsMenu renders the
+  // variant name as DOM text, so a server render that always used
+  // DEFAULT_VARIANT while the client read a different persisted value from
+  // localStorage produced a real hydration error. null (unauthed / read
+  // failed) falls back to ThemeProvider's existing localStorage-derived
+  // init unchanged.
+  const initialTheme = await getInitialThemeVariant();
   return (
     <html lang="en">
       <head>
@@ -99,7 +109,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             Header (nested further down, in AppShell) can call
             useSession(). */}
         <SessionProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider initialVariant={initialTheme}>{children}</ThemeProvider>
         </SessionProvider>
       </body>
     </html>

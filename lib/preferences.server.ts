@@ -11,6 +11,7 @@
 // fallback takes over -- this never breaks the shell render.
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { getPaletteNames, normalizeVariant } from "@/lib/theme";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
@@ -166,6 +167,56 @@ export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiu
 
   const seen = (prefs as Record<string, unknown>).compendium_loader_seen;
   return { hasSeen: seen === true, canPersist: true };
+}
+
+// Server-side counterpart to ThemeProvider's client-side seeding: reads the
+// signed-in user's persisted theme variant before first paint so
+// RootLayout can pass it down as ThemeProvider's initialVariant prop.
+// Without this, ThemeProvider's initial render always used DEFAULT_VARIANT
+// server-side while the client's post-hydration localStorage read could
+// diverge (any authed page load where the saved palette isn't the default)
+// -- SettingsMenu renders the variant name as DOM text
+// (`#theme-active-name`), so that divergence was a real hydration mismatch,
+// not merely a same-render inert value. Same cookie-JWT-direct-to-backend
+// pattern as the other readers in this module, and the underlying fetch
+// itself IS shared with them through fetchPreferencesRow's React.cache()
+// wrapper above -- calling this alongside the other three costs no extra
+// network round-trip. Returns null (not a default variant name) on any
+// failure or invalid/missing/unrecognized persisted value -- ThemeProvider
+// treats null as "no seed", falling back to its existing
+// localStorage-derived init exactly as before this reader existed.
+export async function getInitialThemeVariant(): Promise<string | null> {
+  // Deliberately outside the try/catch below -- see the comment on the
+  // equivalent line in getInitialPanelWidths.
+  const token = (await cookies()).get("access_token")?.value;
+  if (!token) return null;
+
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return null;
+
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) return null;
+
+  const theme = (prefs as Record<string, unknown>).theme;
+  if (typeof theme !== "string") return null;
+
+  // normalizeVariant's own contract (lib/theme.ts) guarantees its return
+  // value is ALWAYS a recognized palette name -- unrecognized input is
+  // silently mapped to DEFAULT_VARIANT rather than signaled as "unknown".
+  // That fallback is right for client-side init (paint SOMETHING rather
+  // than nothing), but wrong here: a corrupt DB value must resolve to null
+  // (no seed -- ThemeProvider falls back to its existing
+  // localStorage-derived init) rather than a false-confidence "Brown" that
+  // looks like a genuinely persisted choice and would override localStorage
+  // as if it were one. So a plain `getPaletteNames().includes(normalized)`
+  // check can't detect "unknown" -- it would always be true. Detect the
+  // fallback directly instead: `theme` is genuine only if it was already a
+  // bare known name, or a known name with the legacy " Dark" suffix
+  // normalizeVariant strips.
+  const normalized = normalizeVariant(theme);
+  const names = getPaletteNames();
+  const isGenuine = names.includes(theme) || `${normalized} Dark` === theme;
+  return isGenuine ? normalized : null;
 }
 
 export interface InitialSessionRole {
