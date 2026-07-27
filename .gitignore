@@ -44,8 +44,7 @@ logs/*
 .archive/
 /*.png
 
-# private migration plans -- symlink into compendium-explorer; never commit
-# (this repo's history goes public at the batch-08 flip; plans stay private)
+# project plans -- symlink to dev
 /docs/project-plans
 
 # sdd scratch
