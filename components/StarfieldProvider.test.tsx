@@ -90,6 +90,35 @@ describe("StarfieldProvider", () => {
     expect(patchPreferences).toHaveBeenCalledWith({ starfield: DEFAULT_STARFIELD_VARIANT });
   });
 
+  describe("canPersist gate (plain demo sessions skip PATCH)", () => {
+    it("updates state but never calls patchPreferences when canPersist is false", async () => {
+      const patchPreferences = vi
+        .spyOn(preferences, "patchPreferences")
+        .mockResolvedValue(undefined);
+      render(
+        <StarfieldProvider initialVariant="twinkle" canPersist={false}>
+          <Consumer />
+        </StarfieldProvider>
+      );
+
+      await userEvent.click(screen.getByText("pan"));
+
+      expect(screen.getByTestId("variant")).toHaveTextContent("pan");
+      expect(patchPreferences).not.toHaveBeenCalled();
+    });
+
+    it("defaults canPersist to true, patching as before when the prop is omitted", async () => {
+      const patchPreferences = vi
+        .spyOn(preferences, "patchPreferences")
+        .mockResolvedValue(undefined);
+      renderProvider("twinkle");
+
+      await userEvent.click(screen.getByText("pan"));
+
+      expect(patchPreferences).toHaveBeenCalledWith({ starfield: "pan" });
+    });
+  });
+
   it("throws when useStarfield is called outside a StarfieldProvider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     function Bare() {

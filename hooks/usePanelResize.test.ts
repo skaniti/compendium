@@ -11,9 +11,9 @@ function stubOffsetWidth(el: HTMLElement, width: number): void {
   Object.defineProperty(el, "offsetWidth", { configurable: true, value: width });
 }
 
-function Harness() {
+function Harness({ canPersist }: { canPersist?: boolean }) {
   const { containerRef, leftPanelRef, leftHandleRef, rightHandleRef, rightPanelRef } =
-    usePanelResize();
+    usePanelResize(canPersist);
   return createElement(
     "div",
     { ref: containerRef, className: "app-container" },
@@ -33,8 +33,8 @@ function Harness() {
   );
 }
 
-function renderHarness() {
-  const { container, unmount } = render(createElement(Harness));
+function renderHarness(canPersist?: boolean) {
+  const { container, unmount } = render(createElement(Harness, { canPersist }));
   const appContainer = container.querySelector(".app-container") as HTMLElement;
   const leftPanel = container.querySelector(".panel-left") as HTMLElement;
   const rightPanel = container.querySelector(".panel-right") as HTMLElement;
@@ -131,6 +131,18 @@ describe("usePanelResize", () => {
     fireEvent.mouseMove(document, { clientX: 900 }); // should be ignored -- no listener anymore
 
     expect(appContainer.style.getPropertyValue("--panel-left-width")).toBe("25.00%");
+  });
+
+  it("canPersist=false resizes normally but never calls patchPreferences on mouseup", () => {
+    const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+    const { appContainer, leftHandle } = renderHarness(false);
+
+    fireEvent.mouseDown(leftHandle, { clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 150 }); // -> 25.00%
+    fireEvent.mouseUp(document);
+
+    expect(appContainer.style.getPropertyValue("--panel-left-width")).toBe("25.00%");
+    expect(patchSpy).not.toHaveBeenCalled();
   });
 
   it("detaches drag listeners and resets body style when unmounted mid-drag", () => {

@@ -237,6 +237,34 @@ export interface InitialSessionRole {
   actingAsDemo: boolean;
 }
 
+// Same dedup rationale as fetchPreferencesRow above, but for GET
+// /api/auth/me instead of /api/auth/preferences: app/layout.tsx (canPersist
+// seed for ThemeProvider) and AppShell.tsx (canPersist seed for
+// StarfieldProvider/PanelGrid, plus the existing force-return-mode logic
+// below) both now call getInitialSessionRole() in the SAME server render
+// pass -- without this, that's two redundant round-trips per page load
+// instead of one. Kept as its own cache()-wrapped function rather than
+// folded into fetchPreferencesRow: different endpoint, different response
+// shape, and memoizing by token only makes sense per-endpoint (a shared
+// key across two unrelated endpoints would either need a compound key or
+// risk one endpoint's response masquerading as the other's).
+type MeFetchResult = { ok: true; body: unknown } | { ok: false };
+
+const fetchMeRow = cache(async (token: string): Promise<MeFetchResult> => {
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false };
+    const body: unknown = await res.json();
+    return { ok: true, body };
+  } catch (err) {
+    console.error("getInitialSessionRole failed:", err);
+    return { ok: false };
+  }
+});
+
 // Server-side counterpart to SessionProvider's client-side hydration
 // (GET /api/auth/me): reads the signed-in user's role + acting-as-demo
 // state before first paint so AppShell can force CompendiumLoader straight
@@ -254,22 +282,14 @@ export async function getInitialSessionRole(): Promise<InitialSessionRole> {
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return { role: null, actingAsDemo: false };
 
-  try {
-    const res = await fetch(`${BACKEND}/api/auth/me`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return { role: null, actingAsDemo: false };
+  const fetched = await fetchMeRow(token);
+  if (!fetched.ok) return { role: null, actingAsDemo: false };
 
-    const data: unknown = await res.json();
-    if (typeof data !== "object" || data === null) return { role: null, actingAsDemo: false };
+  const data = fetched.body;
+  if (typeof data !== "object" || data === null) return { role: null, actingAsDemo: false };
 
-    const rawRole = (data as Record<string, unknown>).role;
-    const role = rawRole === "admin" || rawRole === "demo" || rawRole === "user" ? rawRole : null;
-    const actingAsDemo = (data as Record<string, unknown>).acting_as_demo === true;
-    return { role, actingAsDemo };
-  } catch (err) {
-    console.error("getInitialSessionRole failed:", err);
-    return { role: null, actingAsDemo: false };
-  }
+  const rawRole = (data as Record<string, unknown>).role;
+  const role = rawRole === "admin" || rawRole === "demo" || rawRole === "user" ? rawRole : null;
+  const actingAsDemo = (data as Record<string, unknown>).acting_as_demo === true;
+  return { role, actingAsDemo };
 }

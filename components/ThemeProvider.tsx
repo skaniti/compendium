@@ -78,9 +78,23 @@ interface ThemeProviderProps {
   // lazy initializer below for why this matters and what happens when it's
   // null/absent.
   initialVariant?: string | null;
+  // Plain demo sessions (role === "demo" && !actingAsDemo -- see
+  // AppShell.tsx's isPlainDemo) get a 403 from the backend's
+  // update_preferences endpoint on ANY PATCH, Dash parity (the backend's
+  // own is_plain_demo gate). Rather than fire a PATCH we already know will
+  // 403, skip scheduling it entirely when false -- every other behavior
+  // (DOM apply, localStorage write, state update, and the mount-time
+  // hydration GET below) stays identical, since reads are still allowed
+  // for demo. Defaults to true so every existing call site (no session
+  // context available) behaves exactly as before this prop existed.
+  canPersist?: boolean;
 }
 
-export default function ThemeProvider({ children, initialVariant }: ThemeProviderProps) {
+export default function ThemeProvider({
+  children,
+  initialVariant,
+  canPersist = true,
+}: ThemeProviderProps) {
   // Two distinct init paths, chosen once at mount and never revisited by
   // this initializer (it's a lazy useState initializer -- runs exactly once):
   //
@@ -221,6 +235,10 @@ export default function ThemeProvider({ children, initialVariant }: ThemeProvide
     writeStoredVariant(normalized);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Plain demo: skip scheduling the PATCH entirely -- see canPersist's
+    // own doc comment on ThemeProviderProps for why this never fires
+    // client-side rather than firing-and-swallowing a known 403.
+    if (!canPersist) return;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       void patchPreferences({ theme: normalized });

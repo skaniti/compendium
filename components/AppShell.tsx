@@ -70,8 +70,26 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
   // admin-launched demo session's writes land on the demo row.
   const canPersist = isPlainDemo ? false : compendiumLoaderCanPersist;
 
+  // Plain demo sessions get 403'd by the backend on ANY preferences PATCH
+  // (Dash parity, see the backend's is_plain_demo gate) -- not just the
+  // compendium loader's own first-run dismiss (`canPersist` above), but the
+  // palette debounce (ThemeProvider, seeded in app/layout.tsx from its own
+  // getInitialSessionRole call), the starfield pill clicks
+  // (StarfieldProvider, just below), and panel-resize drag persistence
+  // (usePanelResize, via PanelGrid's canPersist prop) as well. Unlike
+  // `canPersist` above -- which also requires compendiumLoaderCanPersist,
+  // i.e. a resolvable authenticated session specifically for the loader's
+  // own seen-flag persistence -- this gate is a pure function of
+  // isPlainDemo: a null/failed role read (no session confirmed either way)
+  // must default to true here, matching every other writer's pre-existing
+  // (pre-this-change) behavior when nothing is known about the session.
+  const canPersistPreferences = !isPlainDemo;
+
   return (
-    <StarfieldProvider initialVariant={initialStarfieldVariant}>
+    <StarfieldProvider
+      initialVariant={initialStarfieldVariant}
+      canPersist={canPersistPreferences}
+    >
       {/* Full-screen overlay (position: fixed, inset: 0, z-index: 99999 --
           app/styles/compendium-loader.css) -- rendered first so it's the
           first thing painted, though its own z-index (not DOM order) is
@@ -100,6 +118,7 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
         <PanelGrid
           initialLeftWidth={panelLeftWidth}
           initialRightWidth={panelRightWidth}
+          canPersist={canPersistPreferences}
           left={left}
           center={center}
           right={right}

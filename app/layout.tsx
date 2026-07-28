@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { DEFAULT_VARIANT, generateCssText, getPaletteNames, getTokens } from "@/lib/theme";
-import { getInitialThemeVariant } from "@/lib/preferences.server";
+import { getInitialSessionRole, getInitialThemeVariant } from "@/lib/preferences.server";
 import ThemeProvider from "@/components/ThemeProvider";
 import SessionProvider from "@/components/SessionProvider";
 
@@ -82,7 +82,29 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // localStorage produced a real hydration error. null (unauthed / read
   // failed) falls back to ThemeProvider's existing localStorage-derived
   // init unchanged.
-  const initialTheme = await getInitialThemeVariant();
+  //
+  // canPersist mirrors AppShell.tsx's isPlainDemo derivation exactly (see
+  // that file's own comment): a plain, direct-login demo session (role
+  // "demo", not an admin-launched acting-as-demo session) gets a 403 from
+  // the backend's update_preferences endpoint on ANY PATCH, Dash parity --
+  // so ThemeProvider must never schedule its debounced palette PATCH for
+  // that session, even though reads (the seed above, and ThemeProvider's
+  // own mount-time hydration GET) stay allowed. Independent read from
+  // getInitialThemeVariant -- neither depends on the other's result -- run
+  // concurrently rather than serializing two round-trips; the underlying
+  // /api/auth/me fetch itself is ALSO shared with AppShell's own
+  // getInitialSessionRole call in the same render pass, via fetchMeRow's
+  // React.cache() wrapper (lib/preferences.server.ts), so calling it here
+  // costs no extra network round-trip. Null/failed role reads default
+  // canPersist to true -- same "swallow and fall back" contract as every
+  // getInitialX reader in that module, and the same direction AppShell
+  // already takes (isPlainDemo is false when the role can't be determined).
+  const [initialTheme, { role: sessionRole, actingAsDemo }] = await Promise.all([
+    getInitialThemeVariant(),
+    getInitialSessionRole(),
+  ]);
+  const isPlainDemo = sessionRole === "demo" && !actingAsDemo;
+  const canPersistTheme = !isPlainDemo;
   return (
     <html lang="en">
       <head>
@@ -109,7 +131,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             Header (nested further down, in AppShell) can call
             useSession(). */}
         <SessionProvider>
-          <ThemeProvider initialVariant={initialTheme}>{children}</ThemeProvider>
+          <ThemeProvider initialVariant={initialTheme} canPersist={canPersistTheme}>
+            {children}
+          </ThemeProvider>
         </SessionProvider>
       </body>
     </html>

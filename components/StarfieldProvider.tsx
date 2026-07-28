@@ -48,9 +48,18 @@ function normalizeStarfieldVariant(name: string): string {
 
 export default function StarfieldProvider({
   initialVariant = DEFAULT_STARFIELD_VARIANT,
+  canPersist = true,
   children,
 }: {
   initialVariant?: string;
+  // Plain demo sessions (role === "demo" && !actingAsDemo -- see
+  // AppShell.tsx's isPlainDemo) get a 403 from the backend's
+  // update_preferences endpoint on ANY PATCH, Dash parity (the backend's
+  // own is_plain_demo gate). false skips the patchPreferences call below
+  // entirely; the state update (and thus the visible pill change) still
+  // happens. Defaults to true so every existing call site behaves exactly
+  // as before this prop existed.
+  canPersist?: boolean;
   children: ReactNode;
 }) {
   const [variant, setVariantState] = useState<string>(() =>
@@ -64,7 +73,7 @@ export default function StarfieldProvider({
   const setVariant = (next: string) => {
     const normalized = normalizeStarfieldVariant(next);
     setVariantState(normalized);
-    void patchPreferences({ starfield: normalized });
+    if (canPersist) void patchPreferences({ starfield: normalized });
   };
 
   return (

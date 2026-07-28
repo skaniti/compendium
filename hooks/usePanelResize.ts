@@ -22,7 +22,15 @@ interface ActiveDrag {
   onUp: () => void;
 }
 
-export function usePanelResize() {
+// canPersist: plain demo sessions (role === "demo" && !actingAsDemo -- see
+// AppShell.tsx's isPlainDemo) get a 403 from the backend's
+// update_preferences endpoint on ANY PATCH, Dash parity (the backend's own
+// is_plain_demo gate). false skips the patchPreferences call on mouseup
+// entirely; the drag itself (DOM width updates via the CSS custom property)
+// is untouched. Defaults to true so every existing call site (PanelGrid,
+// with no session context threaded through) behaves exactly as before this
+// param existed.
+export function usePanelResize(canPersist: boolean = true) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const leftHandleRef = useRef<HTMLDivElement | null>(null);
   const rightHandleRef = useRef<HTMLDivElement | null>(null);
@@ -44,8 +52,8 @@ export function usePanelResize() {
     const rightPanel = rightPanelRef.current;
     if (!container || !leftHandle || !rightHandle || !leftPanel || !rightPanel) return;
 
-    const detachLeft = attachHandle(leftHandle, container, leftPanel, "left", activeDragRef);
-    const detachRight = attachHandle(rightHandle, container, rightPanel, "right", activeDragRef);
+    const detachLeft = attachHandle(leftHandle, container, leftPanel, "left", activeDragRef, canPersist);
+    const detachRight = attachHandle(rightHandle, container, rightPanel, "right", activeDragRef, canPersist);
     return () => {
       detachLeft();
       detachRight();
@@ -59,7 +67,7 @@ export function usePanelResize() {
         document.body.style.userSelect = "";
       }
     };
-  }, []);
+  }, [canPersist]);
 
   return { containerRef, leftHandleRef, rightHandleRef, leftPanelRef, rightPanelRef };
 }
@@ -70,6 +78,7 @@ function attachHandle(
   panel: HTMLElement,
   side: Side,
   activeDragRef: { current: ActiveDrag | null },
+  canPersist: boolean,
 ): () => void {
   function onMouseDown(e: MouseEvent): void {
     e.preventDefault();
@@ -106,7 +115,12 @@ function attachHandle(
       const leftPct = computed.getPropertyValue("--panel-left-width").trim() || "20%";
       const rightPct = computed.getPropertyValue("--panel-right-width").trim() || "20%";
 
-      void patchPreferences({ panel_left_width: leftPct, panel_right_width: rightPct });
+      // Plain demo: skip the PATCH entirely -- see usePanelResize's own
+      // canPersist doc comment for why (known 403, Dash parity). The drag
+      // itself already applied above via the CSS custom property.
+      if (canPersist) {
+        void patchPreferences({ panel_left_width: leftPct, panel_right_width: rightPct });
+      }
     }
 
     activeDragRef.current = { onMove, onUp };

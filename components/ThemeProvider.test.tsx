@@ -286,6 +286,51 @@ describe("ThemeProvider", () => {
     });
   });
 
+  describe("canPersist gate (plain demo sessions skip PATCH)", () => {
+    it("applies variant/DOM/localStorage but never calls patchPreferences when canPersist is false", async () => {
+      vi.useFakeTimers();
+      document.body.innerHTML = '<style id="theme-root"></style><div id="root"></div>';
+      render(
+        <ThemeProvider canPersist={false}>
+          <Consumer />
+        </ThemeProvider>
+      );
+
+      act(() => fireEvent.click(screen.getByText("pink")));
+
+      expect(screen.getByTestId("variant")).toHaveTextContent("Pink");
+      expect(document.getElementById("theme-root")?.textContent).toBe(
+        generateCssText(getTokens("Pink"))
+      );
+      expect(localStorage.getItem(STORAGE_KEY)).toBe("Pink");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(preferences.patchPreferences).not.toHaveBeenCalled();
+    });
+
+    it("still fires the mount-time hydration GET (getPreferences) when canPersist is false", async () => {
+      render(
+        <ThemeProvider canPersist={false}>
+          <Consumer />
+        </ThemeProvider>
+      );
+      await waitFor(() => expect(preferences.getPreferences).toHaveBeenCalled());
+    });
+
+    it("defaults canPersist to true, patching as before when the prop is omitted", async () => {
+      vi.useFakeTimers();
+      renderProvider();
+      act(() => fireEvent.click(screen.getByText("pink")));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(preferences.patchPreferences).toHaveBeenCalledWith({ theme: "Pink" });
+    });
+  });
+
   it("throws when useTheme is called outside a ThemeProvider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     function Bare() {

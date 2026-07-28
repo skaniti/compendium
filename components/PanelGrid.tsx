@@ -14,6 +14,12 @@ interface PanelGridProps {
   // Omitted -> the ported CSS's own var(--panel-*-width, 20%) fallback wins.
   initialLeftWidth?: string;
   initialRightWidth?: string;
+  // Threaded down to usePanelResize -- see that hook's own doc comment.
+  // Plain demo sessions (AppShell's isPlainDemo) get 403'd on the
+  // mouseup PATCH, Dash parity; defaults to true so every existing render
+  // of this (client) component without an explicit session context behaves
+  // exactly as before this prop existed.
+  canPersist?: boolean;
   left?: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
@@ -22,12 +28,13 @@ interface PanelGridProps {
 export default function PanelGrid({
   initialLeftWidth,
   initialRightWidth,
+  canPersist = true,
   left,
   center,
   right,
 }: PanelGridProps) {
   const { containerRef, leftPanelRef, leftHandleRef, rightHandleRef, rightPanelRef } =
-    usePanelResize();
+    usePanelResize(canPersist);
 
   const style: StyleWithVars = {};
   if (initialLeftWidth) style["--panel-left-width"] = initialLeftWidth;

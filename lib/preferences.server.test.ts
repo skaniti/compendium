@@ -92,14 +92,18 @@ describe("getInitialSessionRole", () => {
   });
 
   it("maps an admin session (not acting)", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    // Unique token per test below -- fetchMeRow is now memoized by token via
+    // the mocked react.cache() (see that mock's own comment above), so
+    // reusing a token across tests in this describe block would silently
+    // serve one test's cached fetch response to the next.
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-1" }) as never);
     mockFetchResponse({ ok: true, json: async () => ({ id: 1, role: "admin", acting_as_demo: false }) });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: "admin", actingAsDemo: false });
   });
 
   it("maps an admin-launched acting-as-demo session", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-2" }) as never);
     mockFetchResponse({
       ok: true,
       json: async () => ({ id: 2, role: "demo", acting_as_demo: true, admin_origin_email: "admin@example.com" }),
@@ -109,21 +113,21 @@ describe("getInitialSessionRole", () => {
   });
 
   it("maps a plain (direct login) demo session", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-3" }) as never);
     mockFetchResponse({ ok: true, json: async () => ({ id: 2, role: "demo", acting_as_demo: false }) });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: "demo", actingAsDemo: false });
   });
 
   it("falls back to {role: null, actingAsDemo: false} on a non-ok response", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-4" }) as never);
     mockFetchResponse({ ok: false, status: 401, json: async () => ({ detail: "Unauthorized" }) });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: null, actingAsDemo: false });
   });
 
   it("falls back to {role: null, actingAsDemo: false} when fetch itself rejects", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-5" }) as never);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED"))
@@ -133,17 +137,69 @@ describe("getInitialSessionRole", () => {
   });
 
   it("falls back to {role: null, actingAsDemo: false} when the body isn't a JSON object", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-6" }) as never);
     mockFetchResponse({ ok: true, json: async () => ["not", "an", "object"] });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: null, actingAsDemo: false });
   });
 
   it("treats an unrecognized role string as null but still reads acting_as_demo faithfully", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "t" }) as never);
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "role-token-7" }) as never);
     mockFetchResponse({ ok: true, json: async () => ({ id: 1, role: "superuser", acting_as_demo: true }) });
 
     await expect(getInitialSessionRole()).resolves.toEqual({ role: null, actingAsDemo: true });
+  });
+});
+
+describe("getInitialSessionRole (React.cache dedup)", () => {
+  // app/layout.tsx (canPersist seed for ThemeProvider) and AppShell.tsx
+  // (canPersist seed for StarfieldProvider/PanelGrid, plus the existing
+  // CompendiumLoader force-return-mode logic) both call
+  // getInitialSessionRole() in the SAME server render pass -- without
+  // wrapping the underlying /api/auth/me fetch in cache(), that's two
+  // redundant round-trips per page load instead of one. Same per-token
+  // memoization idiom as fetchPreferencesRow above (mocked react.cache()
+  // real per-argument memoizer; see that mock's own comment).
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("shares a single backend fetch across multiple getInitialSessionRole calls for the same token", async () => {
+    vi.mocked(cookies).mockResolvedValue(
+      makeFakeCookieJar({ access_token: "role-dedup-token-1" }) as never
+    );
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ id: 1, role: "admin", acting_as_demo: false }),
+    });
+
+    await Promise.all([getInitialSessionRole(), getInitialSessionRole()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/me"),
+      expect.objectContaining({ headers: { authorization: "Bearer role-dedup-token-1" } })
+    );
+  });
+
+  it("does not share a cached fetch across two DIFFERENT tokens", async () => {
+    vi.mocked(cookies).mockResolvedValueOnce(
+      makeFakeCookieJar({ access_token: "role-dedup-token-2a" }) as never
+    );
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ id: 1, role: "user", acting_as_demo: false }),
+    });
+
+    await getInitialSessionRole();
+
+    vi.mocked(cookies).mockResolvedValueOnce(
+      makeFakeCookieJar({ access_token: "role-dedup-token-2b" }) as never
+    );
+    await getInitialSessionRole();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
