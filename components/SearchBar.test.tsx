@@ -59,6 +59,28 @@ describe("SearchBar", () => {
     expect(screen.getByText(/example\.com/)).toBeInTheDocument(); // source pill
   });
 
+  it("survives a redacted complete event (no tool_calls_made) in an acting session", async () => {
+    // The backend's _redact_complete_event strips tool_calls_made and
+    // total_cost_usd whenever get_role(user_id) != "admin" -- and while
+    // acting-as-demo, user_id IS the demo row, so acting sessions always
+    // receive the redacted shape even though the client-side adminContext
+    // (role === "admin" || actingAsDemo) still renders the admin chrome.
+    // Regression: 2026-07-28, chat-send while acting crashed on
+    // meta.tool_calls_made.length. Correct outcome: answer renders, no
+    // trace block (matches Dash, whose acting sessions never receive
+    // trace data either).
+    mockSession({ role: "demo", actingAsDemo: true });
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("hi there");
+      h.onComplete?.({ type: "complete", sources: [], iterations: 1, model: "m" });
+    });
+    render(<SearchBar />);
+    await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(screen.getByText("hi there")).toBeInTheDocument());
+    expect(screen.queryByText(/Trace:/)).not.toBeInTheDocument();
+  });
+
   it("shows an error when the stream rejects", async () => {
     vi.spyOn(stream, "streamAgentQuery").mockRejectedValue(new Error("boom 500"));
     render(<SearchBar />);

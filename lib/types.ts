@@ -29,8 +29,13 @@ export interface CompleteEvent {
   cluster_ids?: number[];
   // Shape per the backend's _extract_image_markers; rendering still deferred.
   images?: { thumb_url: string; source_url: string }[];
-  tool_calls_made: ToolCall[];
-  total_cost_usd: number;
+  // Optional: _redact_complete_event (backend/services/agent.py, P5)
+  // strips both of these whenever get_role(user_id) != "admin". That
+  // includes acting-as-demo sessions -- the acted-as row IS the demo
+  // user -- so the client's admin-ish chrome (role === "admin" ||
+  // actingAsDemo) must never assume they're present.
+  tool_calls_made?: ToolCall[];
+  total_cost_usd?: number;
   iterations: number;
   model: string;
 }

@@ -223,11 +223,17 @@ export default function SearchBar() {
                 </ul>
               )}
 
-              {adminContext && assistant.meta && assistant.meta.tool_calls_made.length > 0 && (
+              {/* Guard on the DATA, not just adminContext: the backend
+                  redacts tool_calls_made/total_cost_usd for any
+                  non-admin get_role(user_id) -- which includes
+                  acting-as-demo sessions, where adminContext is still
+                  true here. An acting session therefore renders no
+                  trace at all (same visible outcome as Dash). */}
+              {adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
                 <details>
                   <summary className="search-trace-summary">
                     Trace: {assistant.meta.iterations} iter, {assistant.meta.tool_calls_made.length} tools, $
-                    {assistant.meta.total_cost_usd.toFixed(4)} -- {assistant.meta.model}
+                    {(assistant.meta.total_cost_usd ?? 0).toFixed(4)} -- {assistant.meta.model}
                   </summary>
                   {assistant.meta.tool_calls_made.map((tc, i) => (
                     <div key={i} style={{ marginLeft: 10, fontSize: 12 }}>
