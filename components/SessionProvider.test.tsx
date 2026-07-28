@@ -156,6 +156,43 @@ describe("SessionProvider / useSession", () => {
     expect(screen.getByTestId("origin-email")).toHaveTextContent("admin@example.com");
   });
 
+  // View-as provenance marker: acting_as_demo=true means /me returned the
+  // DEMO user's own row -- without a suffix, an acting admin is
+  // indistinguishable in the header from a plain demo login.
+  it("appends \" (admin)\" to the account label while acting as demo", async () => {
+    mockApiFetch({
+      id: 2,
+      email: "demo@example.com",
+      name: "demo",
+      role: "demo",
+      acting_as_demo: true,
+      admin_origin_email: "admin@example.com",
+    });
+
+    render(
+      <SessionProvider>
+        <Consumer />
+      </SessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId("acting")).toHaveTextContent("true"));
+    expect(screen.getByTestId("account")).toHaveTextContent("demo (admin)");
+  });
+
+  it("does not append the admin suffix for a plain (non-acting) session", async () => {
+    mockApiFetch({ id: 2, email: "demo@example.com", name: "demo", role: "demo", acting_as_demo: false });
+
+    render(
+      <SessionProvider>
+        <Consumer />
+      </SessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId("acting")).toHaveTextContent("false"));
+    expect(screen.getByTestId("account")).toHaveTextContent("demo");
+    expect(screen.getByTestId("account")).not.toHaveTextContent("(admin)");
+  });
+
   it("signed-out default is safe when apiFetch resolves non-ok (e.g. 401)", async () => {
     mockApiFetch({ error: "unauthorized" }, 401);
 

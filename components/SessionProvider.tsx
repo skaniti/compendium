@@ -98,13 +98,19 @@ function deriveState(data: unknown): Omit<SessionState, "refresh" | "status"> | 
   const name = typeof me.name === "string" && me.name ? me.name : undefined;
   const email = typeof me.email === "string" && me.email ? me.email : undefined;
   const adminOriginEmail = typeof me.admin_origin_email === "string" ? me.admin_origin_email : undefined;
+  const actingAsDemo = me.acting_as_demo === true;
+  const account = name || email || ACCOUNT_EMPTY;
   return {
     // An unrecognized role string (backend contract drift, a proxy error
     // page that happens to be valid JSON, etc.) is treated as signed-out
     // rather than trusted -- never surface a role we don't understand.
     role: isSessionRole(me.role) ? me.role : null,
-    account: name || email || ACCOUNT_EMPTY,
-    actingAsDemo: me.acting_as_demo === true,
+    // View-as provenance marker: while acting_as_demo, this /me row is the
+    // DEMO user's own row (see route handler) -- without a suffix here,
+    // the header would show the demo identity with no hint the viewer is
+    // really the admin, indistinguishable from a plain demo login.
+    account: actingAsDemo ? `${account} (admin)` : account,
+    actingAsDemo,
     adminOriginEmail,
   };
 }
