@@ -213,24 +213,40 @@
   padding-left: 6px;
 }
 
-/* Sources inline */
-.search-msg-sources {
-  margin-top: 4px;
-  padding-left: 14px;
+/* Sources row (chat parity fix 2, 2026-07-28): port of search_stream.js's
+ * srcWrap + srcLabel inline styles (~699-713) as real CSS classes -- Dash
+ * builds this row/label with a one-off style.cssText rather than a
+ * stylesheet rule (no .chat-sources-row/.chat-sources-label selector
+ * exists in Dash's search_bar.css), so these are new class names, not a
+ * port of an existing Dash selector; the declarations themselves ARE
+ * ported from Dash's inline values. Replaces the old .search-msg-sources
+ * <ul> list -- SearchBar.tsx no longer renders that markup, so its CSS is
+ * removed here rather than left dead alongside the new rules.
+ */
+.chat-sources-row {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
   font-size: 0.72rem;
 }
-.search-msg-sources li {
-  margin-bottom: 2px;
+.chat-sources-label {
+  margin-right: 4px;
+  font-size: 0.85rem;
+  color: #fff;
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
 }
-.search-msg-sources a {
-  color: var(--text);
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 2px;
-  font-size: 0.72rem;
-}
-.search-msg-sources a:hover {
-  text-decoration-color: var(--text);
+
+/* Source pill (chat parity fix 2): .tag-pill's own font-size (0.72rem)
+ * already matches makeSourceLink's inline value, so only the pill's
+ * inter-pill spacing needs porting here (search_stream.js ~170-174).
+ */
+.chat-source-pill {
+  margin: 1px 2px 1px 0;
 }
 
 /* Source-pill locate glyph (P7): jumps to the cited page's node on the

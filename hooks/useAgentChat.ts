@@ -9,6 +9,21 @@ import type { CompleteEvent } from "@/lib/types";
 // Presentation now lives in components/SearchBar.tsx; this hook is the
 // single source of truth for the conversation state both the message list
 // and the input row read/drive.
+//
+// 2026-07-28 (chat parity fix 1): restructured from `userMsgs: string[]` +
+// a single shared `assistant: AssistantMessage | null` slot to a `turns:
+// Turn[]` array. The single-slot shape was the bug: every send() replaced
+// `assistant` wholesale, so a second query erased the first answer from
+// the screen instead of appending beside it. Dash's search_stream.js never
+// has this problem because runStreamingQuery() (~469-523) appends a brand
+// new assistantRow DOM node per turn and holds a direct reference to THAT
+// row for the rest of its streaming lifetime -- prior rows are just other
+// nodes still sitting in #search-conversation. `turns` + id-addressed
+// updates (see updateAssistant below) is this hook's equivalent: each
+// send() owns one Turn object for its whole lifetime, addressed by an id
+// that's never reused, so turns never collide across sends. Auto-scroll
+// (Dash's scrollIfPinned/pinned-to-bottom tracking) is NOT ported here --
+// out of scope for this fix, which is display-persistence only.
 
 export interface AssistantMessage {
   text: string; // streamed raw text (mid-flight)
@@ -18,9 +33,27 @@ export interface AssistantMessage {
   error?: string;
 }
 
+// One user/assistant exchange. `id` is a monotonically-increasing,
+// never-reused identifier assigned at send()-time -- it's what lets every
+// streaming callback for a turn (onStatus/onToken/onComplete/the abort or
+// error catch, and even a requestAnimationFrame-batched flush that fires
+// late) find and update ONLY its own turn, never "the last turn" or "the
+// currently active turn". That distinction matters across clear(): once
+// clear() empties `turns`, a straggling callback from the just-cancelled
+// run addresses an id that's no longer present, so its update is a no-op
+// (see updateAssistant) instead of resurrecting the cleared turn or --
+// worse -- writing into whatever new turn a fast follow-up send() has
+// since started. Dash sidesteps this entirely via direct DOM references
+// (see the top-of-file comment); id-addressing is the array-of-turns
+// equivalent of that same guarantee.
+export interface Turn {
+  id: number;
+  user: string;
+  assistant: AssistantMessage;
+}
+
 export interface UseAgentChat {
-  userMsgs: string[];
-  assistant: AssistantMessage | null;
+  turns: Turn[];
   busy: boolean;
   input: string;
   setInput: (value: string) => void;
@@ -30,56 +63,82 @@ export interface UseAgentChat {
 }
 
 export function useAgentChat(): UseAgentChat {
-  const [userMsgs, setUserMsgs] = useState<string[]>([]);
-  const [assistant, setAssistant] = useState<AssistantMessage | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
-  const bufferRef = useRef("");
-  const rafRef = useRef<number | null>(null);
+  const nextIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const flush = useCallback(() => {
-    rafRef.current = null;
-    setAssistant((a) => (a ? { ...a, text: bufferRef.current } : a));
-  }, []);
-
-  const scheduleFlush = useCallback(() => {
-    if (rafRef.current != null) return;
-    rafRef.current = requestAnimationFrame(flush);
-  }, [flush]);
+  // Id-addressed update: only the turn whose id matches is touched: every
+  // other turn (completed answers from earlier sends, in particular)
+  // passes through unchanged. If no turn in `turns` has this id -- clear()
+  // ran since this turn started, or (impossible given nextIdRef only ever
+  // increments) an id collision -- the .map is a no-op, generalizing the
+  // original single-slot code's `a ? { ...a, ... } : a` "already null,
+  // update is a no-op" guard from one nullable slot to an array of
+  // addressable turns.
+  const updateAssistant = useCallback(
+    (id: number, updater: (a: AssistantMessage) => AssistantMessage) => {
+      setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, assistant: updater(t.assistant) } : t)));
+    },
+    [],
+  );
 
   const send = useCallback(async () => {
     const query = input.trim();
     if (!query || busy) return;
     setBusy(true);
     setInput("");
-    setUserMsgs((m) => [...m, query]);
-    bufferRef.current = "";
-    setAssistant({ text: "", done: false, status: "Thinking..." });
+    const id = nextIdRef.current++;
+    setTurns((ts) => [
+      ...ts,
+      { id, user: query, assistant: { text: "", done: false, status: "Thinking..." } },
+    ]);
+
+    // Buffer + rAF handle are local to this call, not hook-level refs, so
+    // a straggling scheduled flush from THIS send can never read or write
+    // a DIFFERENT turn's buffer -- each send() closes over its own. (The
+    // original code's single hook-level bufferRef was safe only because
+    // there was ever exactly one assistant slot to write into; that
+    // invariant no longer holds once completed turns must persist.)
+    let buffer = "";
+    let rafId: number | null = null;
+    const flush = () => {
+      rafId = null;
+      updateAssistant(id, (a) => ({ ...a, text: buffer }));
+    };
+    const scheduleFlush = () => {
+      if (rafId != null) return;
+      rafId = requestAnimationFrame(flush);
+    };
+
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
       await streamAgentQuery(
         query,
         {
-          onStatus: (text) => setAssistant((a) => (a ? { ...a, status: text } : a)),
-          onToken: (text) => { bufferRef.current += text; scheduleFlush(); },
+          onStatus: (text) => updateAssistant(id, (a) => ({ ...a, status: text })),
+          onToken: (text) => {
+            buffer += text;
+            scheduleFlush();
+          },
           onComplete: (meta) =>
-            setAssistant((a) => (a ? { ...a, text: bufferRef.current, done: true, status: "", meta } : a)),
+            updateAssistant(id, (a) => ({ ...a, text: buffer, done: true, status: "", meta })),
         },
         ctrl.signal,
       );
     } catch (err) {
       if ((err as Error).name === "AbortError") {
-        setAssistant((a) => (a ? { ...a, done: true, status: "", error: "Cancelled." } : a));
+        updateAssistant(id, (a) => ({ ...a, done: true, status: "", error: "Cancelled." }));
       } else {
-        setAssistant((a) => (a ? { ...a, done: true, status: "", error: (err as Error).message } : a));
+        updateAssistant(id, (a) => ({ ...a, done: true, status: "", error: (err as Error).message }));
       }
     } finally {
       setBusy(false);
       abortRef.current = null;
     }
-  }, [input, busy, scheduleFlush]);
+  }, [input, busy, updateAssistant]);
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
 
@@ -92,18 +151,20 @@ export function useAgentChat(): UseAgentChat {
   // just gets wiped out from under it by the click handler's own
   // `conv.innerHTML = ''`, a detached-node write that's harmless in raw
   // DOM). React has no equivalent "orphan the node" affordance -- an
-  // in-flight send() would keep calling setAssistant/setUserMsgs against
-  // state this hook still owns after clear(), which would silently
-  // resurrect the just-cleared turn as soon as the next token/complete
-  // event arrived. Cancelling first avoids that: abort() is synchronous,
-  // so the in-flight send()'s catch/finally only ever sees assistant
-  // already null (its `a ? ... : a` update pattern is already a no-op
-  // once that happens).
+  // in-flight send() would keep calling updateAssistant against state this
+  // hook still owns after clear(), which would silently resurrect the
+  // just-cleared turn as soon as the next token/complete event arrived (or,
+  // with turns now addressed by id, could even bleed into a fresh turn
+  // that started before the aborted run's own catch/finally fires -- see
+  // Turn's doc comment). Cancelling first avoids that: abort() is
+  // synchronous, so the in-flight send()'s catch/finally only ever runs
+  // updateAssistant(id, ...) against a `turns` that no longer contains that
+  // id (already emptied by this clear()), which is a no-op as established
+  // above.
   const clear = useCallback(() => {
     abortRef.current?.abort();
-    setUserMsgs([]);
-    setAssistant(null);
+    setTurns([]);
   }, []);
 
-  return { userMsgs, assistant, busy, input, setInput, send, cancel, clear };
+  return { turns, busy, input, setInput, send, cancel, clear };
 }

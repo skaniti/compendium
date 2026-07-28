@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useSearchBarResize } from "@/hooks/useSearchBarResize";
 import { useSession } from "@/components/SessionProvider";
@@ -66,12 +66,19 @@ function renderToolDefinition(tool: AgentTool) {
 //     #search-clear-btn control itself IS ported below (clears in-memory
 //     state); only the cross-reload persistence layer it also resets in
 //     Dash is out of scope here.
-//   - .chat-source-pill / .chat-source-locate-btn (P7 locate-on-graph
-//     glyph) and .chat-images-row -- the pre-existing Chat.tsx never
-//     rendered these either; sources stay the plain-link list it already
-//     had (now styled via the ported .search-msg-sources list class).
+//   - .chat-source-locate-btn (P7 locate-on-graph glyph, makeLocatePillGroup
+//     in search_stream.js) and .chat-images-row -- P7 depends on the
+//     batch-03 chat<->graph interop (__d3* API) which isn't ported yet, and
+//     images are a separate, not-yet-requested parity gap. Sources below
+//     (2026-07-28, chat parity fix 2) DO now port makeSourceLink's plain
+//     .tag-pill.chat-source-pill markup + the "sources:" label
+//     (search_stream.js ~161-188, ~699-713) -- just without the locate
+//     glyph wrapper. Diverges from Dash's makeSourceLink in one respect:
+//     the pill label stays hostname-only (no " · path-tail" suffix) per
+//     the batch brief -- matches what this component already showed before
+//     this fix, now just styled as a pill instead of a bullet.
 export default function SearchBar() {
-  const { userMsgs, assistant, busy, input, setInput, send, cancel, clear } = useAgentChat();
+  const { turns, busy, input, setInput, send, cancel, clear } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
 
   // app.py's clientside callback predicate (:2807-2830): admin-context ==
@@ -148,7 +155,7 @@ export default function SearchBar() {
     void send();
   }, [busy, input, expand, send]);
 
-  const hasMessages = userMsgs.length > 0 || assistant != null;
+  const hasMessages = turns.length > 0;
 
   return (
     <div className="search-bar-wrapper">
@@ -176,40 +183,61 @@ export default function SearchBar() {
           id="search-conversation"
           className={"search-conversation" + (hasMessages ? " has-messages" : "")}
         >
-          {userMsgs.map((m, i) => (
-            <div key={i} className="search-msg-user">
-              <span className="search-msg-user-text">{m}</span>
-            </div>
-          ))}
+          {/* Chat parity fix 1 (2026-07-28): map over turns (not userMsgs
+              then a single assistant block) so every completed exchange
+              renders interleaved -- user bubble immediately followed by
+              its own assistant bubble, in send order -- matching Dash's
+              DOM append order in runStreamingQuery (addUserMessage() then
+              the assistantRow append, ~501-523 of search_stream.js).
+              key={id} (not array index) since turns can only grow/reset,
+              never reorder, and id is stable for a turn's whole lifetime. */}
+          {turns.map(({ id, user, assistant }) => (
+            <Fragment key={id}>
+              <div className="search-msg-user">
+                <span className="search-msg-user-text">{user}</span>
+              </div>
+              <div className="search-msg-assistant">
+                {assistant.status && (
+                  <div className="search-msg-status">
+                    <span className="search-spinner" />
+                    {assistant.status}
+                  </div>
+                )}
+                {assistant.error ? (
+                  <div role="alert" className="search-msg-error">
+                    {assistant.error}
+                  </div>
+                ) : assistant.done ? (
+                  <div
+                    className="search-msg-assistant-text"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(assistant.text) }}
+                  />
+                ) : (
+                  <div className="search-msg-assistant-text" style={{ whiteSpace: "pre-wrap" }}>
+                    {assistant.text}
+                  </div>
+                )}
 
-          {assistant && (
-            <div className="search-msg-assistant">
-              {assistant.status && (
-                <div className="search-msg-status">
-                  <span className="search-spinner" />
-                  {assistant.status}
-                </div>
-              )}
-              {assistant.error ? (
-                <div role="alert" className="search-msg-error">
-                  {assistant.error}
-                </div>
-              ) : assistant.done ? (
-                <div
-                  className="search-msg-assistant-text"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(assistant.text) }}
-                />
-              ) : (
-                <div className="search-msg-assistant-text" style={{ whiteSpace: "pre-wrap" }}>
-                  {assistant.text}
-                </div>
-              )}
-
-              {assistant.meta && assistant.meta.sources.length > 0 && (
-                <ul className="search-msg-sources">
-                  {assistant.meta.sources.map((u) => (
-                    <li key={u}>
-                      <a href={u} target="_blank" rel="noreferrer">
+                {/* Chat parity fix 2 (2026-07-28): Dash's styled source
+                    pills, not a bullet list -- port of makeSourceLink +
+                    the "sources:" label wrapper (search_stream.js
+                    ~161-188 build the pill, ~699-713 build the row +
+                    label). One pill per URL (not deduped by hostname),
+                    same as Dash's loop over metadata.sources. Excludes
+                    the P7 locate-glyph wrapper (makeLocatePillGroup) --
+                    that needs the batch-03 __d3* graph interop, not
+                    ported yet; see the component doc comment above. */}
+                {assistant.meta && assistant.meta.sources.length > 0 && (
+                  <div className="chat-sources-row">
+                    <span className="chat-sources-label">sources:</span>
+                    {assistant.meta.sources.map((u) => (
+                      <a
+                        key={u}
+                        href={u}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="tag-pill chat-source-pill"
+                      >
                         {(() => {
                           try {
                             return new URL(u).hostname.replace("www.", "");
@@ -218,34 +246,34 @@ export default function SearchBar() {
                           }
                         })()}
                       </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {/* Guard on the DATA, not just adminContext: the backend
-                  redacts tool_calls_made/total_cost_usd for any
-                  non-admin get_role(user_id) -- which includes
-                  acting-as-demo sessions, where adminContext is still
-                  true here. An acting session therefore renders no
-                  trace at all (same visible outcome as Dash). */}
-              {adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
-                <details>
-                  <summary className="search-trace-summary">
-                    Trace: {assistant.meta.iterations} iter, {assistant.meta.tool_calls_made.length} tools, $
-                    {(assistant.meta.total_cost_usd ?? 0).toFixed(4)} -- {assistant.meta.model}
-                  </summary>
-                  {assistant.meta.tool_calls_made.map((tc, i) => (
-                    <div key={i} style={{ marginLeft: 10, fontSize: 12 }}>
-                      <code>{tc.tool}</code>
-                      <pre style={{ whiteSpace: "pre-wrap" }}>args: {JSON.stringify(tc.arguments)}</pre>
-                      <pre style={{ whiteSpace: "pre-wrap", opacity: 0.7 }}>{tc.result_preview}</pre>
-                    </div>
-                  ))}
-                </details>
-              )}
-            </div>
-          )}
+                {/* Guard on the DATA, not just adminContext: the backend
+                    redacts tool_calls_made/total_cost_usd for any
+                    non-admin get_role(user_id) -- which includes
+                    acting-as-demo sessions, where adminContext is still
+                    true here. An acting session therefore renders no
+                    trace at all (same visible outcome as Dash). */}
+                {adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
+                  <details>
+                    <summary className="search-trace-summary">
+                      Trace: {assistant.meta.iterations} iter, {assistant.meta.tool_calls_made.length} tools, $
+                      {(assistant.meta.total_cost_usd ?? 0).toFixed(4)} -- {assistant.meta.model}
+                    </summary>
+                    {assistant.meta.tool_calls_made.map((tc, i) => (
+                      <div key={i} style={{ marginLeft: 10, fontSize: 12 }}>
+                        <code>{tc.tool}</code>
+                        <pre style={{ whiteSpace: "pre-wrap" }}>args: {JSON.stringify(tc.arguments)}</pre>
+                        <pre style={{ whiteSpace: "pre-wrap", opacity: 0.7 }}>{tc.result_preview}</pre>
+                      </div>
+                    ))}
+                  </details>
+                )}
+              </div>
+            </Fragment>
+          ))}
         </div>
 
         <div className="search-bar-input-row">

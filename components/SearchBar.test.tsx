@@ -56,7 +56,88 @@ describe("SearchBar", () => {
     await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument()); // markdown-rendered bold
-    expect(screen.getByText(/example\.com/)).toBeInTheDocument(); // source pill
+
+    // Sources render as Dash's styled pills (search_stream.js's
+    // makeSourceLink + the "sources:" label built in runStreamingQuery
+    // ~680-713), not a bullet list -- see item 2/fix 2's comment block
+    // above SearchBar's sources markup.
+    expect(screen.getByText("sources:")).toBeInTheDocument();
+    const sourcePill = screen.getByRole("link", { name: "example.com" });
+    expect(sourcePill).toHaveClass("tag-pill", "chat-source-pill");
+    expect(sourcePill).toHaveAttribute("href", "https://example.com/x");
+    expect(sourcePill).toHaveAttribute("target", "_blank");
+    expect(document.querySelector(".search-msg-sources")).not.toBeInTheDocument(); // old <ul> markup gone
+  });
+
+  it("renders one source pill per URL even when hostnames repeat", async () => {
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onComplete?.({
+        type: "complete",
+        sources: ["https://example.com/a", "https://example.com/b"],
+        cluster_ids: [], images: [], tool_calls_made: [], total_cost_usd: 0,
+        iterations: 1, model: "m",
+      });
+    });
+    render(<SearchBar />);
+    await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "example.com" })).toHaveLength(2)
+    );
+    const [first, second] = screen.getAllByRole("link", { name: "example.com" });
+    expect(first).toHaveAttribute("href", "https://example.com/a");
+    expect(second).toHaveAttribute("href", "https://example.com/b");
+  });
+
+  // Transcript persistence (chat parity fix 1): a completed answer must
+  // stay on screen when a new turn starts, interleaved in send order --
+  // see hooks/useAgentChat.ts's `turns` restructure and Dash's
+  // addUserMessage()/per-run assistantRow reference in search_stream.js,
+  // which never shares one "current answer" slot across turns.
+  it("keeps every completed answer visible across sequential sends, interleaved in order", async () => {
+    vi.spyOn(stream, "streamAgentQuery")
+      .mockImplementationOnce(async (_q, h) => {
+        h.onToken?.("first answer");
+        h.onComplete?.({
+          type: "complete", sources: [], cluster_ids: [], images: [],
+          tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+        });
+      })
+      .mockImplementationOnce(async (_q, h) => {
+        h.onToken?.("second answer");
+        h.onComplete?.({
+          type: "complete", sources: [], cluster_ids: [], images: [],
+          tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+        });
+      });
+    render(<SearchBar />);
+    const input = screen.getByPlaceholderText(/ask/i);
+
+    await userEvent.type(input, "first query");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(screen.getByText("first answer")).toBeInTheDocument());
+
+    await userEvent.type(input, "second query");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(screen.getByText("second answer")).toBeInTheDocument());
+
+    // The bug being fixed: the second send used to REPLACE the first
+    // answer on screen. Both must be present now.
+    expect(screen.getByText("first answer")).toBeInTheDocument();
+    expect(screen.getByText("first query")).toBeInTheDocument();
+    expect(screen.getByText("second query")).toBeInTheDocument();
+
+    // Interleaved, not grouped by type: user1, assistant1, user2,
+    // assistant2 -- matches Dash's DOM append order in runStreamingQuery.
+    const conv = document.querySelector("#search-conversation")!;
+    const rowClasses = Array.from(conv.children).map((el) => el.className);
+    expect(rowClasses).toEqual([
+      "search-msg-user",
+      "search-msg-assistant",
+      "search-msg-user",
+      "search-msg-assistant",
+    ]);
   });
 
   it("survives a redacted complete event (no tool_calls_made) in an acting session", async () => {

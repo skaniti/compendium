@@ -4,16 +4,21 @@ import { useAgentChat } from "./useAgentChat";
 import * as stream from "@/lib/agent-stream";
 
 // Hook-level tests for clear() (item 3, P4 clear-chat port of
-// search_stream.js's clearHistory()). SearchBar.test.tsx's
-// "#search-clear-btn" suite covers the same contract end-to-end through the
-// rendered button; these isolate the state-reset behavior at the hook
-// boundary, including the deliberate sane-deviation from Dash (cancelling
-// an in-flight stream before resetting state -- see clear()'s own comment
-// in useAgentChat.ts for why).
+// search_stream.js's clearHistory()) and for the transcript-persistence
+// restructure (chat parity fix 1, 2026-07-28: userMsgs[]/single-assistant
+// state replaced by a `turns: Turn[]` array so completed exchanges persist
+// instead of each send() replacing the prior answer -- see useAgentChat.ts's
+// top-of-file comment and Turn's own doc comment for the id-addressing
+// rationale). SearchBar.test.tsx's "#search-clear-btn" suite and its own
+// transcript-persistence test cover the same contracts end-to-end through
+// the rendered UI; these isolate the state-reset/turn-addressing behavior
+// at the hook boundary, including the deliberate sane-deviation from Dash
+// (cancelling an in-flight stream before resetting state -- see clear()'s
+// own comment in useAgentChat.ts for why).
 describe("useAgentChat clear()", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("resets userMsgs and assistant but leaves input untouched", async () => {
+  it("resets turns but leaves input untouched", async () => {
     vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
       h.onComplete?.({
         type: "complete", sources: [], cluster_ids: [], images: [],
@@ -26,14 +31,13 @@ describe("useAgentChat clear()", () => {
     await act(async () => {
       await result.current.send();
     });
-    await waitFor(() => expect(result.current.assistant?.done).toBe(true));
-    expect(result.current.userMsgs).toEqual(["hi"]);
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    expect(result.current.turns.map((t) => t.user)).toEqual(["hi"]);
 
     act(() => result.current.setInput("leftover"));
     act(() => result.current.clear());
 
-    expect(result.current.userMsgs).toEqual([]);
-    expect(result.current.assistant).toBeNull();
+    expect(result.current.turns).toEqual([]);
     expect(result.current.input).toBe("leftover");
   });
 
@@ -56,13 +60,58 @@ describe("useAgentChat clear()", () => {
 
     act(() => result.current.clear());
 
-    expect(result.current.userMsgs).toEqual([]);
-    expect(result.current.assistant).toBeNull();
+    expect(result.current.turns).toEqual([]);
     await waitFor(() => expect(result.current.busy).toBe(false));
     expect(streamSpy).toHaveBeenCalled();
-    // The in-flight send()'s catch fires AFTER clear() already reset
-    // assistant to null -- its `a ? ... : a` update pattern must be a
-    // no-op at that point, not resurrect a "Cancelled." bubble.
-    expect(result.current.assistant).toBeNull();
+    // The in-flight send()'s catch fires AFTER clear() already emptied
+    // `turns` -- its id-addressed update (see updateAssistant in
+    // useAgentChat.ts) must be a no-op at that point (no turn with a
+    // matching id left to update), not resurrect a "Cancelled." bubble
+    // by e.g. appending a new turn or writing into a same-index turn
+    // from a later send.
+    expect(result.current.turns).toEqual([]);
+  });
+});
+
+describe("useAgentChat transcript persistence (chat parity fix 1)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("keeps a completed turn in `turns` when a second send starts, addressed by its own id", async () => {
+    const streamSpy = vi
+      .spyOn(stream, "streamAgentQuery")
+      .mockImplementationOnce(async (_q, h) => {
+        h.onComplete?.({
+          type: "complete", sources: [], cluster_ids: [], images: [],
+          tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m1",
+        });
+      })
+      .mockImplementationOnce(
+        () => new Promise<void>(() => {}), // second send stays in flight
+      );
+    const { result } = renderHook(() => useAgentChat());
+
+    act(() => result.current.setInput("first"));
+    await act(async () => {
+      await result.current.send();
+    });
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+
+    act(() => result.current.setInput("second"));
+    act(() => {
+      void result.current.send();
+    });
+    await waitFor(() => expect(result.current.turns).toHaveLength(2));
+
+    // The parity bug: a single shared `assistant` slot meant the second
+    // send's initial {text:"", done:false} object REPLACED the first
+    // turn's completed answer. Each turn must now be its own array
+    // entry, so turn 0 stays exactly as it finished while turn 1 starts
+    // fresh alongside it.
+    expect(result.current.turns[0].user).toBe("first");
+    expect(result.current.turns[0].assistant.done).toBe(true);
+    expect(result.current.turns[0].assistant.meta?.model).toBe("m1");
+    expect(result.current.turns[1].user).toBe("second");
+    expect(result.current.turns[1].assistant.done).toBe(false);
+    expect(streamSpy).toHaveBeenCalledTimes(2);
   });
 });
