@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useGraph } from "@/hooks/useGraph";
 import { fetchClusteringStatus, fetchTopics, postRecluster } from "@/lib/api";
 import { TopicIcon } from "@/lib/icons";
+import ScPopover from "./ScPopover";
+import ScTooltips from "./ScTooltip";
 import { useTimeWindow, type TimeWindow } from "./TimeWindowProvider";
 import type { ClusteringStatus, TopicInterest } from "@/lib/types";
 
@@ -15,9 +17,11 @@ import type { ClusteringStatus, TopicInterest } from "@/lib/types";
 // keys off both.
 //
 // SC popovers/tooltips (topics.py's render_sc_card popovers +
-// open_close_sc_popover) are Task 8-C3, not this task: this component owns
-// `openSlot` + a click handler as the seam for that task to consume, and
-// renders no popover content itself yet.
+// open_close_sc_popover, Task 8-C3): this component owns `openSlot` +
+// handleTileClick's toggle semantics (8-C2's seam), and mounts ScPopover
+// (only while a slot is open) + ScTooltips (always, so hover listeners stay
+// live) -- see components/ScPopover.tsx / ScTooltip.tsx for the actual
+// popover/tooltip content and behavior.
 
 // Dash's static pre-callback title (app.py:312) -- the initial DOM before
 // the first clustering-status read resolves, and the fallback for a failed
@@ -109,6 +113,11 @@ export default function HeaderCards() {
     setOpenSlot((current) => (current === slot ? null : slot));
   }
 
+  // Unconditional close (vs. handleTileClick's toggle) -- used by ScPopover
+  // for Esc/outside-click/successful-mutation dismissal, none of which are
+  // "the same tile clicked again".
+  const closePopover = useCallback(() => setOpenSlot(null), []);
+
   // recluster.py:113-118's "No cache" branch styling: an empty
   // freshness_color means there's no completed run to time yet (or, here,
   // the status hasn't loaded), so the badge dims instead of coloring.
@@ -165,7 +174,14 @@ export default function HeaderCards() {
         </div>
       </div>
 
-      <SuperclustersCard topics={topics} openSlot={openSlot} onTileClick={handleTileClick} />
+      <SuperclustersCard
+        topics={topics}
+        openSlot={openSlot}
+        onTileClick={handleTileClick}
+        onClosePopover={closePopover}
+        refetchTopics={refetchTopics}
+        refreshGraph={refresh}
+      />
     </div>
   );
 }
@@ -174,12 +190,21 @@ interface SuperclustersCardProps {
   topics: TopicInterest[];
   openSlot: number | null;
   onTileClick: (slot: number) => void;
+  onClosePopover: () => void;
+  refetchTopics: () => void;
+  refreshGraph: () => Promise<void>;
 }
 
-// Ports topics.py's render_sc_card title/body rules (~1116-1218). openSlot
-// is threaded through as the Task 8-C3 seam (that task renders the actual
-// popovers keyed off it); this batch renders none.
-function SuperclustersCard({ topics, openSlot, onTileClick }: SuperclustersCardProps) {
+// Ports topics.py's render_sc_card title/body rules (~1116-1218), plus the
+// popover/tooltip mount points (Task 8-C3 -- see ScPopover.tsx / ScTooltip.tsx).
+function SuperclustersCard({
+  topics,
+  openSlot,
+  onTileClick,
+  onClosePopover,
+  refetchTopics,
+  refreshGraph,
+}: SuperclustersCardProps) {
   const n = topics.length;
   const overflow = n > MAX_SUPERCLUSTERS;
   const title = overflow
@@ -193,9 +218,8 @@ function SuperclustersCard({ topics, openSlot, onTileClick }: SuperclustersCardP
         {title}
       </div>
       {/* data-open-slot mirrors Dash's sc-popover-open-slot Store as a DOM
-          attribute -- not read by any CSS/JS yet, just a stable hook for
-          8-C3's popover-mount decision and for this batch's own tests
-          (no popover content exists yet to assert against otherwise). */}
+          attribute -- kept as a test hook (8-C2) even though ScPopover's own
+          mount/unmount is now the actual open/closed signal. */}
       <div
         id="sc-card-body"
         className="hbar-card-body hbar-sc-body"
@@ -205,6 +229,25 @@ function SuperclustersCard({ topics, openSlot, onTileClick }: SuperclustersCardP
           <SCTile key={slot} slot={slot} topic={topics[slot]} onClick={() => onTileClick(slot)} />
         ))}
       </div>
+      {/* Mounted only while a slot is open -- key={openSlot} forces a clean
+          remount (fresh busy/members state, fresh listeners) when switching
+          directly from one open popover to another. Both self-portal into
+          #sc-popovers-portal (AppShell.tsx:106); see their own files. */}
+      {openSlot !== null && (
+        <ScPopover
+          key={openSlot}
+          slot={openSlot}
+          topic={topics[openSlot]}
+          topics={topics}
+          onClose={onClosePopover}
+          refetchTopics={refetchTopics}
+          refreshGraph={refreshGraph}
+        />
+      )}
+      {/* Mounted unconditionally -- hover listeners must stay live regardless
+          of popover state (openSlot is passed through only to suppress that
+          one slot's tooltip). */}
+      <ScTooltips topics={topics} openSlot={openSlot} />
     </div>
   );
 }
