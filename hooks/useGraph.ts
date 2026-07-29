@@ -16,9 +16,16 @@ interface GraphCacheState {
   graph: GraphPayload | null;
   loading: boolean;
   error: Error | null;
+  // Next equivalent of Dash's `graph-version` Store -- consumers (diary,
+  // SUPERCLUSTERS card) refetch when it bumps. Increments only when a
+  // refresh()-initiated flight COMMITS a new payload; the initial mount
+  // load never bumps it (final-review M2 -- Dash bumps graph-version on
+  // recluster/mutations, not on first paint, so the initial load keeps
+  // version 0).
+  graphVersion: number;
 }
 
-let cacheState: GraphCacheState = { graph: null, loading: false, error: null };
+let cacheState: GraphCacheState = { graph: null, loading: false, error: null, graphVersion: 0 };
 // The in-flight fetchGraph() promise, if any -- its mere presence is the
 // dedupe key. Cleared on settle (success or failure) so a later refresh()
 // can start a new flight.
@@ -43,20 +50,43 @@ function getSnapshot(): GraphCacheState {
 // progress. Callers (ensureLoaded's mount-time kick-off, and refresh()) are
 // responsible for clearing `inflight` first if they want to force a new
 // flight rather than join an existing one.
-function load(): Promise<void> {
+//
+// isRefresh distinguishes a refresh()-initiated flight (bumps graphVersion
+// on commit) from the initial mount load (never bumps it) -- see
+// GraphCacheState.graphVersion's own comment.
+//
+// Stale-flight guard (final-review triage item 3): `flight` closes over
+// THIS call's own promise chain. A superseded flight's settle handlers
+// compare `inflight !== flight` before touching shared state, so an older
+// flight that settles AFTER a newer one has started can neither clobber the
+// newer flight's committed result nor null out its `inflight` registration
+// (both handlers below check this before writing anything). Every
+// comparison is safe despite `inflight` being reassigned after `flight` is
+// constructed: `.then`/`.catch`/`.finally` callbacks only ever run as
+// microtasks, strictly after the synchronous `inflight = flight` a few
+// lines down has already executed.
+function load(isRefresh: boolean): Promise<void> {
   if (inflight) return inflight;
   setCacheState({ loading: true });
-  inflight = fetchGraph()
+  const flight: Promise<void> = fetchGraph()
     .then((payload) => {
-      setCacheState({ graph: payload, error: null, loading: false });
+      if (inflight !== flight) return; // superseded -- do not commit a stale result
+      setCacheState({
+        graph: payload,
+        error: null,
+        loading: false,
+        graphVersion: isRefresh ? cacheState.graphVersion + 1 : cacheState.graphVersion,
+      });
     })
     .catch((err) => {
+      if (inflight !== flight) return; // superseded -- do not surface a stale error
       setCacheState({ error: err instanceof Error ? err : new Error(String(err)), loading: false });
     })
     .finally(() => {
-      inflight = null;
+      if (inflight === flight) inflight = null; // only clear OUR OWN registration
     });
-  return inflight;
+  inflight = flight;
+  return flight;
 }
 
 // Only kicks off a fetch if nothing is cached, nothing failed, and nothing
@@ -65,7 +95,7 @@ function load(): Promise<void> {
 // throw outside a browser context.
 function ensureLoaded(): void {
   if (cacheState.graph || cacheState.error || inflight) return;
-  void load();
+  void load(false);
 }
 
 // Test-only reset -- mirrors the vendor one-shot init pattern elsewhere in
@@ -76,7 +106,7 @@ function ensureLoaded(): void {
 // Vitest module instance. Call this in beforeEach() in any test that
 // exercises useGraph().
 export function __resetGraphCacheForTest(): void {
-  cacheState = { graph: null, loading: false, error: null };
+  cacheState = { graph: null, loading: false, error: null, graphVersion: 0 };
   inflight = null;
   listeners.clear();
 }
@@ -85,6 +115,11 @@ export interface UseGraphResult {
   graph: GraphPayload | null;
   loading: boolean;
   error: Error | null;
+  // Next equivalent of Dash's `graph-version` Store -- bumps by 1 each time
+  // a refresh()-initiated flight commits a new payload (never on the
+  // initial mount load). Consumers (DiaryPanel, the SUPERCLUSTERS card)
+  // list this in their fetch effect deps to refetch after a recluster.
+  graphVersion: number;
   // Refetches -- batch 03/Task 8 calls this after POST /api/recluster to
   // pick up the new clustering without a full page reload.
   refresh: () => Promise<void>;
@@ -114,7 +149,7 @@ export function useGraph(): UseGraphResult {
 
   const refresh = useCallback(async () => {
     inflight = null; // drop any settled flight so load() is forced to start fresh
-    await load();
+    await load(true);
   }, []);
 
   const nodeById = useCallback(
@@ -157,6 +192,7 @@ export function useGraph(): UseGraphResult {
     graph: snapshot.graph,
     loading: snapshot.loading,
     error: snapshot.error,
+    graphVersion: snapshot.graphVersion,
     refresh,
     nodeById,
     parentOf,

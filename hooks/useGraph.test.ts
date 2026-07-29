@@ -101,6 +101,92 @@ describe("useGraph", () => {
     expect(result.current.graph).toEqual(second);
   });
 
+  describe("graphVersion", () => {
+    it("starts at 0 and stays at 0 through the initial mount load (final-review M2 -- no bump on first paint)", async () => {
+      const payload = payloadWith([makeNode({ id: "root" })]);
+      vi.spyOn(api, "fetchGraph").mockResolvedValue(payload);
+
+      const { result } = renderHook(() => useGraph());
+
+      expect(result.current.graphVersion).toBe(0);
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.graphVersion).toBe(0);
+    });
+
+    it("increments by 1 each time refresh() commits a new graph payload", async () => {
+      const first = payloadWith([makeNode({ id: "root" })]);
+      const second = payloadWith([makeNode({ id: "root" }), makeNode({ id: "child", parent_id: "root" })]);
+      vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.graphVersion).toBe(0);
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(result.current.graphVersion).toBe(1);
+      expect(result.current.graph).toEqual(second);
+    });
+  });
+
+  describe("stale-flight guard (final-review triage item 3)", () => {
+    it("an older refresh flight settling AFTER a newer one started does not clear the newer inflight or clobber its result", async () => {
+      const initial = payloadWith([makeNode({ id: "root" })]);
+      let resolveOlder!: (value: GraphPayload) => void;
+      let resolveNewer!: (value: GraphPayload) => void;
+      const olderPromise = new Promise<GraphPayload>((resolve) => {
+        resolveOlder = resolve;
+      });
+      const newerPromise = new Promise<GraphPayload>((resolve) => {
+        resolveNewer = resolve;
+      });
+      vi.spyOn(api, "fetchGraph")
+        .mockResolvedValueOnce(initial) // initial mount load
+        .mockReturnValueOnce(olderPromise) // first refresh() flight
+        .mockReturnValueOnce(newerPromise); // second refresh() flight (supersedes the first)
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // Kick off two overlapping refreshes without awaiting the first --
+      // the second starts (and takes over `inflight`) before the first's
+      // underlying fetch has settled.
+      let olderRefresh!: Promise<void>;
+      let newerRefresh!: Promise<void>;
+      act(() => {
+        olderRefresh = result.current.refresh();
+      });
+      act(() => {
+        newerRefresh = result.current.refresh();
+      });
+
+      const stale = payloadWith([makeNode({ id: "stale" })]);
+      const fresh = payloadWith([makeNode({ id: "fresh" })]);
+
+      // Settle the OLDER flight first (its .then/.finally must be no-ops:
+      // it must not null the newer flight's `inflight` registration nor
+      // overwrite the cached graph with its stale payload).
+      await act(async () => {
+        resolveOlder(stale);
+        await olderRefresh;
+      });
+      expect(result.current.graph).toEqual(initial);
+
+      // Now settle the newer flight -- its commit must land normally.
+      await act(async () => {
+        resolveNewer(fresh);
+        await newerRefresh;
+      });
+
+      expect(result.current.graph).toEqual(fresh);
+      // Only ONE commit counted despite two refresh() calls -- the stale
+      // settle was ignored entirely, including for graphVersion.
+      expect(result.current.graphVersion).toBe(1);
+    });
+  });
+
   it("nodeById returns the matching node, or undefined for an unknown id", async () => {
     const payload = payloadWith([makeNode({ id: "root" }), makeNode({ id: "child", parent_id: "root" })]);
     vi.spyOn(api, "fetchGraph").mockResolvedValue(payload);

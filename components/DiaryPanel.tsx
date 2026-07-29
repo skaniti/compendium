@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useNav } from "./NavProvider";
+import { useGraph } from "@/hooks/useGraph";
 import { fetchDiaryWindows } from "@/lib/api";
 import { parseTagBtnIndex } from "@/lib/nav";
 import type { DiaryWindow, Granularity } from "@/lib/types";
@@ -48,6 +49,11 @@ interface DiaryPanelProps {
 export default function DiaryPanel({ granularity }: DiaryPanelProps) {
   const { state, dispatch } = useNav();
   const { selectedNodeId, filterWindowKey } = state;
+  // Task 8-C2, M2 (final-review): graphVersion bumps once a recluster
+  // commits a new graph -- listing it here refetches the diary so its
+  // cluster pills/names pick up the new clustering. Dash parity:
+  // update_diary lists graph-version as an Input (graph.py).
+  const { graphVersion } = useGraph();
 
   // `null` = "no response yet" (initial fetch in flight); `[]` = a real,
   // resolved empty result. Kept distinct so the initial load renders
@@ -77,7 +83,7 @@ export default function DiaryPanel({ granularity }: DiaryPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [granularity, selectedNodeId]);
+  }, [granularity, selectedNodeId, graphVersion]);
 
   function handleWindowClick(win: DiaryWindow): void {
     // window-btn AND overflow-btn (Dash: two distinct pattern-matching

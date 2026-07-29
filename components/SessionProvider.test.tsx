@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import SessionProvider, { HYDRATION_RETRY_MS, useSession } from "./SessionProvider";
 import Header from "./Header";
+import TimeWindowProvider from "./TimeWindowProvider";
 import * as api from "@/lib/api";
 import * as ThemeProviderModule from "./ThemeProvider";
 import * as StarfieldProviderModule from "./StarfieldProvider";
@@ -301,9 +302,33 @@ describe("Header + session wiring (via SessionProvider)", () => {
   // established (mock the hooks rather than standing up real
   // ThemeProvider/StarfieldProvider, which need their own DOM/preferences
   // setup unrelated to what these tests actually exercise).
+  //
+  // Header now also mounts HeaderCards (Task 8-C2), which fires
+  // fetchGraph/fetchClusteringStatus/fetchTopics on mount -- mocked
+  // directly here (bypassing apiFetch entirely) so this suite's own
+  // apiFetch mocks (routed to /api/auth/me + a generic {ok:true} for
+  // everything else) don't leak an `{ok:true}` body into, e.g.,
+  // fetchTopics' `body.topics` and crash HeaderCards' SC card on
+  // `topics.length` of undefined.
   beforeEach(() => {
     vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant: "Green", setVariant: vi.fn() });
     vi.spyOn(StarfieldProviderModule, "useStarfield").mockReturnValue({ variant: "twinkle", setVariant: vi.fn() });
+    vi.spyOn(api, "fetchGraph").mockResolvedValue({
+      nodes: [],
+      links: [],
+      clusters: [],
+      super_clusters: [],
+      groups: [],
+    });
+    vi.spyOn(api, "fetchClusteringStatus").mockResolvedValue({
+      run_number: null,
+      title: "CLUSTERING (NO RUNS YET)",
+      stats_line1: "",
+      stats_line2: "",
+      freshness_label: "",
+      freshness_color: "",
+    });
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -339,7 +364,9 @@ describe("Header + session wiring (via SessionProvider)", () => {
 
     render(
       <SessionProvider>
-        <Header />
+        <TimeWindowProvider>
+          <Header />
+        </TimeWindowProvider>
       </SessionProvider>
     );
 
@@ -370,7 +397,9 @@ describe("Header + session wiring (via SessionProvider)", () => {
 
     render(
       <SessionProvider>
-        <Header />
+        <TimeWindowProvider>
+          <Header />
+        </TimeWindowProvider>
       </SessionProvider>
     );
 
@@ -435,7 +464,9 @@ describe("Header + session wiring (via SessionProvider)", () => {
 
       render(
         <SessionProvider>
-          <Header />
+          <TimeWindowProvider>
+            <Header />
+          </TimeWindowProvider>
         </SessionProvider>
       );
 
@@ -480,7 +511,9 @@ describe("Header + session wiring (via SessionProvider)", () => {
 
       render(
         <SessionProvider>
-          <Header />
+          <TimeWindowProvider>
+            <Header />
+          </TimeWindowProvider>
           <RefreshTrigger />
         </SessionProvider>
       );
@@ -526,7 +559,9 @@ describe("Header + session wiring (via SessionProvider)", () => {
 
       render(
         <SessionProvider>
-          <Header />
+          <TimeWindowProvider>
+            <Header />
+          </TimeWindowProvider>
         </SessionProvider>
       );
 

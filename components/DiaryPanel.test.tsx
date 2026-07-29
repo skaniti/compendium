@@ -3,8 +3,33 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DiaryPanel from "./DiaryPanel";
 import NavProvider, { useNav } from "./NavProvider";
+import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as apiModule from "@/lib/api";
-import type { DiaryWindow } from "@/lib/types";
+import type { DiaryWindow, GraphPayload } from "@/lib/types";
+
+// DiaryPanel now calls useGraph() (Task 8-C2, M2 -- graphVersion refetch),
+// so every render exercises the real module-level graph cache too. Default
+// fetchGraph to an empty payload here (each test overrides fetchDiaryWindows
+// as before); __resetGraphCacheForTest() keeps that cache from leaking a
+// fetched graph/in-flight promise across test cases, mirroring
+// TopicDetail.test.tsx's own convention for the same module.
+const EMPTY_GRAPH: GraphPayload = { nodes: [], links: [], clusters: [], super_clusters: [], groups: [] };
+
+// Test-only probe: mounts a second useGraph() consumer so a test can call
+// refresh() directly (DiaryPanel itself doesn't expose it) to simulate a
+// recluster bumping graphVersion.
+function GraphVersionProbe() {
+  const { refresh } = useGraph();
+  return (
+    <button
+      onClick={() => {
+        void refresh();
+      }}
+    >
+      bump-graph-version
+    </button>
+  );
+}
 
 // Ports layouts/session_diary.py's render_session_diary + _build_window_card
 // (Dash source of truth) into a JSX-parity suite. All fixtures below are
@@ -52,6 +77,8 @@ function renderPanel(granularity: "day" | "week" | "month" = "day") {
 describe("DiaryPanel", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    __resetGraphCacheForTest();
+    vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
   });
 
   // ── Loading / error states ─────────────────────────────────────────
@@ -302,6 +329,21 @@ describe("DiaryPanel", () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
     expect(spy).toHaveBeenNthCalledWith(2, "day", "probe-node");
+  });
+
+  it("refetches when graphVersion bumps (a recluster completing elsewhere)", async () => {
+    const spy = vi.spyOn(apiModule, "fetchDiaryWindows").mockResolvedValue([]);
+    render(
+      <NavProvider>
+        <DiaryPanel granularity="day" />
+        <GraphVersionProbe />
+      </NavProvider>
+    );
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByText("bump-graph-version"));
+
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
   });
 
   it("does not blank previously-loaded cards while a refetch is in flight", async () => {

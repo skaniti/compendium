@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import HeaderCards from "./HeaderCards";
 import SettingsMenu from "./SettingsMenu";
 import { useSession } from "./SessionProvider";
 
@@ -92,10 +93,8 @@ export default function Header() {
   return (
     <div className="app-header" style={APP_HEADER_STYLE}>
       <div id="mode-switch-bar" className="mode-switch-bar mode-graph">
-        {/* Widget cards (CLUSTERING / DATE RANGE / SUPERCLUSTERS) arrive in
-            a later batch -- container hierarchy only for now. */}
         <div id="header-graph-controls" className="hbar-graph-widgets">
-          <div className="hbar-cards-row" />
+          <HeaderCards />
         </div>
 
         {/* TODO(mig-01 task 5): dev/graph mode switching. Kept in the DOM

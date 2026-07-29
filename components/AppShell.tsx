@@ -3,7 +3,9 @@ import CompendiumLoader from "./CompendiumLoader";
 import Header from "./Header";
 import NavProvider from "./NavProvider";
 import PanelGrid from "./PanelGrid";
+import PlainDemoBodyClass from "./PlainDemoBodyClass";
 import StarfieldProvider from "./StarfieldProvider";
+import TimeWindowProvider from "./TimeWindowProvider";
 import {
   getInitialCompendiumLoaderSeen,
   getInitialPanelWidths,
@@ -95,35 +97,47 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           first thing painted, though its own z-index (not DOM order) is
           what actually pins it above Header/PanelGrid. */}
       <CompendiumLoader initialHasSeen={initialHasSeen} canPersist={canPersist} />
-      <Header />
-      {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
-          .app-header. #header-graph-controls animates its mode-swap via
-          `transform`, which makes it a containing block for any
-          position:fixed descendant; rendering popovers here instead gives
-          them a clean, un-transformed ancestor chain so position:fixed
-          escapes to the viewport. Empty until a later batch mounts
-          supercluster tooltip content into it. */}
-      <div id="sc-popovers-portal" />
-      {/* NavProvider (Task 5, lib/nav.ts's reducer) mounted here -- the
-          lowest common ancestor covering both DiaryPanel (left slot, task
-          6) and the future real TopicDetailPanel content (right slot,
-          batch 03) that will consume useNav(). Wraps PanelGrid rather than
-          each panel slot individually: left/center/right are
-          already-rendered ReactNode props built by app/page.tsx (a server
-          component), so NavProvider only needs to be a client-boundary
-          ancestor somewhere above them in the tree -- it doesn't need to
-          construct or touch those nodes itself, same as PanelGrid (also
-          "use client") already doesn't. */}
-      <NavProvider>
-        <PanelGrid
-          initialLeftWidth={panelLeftWidth}
-          initialRightWidth={panelRightWidth}
-          canPersist={canPersistPreferences}
-          left={left}
-          center={center}
-          right={right}
-        />
-      </NavProvider>
+      {/* PlainDemoBodyClass (Task 8-C2, deliverable 5): toggles .plain-demo
+          on <body> for a direct demo login -- see that component's own
+          comment. Renders nothing; mounted anywhere in SessionProvider's
+          subtree (SessionProvider wraps this whole shell in
+          app/layout.tsx). */}
+      <PlainDemoBodyClass />
+      {/* TimeWindowProvider (Task 8-C2): wraps the SAME subtree as
+          NavProvider below so both the header (DATE RANGE pills, the
+          writer) and the panels (batch 03's graph time-window filter, a
+          future reader) share one context instance. */}
+      <TimeWindowProvider>
+        <Header />
+        {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
+            .app-header. #header-graph-controls animates its mode-swap via
+            `transform`, which makes it a containing block for any
+            position:fixed descendant; rendering popovers here instead gives
+            them a clean, un-transformed ancestor chain so position:fixed
+            escapes to the viewport. Empty until a later batch mounts
+            supercluster tooltip content into it. */}
+        <div id="sc-popovers-portal" />
+        {/* NavProvider (Task 5, lib/nav.ts's reducer) mounted here -- the
+            lowest common ancestor covering both DiaryPanel (left slot, task
+            6) and the future real TopicDetailPanel content (right slot,
+            batch 03) that will consume useNav(). Wraps PanelGrid rather than
+            each panel slot individually: left/center/right are
+            already-rendered ReactNode props built by app/page.tsx (a server
+            component), so NavProvider only needs to be a client-boundary
+            ancestor somewhere above them in the tree -- it doesn't need to
+            construct or touch those nodes itself, same as PanelGrid (also
+            "use client") already doesn't. */}
+        <NavProvider>
+          <PanelGrid
+            initialLeftWidth={panelLeftWidth}
+            initialRightWidth={panelRightWidth}
+            canPersist={canPersistPreferences}
+            left={left}
+            center={center}
+            right={right}
+          />
+        </NavProvider>
+      </TimeWindowProvider>
     </StarfieldProvider>
   );
 }
