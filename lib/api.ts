@@ -2,9 +2,12 @@ import type {
   ClusteringStatus,
   DiaryWindow,
   GraphPayload,
+  MemberExclusion,
   NodeDetail,
   PageContent,
   ReclusterResult,
+  TopicInterest,
+  TopicMember,
 } from "./types";
 
 // Thin fetch wrapper: closes the client-side UX loop when the HttpOnly
@@ -112,4 +115,124 @@ export async function postRecluster(): Promise<ReclusterResult> {
   const res = await apiFetch("/api/recluster", { method: "POST" });
   if (!res.ok) throw new Error(`postRecluster failed: ${res.status} ${res.statusText}`);
   return (await res.json()) as ReclusterResult;
+}
+
+// ---------------------------------------------------------------------
+// Task 8-C1 (header-widget-cards batch foundations): typed fetchers for
+// the topic-interest / member-exclusion endpoints, consumed by the header
+// widget cards landing next batch. Shapes verified against
+// compendium-explorer/backend/api/main.py's Topics section at HEAD -- see
+// lib/types.ts for field lists and per-endpoint notes.
+//
+// Same error convention as the graph/diary/clustering fetchers above: a
+// non-ok response throws a descriptive Error rather than swallowing it
+// (unlike lib/preferences.ts's nice-to-have GET/PATCH). This includes the
+// 403 the mutation endpoints return for a direct-demo session -- the UI
+// hides those controls for plain demo, so no special-casing belongs here.
+// ---------------------------------------------------------------------
+
+export async function fetchTopics(): Promise<TopicInterest[]> {
+  const res = await apiFetch("/api/topics");
+  if (!res.ok) throw new Error(`fetchTopics failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { topics: TopicInterest[] };
+  return body.topics;
+}
+
+export async function fetchTopicMembers(
+  keyword: string,
+  limit?: number
+): Promise<TopicMember[]> {
+  const path = `/api/topics/${encodeURIComponent(keyword)}/members`;
+  const url = limit !== undefined ? `${path}?limit=${limit}` : path;
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error(`fetchTopicMembers failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { members: TopicMember[] };
+  return body.members;
+}
+
+export async function fetchMemberExclusions(): Promise<MemberExclusion[]> {
+  const res = await apiFetch("/api/topics/exclusions");
+  if (!res.ok) throw new Error(`fetchMemberExclusions failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { exclusions: MemberExclusion[] };
+  return body.exclusions;
+}
+
+export async function addTopic(keyword: string): Promise<TopicInterest[]> {
+  const res = await apiFetch("/api/topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword }),
+  });
+  if (!res.ok) throw new Error(`addTopic failed: ${res.status} ${res.statusText}`);
+  // The backend also returns `topic` (the single added entry); only
+  // `topics` (the full updated list) is what callers need.
+  const body = (await res.json()) as { topic: TopicInterest; topics: TopicInterest[] };
+  return body.topics;
+}
+
+export async function removeTopic(keyword: string): Promise<TopicInterest[]> {
+  const res = await apiFetch(`/api/topics/${encodeURIComponent(keyword)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`removeTopic failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { topics: TopicInterest[] };
+  return body.topics;
+}
+
+export async function renameTopic(
+  keyword: string,
+  newKeyword: string
+): Promise<TopicInterest[]> {
+  const res = await apiFetch(`/api/topics/${encodeURIComponent(keyword)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword: newKeyword }),
+  });
+  if (!res.ok) throw new Error(`renameTopic failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { topics: TopicInterest[] };
+  return body.topics;
+}
+
+export async function setTopicIcon(
+  keyword: string,
+  iconId: string
+): Promise<TopicInterest[]> {
+  const res = await apiFetch(`/api/topics/${encodeURIComponent(keyword)}/icon`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ icon_id: iconId }),
+  });
+  if (!res.ok) throw new Error(`setTopicIcon failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { topics: TopicInterest[] };
+  return body.topics;
+}
+
+export async function addMemberExclusion(
+  keyword: string,
+  clusterName: string
+): Promise<MemberExclusion[]> {
+  const res = await apiFetch("/api/topics/exclusions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, cluster_name: clusterName }),
+  });
+  if (!res.ok) throw new Error(`addMemberExclusion failed: ${res.status} ${res.statusText}`);
+  // The backend also returns `unlabeled` (count of clusters immediately
+  // unlabeled by the exclusion); only `exclusions` is what callers need.
+  const body = (await res.json()) as { exclusions: MemberExclusion[]; unlabeled: number };
+  return body.exclusions;
+}
+
+export async function removeMemberExclusion(
+  keyword: string,
+  clusterName: string
+): Promise<MemberExclusion[]> {
+  const res = await apiFetch("/api/topics/exclusions", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword, cluster_name: clusterName }),
+  });
+  if (!res.ok) throw new Error(`removeMemberExclusion failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { exclusions: MemberExclusion[] };
+  return body.exclusions;
 }

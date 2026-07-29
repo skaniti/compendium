@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  addMemberExclusion,
+  addTopic,
   apiFetch,
   fetchClusteringStatus,
   fetchDiaryWindows,
   fetchGraph,
+  fetchMemberExclusions,
   fetchNodeDetail,
   fetchPageContent,
+  fetchTopicMembers,
+  fetchTopics,
   postRecluster,
+  removeMemberExclusion,
+  removeTopic,
+  renameTopic,
+  setTopicIcon,
 } from "./api";
 
 // D1 (batch 04 auth/session parity): apiFetch is a thin fetch wrapper, not a
@@ -377,5 +386,288 @@ describe("postRecluster", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500, statusText: "Internal Server Error" })));
 
     await expect(postRecluster()).rejects.toThrow("postRecluster failed: 500 Internal Server Error");
+  });
+});
+
+// Task 8-C1 (header-widget-cards batch foundations): topic-interest
+// fetchers, mirroring the graph/diary/clustering fetchers' idioms above
+// (throw-on-non-ok, apiFetch passthrough). Shapes verified against
+// compendium-explorer/backend/api/main.py's Topics section at HEAD -- see
+// lib/types.ts for the field lists. Two endpoints here (members, rename)
+// landed in the explorer repo concurrently with this task; their shapes
+// were dictated to the backend implementer verbatim.
+
+describe("fetchTopics", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GETs /api/topics and unwraps .topics", async () => {
+    const topics = [{ keyword: "rust", icon_id: "gear", cluster_count: 3 }];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topics }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchTopics();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics");
+    expect(result).toEqual(topics);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500, statusText: "Internal Server Error" })));
+
+    await expect(fetchTopics()).rejects.toThrow("fetchTopics failed: 500 Internal Server Error");
+  });
+});
+
+describe("fetchTopicMembers", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GETs /api/topics/{keyword}/members (encoded) with no query when limit omitted", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ members: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchTopicMembers("rust lang");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust%20lang/members");
+  });
+
+  it("includes ?limit= when given", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ members: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchTopicMembers("rust", 5);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust/members?limit=5");
+  });
+
+  it("unwraps .members", async () => {
+    const members = [
+      { cluster_name: "Rust internals", page_count: 4, mean_membership_probability: 0.82 },
+      { cluster_name: "Cargo tooling", page_count: 2, mean_membership_probability: null },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ members }), { status: 200 }))
+    );
+
+    await expect(fetchTopicMembers("rust")).resolves.toEqual(members);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500, statusText: "Internal Server Error" })));
+
+    await expect(fetchTopicMembers("rust")).rejects.toThrow(
+      "fetchTopicMembers failed: 500 Internal Server Error"
+    );
+  });
+});
+
+describe("fetchMemberExclusions", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GETs /api/topics/exclusions and unwraps .exclusions", async () => {
+    const exclusions = [
+      { keyword: "rust", cluster_slug: "cargo-tooling", cluster_name: "Cargo tooling", created_at: "2026-07-01T00:00:00" },
+    ];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ exclusions }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchMemberExclusions();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/exclusions");
+    expect(result).toEqual(exclusions);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500, statusText: "Internal Server Error" })));
+
+    await expect(fetchMemberExclusions()).rejects.toThrow(
+      "fetchMemberExclusions failed: 500 Internal Server Error"
+    );
+  });
+});
+
+describe("addTopic", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs /api/topics with a JSON {keyword} body and unwraps .topics", async () => {
+    const topics = [{ keyword: "rust", icon_id: null, cluster_count: 0 }];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topic: topics[0], topics }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addTopic("rust");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: "rust" }),
+    });
+    expect(result).toEqual(topics);
+  });
+
+  it("throws on a 403 (demo-gated mutation) rather than special-casing it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("forbidden", { status: 403, statusText: "Forbidden" })));
+
+    await expect(addTopic("rust")).rejects.toThrow("addTopic failed: 403 Forbidden");
+  });
+});
+
+describe("removeTopic", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("DELETEs /api/topics/{keyword} (encoded) and unwraps .topics", async () => {
+    const topics: unknown[] = [];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topics }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await removeTopic("rust lang");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust%20lang", { method: "DELETE" });
+    expect(result).toEqual(topics);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 404, statusText: "Not Found" })));
+
+    await expect(removeTopic("missing")).rejects.toThrow("removeTopic failed: 404 Not Found");
+  });
+});
+
+describe("renameTopic", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("PATCHes /api/topics/{keyword} with a JSON {keyword: newKeyword} body and unwraps .topics", async () => {
+    const topics = [{ keyword: "rust-lang", icon_id: null, cluster_count: 0 }];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topics }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await renameTopic("rust", "rust-lang");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: "rust-lang" }),
+    });
+    expect(result).toEqual(topics);
+  });
+
+  it("encodes the path keyword but not the JSON body", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topics: [] }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renameTopic("rust lang", "rust lang 2");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust%20lang", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: "rust lang 2" }),
+    });
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 400, statusText: "Bad Request" })));
+
+    await expect(renameTopic("rust", "")).rejects.toThrow("renameTopic failed: 400 Bad Request");
+  });
+});
+
+describe("setTopicIcon", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("PUTs /api/topics/{keyword}/icon with a JSON {icon_id} body and unwraps .topics", async () => {
+    const topics = [{ keyword: "rust", icon_id: "gear", cluster_count: 0 }];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ topics }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setTopicIcon("rust", "gear");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/rust/icon", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ icon_id: "gear" }),
+    });
+    expect(result).toEqual(topics);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 404, statusText: "Not Found" })));
+
+    await expect(setTopicIcon("missing", "gear")).rejects.toThrow(
+      "setTopicIcon failed: 404 Not Found"
+    );
+  });
+});
+
+describe("addMemberExclusion", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs /api/topics/exclusions with a JSON body and unwraps .exclusions", async () => {
+    const exclusions = [
+      { keyword: "rust", cluster_slug: "cargo-tooling", cluster_name: "Cargo tooling", created_at: "2026-07-01T00:00:00" },
+    ];
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ exclusions, unlabeled: 1 }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addMemberExclusion("rust", "Cargo tooling");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/exclusions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: "rust", cluster_name: "Cargo tooling" }),
+    });
+    expect(result).toEqual(exclusions);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 403, statusText: "Forbidden" })));
+
+    await expect(addMemberExclusion("rust", "Cargo tooling")).rejects.toThrow(
+      "addMemberExclusion failed: 403 Forbidden"
+    );
+  });
+});
+
+describe("removeMemberExclusion", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("DELETEs /api/topics/exclusions with a JSON body and unwraps .exclusions", async () => {
+    const exclusions: unknown[] = [];
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ exclusions }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await removeMemberExclusion("rust", "Cargo tooling");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/exclusions", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: "rust", cluster_name: "Cargo tooling" }),
+    });
+    expect(result).toEqual(exclusions);
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500, statusText: "Internal Server Error" })));
+
+    await expect(removeMemberExclusion("rust", "Cargo tooling")).rejects.toThrow(
+      "removeMemberExclusion failed: 500 Internal Server Error"
+    );
   });
 });

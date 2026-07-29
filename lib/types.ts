@@ -174,3 +174,35 @@ export type ReclusterResult = {
   naming_cost: number;
   elapsed_seconds: number;
 } & Record<string, unknown>;
+
+// Task 8-C1 (header-widget-cards batch foundations): topic-interest shapes,
+// verified against compendium-explorer/backend/api/main.py's Topics section
+// (~2812-3110) at HEAD. Two of these endpoints (members, rename) landed in
+// the explorer repo concurrently with this task -- their shapes were
+// dictated to the backend implementer verbatim and are locked as specified
+// here rather than independently re-derived.
+
+// GET /api/topics -- {topics: TopicInterest[]}; cluster_count = member
+// clusters in the latest completed run (exact keyword match).
+export interface TopicInterest {
+  keyword: string;
+  icon_id: string | null;
+  cluster_count: number;
+}
+
+// GET /api/topics/{keyword}/members?limit= -- {members: TopicMember[]},
+// ordered mean_membership_probability DESC NULLS LAST, page_count DESC,
+// name (cluster_repo.get_top_clusters_for_keyword).
+export interface TopicMember {
+  cluster_name: string;
+  page_count: number;
+  mean_membership_probability: number | null;
+}
+
+// GET /api/topics/exclusions -- {exclusions: MemberExclusion[]}
+export interface MemberExclusion {
+  keyword: string;
+  cluster_slug: string;
+  cluster_name: string;
+  created_at: string;
+}
