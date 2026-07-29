@@ -114,8 +114,8 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
             `transform`, which makes it a containing block for any
             position:fixed descendant; rendering popovers here instead gives
             them a clean, un-transformed ancestor chain so position:fixed
-            escapes to the viewport. Empty until a later batch mounts
-            supercluster tooltip content into it. */}
+            escapes to the viewport. HeaderCards' ScPopover and ScTooltips
+            (Task 8-C3) both self-portal their content into this div. */}
         <div id="sc-popovers-portal" />
         {/* NavProvider (Task 5, lib/nav.ts's reducer) mounted here -- the
             lowest common ancestor covering both DiaryPanel (left slot, task

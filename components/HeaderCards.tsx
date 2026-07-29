@@ -70,14 +70,40 @@ export default function HeaderCards() {
       });
   }, []);
 
-  // Initial clustering-status read (app.py's card starts with the static
-  // title above and no stats/badge until this resolves).
+  // Clustering-status read: on mount (app.py's card starts with the static
+  // title above and no stats/badge until this resolves), AND whenever
+  // graphVersion bumps -- Dash parity: all three clustering-card callbacks
+  // list graph-version as an Input (update_clustering_card_title
+  // graph.py:50-52, update_hbar_cluster_stats graph.py:206-209,
+  // update_cache_badge recluster.py:97-101), so every sc_* mutation
+  // (add/delete/rename/icon/exclude) refetches this card too, not just the
+  // SUPERCLUSTERS card's topics effect below. handleRecluster's own
+  // refresh() call bumps graphVersion, so this effect alone covers the
+  // post-recluster status refetch -- no separate manual call needed there
+  // (final-review I1).
   useEffect(() => {
     fetchClusteringStatus()
       .then((next) => setStatus(next))
       .catch(() => {
-        // Leave INITIAL_STATUS on screen -- see that constant's comment.
+        // Leave whatever status is already on screen -- see INITIAL_STATUS's comment.
       });
+  }, [graphVersion]);
+
+  // Independent 60-second freshness poll -- Dash's
+  // dcc.Interval(id="cache-badge-interval", interval=60_000) (app.py:1758)
+  // refetches the badge/stats on a timer so "● 5m ago" never freezes on a
+  // long-lived page (final-review M1). Deliberately its own effect with an
+  // empty dep array (mount-once) rather than folded into the effect above,
+  // so a recluster doesn't reset the 60s clock.
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchClusteringStatus()
+        .then((next) => setStatus(next))
+        .catch(() => {
+          // Same best-effort stale-while-revalidate idiom as the effect above.
+        });
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   // Topics power the SUPERCLUSTERS card's title (N/12) and tiles. Refetch
@@ -96,10 +122,10 @@ export default function HeaderCards() {
     try {
       await postRecluster();
       // Success: bump graphVersion (refetches diary + this card's own
-      // topics effect above) and pull the freshly-completed run's status.
+      // topics effect above, AND the clustering-status effect above, which
+      // now also lists graphVersion -- no separate status refetch needed
+      // here; keeping one would double-fetch).
       await refresh();
-      const next = await fetchClusteringStatus();
-      setStatus(next);
     } catch {
       // Dash surfaces recluster errors only into a permanently-hidden
       // #recluster-status span (a callback-validation requirement, not

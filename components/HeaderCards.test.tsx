@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HeaderCards from "./HeaderCards";
 import TimeWindowProvider from "./TimeWindowProvider";
@@ -45,6 +45,17 @@ function mockDefaults() {
   vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
   vi.spyOn(apiModule, "fetchClusteringStatus").mockResolvedValue(makeStatus());
   vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([]);
+}
+
+// vi.advanceTimersByTimeAsync alone leaves the setTimeout callback's
+// setState update unflushed under React 19 + vitest fake timers -- wrapping
+// in act() forces React to flush the resulting re-render before the
+// assertion that follows (same gotcha/fix as ScTooltip.test.tsx's own
+// advanceTimers helper).
+async function advanceTimers(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
 }
 
 function renderHeaderCards(children?: ReactNode) {
@@ -135,7 +146,7 @@ describe("HeaderCards", () => {
     expect(badge.style.opacity).toBe("0.5");
   });
 
-  it("recluster click: busy class + disabled while in flight, then refresh + status refetch + un-busy on success", async () => {
+  it("recluster click: busy class + disabled while in flight, then refresh + status refetch (via graphVersion) + un-busy on success", async () => {
     vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
     vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([]);
     let resolvePost!: (value: ReclusterResult) => void;
@@ -196,6 +207,54 @@ describe("HeaderCards", () => {
     // no status refetch.
     expect(fetchGraphSpy).toHaveBeenCalledTimes(1);
     expect(statusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches clustering status whenever graphVersion bumps, not just on mount/recluster (final-review I1)", async () => {
+    vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
+    vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([]);
+    const statusSpy = vi
+      .spyOn(apiModule, "fetchClusteringStatus")
+      .mockResolvedValueOnce(makeStatus({ stats_line1: "5 clusters · 0 topics" }))
+      .mockResolvedValueOnce(makeStatus({ stats_line1: "5 clusters · 1 topics" }));
+
+    // GraphVersionProbe's refresh() stands in for a topic mutation
+    // (add/delete/rename/icon/exclude) bumping graphVersion via
+    // refreshGraph() elsewhere in the tree -- exactly I1's failure
+    // scenario, without recluster in the loop at all.
+    renderHeaderCards(<GraphVersionProbe />);
+    await screen.findByText("5 clusters · 0 topics");
+    expect(statusSpy).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByText("bump-graph-version"));
+
+    await screen.findByText("5 clusters · 1 topics");
+    expect(statusSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("polls clustering status every 60 seconds so the freshness badge never freezes (final-review M1)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
+      vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([]);
+      const statusSpy = vi
+        .spyOn(apiModule, "fetchClusteringStatus")
+        .mockResolvedValueOnce(makeStatus({ freshness_label: "● 1m ago", freshness_color: "#4ade80" }))
+        .mockResolvedValueOnce(makeStatus({ freshness_label: "● 2m ago", freshness_color: "#4ade80" }));
+
+      renderHeaderCards();
+      await advanceTimers(0); // flush the mount-time fetchClusteringStatus() microtask
+      expect(document.getElementById("cache-freshness-badge")).toHaveTextContent("1m ago");
+      expect(statusSpy).toHaveBeenCalledTimes(1);
+
+      await advanceTimers(59_999);
+      expect(statusSpy).toHaveBeenCalledTimes(1); // not yet -- one ms short of the 60s mark
+
+      await advanceTimers(1);
+      expect(statusSpy).toHaveBeenCalledTimes(2);
+      expect(document.getElementById("cache-freshness-badge")).toHaveTextContent("2m ago");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // ── DATE RANGE card ──────────────────────────────────────────────────
