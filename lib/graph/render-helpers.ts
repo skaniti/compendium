@@ -45,21 +45,36 @@ export function mulberry32(seed: number): () => number {
 // ── Screen-clamped scale (Pattern-3, vendor :522-538) ─────────────────
 
 /** Multiplier such that world_size * scale paints at a screen size clamped
- *  to [k_min, k_max] * natural-size-at-fit, regardless of zoom. `ratio` is
- *  zoomK / fitZoom (1.0 at fit-to-content zoom). */
-export function clampedScale(ratio: number, thresholds: { k_min: number; k_max: number }): number {
-  if (ratio <= 0) return 1.0;
+ *  to [k_min, k_max] * natural-size-at-fit, regardless of zoom.
+ *
+ *  CRITICAL FIX (review finding 1): the vendor divides the clamped ratio by
+ *  the ABSOLUTE zoomK (:537 `return effRatio / zoomK;`), not by `ratio`
+ *  itself -- dividing by zoomK is what cancels the SVG zoom transform so
+ *  the painted size stays screen-constant; dividing by `ratio` (as this
+ *  function used to) leaves a stray `fitZoom` factor baked into every
+ *  world-space size, so everything painted ~1/fitZoom times too small
+ *  (e.g. ~2.4x smaller at this app's live fit scale of ~0.41). `zoomK` and
+ *  `fitZoom` are now both required (not just their quotient) so this can
+ *  divide by the right one -- see the two vendor guard clauses at :529
+ *  (`fitZoom <= 0 || zoomK <= 0`), preserved here verbatim. */
+export function clampedScale(zoomK: number, fitZoom: number, thresholds: { k_min: number; k_max: number }): number {
+  if (fitZoom <= 0 || zoomK <= 0) return 1.0;
+  const ratio = zoomK / fitZoom;
   const effRatio = ratio < thresholds.k_min ? thresholds.k_min : ratio > thresholds.k_max ? thresholds.k_max : ratio;
-  return effRatio / ratio;
+  return effRatio / zoomK;
 }
 
 // ── Page dots + star glyphs (vendor :1388-1406, :3990-4045) ───────────
 
 /** World-space radius for a page dot's invisible anchor circle, screen-
- *  clamped via SCALE_THRESHOLDS.pageDot (vendor :1388-1391). `ratio` is
- *  zoomK / fitZoom (pass 1 for the fit-zoom rest state). */
-export function pageDotRadius(kind: string, ratio: number): number {
-  const s = GRAPH_DEFAULTS.BASE_PAGE_DOT_SIZE * clampedScale(ratio, GRAPH_DEFAULTS.SCALE_THRESHOLDS.pageDot);
+ *  clamped via SCALE_THRESHOLDS.pageDot (vendor :1388-1391). Pass the
+ *  CURRENT absolute zoomK and fitZoom (not just their ratio -- see
+ *  clampedScale's fix note above). Before fit has run (fitZoom unknown),
+ *  pass `fitZoom=0`: the guard above returns 1.0, i.e. BASE_PAGE_DOT_SIZE
+ *  painted as a raw world-space size -- the same transient the vendor's
+ *  own clampedScale produces before its first fitToContent call (:529). */
+export function pageDotRadius(kind: string, zoomK: number, fitZoom: number): number {
+  const s = GRAPH_DEFAULTS.BASE_PAGE_DOT_SIZE * clampedScale(zoomK, fitZoom, GRAPH_DEFAULTS.SCALE_THRESHOLDS.pageDot);
   return kind === "singleton" ? s * 0.85 : s;
 }
 
@@ -266,6 +281,13 @@ export interface HullLabelLayout {
   lineH: number;
   pageCount: number;
   isSuperClusterLike: boolean;
+  // Raw 10th-percentile cluster top, BEFORE the gap/line-count adjustment
+  // baked into `y` -- vendor :4456 `clusterTopY: effectiveTop`, stashed on
+  // the DOM node (`data-cluster-top-y`) so Zoom.tsx's screen-clamped
+  // font-scale pass (vendor's updateLabelScale, :1319-1357) can recompute
+  // the anchor at the CURRENT (zoom-scaled) lineH/gap instead of the fixed
+  // ones baked in below.
+  clusterTopY: number;
 }
 
 /** Word-wrap a cluster name at HULL_LABEL_WRAP_LIMIT chars/line (vendor
@@ -309,6 +331,7 @@ export function computeHullLabelLayout(cluster: GraphCluster, memberPoints: Arra
     lineH: HULL_LABEL_LINE_HEIGHT,
     pageCount: cluster.page_ids.length,
     isSuperClusterLike: isSuperClusterLike(cluster),
+    clusterTopY: effectiveTop,
   };
 }
 

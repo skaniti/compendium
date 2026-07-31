@@ -71,37 +71,75 @@ describe("hashId", () => {
 });
 
 describe("clampedScale", () => {
-  const thresholds = { k_min: 0.9, k_max: 2.1 }; // GRAPH_DEFAULTS.SCALE_THRESHOLDS.pageDot
+  // GRAPH_DEFAULTS.SCALE_THRESHOLDS.pageDot
+  const thresholds = { k_min: 0.9, k_max: 2.1 };
 
-  it("passes ratio through unchanged inside the band", () => {
-    expect(clampedScale(1.5, thresholds)).toBeCloseTo(1, 10);
+  // Review finding 1 (critical): the vendor divides by the ABSOLUTE zoomK
+  // (:537 `return effRatio / zoomK;`), not by the ratio -- these cases were
+  // previously written against the wrong (effRatio/ratio) formula, which
+  // this test file itself pinned as "correct." Re-derived against the
+  // vendor's actual :528-538 line-by-line.
+
+  it("at fit (zoomK === fitZoom), returns effRatio/zoomK -- 1 inside the band", () => {
+    // ratio = 2/2 = 1, inside [0.9, 2.1] -> effRatio = 1 -> 1/zoomK(2) = 0.5
+    expect(clampedScale(2, 2, thresholds)).toBeCloseTo(0.5, 10);
+    // ratio = 1/1 = 1 -> effRatio = 1 -> 1/zoomK(1) = 1
+    expect(clampedScale(1, 1, thresholds)).toBeCloseTo(1, 10);
   });
 
-  it("floors below k_min", () => {
-    // ratio 0.3 -> effRatio clamps to 0.9 -> scale = 0.9 / 0.3 = 3
-    expect(clampedScale(0.3, thresholds)).toBeCloseTo(3, 10);
+  it("floors below k_min, then divides by the absolute zoomK", () => {
+    // zoomK=0.3, fitZoom=1 -> ratio 0.3 -> effRatio clamps to 0.9 -> 0.9 / zoomK(0.3) = 3
+    expect(clampedScale(0.3, 1, thresholds)).toBeCloseTo(3, 10);
   });
 
-  it("caps above k_max", () => {
-    // ratio 4.2 -> effRatio clamps to 2.1 -> scale = 2.1 / 4.2 = 0.5
-    expect(clampedScale(4.2, thresholds)).toBeCloseTo(0.5, 10);
+  it("caps above k_max, then divides by the absolute zoomK", () => {
+    // zoomK=4.2, fitZoom=1 -> ratio 4.2 -> effRatio clamps to 2.1 -> 2.1 / zoomK(4.2) = 0.5
+    expect(clampedScale(4.2, 1, thresholds)).toBeCloseTo(0.5, 10);
   });
 
-  it("returns 1.0 for a non-positive ratio (vendor's fitZoom<=0 guard)", () => {
-    expect(clampedScale(0, thresholds)).toBe(1.0);
-    expect(clampedScale(-1, thresholds)).toBe(1.0);
+  it("dividing by absolute zoomK (not ratio) means equal ratios at different zoom levels diverge", () => {
+    // Both have ratio 1 (inside the band, effRatio=1), but different zoomK
+    // -> the CRITICAL bug this finding fixes: these must NOT be equal.
+    const atZoomK1 = clampedScale(1, 1, thresholds);
+    const atZoomK2 = clampedScale(2, 2, thresholds);
+    expect(atZoomK1).not.toBeCloseTo(atZoomK2, 5);
+    expect(atZoomK1).toBeCloseTo(1, 10);
+    expect(atZoomK2).toBeCloseTo(0.5, 10);
+  });
+
+  it("returns 1.0 when fitZoom<=0 or zoomK<=0 (vendor's :529 guard)", () => {
+    expect(clampedScale(1, 0, thresholds)).toBe(1.0);
+    expect(clampedScale(1, -1, thresholds)).toBe(1.0);
+    expect(clampedScale(0, 1, thresholds)).toBe(1.0);
+    expect(clampedScale(-1, 1, thresholds)).toBe(1.0);
   });
 });
 
 describe("pageDotRadius", () => {
-  it("shrinks singleton dots to 0.85x a regular dot at the same ratio", () => {
-    const regular = pageDotRadius("cluster", 1);
-    const singleton = pageDotRadius("singleton", 1);
+  it("shrinks singleton dots to 0.85x a regular dot at the same zoomK/fitZoom", () => {
+    const regular = pageDotRadius("cluster", 1, 1);
+    const singleton = pageDotRadius("singleton", 1, 1);
     expect(singleton).toBeCloseTo(regular * 0.85, 10);
   });
 
-  it("is BASE_PAGE_DOT_SIZE at fit ratio (1.0, inside the pageDot band)", () => {
-    expect(pageDotRadius("cluster", 1)).toBeCloseTo(1.5, 10); // GRAPH_DEFAULTS.BASE_PAGE_DOT_SIZE
+  it("is BASE_PAGE_DOT_SIZE at zoomK===fitZoom===1 (inside the pageDot band)", () => {
+    expect(pageDotRadius("cluster", 1, 1)).toBeCloseTo(1.5, 10); // GRAPH_DEFAULTS.BASE_PAGE_DOT_SIZE
+  });
+
+  it("screen-clamps to BASE_PAGE_DOT_SIZE/fitZoom at fit zoom (critical fix: not BASE_PAGE_DOT_SIZE flat)", () => {
+    // At fit, zoomK === fitZoom, ratio 1 is inside the pageDot band
+    // [0.9, 2.1] -> effRatio=1 -> world radius = BASE * (1/zoomK) = BASE/fitZoom.
+    // This is what actually paints on screen: world_radius * fitZoom = BASE
+    // screen px, regardless of what fitZoom itself is -- the whole point
+    // of screen-clamping. The pre-fix formula (effRatio/ratio) instead
+    // returned a CONSTANT BASE_PAGE_DOT_SIZE world radius regardless of
+    // fitZoom, which paints at BASE*fitZoom screen px -- wrong by a factor
+    // of fitZoom (e.g. ~2.4x too small at this app's live fit scale ~0.41).
+    const fitZoom = 0.4097;
+    const worldRadius = pageDotRadius("cluster", fitZoom, fitZoom);
+    expect(worldRadius).toBeCloseTo(1.5 / fitZoom, 10);
+    const screenPx = worldRadius * fitZoom;
+    expect(screenPx).toBeCloseTo(1.5, 10);
   });
 });
 
@@ -165,6 +203,10 @@ describe("computeHullLabelLayout", () => {
     expect(layout!.lines).toEqual(["Test Cluster"]);
     expect(layout!.pageCount).toBe(3);
     expect(layout!.isSuperClusterLike).toBe(false);
+    // vendor :4456 `clusterTopY: effectiveTop` -- the RAW 10th-percentile
+    // top, before the gap/line-count adjustment baked into `y` above.
+    // Consumed by Zoom.tsx's applyLabelStyles (review finding 2).
+    expect(layout!.clusterTopY).toBeCloseTo(80, 10);
   });
 
   it("flags super-cluster members", () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { StrictMode } from "react";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import GraphA2 from "./GraphA2";
+import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 import type { GraphPayload } from "@/lib/types";
 
 // Task S3: unit-tests GraphA2's WIRING against a tiny synthetic payload --
@@ -199,6 +200,49 @@ describe("GraphA2", () => {
       const after = container.querySelector("g.graph-root")!.getAttribute("transform");
       expect(after).not.toBe(before);
     });
+  });
+
+  it("screen-clamps circle.page radius after fit (critical fix: not a flat world-unit constant)", async () => {
+    const { container } = render(<GraphA2 data={TINY_PAYLOAD} />);
+    await waitFor(() => expect(container.querySelectorAll("circle.page").length).toBe(3));
+    await waitFor(() => expect(container.querySelector("g.graph-root")?.getAttribute("transform")).toBeTruthy());
+
+    const transform = container.querySelector("g.graph-root")!.getAttribute("transform")!;
+    const scaleMatch = transform.match(/scale\(([-\d.]+)\)/);
+    expect(scaleMatch).not.toBeNull();
+    const fitScale = Number(scaleMatch![1]);
+
+    // A non-singleton dot: at fit, ratio(=zoomK/fitZoom) is 1, inside the
+    // pageDot band [0.9, 2.1], so effRatio=1 and the painted SCREEN size
+    // is BASE_PAGE_DOT_SIZE regardless of what fitScale itself is -- the
+    // previous (effRatio/ratio) formula instead held the WORLD radius at a
+    // flat BASE_PAGE_DOT_SIZE, so the screen size scaled WITH fitScale
+    // (wrong by a factor of fitScale -- see render-helpers.test.ts's
+    // clampedScale/pageDotRadius suite for the isolated formula proof).
+    const circle = container.querySelector('circle[data-kind="cluster"]')!;
+    const worldR = Number(circle.getAttribute("r"));
+    expect(worldR * fitScale).toBeCloseTo(GRAPH_DEFAULTS.BASE_PAGE_DOT_SIZE, 1);
+  });
+
+  it("memoizes the hull-label color map -- getComputedStyle call count plateaus across additional ticks (finding 6)", async () => {
+    const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle");
+    const { container } = render(<GraphA2 data={TINY_PAYLOAD} />);
+    await waitFor(() => expect(container.querySelector("g.hull-label-group")).not.toBeNull());
+
+    // Let a few more animation-frame ticks land (the tiny payload settles
+    // fast, but a couple more commits should still occur).
+    await new Promise((r) => setTimeout(r, 150));
+    const countAfterSettling = getComputedStyleSpy.mock.calls.length;
+
+    await new Promise((r) => setTimeout(r, 300));
+    const countLater = getComputedStyleSpy.mock.calls.length;
+
+    // Before the fix, buildClusterColorMap()+labelColor() (both
+    // getComputedStyle consumers) re-ran on every tick-driven re-render;
+    // after memoizing on "positions now exist" (not the ever-incrementing
+    // version), the count must stop growing once positions exist.
+    expect(countLater).toBe(countAfterSettling);
+    getComputedStyleSpy.mockRestore();
   });
 
   it("handles an empty graph without throwing", async () => {

@@ -39,6 +39,7 @@ import type { ZoomBehavior } from "d3-zoom";
 import { GRAPH_DEFAULTS } from "./constants";
 import d3 from "./d3";
 import {
+  HULL_LABEL_TO_CLUSTER_GAP,
   MIN_ZOOM_RATIO,
   clampedScale,
   hullLabelLodOpacity,
@@ -64,21 +65,78 @@ interface ContentBBox {
 const CULL_DEBOUNCE_MS = 90; // vendor :1518 (scheduleLabelCull)
 const CULL_PAD = 2; // vendor :1581
 
-/** Screen-clamped page-dot radius + star-glyph scale, at the given zoom
- *  ratio (vendor's updatePageDotScale, :1408-1425, minus the selected/
- *  armed 1.8x/1.5x emphasis -- there's no persistent selection styling in
- *  this sandbox's click-select stub, see GraphA2.tsx's header comment). */
-function applyDotStyles(root: ParentNode, ratio: number) {
+/** Screen-clamped page-dot radius + star-glyph scale, at the given
+ *  absolute zoomK/fitZoom (vendor's updatePageDotScale, :1408-1425, minus
+ *  the selected/armed 1.8x/1.5x emphasis -- there's no persistent
+ *  selection styling in this sandbox's click-select stub, see GraphA2.tsx's
+ *  header comment).
+ *
+ *  Review finding 1 (critical): pageDotRadius now takes the ABSOLUTE
+ *  zoomK + fitZoom, not their pre-divided ratio -- see render-helpers.ts's
+ *  clampedScale comment for why dividing by the ratio instead of zoomK
+ *  left every screen-clamped size off by a factor of fitZoom.
+ *
+ *  Review finding 7: `use.star-spikes` gets ONLY a `scale(...)` transform
+ *  here -- translate now lives on the wrapping `<g>` PageDots renders
+ *  (React-owned, rewritten every tick as positions change). Previously
+ *  this function wrote the WHOLE `translate(...) scale(...)` string, but
+ *  so did PageDots' own per-tick render (at a stale, ratio-1 scale) --
+ *  every position-driven re-render clobbered this function's zoom-correct
+ *  scale until the next zoom event. Splitting translate (React, changes
+ *  every tick) from scale (this function, changes only on zoom/pan) into
+ *  two different attributes removes the fight: PageDots never sets
+ *  `transform` on `use.star-spikes` at all (only a constant per-kind
+ *  fallback, see that file's comment), so React's reconciler never
+ *  touches it again after mount, and this function's write always sticks
+ *  until the next zoom event recomputes it. */
+function applyDotStyles(root: ParentNode, zoomK: number, fitZoom: number) {
   root.querySelectorAll<SVGCircleElement>("circle.page").forEach((el) => {
     const kind = el.getAttribute("data-kind") || "";
-    el.setAttribute("r", String(pageDotRadius(kind, ratio)));
+    el.setAttribute("r", String(pageDotRadius(kind, zoomK, fitZoom)));
   });
   root.querySelectorAll<SVGUseElement>("use.star-spikes").forEach((el) => {
     const kind = el.getAttribute("data-kind") || "";
-    const cx = el.getAttribute("data-cx");
-    const cy = el.getAttribute("data-cy");
-    const s = pageDotRadius(kind, ratio) * 0.95;
-    el.setAttribute("transform", `translate(${cx},${cy}) scale(${s})`);
+    const s = pageDotRadius(kind, zoomK, fitZoom) * 0.95;
+    el.setAttribute("transform", `scale(${s})`);
+  });
+}
+
+/** Screen-clamped hull-label font-size + tspan repositioning (vendor's
+ *  updateLabelScale, :1319-1357) -- review finding 2: A2 previously
+ *  rendered a static "10px" WORLD-unit font-size that scaled geometrically
+ *  with zoom instead of staying screen-clamped, and never repositioned
+ *  tspans to compensate.
+ *
+ *  This sandbox has no SC radial-anchor override (render-helpers.ts's
+ *  computeHullLabelLayout comment) -- every label, SC-like or not, uses
+ *  the same "recompute from clusterTopY" repositioning formula (vendor's
+ *  non-SC branch, :1346-1350); only the scale KEY/base font size differs
+ *  for SC-like clusters (vendor :1332-1334), since that distinction is
+ *  about typography, not the (unported) pill anchor.
+ *
+ *  `data-cluster-top-y`/`data-line-count`/`data-is-sc` are written by
+ *  GraphA2.tsx's HullLabels on every render (cheap metadata, tracks live
+ *  cluster position) for this function to read back on each zoom event. */
+function applyLabelStyles(root: ParentNode, zoomK: number, fitZoom: number) {
+  root.querySelectorAll<SVGTextElement>("text.hull-label").forEach((el) => {
+    const isSC = el.getAttribute("data-is-sc") === "1";
+    const thresholds = isSC ? GRAPH_DEFAULTS.SCALE_THRESHOLDS.scLabel : GRAPH_DEFAULTS.SCALE_THRESHOLDS.clLabel;
+    const baseSize = isSC ? GRAPH_DEFAULTS.BASE_SC_LABEL_FONT_SIZE : GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE;
+    const scale = clampedScale(zoomK, fitZoom, thresholds);
+    const lblSize = baseSize * scale;
+    const lineH = baseSize * 1.2 * scale; // vendor :1336
+    const gap = HULL_LABEL_TO_CLUSTER_GAP * scale; // vendor :1337
+
+    el.setAttribute("font-size", `${lblSize}px`);
+
+    const lineCount = Number(el.getAttribute("data-line-count") || "1");
+    const clusterTopY = Number(el.getAttribute("data-cluster-top-y"));
+    if (!Number.isFinite(clusterTopY)) return;
+    const newCenterY = clusterTopY - gap - 2 - (lineCount - 1) * (lineH / 2); // vendor :1349
+    const startY = newCenterY - ((lineCount - 1) * lineH) / 2;
+    el.querySelectorAll<SVGTSpanElement>("tspan").forEach((tspan, i) => {
+      tspan.setAttribute("y", String(startY + i * lineH));
+    });
   });
 }
 
@@ -199,7 +257,13 @@ export default function Zoom({ svgRef, rootRef, layoutStore, width, height }: Zo
         rootEl.setAttribute("transform", String(t));
         currentKRef.current = t.k;
         const ratio = fitZoomRef.current > 0 ? t.k / fitZoomRef.current : 1;
-        applyDotStyles(svgEl, ratio);
+        // Critical fix (review finding 1): pageDotRadius/clampedScale need
+        // the ABSOLUTE t.k/fitZoomRef.current, not the pre-divided ratio --
+        // see applyDotStyles's comment. applyLodStyles/hullLabelLodOpacity
+        // are unaffected (that formula is ratio-based in the vendor too,
+        // :1481 `currentK / fitZoom`, never routed through clampedScale).
+        applyDotStyles(svgEl, t.k, fitZoomRef.current);
+        applyLabelStyles(svgEl, t.k, fitZoomRef.current);
         applyLodStyles(svgEl, ratio);
         scheduleCull();
       });

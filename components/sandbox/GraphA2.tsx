@@ -39,12 +39,12 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GraphCluster, GraphNode, GraphPayload, GraphSuperCluster } from "@/lib/types";
+import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 import Zoom from "@/lib/graph/Zoom";
 import { useForceLayout, type ForceLayoutStore } from "@/lib/graph/useForceLayout";
 import {
   STAR_PATH_DEFS,
   buildClusterColorMap,
-  computeClusterPositionCentroids,
   computeHullLabelLayout,
   labelColor,
   pageDotRadius,
@@ -190,33 +190,48 @@ const PageDots = memo(function PageDots({ nodes, layoutStore, onSelect }: PageDo
       {nodes.map((n) => {
         const pos = positions.get(n.id);
         if (!pos) return null;
-        // Rendered at ratio 1 (fit-zoom rest state) -- Zoom.tsx's
-        // applyDotStyles takes over the `r`/scale attributes imperatively
-        // on every zoom tick afterward (see that file's header comment);
-        // this initial value is what's on screen between "first paint"
-        // and the first zoom/pan gesture.
-        const r = pageDotRadius(n.kind, 1);
+        // Rendered at zoomK=1/fitZoom=1 (both refs' actual pre-fit default,
+        // vendor :368's own `var fitZoom = 1`) -- Zoom.tsx's applyDotStyles
+        // takes over the `r`/scale attributes imperatively on every zoom
+        // tick afterward (see that file's header comment); this initial
+        // value is what's on screen between "first paint" and the first
+        // zoom/pan gesture (in practice, the fit-to-content call that
+        // follows almost immediately).
+        const r = pageDotRadius(n.kind, 1, 1);
         const dotClass = n.kind === "singleton" ? "page singleton" : n.kind === "unclustered" ? "page unclustered" : "page";
+        // Review finding 7: the star glyph's translate (position, changes
+        // every sim tick) and scale (zoom-driven, changes only on zoom/pan)
+        // are split across two elements so React and Zoom.tsx never write
+        // the same attribute. The outer <g> gets a React-owned `translate`
+        // that legitimately changes every tick; the inner <use> gets a
+        // CONSTANT `scale` -- since `r` only depends on `n.kind` (not
+        // position), this expression evaluates to the SAME string on every
+        // re-render, so React's reconciler never re-issues that DOM write
+        // after mount, and Zoom.tsx's later `scale(...)` writes (see that
+        // file's applyDotStyles) are never clobbered by a tick-driven
+        // re-render. Previously both lived in ONE `transform` string on
+        // the `<use>` itself, so every tick's translate change forced a
+        // full-string rewrite that also stomped Zoom's scale.
         return (
           <Fragment key={n.id}>
-            {/* vendor :3996-4003 -- the visible glyph. data-cx/data-cy let
-                Zoom.tsx recompute its translate() on zoom without needing
-                the node list itself. */}
-            <use
-              className="star-spikes"
-              href={`#star-v${starVariant(n.id)}`}
-              data-kind={n.kind}
-              data-cx={pos.x}
-              data-cy={pos.y}
-              transform={`translate(${pos.x},${pos.y}) scale(${r * 0.95})`}
-              fill="currentColor"
-              opacity={starGlyphOpacity(n.visit_count)}
-              pointerEvents="none"
-            />
+            {/* vendor :3996-4003 -- the visible glyph. */}
+            <g transform={`translate(${pos.x},${pos.y})`}>
+              <use
+                className="star-spikes"
+                href={`#star-v${starVariant(n.id)}`}
+                data-kind={n.kind}
+                transform={`scale(${r * 0.95})`}
+                fill="currentColor"
+                opacity={starGlyphOpacity(n.visit_count)}
+                pointerEvents="none"
+              />
+            </g>
             {/* vendor :4006-4045 -- invisible (fill-opacity 0) hit target;
                 visiblePainted (not the CSS default) is what still makes it
                 clickable despite the transparent fill -- same trick the
-                vendor's own comment there explains. */}
+                vendor's own comment there explains. `r` is likewise a
+                per-kind constant (not position-derived), so it survives
+                Zoom.tsx's later writes the same way. */}
             <circle
               className={dotClass}
               data-kind={n.kind}
@@ -250,11 +265,37 @@ interface HullLabelsProps {
 
 const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutStore, onSelect }: HullLabelsProps) {
   const version = useSyncExternalStore(layoutStore.subscribe, layoutStore.getVersion, () => 0);
+  // Review finding 6: colorMap/labelFillMap used to be recomputed from
+  // computeClusterPositionCentroids(clusters, positions) -- LIVE, MOVING
+  // page-node positions -- on every single tick, which (a) re-ran
+  // buildClusterColorMap's getGalaxyStops() and (b) called labelColor()
+  // (a getComputedStyle hit apiece) once per label, every tick: ~100+
+  // getComputedStyle calls/frame on the real dataset, and angle-based hues
+  // drifting visibly while the sim settles (the vendor assigns colors ONCE,
+  // post-layout, since it never re-renders after its one synchronous
+  // paint). Fixed by memoizing on `hasPositions` (flips false->true exactly
+  // once, at the first commit) instead of `version` (bumps every tick) --
+  // and by sourcing centroids from the STABLE Phase-1/1.75 store
+  // (layoutStore.clusterCentroidsRef, populated once, synchronously, before
+  // Phase 2 ever seeds a page node -- see useForceLayout.ts) instead of the
+  // live/settling page positions. Must be called unconditionally, before
+  // the early return below (rules of hooks).
+  const hasPositions = version > 0;
+  const { colorMap, labelFillMap } = useMemo(() => {
+    const centroids = layoutStore.clusterCentroidsRef.current;
+    const cMap = buildClusterColorMap(clusters, superClusters, centroids);
+    const fillMap = new Map<string, string>();
+    cMap.forEach((color, id) => fillMap.set(id, labelColor(color)));
+    return { colorMap: cMap, labelFillMap: fillMap };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `hasPositions`
+    // stands in for "clusterCentroidsRef is now populated"; it flips once
+    // and never again, which is exactly the "compute once" cadence this
+    // fix wants (clusters/superClusters/layoutStore are themselves stable
+    // for the component's lifetime, same contract as the rest of this file).
+  }, [clusters, superClusters, layoutStore, hasPositions]);
+
   if (version === 0 || clusters.length === 0) return null;
   const positions = layoutStore.positionsRef.current;
-
-  const centroids = computeClusterPositionCentroids(clusters, positions);
-  const colorMap = buildClusterColorMap(clusters, superClusters, centroids);
 
   const layouts: HullLabelLayout[] = [];
   clusters.forEach((c) => {
@@ -270,7 +311,7 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
   return (
     <g className="hull-labels">
       {layouts.map((layout) => {
-        const color = colorMap.get(layout.clusterId) ?? "#aaa";
+        const fill = labelFillMap.get(layout.clusterId) ?? "#888888";
         const startY = layout.y - ((layout.lines.length - 1) * layout.lineH) / 2;
         return (
           <g
@@ -287,9 +328,29 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
             <text
               className="hull-label"
               textAnchor="middle"
-              fontSize="10px"
+              // Constant per render (BASE_LABEL_FONT_SIZE never varies) --
+              // Zoom.tsx's applyLabelStyles (review finding 2) owns the
+              // screen-clamped value from the first zoom event onward
+              // (fired synchronously by the initial fit-to-content call);
+              // this is what's on screen only in the brief window before
+              // that. Being a constant expression means React's
+              // reconciler never re-touches this attribute after mount
+              // (same "no clobber" contract as PageDots' star-glyph
+              // scale, see that component's comment), so Zoom's write
+              // sticks across tick-driven re-renders.
+              fontSize={`${GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE}px`}
               fontWeight={600}
-              fill={labelColor(color)}
+              fill={fill}
+              // Metadata for Zoom.tsx's applyLabelStyles -- vendor
+              // :4691-4696's data-cluster-top-y/data-line-count, plus a
+              // data-is-sc flag (vendor distinguishes SC-pill vs plain
+              // labels via the datum directly; this DOM-imperative port
+              // has no datum to read, so it's stashed as an attribute).
+              // These update every render (cluster position tracks the
+              // live sim), unlike font-size/fill above.
+              data-cluster-top-y={layout.clusterTopY}
+              data-line-count={layout.lines.length}
+              data-is-sc={layout.isSuperClusterLike ? "1" : undefined}
               // vendor :4686/:4718 -- SC-like clusters render a touch
               // brighter (0.95 vs 0.7) since they no longer get the retired
               // pill background to set them apart (applySCMarker's small
