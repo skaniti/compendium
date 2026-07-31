@@ -19,10 +19,19 @@ import type { IconEntry } from "@/lib/icons";
 // comment.
 //
 // No live-update wiring: this sandbox mounts once against the initial
-// fetchGraph() payload (see app/sandbox/graph-a1/page.tsx) -- render()
-// itself is idempotent against later calls (module-level `svg` state), but
-// nothing here re-invokes it, matching the "sandbox bar" being
+// fetchGraph() payload (see app/sandbox/graph-a1/page.tsx) -- nothing here
+// re-invokes render() on data changes, matching the "sandbox bar" being
 // deliberately partial.
+//
+// Remount safety (S2 review fix round 1): the vendor's render() survives
+// being called again against a DIFFERENT container -- e.g. this component
+// unmounting (navigating away from /sandbox/graph-a1) and mounting again
+// later -- via a container-changed guard in the vendor's render wrapper
+// (lib/graph/d3-graph-vendor.js, header comment delta #10). One known,
+// documented leak survives remounts: the vendor registers a document-level
+// Escape keydown listener once per container swap that it has no handle to
+// remove (see that same header comment) -- harmless (redundant
+// clearSelection() calls) but not cleaned up.
 
 interface IconDataFile {
   _category_order: string[];
