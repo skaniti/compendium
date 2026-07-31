@@ -569,6 +569,15 @@ function phyllotaxisSeed(centroid: LayoutPosition, i: number): LayoutPosition {
  * onFirstPaint in GraphA2 fires on; onSettle fires once every per-cluster
  * sim has ended.
  *
+ * Review round 2, finding 2: each sim's tick/end handler flushes ONLY its
+ * own group's nodes into `positions` (`flushGroup`), not the full
+ * `workingNodes` array -- the per-cluster split above means a naive
+ * "flush everything on every tick" is O(clusters * nodes) per frame (on
+ * the real dataset, ~373 sims x 753 nodes ~= 280k Map writes/frame during
+ * settle) even though correctness never depended on it (`notify()` stays
+ * rAF-batched regardless of how much of `positions` a given flush touched).
+ *
+
  * One deliberate, documented deviation from strict vendor parity: nodes
  * whose `parent_id` doesn't resolve to any Phase-1 centroid (either
  * literally `null`, or a stale/unmatched id) are grouped into one shared
@@ -668,15 +677,30 @@ export function useForceLayout(
       return { ...n, x: seed.x, y: seed.y };
     });
 
-    function flush() {
+    // Review round 2, finding 2 (measurement-contamination class, same as
+    // round 1's finding 6): flushing ALL workingNodes from every sim's tick
+    // handler is O(clusters * nodes) per frame -- on the real dataset
+    // ~373 per-cluster sims x 753 nodes ~= 280k Map writes/frame during
+    // settle, when only the ticking sim's own group (~2 nodes on average)
+    // actually changed. `flushAll` stays for the one-time initial seed
+    // (touches every node exactly once, not a per-tick cost); each
+    // per-cluster sim's tick/end handler below calls `flushGroup` with
+    // ONLY its own group's nodes instead.
+    function flushAll() {
       workingNodes.forEach((n) => {
+        positions.set(n.id, { x: n.x, y: n.y });
+      });
+    }
+
+    function flushGroup(groupNodes: SimNode[]) {
+      groupNodes.forEach((n) => {
         positions.set(n.id, { x: n.x, y: n.y });
       });
     }
 
     // First commit -- "first dots" -- is the phyllotaxis seed, synchronous
     // with mount, before any sim has ticked at all.
-    flush();
+    flushAll();
     notify();
     callbacksRef.current?.onFirstPaint?.();
 
@@ -714,11 +738,11 @@ export function useForceLayout(
         .stop();
       sims.push(sim);
       sim.on("tick", () => {
-        flush();
+        flushGroup(groupNodes);
         scheduleNotify();
       });
       sim.on("end", () => {
-        flush();
+        flushGroup(groupNodes);
         scheduleNotify();
         endedCount++;
         if (!cancelled && endedCount === totalSims) callbacksRef.current?.onSettle?.();

@@ -46,6 +46,7 @@ import {
   STAR_PATH_DEFS,
   buildClusterColorMap,
   computeHullLabelLayout,
+  hullLabelLineOffsets,
   labelColor,
   pageDotRadius,
   starGlyphOpacity,
@@ -312,7 +313,32 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
     <g className="hull-labels">
       {layouts.map((layout) => {
         const fill = labelFillMap.get(layout.clusterId) ?? "#888888";
-        const startY = layout.y - ((layout.lines.length - 1) * layout.lineH) / 2;
+        // Review round 2, finding 1 (write-fight regression, same bug
+        // class as round 1's star-glyph finding 7): tspan `y` used to be
+        // an ABSOLUTE world coordinate mixing live cluster position
+        // (changes every tick) with zoom-scaled lineH/gap (changes only
+        // on zoom/pan) -- React's per-tick re-render and Zoom.tsx's
+        // zoom-driven write both wrote the SAME attribute, so whichever
+        // fired last within the ~2s settle window won, and the
+        // fit-triggered zoom event (fires before settle finishes) always
+        // lost. Split ownership the same way finding 7 did: this
+        // `<text>`'s `transform` carries ONLY the live position
+        // (`clusterTopY`, React-owned, rewritten every tick -- see the
+        // vendor-derivation note on render-helpers.ts's
+        // hullLabelLineOffsets for why the rest of the geometry is
+        // independent of it); each tspan's `y` is a RELATIVE,
+        // zoom-scale-only offset evaluated at zoomK=1/fitZoom=1 here --
+        // the same "both refs' true pre-fit default" convention PageDots
+        // uses for its initial radius -- depending only on
+        // lines.length/isSuperClusterLike, both stable across ticks for a
+        // given cluster, so this expression evaluates to the SAME array
+        // every render and React's reconciler never re-touches these
+        // attributes after mount. Zoom.tsx's applyLabelStyles owns them
+        // from the first zoom event onward (fired synchronously by the
+        // initial fit-to-content call) and never fights with a
+        // tick-driven re-render again, since neither writer ever touches
+        // the other's attribute.
+        const offsets = hullLabelLineOffsets(layout.lines.length, 1, 1, layout.isSuperClusterLike);
         return (
           <g
             key={layout.clusterId}
@@ -328,12 +354,17 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
             <text
               className="hull-label"
               textAnchor="middle"
+              // React-owned position -- rewritten every render (cluster
+              // position tracks the live sim). This is the ONLY thing
+              // that carries clusterTopY; Zoom.tsx never reads or writes
+              // this attribute (see finding-1 comment above).
+              transform={`translate(0,${layout.clusterTopY})`}
               // Constant per render (BASE_LABEL_FONT_SIZE never varies) --
-              // Zoom.tsx's applyLabelStyles (review finding 2) owns the
-              // screen-clamped value from the first zoom event onward
-              // (fired synchronously by the initial fit-to-content call);
-              // this is what's on screen only in the brief window before
-              // that. Being a constant expression means React's
+              // Zoom.tsx's applyLabelStyles (review finding 2, round 1)
+              // owns the screen-clamped value from the first zoom event
+              // onward (fired synchronously by the initial fit-to-content
+              // call); this is what's on screen only in the brief window
+              // before that. Being a constant expression means React's
               // reconciler never re-touches this attribute after mount
               // (same "no clobber" contract as PageDots' star-glyph
               // scale, see that component's comment), so Zoom's write
@@ -342,13 +373,12 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
               fontWeight={600}
               fill={fill}
               // Metadata for Zoom.tsx's applyLabelStyles -- vendor
-              // :4691-4696's data-cluster-top-y/data-line-count, plus a
-              // data-is-sc flag (vendor distinguishes SC-pill vs plain
-              // labels via the datum directly; this DOM-imperative port
-              // has no datum to read, so it's stashed as an attribute).
-              // These update every render (cluster position tracks the
-              // live sim), unlike font-size/fill above.
-              data-cluster-top-y={layout.clusterTopY}
+              // :4691-4696's data-line-count, plus a data-is-sc flag
+              // (vendor distinguishes SC-pill vs plain labels via the
+              // datum directly; this DOM-imperative port has no datum to
+              // read, so it's stashed as an attribute). Both are stable
+              // per label (name/super-cluster membership don't change
+              // tick to tick), unlike `transform` above.
               data-line-count={layout.lines.length}
               data-is-sc={layout.isSuperClusterLike ? "1" : undefined}
               // vendor :4686/:4718 -- SC-like clusters render a touch
@@ -360,7 +390,7 @@ const HullLabels = memo(function HullLabels({ clusters, superClusters, layoutSto
               opacity={layout.isSuperClusterLike ? 0.95 : 0.7}
             >
               {layout.lines.map((line, i) => (
-                <tspan key={i} x={layout.x} y={startY + i * layout.lineH}>
+                <tspan key={i} x={layout.x} y={offsets[i]}>
                   {line}
                 </tspan>
               ))}

@@ -335,6 +335,47 @@ export function computeHullLabelLayout(cluster: GraphCluster, memberPoints: Arra
   };
 }
 
+/** Zoom-scale-dependent tspan `y` OFFSETS (relative to a cluster's
+ *  `clusterTopY` anchor -- NOT an absolute y) for a hull label's lines, at
+ *  the given absolute zoomK/fitZoom -- vendor's updateLabelScale geometry
+ *  (:1319-1357), factored so the result depends ONLY on
+ *  lineCount/isSC/zoomK/fitZoom, never on `clusterTopY` itself.
+ *
+ *  Review round 2, finding 1 (write-fight regression, same bug class as
+ *  round 1's star-glyph finding 7): `GraphA2.tsx`'s `HullLabels`
+ *  re-renders every tspan `y` on every sim tick (live cluster position),
+ *  while `Zoom.tsx`'s `applyLabelStyles` wrote the SAME attribute on zoom
+ *  events using zoom-scaled lineH/gap -- whichever wrote last within the
+ *  ~2s settle window won, and since the fit-triggered zoom event fires
+ *  BEFORE settle finishes, React's unscaled per-tick write always
+ *  clobbered Zoom's scaled one, leaving labels resting at the WRONG
+ *  (unscaled) anchor.
+ *
+ *  Fix: split ownership the same way finding 7 did for the star-glyph
+ *  transform. The vendor's `newCenterY = clusterTopY - gap - 2 -
+ *  (lineCount-1)*(lineH/2)` (:1349) is linear in `clusterTopY` with a
+ *  fixed offset that depends only on scale -- so `tspan_y(i) -
+ *  clusterTopY` is INDEPENDENT of `clusterTopY`. `GraphA2.tsx` applies
+ *  `clusterTopY` (changes every tick) via a `<text
+ *  transform="translate(0,clusterTopY)">` it owns exclusively; this
+ *  function computes the REMAINING zoom-scale-dependent part (changes
+ *  only on zoom/pan) that `Zoom.tsx` owns exclusively -- no attribute is
+ *  ever written by both. Derived by substituting `clusterTopY = 0` into
+ *  the vendor's own newCenterY/startY formula (mirrors `Zoom.tsx`'s
+ *  `applyLabelStyles`, which used to compute the same thing with a real
+ *  `clusterTopY` before this fix). */
+export function hullLabelLineOffsets(lineCount: number, zoomK: number, fitZoom: number, isSC: boolean): number[] {
+  const thresholds = isSC ? GRAPH_DEFAULTS.SCALE_THRESHOLDS.scLabel : GRAPH_DEFAULTS.SCALE_THRESHOLDS.clLabel;
+  const baseSize = isSC ? GRAPH_DEFAULTS.BASE_SC_LABEL_FONT_SIZE : GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE;
+  const scale = clampedScale(zoomK, fitZoom, thresholds);
+  const lineH = baseSize * 1.2 * scale; // vendor :1336
+  const gap = HULL_LABEL_TO_CLUSTER_GAP * scale; // vendor :1337
+  const relativeClusterTopY = 0; // see comment above -- this is the "clusterTopY=0" substitution
+  const newCenterY = relativeClusterTopY - gap - 2 - (lineCount - 1) * (lineH / 2); // vendor :1349
+  const startY = newCenterY - ((lineCount - 1) * lineH) / 2;
+  return Array.from({ length: lineCount }, (_, i) => startY + i * lineH);
+}
+
 // ── Cluster centroid from ACTUAL node positions (vendor :1725-1737) ────
 // Distinct from useForceLayout's Phase-1 centroids (which seed Phase 2
 // before the sim relaxes anything): this reads settled/current positions,

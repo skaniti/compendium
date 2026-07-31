@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { GraphCluster, GraphSuperCluster } from "@/lib/types";
+import { GRAPH_DEFAULTS } from "./constants";
 import {
   buildClusterColorMap,
   clampedScale,
@@ -7,6 +8,7 @@ import {
   computeHullLabelLayout,
   getGalaxyStops,
   hashId,
+  hullLabelLineOffsets,
   hullLabelLodOpacity,
   labelColor,
   lerpHex,
@@ -216,6 +218,70 @@ describe("computeHullLabelLayout", () => {
       [1, 1],
     ]);
     expect(layout!.isSuperClusterLike).toBe(true);
+  });
+});
+
+// Review round 2, finding 1: this pins hullLabelLineOffsets against a
+// hand-derived reproduction of the vendor's updateLabelScale formula
+// (:1319-1357), independent of the function under test, at a NON-1 fitZoom
+// -- round 1's coverage only ever exercised the font-size half of this
+// geometry (never the tspan y offsets specifically, and never off the
+// ratio=1 "at fit" case), which is exactly how the write-fight regression
+// slipped through review.
+describe("hullLabelLineOffsets", () => {
+  it("matches the vendor's newCenterY/startY formula (clLabel, non-SC) at a non-1 ratio", () => {
+    const zoomK = 1.7;
+    const fitZoom = 1.0; // ratio 1.7 -- inside clLabel's [1.25, 2.0] band, so effRatio = ratio (no clamp)
+    const lineCount = 3;
+
+    const offsets = hullLabelLineOffsets(lineCount, zoomK, fitZoom, false);
+
+    // Hand-reproduced vendor arithmetic (:1332-1350), with clusterTopY=0
+    // substituted in directly (not via clampedScale/the function under
+    // test) so this is an independent check, not a tautology.
+    const { k_min, k_max } = GRAPH_DEFAULTS.SCALE_THRESHOLDS.clLabel;
+    const ratio = zoomK / fitZoom;
+    const effRatio = Math.min(k_max, Math.max(k_min, ratio));
+    const scale = effRatio / zoomK; // vendor clampedScale, :537
+    const baseSize = GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE;
+    const lineH = baseSize * 1.2 * scale; // vendor :1336
+    const gap = 16 * scale; // vendor :1337 (LABEL_TO_CLUSTER_GAP)
+    const newCenterY = 0 - gap - 2 - (lineCount - 1) * (lineH / 2); // vendor :1349
+    const startY = newCenterY - ((lineCount - 1) * lineH) / 2;
+    const expected = [0, 1, 2].map((i) => startY + i * lineH);
+
+    offsets.forEach((y, i) => expect(y).toBeCloseTo(expected[i], 10));
+  });
+
+  it("matches the vendor's formula (scLabel, SC-like) at the k_max clamp ceiling", () => {
+    const zoomK = 10; // far past scLabel's k_max=2.0 -- exercises the clamp
+    const fitZoom = 1.0;
+    const lineCount = 2;
+
+    const offsets = hullLabelLineOffsets(lineCount, zoomK, fitZoom, true);
+
+    const { k_max } = GRAPH_DEFAULTS.SCALE_THRESHOLDS.scLabel;
+    const scale = k_max / zoomK; // ratio (10) exceeds k_max, so effRatio saturates at k_max
+    const baseSize = GRAPH_DEFAULTS.BASE_SC_LABEL_FONT_SIZE;
+    const lineH = baseSize * 1.2 * scale;
+    const gap = 16 * scale;
+    const newCenterY = 0 - gap - 2 - (lineCount - 1) * (lineH / 2);
+    const startY = newCenterY - ((lineCount - 1) * lineH) / 2;
+    const expected = [0, 1].map((i) => startY + i * lineH);
+
+    offsets.forEach((y, i) => expect(y).toBeCloseTo(expected[i], 10));
+  });
+
+  it("is independent of clusterTopY by construction -- callers add clusterTopY separately via a transform", () => {
+    // The whole point of factoring this out (see the function's own
+    // doc comment): its return value must NOT depend on the cluster's
+    // live position, only on lineCount/isSC/zoomK/fitZoom -- calling it
+    // twice with the same scale inputs must be byte-identical regardless
+    // of how many times a caller has re-rendered in between (this is what
+    // lets React own clusterTopY exclusively without a write-fight).
+    const a = hullLabelLineOffsets(2, 1.6, 1.0, false);
+    const b = hullLabelLineOffsets(2, 1.6, 1.0, false);
+    expect(a).toEqual(b);
   });
 });
 

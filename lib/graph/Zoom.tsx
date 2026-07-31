@@ -39,9 +39,9 @@ import type { ZoomBehavior } from "d3-zoom";
 import { GRAPH_DEFAULTS } from "./constants";
 import d3 from "./d3";
 import {
-  HULL_LABEL_TO_CLUSTER_GAP,
   MIN_ZOOM_RATIO,
   clampedScale,
+  hullLabelLineOffsets,
   hullLabelLodOpacity,
   pageDotRadius,
 } from "./render-helpers";
@@ -102,10 +102,10 @@ function applyDotStyles(root: ParentNode, zoomK: number, fitZoom: number) {
 }
 
 /** Screen-clamped hull-label font-size + tspan repositioning (vendor's
- *  updateLabelScale, :1319-1357) -- review finding 2: A2 previously
- *  rendered a static "10px" WORLD-unit font-size that scaled geometrically
- *  with zoom instead of staying screen-clamped, and never repositioned
- *  tspans to compensate.
+ *  updateLabelScale, :1319-1357) -- review finding 2 (round 1): A2
+ *  previously rendered a static "10px" WORLD-unit font-size that scaled
+ *  geometrically with zoom instead of staying screen-clamped, and never
+ *  repositioned tspans to compensate.
  *
  *  This sandbox has no SC radial-anchor override (render-helpers.ts's
  *  computeHullLabelLayout comment) -- every label, SC-like or not, uses
@@ -114,9 +114,21 @@ function applyDotStyles(root: ParentNode, zoomK: number, fitZoom: number) {
  *  for SC-like clusters (vendor :1332-1334), since that distinction is
  *  about typography, not the (unported) pill anchor.
  *
- *  `data-cluster-top-y`/`data-line-count`/`data-is-sc` are written by
- *  GraphA2.tsx's HullLabels on every render (cheap metadata, tracks live
- *  cluster position) for this function to read back on each zoom event. */
+ *  Review round 2, finding 1: this function used to also read
+ *  `data-cluster-top-y` and bake the live cluster position into the tspan
+ *  `y` it wrote -- but GraphA2.tsx's HullLabels re-renders that SAME
+ *  attribute every sim tick (unscaled), so whichever of the two writers
+ *  ran last within the ~2s settle window won, and the fit-triggered zoom
+ *  event (which always fires BEFORE settle finishes) always lost. Fixed by
+ *  splitting ownership: GraphA2.tsx now applies `clusterTopY` via a
+ *  `<text transform="translate(0,clusterTopY)">` it owns exclusively (see
+ *  that file's HullLabels comment), and this function writes ONLY the
+ *  zoom-scale-dependent RELATIVE offset (render-helpers.ts's
+ *  hullLabelLineOffsets, clusterTopY-independent by construction) -- the
+ *  two writers no longer touch a shared quantity, so neither can clobber
+ *  the other. `data-line-count`/`data-is-sc` are written by GraphA2.tsx's
+ *  HullLabels once per label (stable metadata, not tick-driven) for this
+ *  function to read back on each zoom event. */
 function applyLabelStyles(root: ParentNode, zoomK: number, fitZoom: number) {
   root.querySelectorAll<SVGTextElement>("text.hull-label").forEach((el) => {
     const isSC = el.getAttribute("data-is-sc") === "1";
@@ -124,18 +136,12 @@ function applyLabelStyles(root: ParentNode, zoomK: number, fitZoom: number) {
     const baseSize = isSC ? GRAPH_DEFAULTS.BASE_SC_LABEL_FONT_SIZE : GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE;
     const scale = clampedScale(zoomK, fitZoom, thresholds);
     const lblSize = baseSize * scale;
-    const lineH = baseSize * 1.2 * scale; // vendor :1336
-    const gap = HULL_LABEL_TO_CLUSTER_GAP * scale; // vendor :1337
-
     el.setAttribute("font-size", `${lblSize}px`);
 
     const lineCount = Number(el.getAttribute("data-line-count") || "1");
-    const clusterTopY = Number(el.getAttribute("data-cluster-top-y"));
-    if (!Number.isFinite(clusterTopY)) return;
-    const newCenterY = clusterTopY - gap - 2 - (lineCount - 1) * (lineH / 2); // vendor :1349
-    const startY = newCenterY - ((lineCount - 1) * lineH) / 2;
+    const offsets = hullLabelLineOffsets(lineCount, zoomK, fitZoom, isSC);
     el.querySelectorAll<SVGTSpanElement>("tspan").forEach((tspan, i) => {
-      tspan.setAttribute("y", String(startY + i * lineH));
+      tspan.setAttribute("y", String(offsets[i]));
     });
   });
 }

@@ -210,4 +210,60 @@ describe("useForceLayout", () => {
       expect(Math.hypot(small1.x - smallMeanX, small1.y - smallMeanY)).toBeLessThan(collideRadius * 3);
     }, 10000);
   });
+
+  // Review round 2, finding 2 (measurement-contamination class, same as
+  // round 1's finding 6): every per-cluster sim's tick handler used to call
+  // a global flush() that iterated ALL workingNodes regardless of which
+  // sim ticked -- O(clusters * nodes) per frame (on the real dataset,
+  // ~373 sims x 753 nodes ~= 280k Map writes/frame during settle, where
+  // per-group flushing is ~753 total). Fixed by making each sim's tick/end
+  // handler flush only its OWN group's nodes.
+  it("flushes only the ticking sim's own group into positions, not the full node set (finding 2 -- per-group flush)", async () => {
+    const bigCluster: GraphCluster = { id: "big", name: "Big", page_ids: Array.from({ length: 20 }, (_, i) => `b${i}`) };
+    const smallCluster: GraphCluster = { id: "small", name: "Small", page_ids: ["s0", "s1", "s2"] };
+    const bigNodes = makeNodes(20, "big").map((n, i) => ({ ...n, id: `b${i}` }));
+    const smallNodes = makeNodes(3, "small").map((n, i) => ({ ...n, id: `s${i}` }));
+
+    const { result } = renderHook(() =>
+      useForceLayout([...bigNodes, ...smallNodes], [bigCluster, smallCluster], [], 800, 600)
+    );
+    await waitFor(() => expect(result.current.getVersion()).toBeGreaterThan(0));
+
+    // Spy on the ACTUAL positions Map instance (not Map.prototype -- other
+    // Maps are used elsewhere in the module, e.g. during Phase-1 centroid
+    // computation, and that's all finished by the time the first commit
+    // lands) so only per-tick flush() writes are captured from here on.
+    const positionsMap = result.current.positionsRef.current;
+    const setSpy = vi.spyOn(positionsMap, "set");
+
+    await waitFor(() => expect(setSpy.mock.calls.length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 200)); // let several more tick rounds land
+
+    // Snapshot the recorded calls BEFORE mockRestore() -- vitest's
+    // mockRestore() resets recorded call history as part of restoring the
+    // original implementation, so reading mock.calls afterward would
+    // always see an empty array.
+    const calls = [...setSpy.mock.calls];
+    setSpy.mockRestore();
+    expect(calls.length).toBeGreaterThan(0);
+
+    // Group the recorded .set(id, ...) calls into contiguous same-cluster
+    // runs. A single flushGroup() call's forEach is synchronous (JS is
+    // single-threaded; d3-timer runs one sim's queued tick handler to
+    // completion before the next), so one run == one flush from one sim.
+    // Every run's length must equal EXACTLY one cluster's own size (20 or
+    // 3) -- proof no single flush ever touches both groups' nodes, i.e.
+    // the O(clusters * nodes) global flush this finding removes is gone.
+    const runs: number[] = [];
+    let i = 0;
+    while (i < calls.length) {
+      const prefix = (calls[i][0] as string)[0];
+      let j = i;
+      while (j < calls.length && (calls[j][0] as string)[0] === prefix) j++;
+      runs.push(j - i);
+      i = j;
+    }
+    expect(runs.length).toBeGreaterThan(0);
+    runs.forEach((len) => expect([3, 20]).toContain(len));
+  });
 });
