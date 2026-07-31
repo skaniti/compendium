@@ -30,6 +30,13 @@ refactor later).
 | Frame rate during pan (fps) | | |
 | Heap (MB) | | |
 
+Metric semantics: the two time-to-first-dots numbers measure different
+moments — A1 marks after the fully SETTLED layout paints (synchronous vendor
+pipeline); A2 marks when the phyllotaxis SEED paints, with a visible ~2s live
+settle following. The difference is the architecture itself; compare the
+experiences, not just the numbers. Both are dev-mode figures (StrictMode
+double-mount inflates absolutes on both sides; relative comparison holds).
+
 ## CC-run checks (Task S4 Step 1)
 
 | Check | A1: port-intact | A2: react-owned |
