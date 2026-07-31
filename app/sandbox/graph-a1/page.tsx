@@ -1,39 +1,50 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import GraphA1 from "@/components/sandbox/GraphA1";
 import SandboxOverlayChip from "@/components/sandbox/SandboxOverlayChip";
 import { fetchGraph } from "@/lib/api";
 import type { GraphPayload } from "@/lib/types";
 
 // Task S1 (batch 03 graph canvas port) scaffolding for the F2 bake-off's
-// "A1: port-intact" sandbox -- see plan Task S2 for what lands in the
-// mount slot below (components/sandbox/GraphA1.tsx, a near-verbatim port
-// of the Dash d3_graph.js renderer). This page only proves the plumbing:
-// fetch the real graph payload through 02's fetchGraph(), render a
-// full-viewport dark container, and surface the shared overlay chip. No
-// dots render yet, so "time-to-first-dots" here is really
-// fetch-to-placeholder-render -- S2 re-points MARK_FIRST_DOTS at the
-// renderer's own first-paint instead of changing this page's structure.
+// "A1: port-intact" sandbox, extended by Task S2: components/sandbox/
+// GraphA1.tsx (a near-verbatim port of the Dash d3_graph.js renderer) now
+// mounts in the slot below once the fetch resolves. time-to-first-dots is
+// measured from fetch-start to GraphA1's onFirstPaint callback, which
+// fires right after the vendor's render() call returns (synchronous
+// layout+paint) -- not from the old payload-arrival placeholder mark.
 
 const VARIANT_LABEL = "A1: port-intact";
 const MARK_FETCH_START = "sandbox-a1-fetch-start";
 const MARK_FIRST_DOTS = "sandbox-a1-first-dots";
 const MEASURE_NAME = "sandbox-a1-time-to-first-dots";
 
+// S2 fix: CONTAINER_STYLE previously used minHeight (indefinite) instead
+// of height. GraphA1's mounted div reads the container's measured size via
+// a ResizeObserver (d3-graph-vendor.js, ported verbatim from Dash) and
+// re-applies it to the SVG viewBox + zoom fit on every observed change --
+// with an indefinite-height ancestor chain (minHeight percentages resolve
+// against an "auto" reference), that produced a real feedback loop: each
+// observed size nudged the SVG's rendered box a few px taller, which
+// triggered another observation, taller again, unbounded (verified via
+// CDP: container height grew ~28px per ResizeObserver tick with zero user
+// interaction). A definite `height: 100vh` on this root breaks the loop --
+// every descendant's percentage height now resolves against a fixed
+// reference instead of another percentage.
 const CONTAINER_STYLE: CSSProperties = {
-  minHeight: "100vh",
+  height: "100vh",
   width: "100%",
   background: "var(--bg)",
   color: "var(--text)",
   colorScheme: "dark",
   position: "relative",
   boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const MOUNT_SLOT_STYLE: CSSProperties = {
   width: "100%",
   height: "100%",
-  minHeight: "100vh",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -68,16 +79,14 @@ export default function GraphA1SandboxPage() {
     };
   }, []);
 
-  // Marks once the placeholder below has committed with fetched data --
-  // a separate effect (runs after the DOM commit triggered by setPayload
-  // above) so this times render, not just data arrival. S2 moves this
-  // mark into GraphA1's own first-paint instead.
-  useEffect(() => {
-    if (payload === null) return;
+  // Passed to GraphA1 as onFirstPaint -- fires once the vendor's render()
+  // call actually returns (dots painted), not on payload arrival/placeholder
+  // commit like the pre-S2 version of this mark.
+  const handleFirstPaint = useCallback(() => {
     performance.mark(MARK_FIRST_DOTS);
     const measure = performance.measure(MEASURE_NAME, MARK_FETCH_START, MARK_FIRST_DOTS);
     setElapsedMs(measure.duration);
-  }, [payload]);
+  }, []);
 
   return (
     <div style={CONTAINER_STYLE}>
@@ -86,10 +95,9 @@ export default function GraphA1SandboxPage() {
         nodeCount={payload ? payload.nodes.length : null}
         elapsedMs={elapsedMs}
       />
-      {/* Mount slot: Task S2 drops components/sandbox/GraphA1.tsx here,
-          fed by `payload` and lib/graph/constants.ts's GRAPH_DEFAULTS. */}
       <div style={MOUNT_SLOT_STYLE} data-testid="graph-a1-mount-slot">
         {error ? <p style={ERROR_STYLE}>Couldn&apos;t load graph: {error}</p> : null}
+        {payload ? <GraphA1 data={payload} onFirstPaint={handleFirstPaint} /> : null}
       </div>
     </div>
   );

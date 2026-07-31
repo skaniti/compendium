@@ -1,0 +1,58 @@
+// Ambient module declaration for lib/graph/d3-graph-vendor.js, the near-
+// verbatim port of explorer's d3_graph.js (see that file's own header
+// comment for the full de-Dash accounting). `allowJs` is false project-wide
+// (tsconfig.json) and tsconfig's `include` only covers `**/*.ts`/`**/*.tsx`,
+// so this plain `.js` file has no inferred shape -- this declaration is
+// what lets `import("@/lib/graph/d3-graph-vendor.js")` (components/sandbox/
+// GraphA1.tsx) type-check. Unlike lib/vendor/vendor.d.ts's *.js wildcard
+// (those files are side-effect-only, no exports), this module has real
+// named exports, so they're typed here individually rather than left `any`.
+//
+// Keep in sync with the vendor file's own "S2 module exports" block (EOF)
+// if the export set ever changes.
+
+declare module "@/lib/graph/d3-graph-vendor.js" {
+  import type { GraphPayload } from "@/lib/types";
+  import type { GraphDefaults } from "@/lib/graph/constants";
+  import type { IconEntry } from "@/lib/icons";
+
+  export interface GraphRenderOptions {
+    // Fired from writeTapStore (selectNode/selectCluster/clearSelection) --
+    // kind is 'node' | 'cluster' | null (null on clear), id is the
+    // corresponding page/cluster id or null. Sandbox: console stub.
+    onSelect?: (kind: string | null, id: string | null) => void;
+    // Same shape window.__superClusterIcons carried in Dash -- see
+    // lib/icon-data.json / lib/icons.tsx. Keyed by icon id.
+    icons?: Record<string, IconEntry>;
+    // Applied once at first mount; defaults to GRAPH_DEFAULTS when omitted
+    // (sandbox behavior -- see the vendor file's render wrapper).
+    tunerSnapshot?: GraphDefaults;
+    // Re-applies the prior zoom/pan transform after a re-layout instead of
+    // snapping back to fit-to-content (mirrors the Dash tuner's re-layout
+    // sliders' behavior).
+    preserveView?: boolean;
+  }
+
+  export function render(
+    container: HTMLElement,
+    data: GraphPayload,
+    opts?: GraphRenderOptions
+  ): void;
+
+  // Palette-change hook (promotion wires this to ThemeProvider); unused by
+  // the sandbox.
+  export function recolor(): void;
+
+  // Dev/CDP debug aliases -- also attached to window.__d3* when
+  // NODE_ENV !== "production" (see the vendor file's header comment,
+  // delta #7). Loosely typed; not part of the sandbox's own contract.
+  export function setSelection(type: string, id: unknown): void;
+  export function toggleNoise(show: boolean): void;
+  export function frameNodes(nodeIds: string[], visibleH?: number): void;
+  export function getClusterPages(clusterId: string): string[];
+  export function hasNode(nodeId: string): boolean;
+  export function debugGetSelection(): Record<string, unknown>;
+  export function resetTunerToDefaults(): boolean;
+  export function applyTunerOverrides(partial: Partial<GraphDefaults>): boolean;
+  export const expandedGroups: Record<string, boolean>;
+}
