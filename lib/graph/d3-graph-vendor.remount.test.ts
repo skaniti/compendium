@@ -11,9 +11,15 @@ import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 //
 // A minimal 1-node, 0-cluster, 0-link payload keeps the real render()
 // pipeline jsdom-safe: 0 clusters means measureLabelDims/getBBox-driven
-// label measurement is never reached (only called per-cluster), and every
-// SANDBOX_SECTION_GATES section that touches getScreenCTM/getBBox
-// (nebula/watermark/edgeChip/tooltip/lodNicety) is off by default anyway.
+// label measurement is never reached (only called per-cluster), and
+// nebula/watermark/knot/tooltip/lodNicety all no-op on 0 clusters even
+// though A1-2 waves 1-3 turned them on. `edgeChip` differs: updateEdgeChips
+// calls rootNode.getScreenCTM() unconditionally (before it ever looks at
+// super_clusters.length), and jsdom implements no SVG geometry methods at
+// all (not even a throwing stub -- verified: `typeof svg.getScreenCTM ===
+// 'undefined'`). Real browsers always have this (standard
+// SVGGraphicsElement API), so the stub below belongs in the test, not
+// vendor code -- see the beforeEach.
 const ONE_NODE_PAYLOAD: GraphPayload = {
   nodes: [
     {
@@ -43,10 +49,22 @@ describe("d3-graph-vendor render() container-changed guard", () => {
     // never schedules a timer -- keeps the test deterministic and avoids
     // leaking pending timers across tests.
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    // jsdom stub for SVGGraphicsElement.getScreenCTM (see the module
+    // comment above for why this belongs here, not in vendor code).
+    // Identity-ish matrix is enough -- ONE_NODE_PAYLOAD has 0
+    // super_clusters, so updateEdgeChips's own forEach over them never
+    // executes; this only needs to keep the unconditional call from
+    // throwing.
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
   });
 
   afterEach(() => {
     document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
   });
 
   it("builds a fresh SVG in a newly mounted container after a remount", async () => {
