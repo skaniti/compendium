@@ -4,6 +4,7 @@ import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
 import ThemeProvider, { useTheme } from "./ThemeProvider";
+import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
 import type { GraphPayload } from "@/lib/types";
 
@@ -90,6 +91,13 @@ afterEach(() => {
   // next test's initial readStoredVariant() read (same convention
   // ThemeProvider.test.tsx's own beforeEach uses).
   localStorage.clear();
+  // Task A1-3 (Step 2): GraphCanvas now reads through hooks/useGraph.ts's
+  // module-level shared cache instead of its own local fetchGraph() call --
+  // without resetting it here, one test's committed graph/graphVersion would
+  // leak into the next (same convention hooks/useGraph.test.ts's own
+  // beforeEach uses; done in afterEach here instead since renderCanvas() is
+  // called fresh at the START of each test body, not in a shared beforeEach).
+  __resetGraphCacheForTest();
 });
 
 // Test-only probe: exposes NavProvider's state as text + lets a test drive
@@ -125,6 +133,20 @@ function ThemeProbe() {
   );
 }
 
+// Test-only probe: exposes hooks/useGraph.ts's refresh() so a test can
+// trigger a graphVersion bump directly (the same call DiaryPanel/the
+// SUPERCLUSTERS card make after a recluster) without needing a real
+// POST /api/recluster round-trip.
+function GraphProbe() {
+  const { refresh, graphVersion } = useGraph();
+  return (
+    <div>
+      <span data-testid="graph-version">{graphVersion}</span>
+      <button onClick={() => void refresh()}>trigger-refresh</button>
+    </div>
+  );
+}
+
 function renderCanvas(meBody: unknown = SIGNED_OUT, meStatus = 401) {
   mockApiFetch(meBody, meStatus);
   return render(
@@ -134,6 +156,7 @@ function renderCanvas(meBody: unknown = SIGNED_OUT, meStatus = 401) {
           <GraphCanvas />
           <NavProbe />
           <ThemeProbe />
+          <GraphProbe />
         </NavProvider>
       </ThemeProvider>
     </SessionProvider>
@@ -200,6 +223,99 @@ describe("GraphCanvas mount + fetch", () => {
     await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
     expect(renderMock).not.toHaveBeenCalled();
     expect(document.querySelector("#compendium-empty-state")).toBeNull();
+  });
+});
+
+describe("GraphCanvas <-> useGraph() binding (Step 1a/2: graphVersion re-render, no refetch churn)", () => {
+  it("mounts once via useGraph() -- an unrelated GraphCanvas re-render does not trigger a second fetchGraph call", async () => {
+    const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Selecting a node re-renders GraphCanvas via NavProvider's context
+    // (same re-render final-review already exercises for recolor() below)
+    // -- this must never be mistaken for a reason to refetch.
+    act(() => screen.getByText("seed-select").click());
+    expect(screen.getByTestId("selected")).toHaveTextContent("seed-node");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-invokes vendor.render() with the new payload when graphVersion bumps (refresh()), without an extra fetchGraph call beyond the refresh itself", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(renderMock.mock.calls[0][1]).toBe(first);
+    expect(screen.getByTestId("graph-version")).toHaveTextContent("0");
+
+    act(() => screen.getByText("trigger-refresh").click());
+
+    await waitFor(() => expect(screen.getByTestId("graph-version")).toHaveTextContent("1"));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    expect(renderMock.mock.calls[1][1]).toBe(second);
+    // Same container both times -- a re-render, not a remount.
+    expect(renderMock.mock.calls[1][0]).toBe(renderMock.mock.calls[0][0]);
+    expect(fetchSpy).toHaveBeenCalledTimes(2); // initial mount load + the one refresh() flight
+  });
+
+  it("does NOT re-invoke vendor.render() on mount itself (graphVersion starts at, and stays, 0)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("graph-version")).toHaveTextContent("0");
+  });
+
+  it("reapplies the current selection after a graphVersion-triggered re-render", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-select").click());
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+    setSelectionMock.mockClear();
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+  });
+
+  it("A1-1 ledgered minor (fixed): a selection made DURING the vendor's dynamic-import mount window is not dropped", async () => {
+    // Previously (task-A1-1-report.md / progress.md): the mount effect read
+    // state.selectedNodeId via closure at effect-DEFINITION time, so a
+    // selection made after the effect started but before the dynamic
+    // import() resolved was silently ignored until some LATER, unrelated
+    // nav action happened to re-fire the separate inbound-wiring effect.
+    // The fix reads selection through a ref that's always current, checked
+    // at import-RESOLUTION time instead. Dispatching the selection
+    // synchronously right after render (before awaiting anything) fires it
+    // well before EITHER the mocked fetchGraph() promise or the dynamic
+    // import() of the mocked vendor module has had a chance to resolve --
+    // exactly the race window the A1-1 report flagged.
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    act(() => screen.getByText("seed-select").click());
+    expect(screen.getByTestId("selected")).toHaveTextContent("seed-node");
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    // The mount-time apply must have picked up the selection made during
+    // the import window -- not dropped it.
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
   });
 });
 

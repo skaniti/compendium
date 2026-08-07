@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { apiFetch, fetchGraph } from "@/lib/api";
+import { useEffect, useRef, type CSSProperties } from "react";
+import { apiFetch } from "@/lib/api";
 import { useSession } from "./SessionProvider";
 import { useNav } from "./NavProvider";
 import { useTheme } from "./ThemeProvider";
+import { useGraph } from "@/hooks/useGraph";
 import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
-import type { GraphPayload } from "@/lib/types";
+
+// Type-only handle onto the vendor module's own shape (lib/graph/vendor.d.ts)
+// -- used below to type renderRef, which holds the raw render() binding
+// captured at mount time for direct reuse on later graphVersion bumps
+// (Step 2/1a) without re-running the dynamic import().
+type GraphVendorModule = typeof import("@/lib/graph/d3-graph-vendor.js");
 
 // Task A1-1 (batch 03 graph canvas port) -- the promotion commit. Moved
 // verbatim from components/sandbox/GraphA1.tsx (Task S2's "A1: port-intact"
@@ -51,13 +57,16 @@ import type { GraphPayload } from "@/lib/types";
 // Fetch: GraphA1.tsx (pre-promotion) took `data` as a prop, fetched one
 // level up in app/sandbox/graph-a1/page.tsx via 02's fetchGraph(). Since
 // app/page.tsx does no data plumbing of its own (GraphPlaceholder mounted
-// with zero props), that fetch moves down into this component instead --
+// with zero props), that fetch moved down into this component at A1-1 --
 // dropping the sandbox-only `performance.mark`/`onFirstPaint` plumbing
-// that fed SandboxOverlayChip (Task S1, deleted this commit; see the
-// brief's Step 3). useGraph() module-cache binding (live re-fetch on
-// mutation, graphVersion re-render) is Task A1-3's job, noted there in the
-// report as the seam this task intentionally leaves alone -- this fetches
-// once via fetchGraph() directly, same as the sandbox did.
+// that fed SandboxOverlayChip (Task S1, deleted that commit; see the
+// brief's Step 3). A1-1 called fetchGraph() directly, once, with no
+// re-render on later changes -- Task A1-3 (Step 2 below) rebinds this to
+// hooks/useGraph.ts's shared module-cache instead: graphVersion bumps (a
+// refresh()-initiated flight committing -- recluster elsewhere, or the
+// time-window pill) now re-render the already-mounted vendor with fresh
+// data, and multiple useGraph() consumers (header, panels, canvas) share
+// one fetch rather than each firing their own.
 
 interface IconDataFile {
   _category_order: string[];
@@ -189,49 +198,65 @@ export default function GraphCanvas() {
   const disposeRef = useRef<(() => void) | null>(null);
   const setSelectionRef = useRef<((type: string, id: unknown) => void) | null>(null);
   const recolorRef = useRef<(() => void) | null>(null);
+  // Task A1-3 (Step 2): the raw render() binding, captured once at mount so
+  // a LATER graphVersion bump can re-invoke it directly (see the dedicated
+  // effect below) without repeating the dynamic import() -- the module is
+  // already loaded and cached by then (standard ESM import cache).
+  const renderRef = useRef<GraphVendorModule["render"] | null>(null);
+  // Task A1-3 (Step 1a/2): the graphVersion this component's vendor mount
+  // currently reflects on screen -- null before the FIRST render() call has
+  // happened. Guards the graphVersion-bump re-render effect below against
+  // double-firing in the same commit as the mount effect (see that effect's
+  // own comment for the exact race it closes).
+  const lastRenderedVersionRef = useRef<number | null>(null);
   const { role, actingAsDemo } = useSession();
   const { state, dispatch, selectFromCanvas } = useNav();
   const { variant } = useTheme();
 
-  const [payload, setPayload] = useState<GraphPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Task A1-3 (Step 2): rebind from a local one-shot fetchGraph() effect to
+  // the shared hooks/useGraph.ts cache -- graphVersion is the Next
+  // equivalent of Dash's `graph-version` Store; refresh()-initiated flights
+  // (recluster elsewhere, or a time-window change below) bump it, the
+  // initial mount load does not (useGraph.ts's own documented contract).
+  const { graph: payload, error: graphError, graphVersion } = useGraph();
+  const error = graphError?.message ?? null;
 
-  // Fetch once on mount (moved down from the deleted
-  // app/sandbox/graph-a1/page.tsx, minus its performance.mark plumbing --
-  // see the header comment).
-  useEffect(() => {
-    let cancelled = false;
-    fetchGraph()
-      .then((data) => {
-        if (cancelled) return;
-        setPayload(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // A1-1 ledgered minor (task-A1-1-report.md / progress.md), FIXED here:
+  // the vendor mount effect below applies whatever selection NavProvider
+  // already holds at the moment its dynamic import() RESOLVES, not at the
+  // moment the effect was DEFINED -- previously it closed over
+  // `state.selectedNodeId` directly, so a selection made during the import
+  // window (after the effect started, before the promise resolved) was
+  // silently dropped until some LATER, unrelated nav action happened to
+  // re-fire the separate inbound-wiring effect. A plain ref assigned every
+  // render (not inside an effect) always reflects the LATEST value by the
+  // time the async .then() below reads it.
+  const selectedNodeIdRef = useRef(state.selectedNodeId);
+  selectedNodeIdRef.current = state.selectedNodeId;
 
   // Obligation 1 (see header comment): visible only once a fetch has
   // actually completed AND it reported zero nodes -- `payload !== null`
-  // stands in for Dash's `graphVersion > 0` ("loaded"), since this fetches
-  // exactly once today (no useGraph() re-fetch/version bump until A1-3).
+  // stands in for Dash's `graphVersion > 0` ("loaded"). NOTE: now that a
+  // REAL graphVersion is available (useGraph.ts), it is deliberately NOT
+  // used here instead -- useGraph.ts's own contract is that the initial
+  // mount load never bumps graphVersion (stays 0 forever until a
+  // refresh()/window-change/mutation), so `graphVersion > 0` would never
+  // become true from the initial load alone and the empty state would
+  // never show. `payload !== null` ("a fetch has settled, regardless of
+  // whether it bumped a version") remains the correct proxy.
   const hasNodes = payload !== null && payload.nodes.length > 0;
   const showEmptyState = payload !== null && !hasNodes;
 
   // Mount the vendor renderer once real graph data with at least one node
-  // arrives. Mount-once by design, same contract GraphA1.tsx had (data was
-  // a stable prop there; here it's the first non-empty fetch result) --
-  // useGraph()/graphVersion re-render on data changes is A1-3's job.
+  // arrives. Mount-once by design (dynamic import() + svg/handler setup
+  // only happens here) -- LATER graphVersion bumps re-invoke renderRef
+  // directly via the dedicated effect below instead of re-running this one.
   useEffect(() => {
     if (!hasNodes) return;
     let cancelled = false;
     void import("@/lib/graph/d3-graph-vendor.js").then((vendor) => {
       if (cancelled || !containerRef.current || !payload) return;
+      renderRef.current = vendor.render;
       setSelectionRef.current = vendor.setSelection;
       // Task A1-2 wave 8: recolor() handle for the palette-change effect
       // below. Same module-scope-singleton-export shape as setSelection
@@ -253,27 +278,72 @@ export default function GraphCanvas() {
         // opts.tunerSnapshot stays absent -- GRAPH_DEFAULTS applies until
         // group B wires a saved profile.
       });
-      // Apply whatever selection NavProvider already holds at mount time
-      // (e.g. a selection made via some other surface before this fetch/
-      // mount race resolved) -- the effect below only reacts to LATER
-      // changes, so this covers the "already selected" case explicitly.
-      if (state.selectedNodeId) vendor.setSelection("node", state.selectedNodeId);
+      // Apply whatever selection NavProvider already holds by the time the
+      // import resolves (see selectedNodeIdRef's own comment above for why
+      // this reads the ref, not the closed-over `state` -- the A1-1 fix).
+      // The effect below only reacts to LATER changes, so this covers the
+      // "already selected before/during mount" case explicitly.
+      if (selectedNodeIdRef.current) vendor.setSelection("node", selectedNodeIdRef.current);
+      lastRenderedVersionRef.current = graphVersion;
     });
     return () => {
       cancelled = true;
       disposeRef.current?.();
       disposeRef.current = null;
+      renderRef.current = null;
       setSelectionRef.current = null;
       recolorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once
     // against the first non-empty payload by design (see above);
-    // state.selectedNodeId is read once here for the initial apply, live
-    // updates are the separate inbound-wiring effect below, and
-    // selectFromCanvas is NavProvider's stable convenience (identity only
-    // changes with `state`, which this effect deliberately does not
-    // re-run on).
+    // selection is read via selectedNodeIdRef (always current, see its own
+    // comment) rather than a dependency, live updates for LATER changes are
+    // the separate inbound-wiring effect below, and selectFromCanvas is
+    // NavProvider's stable convenience (identity only changes with `state`,
+    // which this effect deliberately does not re-run on).
   }, [hasNodes]);
+
+  // Task A1-3 (Step 1a/2): re-render the already-mounted vendor with fresh
+  // graph data whenever graphVersion bumps (a refresh()-initiated flight
+  // committed -- recluster elsewhere, or a time-window change below), WITHOUT
+  // re-running the mount effect above (no new dynamic import(), no
+  // dispose+rebuild of the ResizeObserver/Escape-listener pair the container-
+  // swap guard owns -- see vendor header comment delta #11). Mirrors Dash's
+  // own clientside callback (app.py's `window.__d3GraphRender(graphData)`,
+  // Input=d3-graph-data): no `preserveView`, so this resets to fit-to-content
+  // exactly like Dash's own re-render does, not a `toggleGroupExpansion`-style
+  // camera-pinned refresh.
+  //
+  // Guarded two ways against the initial mount: (1) graphVersion starts at,
+  // and stays, 0 through the initial load (useGraph.ts's own contract), so
+  // this effect's dependency does not actually change value on that first
+  // transition; (2) lastRenderedVersionRef additionally guards the one real
+  // edge case where BOTH effects could fire in the same commit -- an EMPTY
+  // initial payload (vendor never mounted, renderRef still null) followed by
+  // a window change that both brings the first real nodes AND bumps
+  // graphVersion in the same flight. In that case this effect's synchronous
+  // body runs first (renderRef.current is still null -- the mount effect's
+  // own dynamic import() hasn't resolved yet), so it no-ops; the mount effect
+  // then handles the actual first mount once its import resolves and records
+  // the version it rendered.
+  useEffect(() => {
+    if (!renderRef.current || !containerRef.current || !payload) return;
+    if (lastRenderedVersionRef.current === graphVersion) return;
+    disposeRef.current = renderRef.current(containerRef.current, payload, {
+      icons: iconData.icons,
+      onSelect: (kind, id) => selectFromCanvas(kind as "node" | "cluster" | null, id ?? undefined),
+    });
+    lastRenderedVersionRef.current = graphVersion;
+    // Re-apply selection against the freshly-drawn DOM -- render()'s own
+    // internal D3 data join (keyed by node id) preserves attributes on
+    // PERSISTING nodes untouched, but any node that newly ENTERS (wasn't in
+    // the previous dataset) is drawn with a flat default opacity, and
+    // hull-label groups are rebuilt outright -- so a currently-selected
+    // node's highlight is not reliably guaranteed to survive a data swap
+    // without this explicit re-apply. Mirrors the mount effect's own
+    // "apply whatever selection already exists" step above.
+    if (selectedNodeIdRef.current) setSelectionRef.current?.("node", selectedNodeIdRef.current);
+  }, [graphVersion, payload, selectFromCanvas]);
 
   // Step 4b / Step 6: canvas Esc is a BUBBLE-phase (no `true` capture
   // flag) document listener dispatching the nav layer's reserved
