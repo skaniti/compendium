@@ -3,6 +3,7 @@ import { render, cleanup, waitFor, screen, act } from "@testing-library/react";
 import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
+import ThemeProvider, { useTheme } from "./ThemeProvider";
 import * as api from "@/lib/api";
 import type { GraphPayload } from "@/lib/types";
 
@@ -19,12 +20,14 @@ import type { GraphPayload } from "@/lib/types";
 const renderMock = vi.fn();
 const setSelectionMock = vi.fn();
 const disposeMock = vi.fn();
+const recolorMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   render: (...args: unknown[]) => {
     renderMock(...args);
     return disposeMock;
   },
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
+  recolor: (...args: unknown[]) => recolorMock(...args),
 }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -81,6 +84,12 @@ afterEach(() => {
   renderMock.mockClear();
   setSelectionMock.mockClear();
   disposeMock.mockClear();
+  recolorMock.mockClear();
+  // ThemeProvider (wave 8) persists the picked variant to localStorage --
+  // clear between tests so one test's setVariant() call can't seed the
+  // next test's initial readStoredVariant() read (same convention
+  // ThemeProvider.test.tsx's own beforeEach uses).
+  localStorage.clear();
 });
 
 // Test-only probe: exposes NavProvider's state as text + lets a test drive
@@ -100,14 +109,33 @@ function NavProbe() {
   );
 }
 
+// Test-only probe: exposes ThemeProvider's palette context and lets a
+// test switch palettes directly (mirrors ThemeProvider.test.tsx's own
+// Consumer) -- production wires GraphCanvas UNDER ThemeProvider
+// (SessionProvider > ThemeProvider > ... > GraphCanvas, app/layout.tsx +
+// app/page.tsx), so renderCanvas() below mirrors that same nesting order.
+function ThemeProbe() {
+  const { variant, setVariant } = useTheme();
+  return (
+    <div>
+      <span data-testid="theme-variant">{variant}</span>
+      <button onClick={() => setVariant("Pink")}>switch-pink</button>
+      <button onClick={() => setVariant("Teal")}>switch-teal</button>
+    </div>
+  );
+}
+
 function renderCanvas(meBody: unknown = SIGNED_OUT, meStatus = 401) {
   mockApiFetch(meBody, meStatus);
   return render(
     <SessionProvider>
-      <NavProvider>
-        <GraphCanvas />
-        <NavProbe />
-      </NavProvider>
+      <ThemeProvider>
+        <NavProvider>
+          <GraphCanvas />
+          <NavProbe />
+          <ThemeProbe />
+        </NavProvider>
+      </ThemeProvider>
     </SessionProvider>
   );
 }
@@ -366,5 +394,79 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
 
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
     expect(screen.queryByText(/graph arrives in a later slice/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("GraphCanvas live palette recolor (Task A1-2 wave 8: wire vendor recolor() to theme changes)", () => {
+  it("does not call recolor() at mount time -- only on a LATER palette change", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    // Give any stray effects a tick to settle before asserting the negative.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(recolorMock).not.toHaveBeenCalled();
+  });
+
+  it("calls vendor.recolor() exactly once when the palette changes", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(recolorMock).not.toHaveBeenCalled();
+
+    act(() => screen.getByText("switch-pink").click());
+    expect(screen.getByTestId("theme-variant")).toHaveTextContent("Pink");
+
+    await waitFor(() => expect(recolorMock).toHaveBeenCalledTimes(1));
+    // Called with no arguments -- the vendor's recolor() takes none.
+    expect(recolorMock).toHaveBeenCalledWith();
+  });
+
+  it("calls recolor() again on a second, distinct palette switch -- not a one-shot subscription", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("switch-pink").click());
+    await waitFor(() => expect(recolorMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("switch-teal").click());
+    await waitFor(() => expect(recolorMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("does NOT call recolor() on an unrelated re-render (NavProvider selection change)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    // Selecting a node re-renders GraphCanvas (via NavProvider's context)
+    // but never touches the theme variant -- recolor() must stay silent.
+    act(() => screen.getByText("seed-select").click());
+    expect(screen.getByTestId("selected")).toHaveTextContent("seed-node");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(recolorMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call recolor() before the vendor mount has resolved (no crash on a null handle)", async () => {
+    // Empty payload -- the vendor never mounts (hasNodes stays false), so
+    // recolorRef.current stays null for this render's whole lifetime.
+    // Switching the palette must still be a safe no-op, not a crash.
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    expect(renderMock).not.toHaveBeenCalled();
+
+    act(() => screen.getByText("switch-pink").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(recolorMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("theme-variant")).toHaveTextContent("Pink");
   });
 });

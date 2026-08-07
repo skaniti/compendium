@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch, fetchGraph } from "@/lib/api";
 import { useSession } from "./SessionProvider";
 import { useNav } from "./NavProvider";
+import { useTheme } from "./ThemeProvider";
 import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
 import type { GraphPayload } from "@/lib/types";
@@ -187,8 +188,10 @@ export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const disposeRef = useRef<(() => void) | null>(null);
   const setSelectionRef = useRef<((type: string, id: unknown) => void) | null>(null);
+  const recolorRef = useRef<(() => void) | null>(null);
   const { role, actingAsDemo } = useSession();
   const { state, dispatch, selectFromCanvas } = useNav();
+  const { variant } = useTheme();
 
   const [payload, setPayload] = useState<GraphPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +233,12 @@ export default function GraphCanvas() {
     void import("@/lib/graph/d3-graph-vendor.js").then((vendor) => {
       if (cancelled || !containerRef.current || !payload) return;
       setSelectionRef.current = vendor.setSelection;
+      // Task A1-2 wave 8: recolor() handle for the palette-change effect
+      // below. Same module-scope-singleton-export shape as setSelection
+      // above (lib/graph/d3-graph-vendor.js's `export { ... recolor,
+      // ... }`) -- calling it reads/repaints whatever `currentData`/`svg`
+      // the vendor module currently holds, no per-call arguments needed.
+      recolorRef.current = vendor.recolor;
       disposeRef.current = vendor.render(containerRef.current, payload, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
@@ -255,6 +264,7 @@ export default function GraphCanvas() {
       disposeRef.current?.();
       disposeRef.current = null;
       setSelectionRef.current = null;
+      recolorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once
     // against the first non-empty payload by design (see above);
@@ -311,6 +321,51 @@ export default function GraphCanvas() {
   useEffect(() => {
     setSelectionRef.current?.("node", state.selectedNodeId);
   }, [state.selectedNodeId]);
+
+  // Task A1-2 wave 8: live palette recolor. Subscribes to ThemeProvider's
+  // `variant` (components/ThemeProvider.tsx) and calls the vendor's
+  // exported `recolor()` -- the de-Dash replacement for Dash's
+  // #dynamic-theme-css MutationObserver (observePaletteChanges /
+  // recolorForPalette, vendor header comment delta #6) -- so a palette
+  // switch repaints the already-mounted graph (cluster/label/nebula/
+  // watermark colors) in place, no remount.
+  //
+  // Skips the FIRST run (mount) deliberately: the vendor's own initial
+  // render() call already does one full color assignment pass as part of
+  // laying out the graph, so calling recolor() again immediately after
+  // mount would just be a redundant, wasted extra pass over every
+  // cluster/label/nebula/watermark with the SAME palette. An explicit
+  // ref guard makes this precise regardless of timing -- recolorRef.
+  // current is also still null on the very first commit anyway (the
+  // vendor mount effect's `import().then()` above always resolves on a
+  // LATER microtask, never synchronously within the same commit), so the
+  // guard and the natural async race agree, but the guard doesn't
+  // silently depend on that race to stay correct.
+  //
+  // Ordering guarantee (why this doesn't recolor with STALE CSS):
+  // ThemeProvider.setVariant (components/ThemeProvider.tsx) calls its
+  // React state setter and THEN applyToDom(normalized) in source order,
+  // but the state setter only *schedules* a re-render -- it does not run
+  // this effect synchronously. applyToDom writes the new palette's CSS
+  // custom properties (`--galaxy-0`, etc. -- lib/theme.ts's
+  // getTokens/generateCssText) onto every `#theme-root` <style> node
+  // SYNCHRONOUSLY, inside that same setVariant() call, before it
+  // returns. React can only commit (and run this effect) once the
+  // current synchronous task finishes, so by the time this effect fires
+  // for a real palette change, the DOM's CSS custom properties are
+  // already the NEW palette's values. This matters concretely:
+  // recolorForPalette -> assignClusterColors -> getGalaxyStops() reads
+  // `getComputedStyle(document.documentElement).getPropertyValue
+  // ('--galaxy-N')` -- recolor() firing before the CSS vars updated
+  // would repaint with the OLD palette's gradient stops.
+  const isFirstVariantRender = useRef(true);
+  useEffect(() => {
+    if (isFirstVariantRender.current) {
+      isFirstVariantRender.current = false;
+      return;
+    }
+    recolorRef.current?.();
+  }, [variant]);
 
   // JWT port of Dash's admin-only /__view_as_demo switch (D5, batch 04) --
   // ported unchanged from GraphPlaceholder.tsx (originally moved there
