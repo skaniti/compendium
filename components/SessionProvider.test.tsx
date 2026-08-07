@@ -12,11 +12,13 @@ import * as StarfieldProviderModule from "./StarfieldProvider";
 // lib/api.test.ts, components/SessionKeeper.test.tsx). Header consumes the
 // context directly now (no more of its own fetch) for `account` and to host
 // SettingsMenu -- the admin/demo view-as/return-to-admin role-gating matrix
-// that used to live (and get tested) here moved into GraphPlaceholder (gate
-// 2 walkthrough fix 2, Dash parity: the graph-canvas debug overlay), so
-// that gating coverage now lives in GraphPlaceholder.test.tsx instead. What
-// remains here is SessionKeeper suspension wiring, which only needs SOME
-// useSession() consumer in the tree -- Header still qualifies.
+// that used to live (and get tested) here moved into the graph-canvas debug
+// overlay (gate 2 walkthrough fix 2, Dash parity), first components/
+// GraphPlaceholder.tsx and then (Task A1-1 promotion) components/
+// GraphCanvas.tsx, so that gating coverage now lives in
+// GraphCanvas.test.tsx instead. What remains here is SessionKeeper
+// suspension wiring, which only needs SOME useSession() consumer in the
+// tree -- Header still qualifies.
 
 const CHECK_INTERVAL_MS = 60_000;
 const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";

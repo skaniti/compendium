@@ -20,7 +20,7 @@ declare global {
 // once the mount div ref already exists, and the live variant comes from
 // StarfieldProvider's context instead of localStorage.
 //
-// Renders behind GraphPlaceholder in the center panel -- the ported CSS
+// Renders behind GraphCanvas in the center panel -- the ported CSS
 // (.panel-center #starry-sky-mount, app/styles/starry-selector.css)
 // already pins this to position:absolute/z-index:0 inside .panel-center,
 // same as Dash's layering (starry-sky z:0, below #d3-graph-container z:1).

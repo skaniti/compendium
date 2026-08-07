@@ -3,8 +3,8 @@
 // comment for the full de-Dash accounting). `allowJs` is false project-wide
 // (tsconfig.json) and tsconfig's `include` only covers `**/*.ts`/`**/*.tsx`,
 // so this plain `.js` file has no inferred shape -- this declaration is
-// what lets `import("@/lib/graph/d3-graph-vendor.js")` (components/sandbox/
-// GraphA1.tsx) type-check. Unlike lib/vendor/vendor.d.ts's *.js wildcard
+// what lets `import("@/lib/graph/d3-graph-vendor.js")` (components/
+// GraphCanvas.tsx) type-check. Unlike lib/vendor/vendor.d.ts's *.js wildcard
 // (those files are side-effect-only, no exports), this module has real
 // named exports, so they're typed here individually rather than left `any`.
 //
@@ -33,11 +33,17 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     preserveView?: boolean;
   }
 
+  // A1-1 promotion (vendor header comment delta #11): returns a dispose()
+  // handle that tears down this mount's document-level Escape keydown
+  // listener + ResizeObserver -- callers should invoke it from their
+  // effect teardown on final unmount (a remount, i.e. calling render()
+  // again with a different container, already self-heals via the
+  // wrapper's own container-swap guard and does not need this).
   export function render(
     container: HTMLElement,
     data: GraphPayload,
     opts?: GraphRenderOptions
-  ): void;
+  ): () => void;
 
   // Palette-change hook (promotion wires this to ThemeProvider); unused by
   // the sandbox.

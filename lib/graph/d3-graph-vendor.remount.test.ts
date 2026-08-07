@@ -3,9 +3,10 @@ import type { GraphPayload } from "@/lib/types";
 import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 
 // S2 fix round 1 (review finding 2): exercises the REAL vendor module's
-// container-changed guard (header comment delta #10) directly against
-// jsdom -- GraphA1.test.tsx mocks lib/graph/d3-graph-vendor.js (see that
-// file's own header comment: the real module does a D3 force layout + SVG
+// container-changed guard (header comment delta #10, extended by A1-1's
+// delta #11 teardown-handle fix) directly against jsdom --
+// GraphCanvas.test.tsx mocks lib/graph/d3-graph-vendor.js (see that file's
+// own header comment: the real module does a D3 force layout + SVG
 // measurement jsdom doesn't implement), so it can never observe this.
 //
 // A minimal 1-node, 0-cluster, 0-link payload keeps the real render()
@@ -56,9 +57,9 @@ describe("d3-graph-vendor render() container-changed guard", () => {
     render(containerA, ONE_NODE_PAYLOAD, {});
     expect(containerA.querySelector("svg")).not.toBeNull();
 
-    // Simulate GraphA1 unmounting (its container leaves the document) and
-    // remounting into a brand-new container -- e.g. navigating away from
-    // and back to /sandbox/graph-a1.
+    // Simulate GraphCanvas unmounting (its container leaves the document)
+    // and remounting into a brand-new container -- e.g. a client-side nav
+    // away from and back to the app shell's center panel.
     containerA.remove();
     const containerB = document.createElement("div");
     document.body.appendChild(containerB);
