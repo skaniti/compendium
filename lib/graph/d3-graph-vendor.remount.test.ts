@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GraphPayload } from "@/lib/types";
 import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 
@@ -94,5 +94,93 @@ describe("d3-graph-vendor render() container-changed guard", () => {
       }),
     ).not.toThrow();
     expect(containerB.querySelector("svg")).not.toBeNull();
+  });
+
+  // A1-1 fix round 1 (review finding: the real dispose() path had zero
+  // coverage -- GraphCanvas.test.tsx's own dispose test only proves
+  // GraphCanvas calls whatever render() returns, against a `disposeMock`
+  // the test's own vi.mock factory fabricates; it can't catch a future
+  // edit that drops `return dispose` or guts teardownContainerHandlers()
+  // in the REAL vendor. These three tests close that gap against the
+  // unmocked module (vendor header comment delta #11).
+  //
+  // ResizeObserver is not present in this project's jsdom environment
+  // (verified: `"ResizeObserver" in new JSDOM(...).window` is false, and
+  // vitest.setup.ts adds no polyfill) -- the vendor's own
+  // `typeof ResizeObserver !== 'undefined'` guard is therefore false here,
+  // so `__resizeObserverHandle` never gets set and its disconnect() half
+  // of teardownContainerHandlers() is a no-op in this suite. The Escape
+  // keydown listener has no such environment gap, so these tests exercise
+  // that half directly via document.addEventListener/removeEventListener
+  // spies -- the same observable the review specifically asked for.
+  it("render() returns a dispose() function (the teardown handle exists on the real module)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const dispose = render(container, ONE_NODE_PAYLOAD, {});
+
+    expect(typeof dispose).toBe("function");
+  });
+
+  it("dispose() removes the exact Escape keydown listener render() registered", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const addSpy = vi.spyOn(document, "addEventListener");
+    const dispose = render(container, ONE_NODE_PAYLOAD, {});
+
+    // Find the keydown handler this render() call registered -- asserting
+    // against the EXACT function reference (not just "was called with
+    // 'keydown', expect.any(Function)") proves dispose() removes the SAME
+    // listener render() added, not merely some keydown listener.
+    const keydownCall = addSpy.mock.calls.find(([type]) => type === "keydown");
+    expect(keydownCall).toBeDefined();
+    const registeredHandler = keydownCall![1];
+    addSpy.mockRestore();
+
+    const removeSpy = vi.spyOn(document, "removeEventListener");
+    expect(removeSpy).not.toHaveBeenCalled();
+
+    dispose();
+
+    expect(removeSpy).toHaveBeenCalledWith("keydown", registeredHandler);
+    removeSpy.mockRestore();
+  });
+
+  it("a stale dispose() from a superseded mount does not tear down the current mount's handlers", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+
+    const containerA = document.createElement("div");
+    document.body.appendChild(containerA);
+    const disposeA = render(containerA, ONE_NODE_PAYLOAD, {});
+
+    // Remount against a fresh container -- the container-swap guard inside
+    // render() already tears down containerA's OWN Escape listener as part
+    // of THIS call (covered by the "builds a fresh SVG" test above); what
+    // it must NOT do is leave disposeA() able to reach in and remove
+    // containerB's listener later.
+    containerA.remove();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+
+    const addSpy = vi.spyOn(document, "addEventListener");
+    render(containerB, ONE_NODE_PAYLOAD, {});
+    const bKeydownCall = addSpy.mock.calls.find(([type]) => type === "keydown");
+    expect(bKeydownCall).toBeDefined();
+    const bHandler = bKeydownCall![1];
+    addSpy.mockRestore();
+
+    const removeSpy = vi.spyOn(document, "removeEventListener");
+
+    // Stale: disposeA closed over containerA, which is no longer the
+    // mounted container -- the `__mountedContainer !== container` guard
+    // inside the returned dispose() must make this a no-op rather than
+    // reaching in and removing containerB's live listener.
+    expect(() => disposeA()).not.toThrow();
+    expect(removeSpy).not.toHaveBeenCalledWith("keydown", bHandler);
+
+    removeSpy.mockRestore();
   });
 });
