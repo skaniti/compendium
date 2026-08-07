@@ -112,6 +112,27 @@ function renderCanvas(meBody: unknown = SIGNED_OUT, meStatus = 401) {
   );
 }
 
+describe("GraphCanvas #node-tooltip mount point (wave 6: tooltip gate DOM-provenance fix)", () => {
+  it("renders #node-tooltip as a sibling of #d3-graph-container, initially hidden, mirroring Dash's layout div", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas(SIGNED_OUT, 401);
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    // The vendor (lib/graph/d3-graph-vendor.js showTooltip/hideTooltip/
+    // showLinesTooltip) looks this up via document.getElementById and never
+    // creates it -- it must exist in the document regardless of whether the
+    // graph itself has any nodes yet.
+    const tip = document.getElementById("node-tooltip");
+    expect(tip).not.toBeNull();
+    expect(tip).toHaveClass("node-tooltip");
+    expect(tip).toHaveStyle({ display: "none" });
+    // Not nested inside #d3-graph-container -- see GraphCanvas.tsx's
+    // NODE_TOOLTIP_STYLE comment for why sibling placement is safe here.
+    expect(document.querySelector("#d3-graph-container #node-tooltip")).toBeNull();
+  });
+});
+
 describe("GraphCanvas mount + fetch", () => {
   it("mounts a #d3-graph-container div and calls the vendor's render() once graph data with nodes arrives", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);

@@ -165,6 +165,24 @@ const ERROR_STYLE: CSSProperties = {
   fontSize: "0.85rem",
 };
 
+// Task A1-2 wave 6: the vendor's showTooltip/hideTooltip/showLinesTooltip
+// (lib/graph/d3-graph-vendor.js) look up `#node-tooltip` via
+// document.getElementById and never create it themselves -- Dash's LAYOUT
+// provides it (app.py:1917-1921, a top-level sibling of the three-panel
+// view, deliberately OUTSIDE .app-header for the same containing-block-
+// escape reason documented on #sc-popovers-portal above it). This mirrors
+// Dash's element verbatim: id, className, and the initial inline
+// style={"display": "none"} (d3_graph.js drives left/top/display from here
+// on via element.style). Visual styling lives in app/styles/style.css's
+// already-ported .node-tooltip rules. Rendered as a sibling of
+// #d3-graph-container rather than nested inside it -- closer to Dash's own
+// DOM placement, and harmless either way since position:fixed escapes to
+// the viewport regardless of DOM nesting as long as no ancestor establishes
+// a containing block (checked: neither #d3-graph-container nor
+// .panel-center/.app-container has a transform/filter/backdrop-filter/
+// will-change rule that would trap it).
+const NODE_TOOLTIP_STYLE: CSSProperties = { display: "none" };
+
 export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const disposeRef = useRef<(() => void) | null>(null);
@@ -319,39 +337,42 @@ export default function GraphCanvas() {
   }
 
   return (
-    <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE}>
-      {showEmptyState && (
-        <div id="compendium-empty-state" style={EMPTY_STATE_STYLE}>
-          <div style={EMPTY_STATE_LEAD_STYLE}>{EMPTY_STATE_BODY}</div>
-          <div style={EMPTY_STATE_PRIVACY_STYLE}>{EMPTY_STATE_PRIVACY}</div>
-          <a href={EMPTY_STATE_CTA_HREF || "#"} style={EMPTY_STATE_CTA_STYLE}>
-            {EMPTY_STATE_CTA}
-          </a>
+    <>
+      <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE}>
+        {showEmptyState && (
+          <div id="compendium-empty-state" style={EMPTY_STATE_STYLE}>
+            <div style={EMPTY_STATE_LEAD_STYLE}>{EMPTY_STATE_BODY}</div>
+            <div style={EMPTY_STATE_PRIVACY_STYLE}>{EMPTY_STATE_PRIVACY}</div>
+            <a href={EMPTY_STATE_CTA_HREF || "#"} style={EMPTY_STATE_CTA_STYLE}>
+              {EMPTY_STATE_CTA}
+            </a>
+          </div>
+        )}
+        {error && <p style={ERROR_STYLE}>Couldn&apos;t load graph: {error}</p>}
+        <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
+          {role === "admin" && !actingAsDemo && (
+            <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
+              <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
+                view demo
+              </button>
+              <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+            </span>
+          )}
+          {actingAsDemo && (
+            <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
+              <button
+                type="button"
+                style={DEBUG_LINK_BUTTON_STYLE}
+                onClick={() => void handleReturnToAdmin()}
+              >
+                return to admin
+              </button>
+              <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+            </span>
+          )}
         </div>
-      )}
-      {error && <p style={ERROR_STYLE}>Couldn&apos;t load graph: {error}</p>}
-      <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
-        {role === "admin" && !actingAsDemo && (
-          <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
-            <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
-              view demo
-            </button>
-            <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-          </span>
-        )}
-        {actingAsDemo && (
-          <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
-            <button
-              type="button"
-              style={DEBUG_LINK_BUTTON_STYLE}
-              onClick={() => void handleReturnToAdmin()}
-            >
-              return to admin
-            </button>
-            <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-          </span>
-        )}
       </div>
-    </div>
+      <div id="node-tooltip" className="node-tooltip" style={NODE_TOOLTIP_STYLE} />
+    </>
   );
 }
