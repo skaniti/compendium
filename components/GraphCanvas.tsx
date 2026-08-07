@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "./SessionProvider";
 import { useNav } from "./NavProvider";
 import { useTheme } from "./ThemeProvider";
+import { useTimeWindow } from "./TimeWindowProvider";
 import { useGraph } from "@/hooks/useGraph";
 import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
@@ -212,14 +213,28 @@ export default function GraphCanvas() {
   const { role, actingAsDemo } = useSession();
   const { state, dispatch, selectFromCanvas } = useNav();
   const { variant } = useTheme();
+  const { timeWindow } = useTimeWindow();
 
   // Task A1-3 (Step 2): rebind from a local one-shot fetchGraph() effect to
   // the shared hooks/useGraph.ts cache -- graphVersion is the Next
   // equivalent of Dash's `graph-version` Store; refresh()-initiated flights
   // (recluster elsewhere, or a time-window change below) bump it, the
   // initial mount load does not (useGraph.ts's own documented contract).
-  const { graph: payload, error: graphError, graphVersion } = useGraph();
+  const { graph: payload, error: graphError, graphVersion, setWindow } = useGraph();
   const error = graphError?.message ?? null;
+
+  // Task A1-3 (Step 3): TimeWindowProvider's second reader (the DATE RANGE
+  // header card is the first). setWindow() is idempotent against the
+  // already-active window (useGraph.ts's own guard) and its commit reuses
+  // the SAME graphVersion-driven re-render effect above -- no separate
+  // "window changed, redraw" path to keep in sync. Deliberately unguarded
+  // against the initial render (unlike the palette-recolor effect's
+  // isFirstVariantRender ref): calling setWindow("all") on mount is a
+  // genuine no-op by construction (cacheState.window already defaults to
+  // "all"), so there is nothing here worth special-casing away.
+  useEffect(() => {
+    void setWindow(timeWindow);
+  }, [timeWindow, setWindow]);
 
   // A1-1 ledgered minor (task-A1-1-report.md / progress.md), FIXED here:
   // the vendor mount effect below applies whatever selection NavProvider

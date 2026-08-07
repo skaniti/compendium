@@ -6,6 +6,7 @@ import type {
   NodeDetail,
   PageContent,
   ReclusterResult,
+  TimeWindow,
   TopicInterest,
   TopicMember,
 } from "./types";
@@ -69,8 +70,18 @@ export function redirectToLogin(): void {
 // callers can render an empty state without a try/catch.
 // ---------------------------------------------------------------------
 
-export async function fetchGraph(): Promise<GraphPayload> {
-  const res = await apiFetch("/api/graph");
+// Task A1-3 (Step 3, R2's backend counterpart -- explorer aff2f3f): window
+// is optional and defaults to the backend's own "all" (GET /api/graph?window,
+// backend/api/main.py) -- omitted (or explicitly "all") for the SAME
+// "/api/graph" request shape this made before this param existed (no
+// behavior change for every pre-existing caller passing zero args). Only
+// 7/30/90/365 add the query string; the backend rebuilds fresh from the DB
+// for those (does NOT warm graph_cache, unlike "all" -- see its own
+// docstring) and hooks/useGraph.ts's cache is refetch-on-change to match
+// (no client-side per-window caching either).
+export async function fetchGraph(window?: TimeWindow): Promise<GraphPayload> {
+  const path = window && window !== "all" ? `/api/graph?window=${encodeURIComponent(window)}` : "/api/graph";
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`fetchGraph failed: ${res.status} ${res.statusText}`);
   return (await res.json()) as GraphPayload;
 }

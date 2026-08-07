@@ -165,6 +165,35 @@ describe("fetchGraph", () => {
 
     await expect(fetchGraph()).rejects.toThrow("fetchGraph failed: 500 Internal Server Error");
   });
+
+  // Task A1-3 (Step 3): ?window= passthrough for the graph time-window
+  // filter (explorer aff2f3f's /api/graph?window=all|7|30|90|365, R2).
+  it("GETs /api/graph with no query string for window 'all' (backend default -- explicit passthrough would be a no-op)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchGraph("all");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/graph");
+  });
+
+  it("GETs /api/graph?window=7 for a numeric window value", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchGraph("7");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/graph?window=7");
+  });
+
+  it("GETs /api/graph?window=365 (the legacy no-pill value round-trips too)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchGraph("365");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/graph?window=365");
+  });
 });
 
 describe("fetchDiaryWindows", () => {

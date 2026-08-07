@@ -1,20 +1,23 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { TimeWindow } from "@/lib/types";
 
 // Next equivalent of Dash's `dcc.Store(id="graph-time-window", data="all")`
 // (app.py:400) -- the single source of truth for the DATE RANGE pills'
 // active state. Task 8-C2 (header widget cards batch): only writer is the
-// DATE RANGE card (components/HeaderCards.tsx), only reader this batch is
-// that same card's active-pill className. Batch 03 wires the actual graph
-// time-window filter (Dash's filter_graph_by_time_window) as a second
-// reader -- the exported surface is kept minimal/stable so that lands as a
-// pure addition, not a rework.
+// DATE RANGE card (components/HeaderCards.tsx), only reader this batch was
+// that same card's active-pill className. Task A1-3 (batch 03) wires the
+// actual graph time-window filter (Dash's filter_graph_by_time_window) as a
+// second reader (components/GraphCanvas.tsx, via hooks/useGraph.ts's
+// setWindow) -- the exported surface stayed minimal/stable through that so
+// it landed as a pure addition, not a rework.
 //
-// "365" is a legacy value the Dash graph filter still accepts (kept in the
-// type for round-trip completeness) but renders NO pill -- there is no
-// (label, "365") entry in DATE_RANGE_PILLS (HeaderCards.tsx).
-export type TimeWindow = "all" | "7" | "30" | "90" | "365";
+// TimeWindow itself now lives in lib/types.ts (moved at A1-3 so lib/api.ts
+// and hooks/useGraph.ts can reference it without importing from
+// components/) -- re-exported here under its original name so this
+// file's existing importers (HeaderCards.tsx) are unaffected.
+export type { TimeWindow };
 
 export interface TimeWindowContextValue {
   timeWindow: TimeWindow;

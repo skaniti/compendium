@@ -131,6 +131,126 @@ describe("useGraph", () => {
     });
   });
 
+  describe("setWindow (Task A1-3 Step 3: ?window= passthrough)", () => {
+    it("mounts against the default window 'all' -- fetchGraph is called with 'all', no ?window= query", async () => {
+      const payload = payloadWith([makeNode({ id: "root" })]);
+      const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(payload);
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(fetchSpy).toHaveBeenCalledWith("all");
+    });
+
+    it("refetches with the new window and commits the result, bumping graphVersion (Dash parity -- filter_graph_by_time_window bumps graph-version too)", async () => {
+      const initial = payloadWith([makeNode({ id: "root" })]);
+      const windowed = payloadWith([makeNode({ id: "root" }), makeNode({ id: "recent", parent_id: "root" })]);
+      const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(initial).mockResolvedValueOnce(windowed);
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.graphVersion).toBe(0);
+
+      await act(async () => {
+        await result.current.setWindow("7");
+      });
+
+      expect(fetchSpy).toHaveBeenLastCalledWith("7");
+      expect(result.current.graph).toEqual(windowed);
+      expect(result.current.graphVersion).toBe(1);
+    });
+
+    it("is a no-op when called with the currently-active window -- no extra fetchGraph call", async () => {
+      const payload = payloadWith([makeNode({ id: "root" })]);
+      const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(payload);
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await result.current.setWindow("all"); // already the active window
+      });
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(result.current.graphVersion).toBe(0);
+    });
+
+    it("refresh() re-fetches using the CURRENTLY active window, not always 'all'", async () => {
+      const initial = payloadWith([makeNode({ id: "root" })]);
+      const windowed = payloadWith([makeNode({ id: "root" })]);
+      const reclustered = payloadWith([makeNode({ id: "root" }), makeNode({ id: "new", parent_id: "root" })]);
+      const fetchSpy = vi
+        .spyOn(api, "fetchGraph")
+        .mockResolvedValueOnce(initial)
+        .mockResolvedValueOnce(windowed)
+        .mockResolvedValueOnce(reclustered);
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.setWindow("30");
+      });
+      expect(fetchSpy).toHaveBeenLastCalledWith("30");
+
+      // A recluster elsewhere calls refresh() with no window argument of its
+      // own -- it must still respect the window the user has active, not
+      // silently reset the view back to "all".
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(fetchSpy).toHaveBeenLastCalledWith("30");
+      expect(result.current.graph).toEqual(reclustered);
+      expect(result.current.graphVersion).toBe(2);
+    });
+
+    it("stale-flight guard also covers setWindow: an older window flight settling after a newer one started does not clobber the newer result", async () => {
+      const initial = payloadWith([makeNode({ id: "root" })]);
+      let resolveOlder!: (value: GraphPayload) => void;
+      let resolveNewer!: (value: GraphPayload) => void;
+      const olderPromise = new Promise<GraphPayload>((resolve) => {
+        resolveOlder = resolve;
+      });
+      const newerPromise = new Promise<GraphPayload>((resolve) => {
+        resolveNewer = resolve;
+      });
+      vi.spyOn(api, "fetchGraph")
+        .mockResolvedValueOnce(initial) // initial mount load ("all")
+        .mockReturnValueOnce(olderPromise) // setWindow("7")
+        .mockReturnValueOnce(newerPromise); // setWindow("30"), before "7" settled
+
+      const { result } = renderHook(() => useGraph());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      let olderSet!: Promise<void>;
+      let newerSet!: Promise<void>;
+      act(() => {
+        olderSet = result.current.setWindow("7");
+      });
+      act(() => {
+        newerSet = result.current.setWindow("30");
+      });
+
+      const stale = payloadWith([makeNode({ id: "stale-7-day" })]);
+      const fresh = payloadWith([makeNode({ id: "fresh-30-day" })]);
+
+      await act(async () => {
+        resolveOlder(stale);
+        await olderSet;
+      });
+      expect(result.current.graph).toEqual(initial); // unchanged -- superseded
+
+      await act(async () => {
+        resolveNewer(fresh);
+        await newerSet;
+      });
+      expect(result.current.graph).toEqual(fresh);
+      expect(result.current.graphVersion).toBe(1); // only ONE commit counted
+    });
+  });
+
   describe("stale-flight guard (final-review triage item 3)", () => {
     it("an older refresh flight settling AFTER a newer one started does not clear the newer inflight or clobber its result", async () => {
       const initial = payloadWith([makeNode({ id: "root" })]);

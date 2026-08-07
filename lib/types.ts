@@ -112,6 +112,19 @@ export interface NodeDetail {
   subtree: GraphNode[];
 }
 
+// Task 8-C2 (header widget cards batch): originally defined in
+// components/TimeWindowProvider.tsx -- moved here at Task A1-3 (batch 03)
+// so lib/api.ts's fetchGraph() and hooks/useGraph.ts (neither of which
+// import from components/, an established layering boundary in this repo)
+// can reference it without a lib -> components dependency.
+// TimeWindowProvider.tsx re-exports this under its original name, so its
+// existing importers (HeaderCards.tsx) are unaffected.
+//
+// "365" is a legacy value the Dash graph filter still accepts (kept in the
+// type for round-trip completeness) but renders NO pill -- there is no
+// (label, "365") entry in DATE_RANGE_PILLS (HeaderCards.tsx).
+export type TimeWindow = "all" | "7" | "30" | "90" | "365";
+
 // Task 6 (batch 02): shared literal union for the day/week/month
 // granularity toggle -- lives here (not inline in HistoryPanel/DiaryPanel)
 // so both components import the same type instead of two independently

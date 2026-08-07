@@ -4,6 +4,7 @@ import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
 import ThemeProvider, { useTheme } from "./ThemeProvider";
+import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
 import type { GraphPayload } from "@/lib/types";
@@ -79,6 +80,18 @@ const EMPTY_PAYLOAD: GraphPayload = {
   groups: [],
 };
 
+// A DISTINCT (fewer-nodes) payload standing in for a real windowed response
+// (task-A1-3-brief.md's live-verification note: window=7 returned ~39 nodes
+// vs ~802 full) -- used to assert the canvas re-renders with the NEW,
+// smaller dataset rather than re-rendering the same payload.
+const WINDOW_7_PAYLOAD: GraphPayload = {
+  nodes: [node("page-1")],
+  links: [],
+  clusters: [],
+  super_clusters: [],
+  groups: [],
+};
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -147,17 +160,37 @@ function GraphProbe() {
   );
 }
 
+// Test-only probe: exposes TimeWindowProvider's setTimeWindow() so a test
+// can drive a DATE RANGE pill click without rendering the real HeaderCards
+// widget -- production nests GraphCanvas under TimeWindowProvider
+// (components/AppShell.tsx: TimeWindowProvider > Header/NavProvider >
+// PanelGrid > center), so renderCanvas() below mirrors that same nesting.
+function TimeWindowProbe() {
+  const { timeWindow, setTimeWindow } = useTimeWindow();
+  return (
+    <div>
+      <span data-testid="time-window">{timeWindow}</span>
+      <button onClick={() => setTimeWindow("7")}>window-7</button>
+      <button onClick={() => setTimeWindow("30")}>window-30</button>
+      <button onClick={() => setTimeWindow("all")}>window-all</button>
+    </div>
+  );
+}
+
 function renderCanvas(meBody: unknown = SIGNED_OUT, meStatus = 401) {
   mockApiFetch(meBody, meStatus);
   return render(
     <SessionProvider>
       <ThemeProvider>
-        <NavProvider>
-          <GraphCanvas />
-          <NavProbe />
-          <ThemeProbe />
-          <GraphProbe />
-        </NavProvider>
+        <TimeWindowProvider>
+          <NavProvider>
+            <GraphCanvas />
+            <NavProbe />
+            <ThemeProbe />
+            <GraphProbe />
+            <TimeWindowProbe />
+          </NavProvider>
+        </TimeWindowProvider>
       </ThemeProvider>
     </SessionProvider>
   );
@@ -315,6 +348,66 @@ describe("GraphCanvas <-> useGraph() binding (Step 1a/2: graphVersion re-render,
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     // The mount-time apply must have picked up the selection made during
     // the import window -- not dropped it.
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+  });
+});
+
+describe("GraphCanvas time-window wiring (Step 3: TimeWindowProvider's second reader)", () => {
+  it("mounts with fetchGraph called against the default window 'all'", async () => {
+    const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(fetchSpy).toHaveBeenCalledWith("all");
+  });
+
+  it("clicking a DATE RANGE pill refetches with the new window and re-renders the canvas with fewer nodes", async () => {
+    const fetchSpy = vi
+      .spyOn(api, "fetchGraph")
+      .mockImplementation(async (window) => (window === "7" ? WINDOW_7_PAYLOAD : ONE_NODE_PAYLOAD));
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(renderMock.mock.calls[0][1]).toBe(ONE_NODE_PAYLOAD);
+
+    act(() => screen.getByText("window-7").click());
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenLastCalledWith("7"));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    expect(renderMock.mock.calls[1][1]).toBe(WINDOW_7_PAYLOAD);
+    // graphVersion bumped -- Dash parity (filter_graph_by_time_window bumps
+    // graph-version too), and the SAME re-render path a recluster uses.
+    await waitFor(() => expect(screen.getByTestId("graph-version")).toHaveTextContent("1"));
+  });
+
+  it("re-clicking the currently-active window pill is a no-op -- no extra fetch or re-render", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("window-all").click()); // "all" already active
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("graph-version")).toHaveTextContent("0");
+  });
+
+  it("selection persists across a window-triggered re-render (reapplied via setSelection)", async () => {
+    vi.spyOn(api, "fetchGraph").mockImplementation(async (window) =>
+      window === "30" ? WINDOW_7_PAYLOAD : ONE_NODE_PAYLOAD
+    );
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-select").click());
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+    setSelectionMock.mockClear();
+
+    act(() => screen.getByText("window-30").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+
     await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
   });
 });
