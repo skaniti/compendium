@@ -13,6 +13,9 @@ refactor later).
 
 ## User-scored (Task S4 Step 2)
 
+Scale: 1-10, higher is better. Non-comparable criteria: score N/C with a
+one-line reason rather than guessing a number.
+
 | Criterion | A1: port-intact | A2: react-owned |
 |---|---|---|
 | Cold-load feel | | |
