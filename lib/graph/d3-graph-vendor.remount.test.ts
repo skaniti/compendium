@@ -156,6 +156,32 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// Task group W fix round 1 (chunking finishRenderAfterSettle): every
+// render() call that reaches settle now schedules 2 more rAF-deferred
+// chunks (jsdom has no real requestAnimationFrame, so these fall back to
+// `setTimeout(cb, 16)` -- see the vendor's own __rafSchedule comment) on
+// top of SyncFakeSimWorker's own fully-synchronous tick-to-end delivery.
+// Left undrained, those become LEAKED pending timers that fire during a
+// LATER, unrelated test -- and since chunk 3 calls fitToContent ->
+// updateEdgeChips -> getScreenCTM(), a leaked chunk firing after some
+// LATER test's own afterEach has already removed ITS getScreenCTM stub
+// would throw in that later test, not this one. window.__d3FlushSettleChunk
+// (dev/test-only, wired in d3-graph-vendor.js right next to
+// window.__d3GraphRender) synchronously drains every still-pending chunk
+// for the CURRENT run -- called from the FIRST line of each describe
+// block's own afterEach below, deliberately BEFORE that block's own
+// getScreenCTM stub gets removed a few lines later in the SAME afterEach
+// callback (so this doesn't depend on any cross-scope --
+// describe-block-local vs top-level-file -- afterEach ordering guarantee,
+// only on statements within one callback running top-to-bottom).
+function flushSettleChunks(): void {
+  const w = window as unknown as { __d3FlushSettleChunk?: () => boolean };
+  for (let i = 0; i < 10 && w.__d3FlushSettleChunk?.(); i++) {
+    // keep draining until nothing is left pending (bounded so a bug
+    // in the flush itself can't hang the test suite)
+  }
+}
+
 describe("d3-graph-vendor render() container-changed guard", () => {
   beforeEach(() => {
     // Pre-seeds a real --galaxy-0 custom property so render()'s
@@ -177,6 +203,7 @@ describe("d3-graph-vendor render() container-changed guard", () => {
   });
 
   afterEach(() => {
+    flushSettleChunks();
     document.documentElement.style.removeProperty("--galaxy-0");
     delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
       .getScreenCTM;
@@ -337,6 +364,7 @@ describe("d3-graph-vendor toggleNoise() (Task A1-3 Step 4)", () => {
   });
 
   afterEach(() => {
+    flushSettleChunks();
     document.documentElement.style.removeProperty("--galaxy-0");
     delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
       .getScreenCTM;
@@ -453,6 +481,7 @@ describe("d3-graph-vendor setFilterDim() composes with selection (Task A1-3 Step
   });
 
   afterEach(() => {
+    flushSettleChunks();
     document.documentElement.style.removeProperty("--galaxy-0");
     delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
       .getScreenCTM;
