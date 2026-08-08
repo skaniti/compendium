@@ -209,6 +209,37 @@ class ManualStepSimWorker {
   }
 }
 
+// Batch 03 final whole-branch review fix (vendor header comment delta
+// #23): this project's jsdom environment implements no ResizeObserver at
+// all (see the "container-changed guard" describe block's own comment
+// below), so the vendor's `if (typeof ResizeObserver !== 'undefined')`
+// guard is always false here and `__resizeObserverHandle` never gets
+// set -- every OTHER test in this file that touches dispose()/remount
+// can only observe that gap's Escape-listener half. The one new test
+// below needs to observe the ResizeObserver half too (that's exactly
+// what delta #23 fixed), so it stubs this minimal fake in for its own
+// scope only -- `vi.unstubAllGlobals()` in the top-level `afterEach`
+// below removes it again before the next test.
+class FakeResizeObserver {
+  static instances: FakeResizeObserver[] = [];
+  observedElements: Element[] = [];
+  disconnected = false;
+
+  constructor(_callback: ResizeObserverCallback) {
+    FakeResizeObserver.instances.push(this);
+  }
+
+  observe(target: Element): void {
+    this.observedElements.push(target);
+  }
+
+  unobserve(): void {}
+
+  disconnect(): void {
+    this.disconnected = true;
+  }
+}
+
 // One real 2-page cluster (no super_cluster -- keeps Phase 1.5/1.75's
 // SC-pass complexity out of scope, this payload only needs to make Phase
 // 2 actually tick instead of settling immediately) -- Phase 2 always runs
@@ -557,6 +588,77 @@ describe("d3-graph-vendor render() container-changed guard", () => {
     render(containerB, ONE_NODE_PAYLOAD, {});
 
     expect(containerB.querySelectorAll("circle.page").length).toBe(1);
+  });
+
+  // Batch 03 final whole-branch review fix (header comment delta #23):
+  // the third geometry alongside "builds a fresh SVG in a newly mounted
+  // container..." (dispose -> new container) and "container-swap...
+  // WITHOUT disposing first" (new container, no dispose) above --
+  // dispose(), THEN render() again into the SAME container, e.g.
+  // GraphCanvas.tsx's mount effect disposing on a `hasNodes` true->false
+  // transition and re-mounting on the next true against the same
+  // never-swapped container div. Pre-fix: `svg` stayed non-null across
+  // dispose() (only teardownContainerHandlers() ran), so the
+  // container-swap guard saw no container change and render()'s `if
+  // (!svg)` block -- the only construction site for the Escape listener
+  // and the ResizeObserver alike -- never ran again on the second
+  // render(), leaving both permanently dead for that mount.
+  it("dispose() then render() into the SAME container rebuilds the Escape listener and ResizeObserver (not just leaves them dead)", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    FakeResizeObserver.instances = [];
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const firstAddSpy = vi.spyOn(document, "addEventListener");
+    const dispose = render(container, ONE_NODE_PAYLOAD, {});
+    const firstKeydownCall = firstAddSpy.mock.calls.find(([type]) => type === "keydown");
+    expect(firstKeydownCall).toBeDefined();
+    const firstHandler = firstKeydownCall![1];
+    firstAddSpy.mockRestore();
+
+    expect(FakeResizeObserver.instances).toHaveLength(1);
+    const firstObserver = FakeResizeObserver.instances[0];
+    expect(firstObserver.observedElements).toContain(container);
+    expect(firstObserver.disconnected).toBe(false);
+
+    // The hasNodes true->false transition: GraphCanvas's mount-effect
+    // cleanup disposes, but the container div itself is never removed
+    // from the document (it's unconditionally rendered regardless of
+    // hasNodes) -- simulated here by disposing WITHOUT touching
+    // `container` at all.
+    dispose();
+    expect(firstObserver.disconnected).toBe(true); // teardownContainerHandlers() ran
+
+    // The hasNodes false->true transition: re-render into the exact same
+    // container node.
+    const secondAddSpy = vi.spyOn(document, "addEventListener");
+    render(container, ONE_NODE_PAYLOAD, {});
+    const secondKeydownCall = secondAddSpy.mock.calls.find(([type]) => type === "keydown");
+    secondAddSpy.mockRestore();
+
+    // The fix: a NEW Escape listener was registered (not silently
+    // skipped because `if (!svg)` saw a still-non-null `svg`) --
+    // asserting a DIFFERENT function reference than firstHandler proves
+    // reconstruction, not merely that some keydown listener exists
+    // (which could be the pre-fix leaked original still sitting there).
+    expect(secondKeydownCall).toBeDefined();
+    expect(secondKeydownCall![1]).not.toBe(firstHandler);
+
+    // The fix: a NEW ResizeObserver was constructed and is observing the
+    // (same) container -- pre-fix, FakeResizeObserver.instances would
+    // still have length 1 here (the first, already-disconnected one).
+    expect(FakeResizeObserver.instances).toHaveLength(2);
+    const secondObserver = FakeResizeObserver.instances[1];
+    expect(secondObserver.observedElements).toContain(container);
+    expect(secondObserver.disconnected).toBe(false);
+
+    // Regression guard for the fix's OWN documented risk (delta #23's
+    // "would stack a second <svg>" paragraph): exactly one <svg>, not
+    // two, inside the reused container.
+    expect(container.querySelectorAll("svg").length).toBe(1);
+    expect(container.querySelectorAll("circle.page").length).toBe(1);
   });
 });
 
