@@ -51,13 +51,14 @@ function mockApiFetch(meBody: unknown, meStatus = 200) {
 }
 
 function Consumer() {
-  const { role, account, actingAsDemo, adminOriginEmail } = useSession();
+  const { role, account, actingAsDemo, adminOriginEmail, showNoise } = useSession();
   return (
     <div>
       <span data-testid="role">{role ?? "null"}</span>
       <span data-testid="account">{account}</span>
       <span data-testid="acting">{String(actingAsDemo)}</span>
       <span data-testid="origin-email">{adminOriginEmail ?? ""}</span>
+      <span data-testid="show-noise">{String(showNoise)}</span>
     </div>
   );
 }
@@ -180,6 +181,83 @@ describe("SessionProvider / useSession", () => {
 
     await waitFor(() => expect(screen.getByTestId("acting")).toHaveTextContent("true"));
     expect(screen.getByTestId("account")).toHaveTextContent("demo (admin)");
+  });
+
+  // Task A1-3 (Step 4): show_noise comes from the SAME /api/auth/me payload
+  // this provider already fetches (its `preferences` sub-object, the same
+  // JSONB row /api/auth/preferences reads) -- GraphCanvas.tsx reads it via
+  // useSession() instead of a second round-trip to lib/preferences.ts's
+  // getPreferences(). Default false matches Dash's own missing-key default
+  // (graph_canvas.py's _load_noise_pref: `bool(prefs.get("show_noise",
+  // False))`), NOT the vendor's own DOM-mirror-absent `true` fallback.
+  describe("showNoise (Task A1-3 Step 4)", () => {
+    it("defaults to false before hydration (pending) and while unauthenticated (401)", async () => {
+      mockApiFetch({ error: "unauthorized" }, 401);
+      render(
+        <SessionProvider>
+          <Consumer />
+        </SessionProvider>
+      );
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("false");
+      await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("null"));
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("false");
+    });
+
+    it("defaults to false when the preferences object omits show_noise entirely", async () => {
+      mockApiFetch({ id: 1, email: "a@example.com", role: "user", acting_as_demo: false, preferences: {} });
+      render(
+        <SessionProvider>
+          <Consumer />
+        </SessionProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("user"));
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("false");
+    });
+
+    it("defaults to false when /me omits preferences entirely (older/unshaped response)", async () => {
+      mockApiFetch({ id: 1, email: "a@example.com", role: "user", acting_as_demo: false });
+      render(
+        <SessionProvider>
+          <Consumer />
+        </SessionProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("user"));
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("false");
+    });
+
+    it("reads show_noise: true from preferences", async () => {
+      mockApiFetch({
+        id: 1,
+        email: "a@example.com",
+        role: "user",
+        acting_as_demo: false,
+        preferences: { show_noise: true },
+      });
+      render(
+        <SessionProvider>
+          <Consumer />
+        </SessionProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("user"));
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("true");
+    });
+
+    it("a non-boolean show_noise value is treated as false, not trusted/coerced truthy", async () => {
+      mockApiFetch({
+        id: 1,
+        email: "a@example.com",
+        role: "user",
+        acting_as_demo: false,
+        preferences: { show_noise: "yes" },
+      });
+      render(
+        <SessionProvider>
+          <Consumer />
+        </SessionProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("user"));
+      expect(screen.getByTestId("show-noise")).toHaveTextContent("false");
+    });
   });
 
   it("does not append the admin suffix for a plain (non-acting) session", async () => {

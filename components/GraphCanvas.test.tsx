@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen, act } from "@testing-library/react";
+import { render, cleanup, waitFor, screen, act, fireEvent } from "@testing-library/react";
 import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
@@ -7,6 +7,7 @@ import ThemeProvider, { useTheme } from "./ThemeProvider";
 import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
+import * as preferences from "@/lib/preferences";
 import type { GraphPayload } from "@/lib/types";
 
 // Task A1-1: unit-tests the GraphCanvas CONTRACT -- fetch -> mount, the
@@ -23,6 +24,7 @@ const renderMock = vi.fn();
 const setSelectionMock = vi.fn();
 const disposeMock = vi.fn();
 const recolorMock = vi.fn();
+const toggleNoiseMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   render: (...args: unknown[]) => {
     renderMock(...args);
@@ -30,6 +32,7 @@ vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   },
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
   recolor: (...args: unknown[]) => recolorMock(...args),
+  toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
 }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -99,6 +102,7 @@ afterEach(() => {
   setSelectionMock.mockClear();
   disposeMock.mockClear();
   recolorMock.mockClear();
+  toggleNoiseMock.mockClear();
   // ThemeProvider (wave 8) persists the picked variant to localStorage --
   // clear between tests so one test's setVariant() call can't seed the
   // next test's initial readStoredVariant() read (same convention
@@ -603,6 +607,105 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
 
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
     expect(screen.queryByText(/graph arrives in a later slice/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("GraphCanvas noise toggle (Step 4)", () => {
+  it("defaults to 'noise: off' when the session's show_noise preference is unset, and applies it to the vendor at mount", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(false));
+  });
+
+  it("renders 'noise: on' and applies true to the vendor when the session's show_noise preference is true", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      { id: 1, email: "u@example.com", role: "user", acting_as_demo: false, preferences: { show_noise: true } },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("noise: on")).toBeInTheDocument());
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(true));
+  });
+
+  it("clicking the toggle flips the label and calls vendor.toggleNoise with the new state", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+    toggleNoiseMock.mockClear();
+
+    act(() => screen.getByText("noise: off").click());
+
+    expect(screen.getByText("noise: on")).toBeInTheDocument();
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(true));
+  });
+
+  it("is keyboard-activatable via Enter/Space (app CSS already targets :focus/:focus-visible on #noise-toggle-btn)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+
+    const toggle = screen.getByText("noise: off");
+    expect(toggle).toHaveAttribute("tabIndex", "0");
+
+    fireEvent.keyDown(toggle, { key: "Enter" });
+    expect(screen.getByText("noise: on")).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByText("noise: on"), { key: " " });
+    expect(screen.getByText("noise: off")).toBeInTheDocument();
+  });
+
+  it("clicking the toggle calls patchPreferences with { show_noise } for a normal/admin session", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+
+    act(() => screen.getByText("noise: off").click());
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledWith({ show_noise: true }));
+  });
+
+  it("(Step 1c) SKIPS patchPreferences for a plain-demo session (role===demo, not acting), but still flips the control", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+    renderCanvas({ id: 2, email: "demo@example.com", role: "demo", acting_as_demo: false }, 200);
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+
+    act(() => screen.getByText("noise: off").click());
+
+    expect(screen.getByText("noise: on")).toBeInTheDocument();
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(patchSpy).not.toHaveBeenCalled();
+  });
+
+  it("an admin acting-as-demo session still persists (isPlainDemo is false while acting)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
+    renderCanvas(
+      { id: 2, email: "demo@example.com", role: "demo", acting_as_demo: true, admin_origin_email: "admin@example.com" },
+      200
+    );
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
+
+    act(() => screen.getByText("noise: off").click());
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledWith({ show_noise: true }));
+  });
+
+  it("the toggle control is never hidden -- visible for a plain (non-admin, non-acting) user, even with an empty graph", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(screen.getByText(/^noise: (on|off)$/)).toBeInTheDocument());
   });
 });
 

@@ -41,6 +41,43 @@ const ONE_NODE_PAYLOAD: GraphPayload = {
   groups: [],
 };
 
+// Task A1-3 Step 4: one featured singleton (never hidden by the noise
+// toggle -- filterOutNoise only strips kind === "unclustered") plus one
+// unclustered "noise" node, 0 clusters/links (same jsdom-safety rationale
+// as ONE_NODE_PAYLOAD above).
+const NOISE_PAYLOAD: GraphPayload = {
+  nodes: [
+    {
+      id: "page-1",
+      label: "Featured Page",
+      level: 0,
+      kind: "singleton",
+      visit_count: 1,
+      parent_id: null,
+      children_ids: [],
+      capture_ids: [],
+      page_urls: ["https://example.com/1"],
+      first_visited_at: null,
+    },
+    {
+      id: "page-2",
+      label: "Background Noise Page",
+      level: 0,
+      kind: "unclustered",
+      visit_count: 1,
+      parent_id: null,
+      children_ids: [],
+      capture_ids: [],
+      page_urls: ["https://example.com/2"],
+      first_visited_at: null,
+    },
+  ],
+  links: [],
+  clusters: [],
+  super_clusters: [],
+  groups: [],
+};
+
 describe("d3-graph-vendor render() container-changed guard", () => {
   beforeEach(() => {
     // Pre-seeds a real --galaxy-0 custom property so render()'s
@@ -200,5 +237,91 @@ describe("d3-graph-vendor render() container-changed guard", () => {
     expect(removeSpy).not.toHaveBeenCalledWith("keydown", bHandler);
 
     removeSpy.mockRestore();
+  });
+});
+
+// Task A1-3 Step 4 (header comment delta #14): the DOM-mirror seam
+// (#noise-toggle-json) is gone -- these exercise the REAL toggleNoise(show)
+// setter against the real module, since GraphCanvas.test.tsx's mocked
+// vendor can't observe whether the module's own state/re-render actually
+// changed. Explicitly calls toggleNoise() to a KNOWN value before each
+// assertion (not relying on the module's own `true` default) since
+// __showNoise is module-level state that persists across tests in this
+// file, same class of shared-state concern __mountedContainer/rawData
+// already have here.
+describe("d3-graph-vendor toggleNoise() (Task A1-3 Step 4)", () => {
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+  });
+
+  afterEach(() => {
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  it("show=true renders both the featured singleton and the unclustered noise page", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    toggleNoise(true);
+    render(container, NOISE_PAYLOAD, {});
+
+    expect(container.querySelectorAll("circle.page").length).toBe(2);
+  });
+
+  it("show=false filters the unclustered noise page out of the rendered set", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    toggleNoise(true);
+    render(container, NOISE_PAYLOAD, {});
+    expect(container.querySelectorAll("circle.page").length).toBe(2);
+
+    toggleNoise(false);
+    expect(container.querySelectorAll("circle.page").length).toBe(1);
+    expect(container.querySelector("circle.page.unclustered")).toBeNull();
+  });
+
+  it("toggling back to show=true restores the noise page (re-render from rawData, not a one-shot filter)", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    toggleNoise(true);
+    render(container, NOISE_PAYLOAD, {});
+    toggleNoise(false);
+    expect(container.querySelectorAll("circle.page").length).toBe(1);
+
+    toggleNoise(true);
+    expect(container.querySelectorAll("circle.page").length).toBe(2);
+  });
+
+  it("a toggleNoise() call BEFORE the first render() still records the intended state for that first render", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    // No render() yet -- rawData is null, so this must not throw, and must
+    // not silently drop the intended state either (the fix: __showNoise is
+    // written BEFORE the `if (!rawData) return;` guard).
+    expect(() => toggleNoise(false)).not.toThrow();
+
+    render(container, NOISE_PAYLOAD, {});
+    expect(container.querySelectorAll("circle.page").length).toBe(1);
+
+    toggleNoise(true); // restore for any test ordering after this one
+  });
+
+  it("toggleNoise(false) with no dataset rendered yet is a safe no-op (nothing to re-render)", async () => {
+    const { toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    expect(() => toggleNoise(false)).not.toThrow();
+    toggleNoise(true); // restore
   });
 });

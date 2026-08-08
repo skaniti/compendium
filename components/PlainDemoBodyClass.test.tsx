@@ -16,6 +16,7 @@ function mockSession(overrides: { role?: SessionRole | null; actingAsDemo?: bool
     account: "test@example.com",
     actingAsDemo: overrides.actingAsDemo ?? false,
     adminOriginEmail: undefined,
+    showNoise: false,
     status: "hydrated",
     refresh: vi.fn(),
   });

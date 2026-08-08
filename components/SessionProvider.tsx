@@ -32,6 +32,18 @@ export interface SessionState {
   account: string;
   actingAsDemo: boolean;
   adminOriginEmail?: string;
+  // Task A1-3 (Step 4): show_noise from the SAME GET /api/auth/me payload
+  // this provider already fetches -- its `preferences` sub-object (backend:
+  // user_repo.get_user_by_id's "preferences" JSONB column, the identical
+  // row /api/auth/preferences reads). GraphCanvas.tsx reads this instead of
+  // a second round-trip to lib/preferences.ts's getPreferences() (a
+  // SEPARATE endpoint call ThemeProvider/StarfieldProvider already use for
+  // THEIR OWN prefs). Defaults to false, matching Dash's own missing-key
+  // default (graph_canvas.py's _load_noise_pref: `bool(prefs.get(
+  // "show_noise", False))`) -- NOT the vendor's DOM-mirror-absent `true`
+  // fallback (readNoiseToggleState()'s own comment), which GraphCanvas.tsx
+  // overrides with this value regardless.
+  showNoise: boolean;
   status: SessionHydrationStatus;
   refresh: () => Promise<void>;
 }
@@ -48,6 +60,7 @@ const INITIAL_STATE: Omit<SessionState, "refresh"> = {
   account: ACCOUNT_PLACEHOLDER,
   actingAsDemo: false,
   adminOriginEmail: undefined,
+  showNoise: false,
   status: "pending",
 };
 
@@ -56,6 +69,7 @@ const FAILED_STATE: Omit<SessionState, "refresh"> = {
   account: ACCOUNT_EMPTY,
   actingAsDemo: false,
   adminOriginEmail: undefined,
+  showNoise: false,
   status: "failed",
 };
 
@@ -81,6 +95,7 @@ interface MeResponse {
   role?: unknown;
   acting_as_demo?: unknown;
   admin_origin_email?: unknown;
+  preferences?: unknown;
 }
 
 function isSessionRole(value: unknown): value is SessionRole {
@@ -100,6 +115,16 @@ function deriveState(data: unknown): Omit<SessionState, "refresh" | "status"> | 
   const adminOriginEmail = typeof me.admin_origin_email === "string" ? me.admin_origin_email : undefined;
   const actingAsDemo = me.acting_as_demo === true;
   const account = name || email || ACCOUNT_EMPTY;
+  // show_noise: only trust a LITERAL boolean true (Dash's own
+  // `bool(prefs.get("show_noise", False))` reads a possibly-absent JSONB
+  // key, so a non-boolean/garbage value here is just as "not explicitly
+  // set" as a missing key -- default false either way, never coerce a
+  // truthy-but-wrong-typed value).
+  const preferences =
+    typeof me.preferences === "object" && me.preferences !== null
+      ? (me.preferences as Record<string, unknown>)
+      : {};
+  const showNoise = preferences.show_noise === true;
   return {
     // An unrecognized role string (backend contract drift, a proxy error
     // page that happens to be valid JSON, etc.) is treated as signed-out
@@ -112,6 +137,7 @@ function deriveState(data: unknown): Omit<SessionState, "refresh" | "status"> | 
     account: actingAsDemo ? `${account} (admin)` : account,
     actingAsDemo,
     adminOriginEmail,
+    showNoise,
   };
 }
 

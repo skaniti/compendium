@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { apiFetch } from "@/lib/api";
+import { patchPreferences } from "@/lib/preferences";
 import { useSession } from "./SessionProvider";
 import { useNav } from "./NavProvider";
 import { useTheme } from "./ThemeProvider";
@@ -39,13 +46,12 @@ type GraphVendorModule = typeof import("@/lib/graph/d3-graph-vendor.js");
 //     GraphPlaceholder already had it (that file's own comment: this port
 //     deliberately does not replicate Dash's admin-context-only OUTER
 //     gate, only the two trigger links are individually role-gated).
-//     Dash's third overlay child (a noise-toggle text control,
-//     graph_canvas.py:724-733, each trigger's own " | " separator span
-//     exists to lead into it) is intentionally NOT ported here -- the
-//     noise toggle is Task A1-3 Step 4's job; until it lands, a visible
-//     trigger's trailing separator has nothing after it, matching Dash's
-//     own per-form markup (the separator lives INSIDE each form, not
-//     conditioned on what follows).
+//     Dash's third overlay child -- a noise-toggle text control
+//     (graph_canvas.py:724-733; each trigger's own " | " separator span
+//     leads into it) -- landed at Task A1-3 Step 4 (#noise-toggle-btn
+//     below), un-individually-gated same as Dash's own markup (only the
+//     outer wrapper was ever admin-context-gated there, and this port's
+//     outer wrapper is unconditional per the deviation just above).
 //
 // `id="d3-graph-container"` matches the selector app/styles/theme.css
 // already ported (batch 01) for the graph canvas mask + watermark/group-
@@ -156,6 +162,19 @@ const DEBUG_LINK_SEPARATOR_STYLE: CSSProperties = {
   marginRight: "4px",
 };
 
+// Task A1-3 (Step 4): verbatim port of the noise-toggle span's inline style
+// dict (graph_canvas.py:724-733's html.Span(id="noise-toggle-btn")). App CSS
+// (app/styles/search-bar.css, already ported) supplies the hover filter
+// and :focus/:focus-visible outline for this id -- see the JSX below for
+// why this element is made keyboard-focusable (tabIndex) to actually
+// trigger those rules, a deliberate a11y improvement Dash's own
+// n_clicks-driven html.Span never had.
+const NOISE_TOGGLE_STYLE: CSSProperties = {
+  cursor: "pointer",
+  color: "inherit",
+  textDecoration: "none",
+};
+
 // Verbatim copy from graph_canvas.py's _EMPTY_STATE_BODY / _PRIVACY / _CTA
 // (:50-61). See that module's comment block for the tone/framing rationale
 // before re-tuning this text.
@@ -199,6 +218,9 @@ export default function GraphCanvas() {
   const disposeRef = useRef<(() => void) | null>(null);
   const setSelectionRef = useRef<((type: string, id: unknown) => void) | null>(null);
   const recolorRef = useRef<(() => void) | null>(null);
+  // Task A1-3 (Step 4): the vendor's toggleNoise(show) setter, captured at
+  // mount like setSelectionRef/recolorRef above.
+  const toggleNoiseRef = useRef<((show: boolean) => void) | null>(null);
   // Task A1-3 (Step 2): the raw render() binding, captured once at mount so
   // a LATER graphVersion bump can re-invoke it directly (see the dedicated
   // effect below) without repeating the dynamic import() -- the module is
@@ -210,10 +232,35 @@ export default function GraphCanvas() {
   // double-firing in the same commit as the mount effect (see that effect's
   // own comment for the exact race it closes).
   const lastRenderedVersionRef = useRef<number | null>(null);
-  const { role, actingAsDemo } = useSession();
+  const { role, actingAsDemo, showNoise: sessionShowNoise } = useSession();
   const { state, dispatch, selectFromCanvas } = useNav();
   const { variant } = useTheme();
   const { timeWindow } = useTimeWindow();
+
+  // Plain demo sessions (direct login, not admin-launched view-as) get
+  // 403'd by the backend on ANY preferences PATCH (Dash parity, the
+  // backend's is_plain_demo gate) -- same local derivation ThemeProvider/
+  // StarfieldProvider/usePanelResize's own callers use (AppShell.tsx's
+  // isPlainDemo), computed here directly since GraphCanvas already reads
+  // role/actingAsDemo from useSession() for the view-demo/return-to-admin
+  // triggers above and isn't threaded any props from a server component.
+  const isPlainDemo = role === "demo" && !actingAsDemo;
+
+  // Task A1-3 (Step 4): noise toggle. Local state is the single source of
+  // truth for BOTH the displayed label and what gets applied to the
+  // vendor (via the effect below) -- seeded from the session's persisted
+  // preference once hydration resolves (the seeding effect just below),
+  // then owned by the click handler (handleToggleNoise) from then on.
+  const [showNoise, setShowNoiseState] = useState(false);
+  useEffect(() => {
+    setShowNoiseState(sessionShowNoise);
+  }, [sessionShowNoise]);
+  // Always-current ref (same pattern as selectedNodeIdRef below) so the
+  // vendor mount effect's async .then() applies whatever the LATEST noise
+  // state is at import-resolution time, not a value stale-closed at
+  // effect-definition time.
+  const showNoiseRef = useRef(showNoise);
+  showNoiseRef.current = showNoise;
 
   // Task A1-3 (Step 2): rebind from a local one-shot fetchGraph() effect to
   // the shared hooks/useGraph.ts cache -- graphVersion is the Next
@@ -279,6 +326,7 @@ export default function GraphCanvas() {
       // ... }`) -- calling it reads/repaints whatever `currentData`/`svg`
       // the vendor module currently holds, no per-call arguments needed.
       recolorRef.current = vendor.recolor;
+      toggleNoiseRef.current = vendor.toggleNoise;
       disposeRef.current = vendor.render(containerRef.current, payload, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
@@ -299,6 +347,12 @@ export default function GraphCanvas() {
       // The effect below only reacts to LATER changes, so this covers the
       // "already selected before/during mount" case explicitly.
       if (selectedNodeIdRef.current) vendor.setSelection("node", selectedNodeIdRef.current);
+      // Task A1-3 (Step 4): same "apply the current value at import-
+      // resolution time" pattern as selection above, via showNoiseRef
+      // (always current -- see its own comment). Unconditional (unlike the
+      // selection apply's `if`) because there is no meaningful "unset"
+      // state for a boolean toggle to skip applying.
+      vendor.toggleNoise(showNoiseRef.current);
       lastRenderedVersionRef.current = graphVersion;
     });
     return () => {
@@ -308,6 +362,7 @@ export default function GraphCanvas() {
       renderRef.current = null;
       setSelectionRef.current = null;
       recolorRef.current = null;
+      toggleNoiseRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once
     // against the first non-empty payload by design (see above);
@@ -380,6 +435,16 @@ export default function GraphCanvas() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [dispatch]);
+
+  // Task A1-3 (Step 4): pushes LATER showNoise changes to the vendor --
+  // either the session's preference hydrating after the vendor has already
+  // mounted, or a user click (handleToggleNoise below). No-ops via the ref
+  // guard until the mount effect above has resolved (that effect's own
+  // unconditional apply covers "already known by mount time" already, same
+  // split as the selection inbound-wiring effect below).
+  useEffect(() => {
+    toggleNoiseRef.current?.(showNoise);
+  }, [showNoise]);
 
   // Step 5: inbound wiring. Subscribes to NavProvider's selection state and
   // applies it via the vendor's __d3SetSelection semantics (setSelection
@@ -476,6 +541,31 @@ export default function GraphCanvas() {
     window.location.assign("/");
   }
 
+  // Task A1-3 (Step 4): port of Dash's noise-toggle click handler
+  // (callbacks/graph.py:129-154's toggle_noise). Flips the local/vendor
+  // state unconditionally (the effect above pushes it to the vendor) --
+  // the control itself is NEVER hidden or disabled for plain demo, only
+  // the persistence write is skipped (spec.md's "Preference writes &
+  // plain-demo" section: "mutation UI never hidden for the noise toggle").
+  // Dash's own handler swallows a persistence failure silently (`except
+  // Exception: pass`) and still flips client-side either way; the 403
+  // backstop this skip is paired with is the SAME shape patchPreferences
+  // itself already logs-and-swallows (lib/preferences.ts), so no extra
+  // try/catch belongs here.
+  function handleToggleNoise(): void {
+    const next = !showNoise;
+    setShowNoiseState(next);
+    if (!isPlainDemo) {
+      void patchPreferences({ show_noise: next });
+    }
+  }
+
+  function handleNoiseToggleKeyDown(e: ReactKeyboardEvent<HTMLSpanElement>): void {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    handleToggleNoise();
+  }
+
   return (
     <>
       <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE}>
@@ -510,6 +600,25 @@ export default function GraphCanvas() {
               <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
             </span>
           )}
+          {/* Task A1-3 (Step 4): port of graph_canvas.py's noise-toggle
+              html.Span (:724-733) -- Dash gives it NO individual role gate
+              of its own (only the outer #graph-debug-overlay wrapper is
+              admin-context-gated there); this port's outer wrapper is
+              already unconditionally rendered (A1-1's deliberate, ratified
+              deviation from Dash's own outer gate -- see this file's
+              header comment), so this control follows the same
+              un-individually-gated shape, satisfying the brief's own
+              "toggle UI itself NEVER hidden" requirement for free. */}
+          <span
+            id="noise-toggle-btn"
+            role="button"
+            tabIndex={0}
+            style={NOISE_TOGGLE_STYLE}
+            onClick={handleToggleNoise}
+            onKeyDown={handleNoiseToggleKeyDown}
+          >
+            {showNoise ? "noise: on" : "noise: off"}
+          </span>
         </div>
       </div>
       <div id="node-tooltip" className="node-tooltip" style={NODE_TOOLTIP_STYLE} />
