@@ -286,12 +286,17 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
     await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
   });
 
-  it("does NOT set the signal while the fetch is still pending or the payload has zero nodes", async () => {
-    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+  it("does NOT set the signal while the fetch is still pending", async () => {
+    vi.spyOn(api, "fetchGraph").mockImplementation(() => new Promise(() => {})); // never resolves
     renderCanvas();
 
-    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     expect(renderMock).not.toHaveBeenCalled();
+    expect(document.querySelector("#compendium-empty-state")).toBeNull();
     expect(window.__compendiumGraphRendered).toBeUndefined();
   });
 
@@ -307,6 +312,53 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
 
     expect(window.__compendiumGraphRendered).toBe(true);
+  });
+
+  // Coordinator-adjudicated fix (task-A1-4-report.md's "fix" section): the
+  // dismiss trigger's real domain is "canvas settled," and the empty state
+  // (payload committed, zero nodes -- GraphPlaceholder TODO(mig-03)
+  // obligation 1, `showEmptyState` below) IS a settled state -- a
+  // first-time user with nothing captured yet is exactly the loader's own
+  // first-run audience, so leaving this path unsignaled would strand it on
+  // CompendiumLoader.tsx's ~10s MAX_TRIES fallback instead of dismissing
+  // promptly.
+  it("sets window.__compendiumGraphRendered once the canvas settles into the empty state (zero nodes, vendor never mounts)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    expect(renderMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+  });
+
+  it("does not double-fire or resurrect when a later refetch goes EMPTY -> RENDERED (graphVersion bump)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(EMPTY_PAYLOAD).mockResolvedValueOnce(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+    expect(renderMock).not.toHaveBeenCalled();
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    // Still true (never unset in between) -- the empty-state settle and the
+    // later real render are two writes of the SAME value, not a toggle.
+    expect(window.__compendiumGraphRendered).toBe(true);
+  });
+
+  it("does not double-fire or resurrect when a later refetch goes RENDERED -> EMPTY (graphVersion bump)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(ONE_NODE_PAYLOAD).mockResolvedValueOnce(EMPTY_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+
+    expect(window.__compendiumGraphRendered).toBe(true);
+    expect(renderMock).toHaveBeenCalledTimes(1); // vendor never re-invoked for the now-empty payload
   });
 });
 

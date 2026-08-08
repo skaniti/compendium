@@ -56,10 +56,17 @@ interface Window {
   // globals here already are.
   __compendiumLoaderVendorInitStarted?: boolean;
   // Task A1-4 (batch 03 graph canvas port): render-complete signal.
-  // components/GraphCanvas.tsx sets this `true` the first time its vendor's
-  // render() call returns -- render() is synchronous, so its return IS
-  // first paint (no rAF/async tail to wait on). components/CompendiumLoader.tsx's
-  // tryDismiss loop polls this ALONGSIDE window.__compendiumLoader before
+  // components/GraphCanvas.tsx sets this `true` once the canvas reaches its
+  // first SETTLED state -- either its vendor's render() call returns
+  // (render() is synchronous, so its return IS first paint, no rAF/async
+  // tail to wait on) OR the canvas resolves to the empty state (payload
+  // committed, zero nodes -- a first-time user with nothing captured yet is
+  // still a settled canvas, and is exactly the loader's own first-run
+  // audience; A1-4 fix, task-A1-4-report.md's "fix" section). Two write
+  // sites in that one component, same flag, same "idempotent, later
+  // same-value writes are a no-op" reasoning either way.
+  // components/CompendiumLoader.tsx's tryDismiss loop polls this ALONGSIDE
+  // window.__compendiumLoader before
   // calling dismiss() (see that effect's own comment) -- replaces the
   // mig-03 "vendor module finished initializing" stand-in trigger with the
   // real one. Window-scoped (not a callback GraphCanvas looks up) because

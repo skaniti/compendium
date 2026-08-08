@@ -403,6 +403,30 @@ export default function GraphCanvas() {
     // which this effect deliberately does not re-run on).
   }, [hasNodes]);
 
+  // Task A1-4 fix (coordinator-adjudicated in-scope, task-A1-4-report.md's
+  // "fix" section -- not the speculative plumbing the original brief said
+  // to avoid): the render-complete signal above only covers the "a real
+  // graph painted" path. A compendium that settles into the EMPTY state
+  // (payload committed, zero nodes -- showEmptyState, obligation 1 in this
+  // file's header comment) is an equally "canvas settled" outcome, and a
+  // first-time user with nothing captured yet is exactly the loader's own
+  // first-run audience -- leaving this path unsignaled would strand it on
+  // CompendiumLoader.tsx's ~10s MAX_TRIES fallback instead of dismissing
+  // promptly. Fires whenever showEmptyState is true, including on a LATER
+  // transition (a refetch that goes from having nodes back to zero, e.g. a
+  // window filter with no results) -- unconditionally, same reasoning as
+  // the mount effect's own write above: idempotent (already-true stays
+  // true), and CompendiumLoader.tsx's own `completed` latch (not this
+  // flag) is what actually enforces "the loader dismisses at most once" on
+  // its side, so a later same-value write here from either path is always
+  // a harmless no-op there. TODO(W3): same fate as the mount effect's own
+  // write -- delete both once dismissal moves to the first worker
+  // `positions` batch.
+  useEffect(() => {
+    if (!showEmptyState) return;
+    window.__compendiumGraphRendered = true;
+  }, [showEmptyState]);
+
   // Task A1-3 (Step 1a/2): re-render the already-mounted vendor with fresh
   // graph data whenever graphVersion bumps (a refresh()-initiated flight
   // committed -- recluster elsewhere, or a time-window change below), WITHOUT
