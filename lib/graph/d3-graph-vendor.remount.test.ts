@@ -148,6 +148,109 @@ class SyncFakeSimWorker {
   }
 }
 
+// Task group W fix round 1 (dispose-mid-settle coverage): SyncFakeSimWorker
+// above always runs a `start` to full completion (tick..end) within ONE
+// synchronous `postMessage` call -- there is no "mid-settle" moment a test
+// could dispose() into. This fake gives the TEST manual control over
+// pacing instead: `postMessage({type:"start",...})` emits only the FIRST
+// tick (the phyllotaxis seed, matching the real worker's own contract),
+// then waits for the test to call `step()` explicitly to advance one tick
+// at a time. `postMessage({type:"stop"})` mirrors sim.worker.ts's own
+// handleStop (nulls the engine) so a `step()` call after `stop` is a
+// no-op -- the same observable a REAL worker would produce once it's
+// processed a `stop` message, letting a test simulate "the vendor's
+// createWorkerSim.stop() already suppressed delivery client-side, AND
+// separately the worker itself has stopped ticking" in one object.
+class ManualStepSimWorker {
+  // Self-registers the most recently constructed instance -- tests have
+  // no other handle onto whatever instance createWorkerSim's internal
+  // `new Worker(...)` produced (it's constructed deep inside the vendor
+  // module, not returned anywhere), so this is how a test reaches in to
+  // call `step()` on it.
+  static lastInstance: ManualStepSimWorker | null = null;
+
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+  private engine: ReturnType<typeof createSimEngine> | null = null;
+
+  constructor(_scriptURL?: unknown, _options?: unknown) {
+    ManualStepSimWorker.lastInstance = this;
+  }
+
+  postMessage(message: MainToWorkerMessage): void {
+    if (message.type === "stop") {
+      this.engine = null;
+      return;
+    }
+    if (message.type !== "start") return;
+    const engine = createSimEngine(message as SimStartPayload);
+    this.engine = engine;
+    this.emit({ type: "tick", positions: engine.snapshot() });
+    if (engine.done) this.emit({ type: "end", positions: engine.snapshot() });
+  }
+
+  /** Test-only: advance one tick and emit the resulting tick/end message.
+   *  A no-op once `stop` has nulled the engine -- matches
+   *  sim.worker.ts's own scheduleFrame, which checks `if (!engine)
+   *  return;` before ever ticking again. */
+  step(): void {
+    const engine = this.engine;
+    if (!engine || engine.done) return;
+    const done = engine.step();
+    this.emit(done ? { type: "end", positions: engine.snapshot() } : { type: "tick", positions: engine.snapshot() });
+  }
+
+  terminate(): void {
+    this.engine = null;
+    this.onmessage = null;
+  }
+
+  private emit(message: WorkerToMainMessage): void {
+    this.onmessage?.({ data: message } as MessageEvent<unknown>);
+  }
+}
+
+// One real 2-page cluster (no super_cluster -- keeps Phase 1.5/1.75's
+// SC-pass complexity out of scope, this payload only needs to make Phase
+// 2 actually tick instead of settling immediately) -- Phase 2 always runs
+// a FIXED 150 ticks per cluster regardless of member count
+// (lib/graph/sim-layout.ts's own header comment), so `engine.done` stays
+// false for many `step()` calls no matter how few nodes are in it; that
+// fixed-count guarantee is what makes "dispose after a couple of manual
+// steps, well before the 150th" a reliable mid-settle window rather than
+// a race.
+const MID_SETTLE_PAYLOAD: GraphPayload = {
+  nodes: [
+    {
+      id: "page-1",
+      label: "Page One",
+      level: 0,
+      kind: "cluster",
+      visit_count: 1,
+      parent_id: "c1",
+      children_ids: [],
+      capture_ids: [],
+      page_urls: ["https://example.com/1"],
+      first_visited_at: null,
+    },
+    {
+      id: "page-2",
+      label: "Page Two",
+      level: 0,
+      kind: "cluster",
+      visit_count: 1,
+      parent_id: "c1",
+      children_ids: [],
+      capture_ids: [],
+      page_urls: ["https://example.com/2"],
+      first_visited_at: null,
+    },
+  ],
+  links: [],
+  clusters: [{ id: "c1", name: "Cluster One", page_ids: ["page-1", "page-2"] }],
+  super_clusters: [],
+  groups: [],
+};
+
 beforeEach(() => {
   vi.stubGlobal("Worker", SyncFakeSimWorker);
 });
@@ -342,6 +445,118 @@ describe("d3-graph-vendor render() container-changed guard", () => {
     expect(removeSpy).not.toHaveBeenCalledWith("keydown", bHandler);
 
     removeSpy.mockRestore();
+  });
+
+  // Task group W fix round 1 (review finding, Medium): dispose() only
+  // tore down the container/Escape/ResizeObserver handlers -- the sim run
+  // itself kept ticking after final unmount, painting into a DETACHED svg
+  // (up to 60Hz) until it settled, then still running the full
+  // finishRenderAfterSettle tail for a container nobody can see anymore.
+  // Uses ManualStepSimWorker (not the file's default SyncFakeSimWorker,
+  // which always completes a run in one synchronous call and so has no
+  // "mid-settle" moment to dispose() into) to genuinely pause the run
+  // between ticks.
+  it("unmount mid-settle stops the run -- no further paints, no post-dispose onFirstPaint, no settle-tail draw", async () => {
+    vi.stubGlobal("Worker", ManualStepSimWorker);
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onFirstPaint = vi.fn();
+    const dispose = render(container, MID_SETTLE_PAYLOAD, { onFirstPaint });
+
+    // First tick (the phyllotaxis seed) already painted synchronously,
+    // exactly as it does with the real worker.
+    expect(onFirstPaint).toHaveBeenCalledTimes(1);
+    expect(container.querySelectorAll("circle.page").length).toBe(2);
+
+    const worker = ManualStepSimWorker.lastInstance;
+    expect(worker).toBeTruthy();
+    const postMessageSpy = vi.spyOn(worker!, "postMessage");
+
+    // Advance a handful of ticks -- Phase 2 always runs a FIXED 150 ticks
+    // per cluster regardless of member count (sim-layout.ts's own header
+    // comment), so this is reliably still mid-settle, not a race.
+    for (let i = 0; i < 5; i++) worker!.step();
+
+    const dotBefore = container.querySelector("circle.page")!;
+    const cxBefore = dotBefore.getAttribute("cx");
+    const cyBefore = dotBefore.getAttribute("cy");
+
+    dispose();
+
+    // The fix: dispose() must have told the sim client to stop.
+    expect(postMessageSpy).toHaveBeenCalledWith({ type: "stop" });
+
+    // Simulate the worker "still trying" to deliver more messages after
+    // dispose() -- including driving it all the way to a hypothetical
+    // `end` -- exercising BOTH createWorkerSim's own client-side
+    // suppression AND the vendor's own belt-and-suspenders __simRunCtx
+    // null-out (handleSimTick/handleSimEnd's `if (!ctx) return;` guards).
+    for (let i = 0; i < 200; i++) worker!.step();
+
+    const dotAfter = container.querySelector("circle.page")!;
+    expect(dotAfter.getAttribute("cx")).toBe(cxBefore);
+    expect(dotAfter.getAttribute("cy")).toBe(cyBefore);
+    expect(onFirstPaint).toHaveBeenCalledTimes(1); // not called again
+    // finishRenderAfterSettle (chunk 1's drawHulls) never ran for this
+    // disposed run -- it never reached a live `end`.
+    expect(container.querySelector(".hull-label")).toBeNull();
+  });
+
+  // Task group W fix round 1: the TRAP the review explicitly flagged --
+  // dispose() must call __simClient.stop(), never __simClient.dispose(),
+  // or render()'s own `if (!__simClient) { __simClient =
+  // createWorkerSim(...); }` guard (header comment delta #19b) would
+  // never recreate a permanently-disposed controller, silently breaking
+  // every future mount in the app's lifetime (not just this container's).
+  it("remount after a full unmount still works -- __simClient stays usable, not permanently disposed", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+
+    const containerA = document.createElement("div");
+    document.body.appendChild(containerA);
+    const disposeA = render(containerA, ONE_NODE_PAYLOAD, {});
+    expect(containerA.querySelectorAll("circle.page").length).toBe(1);
+
+    disposeA();
+
+    containerA.remove();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+
+    // If __simClient were dead (the trapped `.dispose()` mistake), this
+    // .start() would be a silent no-op and containerB would stay empty
+    // forever -- SyncFakeSimWorker's synchronous delivery means a real
+    // failure here shows up as an immediate, deterministic assertion
+    // failure, not a flaky timing gap.
+    expect(() => render(containerB, ONE_NODE_PAYLOAD, {})).not.toThrow();
+    expect(containerB.querySelectorAll("circle.page").length).toBe(1);
+  });
+
+  // Task group W fix round 1: confirms the dispose() edit above left the
+  // (already-working, unrelated) container-swap path alone -- a swap
+  // falls through to the SAME render() call's own `.start()`, which
+  // already supersedes any prior run as part of its normal contract, so
+  // there was never a detached-worker gap on this path to begin with.
+  // Same shape as "builds a fresh SVG..." above, plus the circle.page
+  // count check that test doesn't make, closing the gap explicitly rather
+  // than only by inference from the other test passing.
+  it("container-swap (remount WITHOUT disposing first) still paints the new container -- unregressed by the dispose fix", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+
+    const containerA = document.createElement("div");
+    document.body.appendChild(containerA);
+    render(containerA, ONE_NODE_PAYLOAD, {});
+    expect(containerA.querySelectorAll("circle.page").length).toBe(1);
+
+    // No dispose() call here -- e.g. GraphCanvas re-rendering into a
+    // fresh container without an intervening full unmount.
+    containerA.remove();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+    render(containerB, ONE_NODE_PAYLOAD, {});
+
+    expect(containerB.querySelectorAll("circle.page").length).toBe(1);
   });
 });
 
