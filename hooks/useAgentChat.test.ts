@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useAgentChat } from "./useAgentChat";
 import * as stream from "@/lib/agent-stream";
+import * as chatInterop from "@/lib/graph/chat-interop";
 
 // Hook-level tests for clear() (item 3, P4 clear-chat port of
 // search_stream.js's clearHistory()) and for the transcript-persistence
@@ -113,5 +114,72 @@ describe("useAgentChat transcript persistence (chat parity fix 1)", () => {
     expect(result.current.turns[1].user).toBe("second");
     expect(result.current.turns[1].assistant.done).toBe(false);
     expect(streamSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Task group C, C1 (cluster-cite framing): port of search_stream.js's
+// `if (metadata && metadata.cluster_ids) { highlightClusters(metadata.cluster_ids); }`
+// (:831-832). These tests isolate the WIRING -- that onComplete calls
+// lib/graph/chat-interop.ts's frameCitedClusters with the event's
+// cluster_ids and never lets it crash the turn -- against a mocked
+// chat-interop module. frameCitedClusters' own union/frame/absent-module
+// logic is covered independently in lib/graph/chat-interop.test.ts.
+describe("useAgentChat cluster-cite framing (C1)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("calls frameCitedClusters with the complete event's cluster_ids once the turn completes", async () => {
+    const frameSpy = vi.spyOn(chatInterop, "frameCitedClusters").mockResolvedValue(undefined);
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onComplete?.({
+        type: "complete", sources: [], cluster_ids: ["slug-a", "slug-b"], images: [],
+        tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+      });
+    });
+    const { result } = renderHook(() => useAgentChat());
+
+    act(() => result.current.setInput("hi"));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    expect(frameSpy).toHaveBeenCalledWith(["slug-a", "slug-b"]);
+  });
+
+  it("still calls frameCitedClusters (with undefined) on an early-exit complete event missing cluster_ids -- relies on its own no-op guard, does not special-case here", async () => {
+    const frameSpy = vi.spyOn(chatInterop, "frameCitedClusters").mockResolvedValue(undefined);
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      // Early-exit complete shape (no OpenAI key / empty compendium,
+      // backend/services/agent.py ~697-706/715-724): cluster_ids absent.
+      h.onComplete?.({ type: "complete", sources: [], iterations: 0, model: "m" });
+    });
+    const { result } = renderHook(() => useAgentChat());
+
+    act(() => result.current.setInput("hi"));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    expect(frameSpy).toHaveBeenCalledWith(undefined);
+  });
+
+  it("does not surface an error on the turn when frameCitedClusters unexpectedly rejects -- chat must never crash while the graph module is loading/missing", async () => {
+    vi.spyOn(chatInterop, "frameCitedClusters").mockRejectedValue(new Error("graph module unavailable"));
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onComplete?.({
+        type: "complete", sources: [], cluster_ids: ["slug-a"], images: [],
+        tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+      });
+    });
+    const { result } = renderHook(() => useAgentChat());
+
+    act(() => result.current.setInput("hi"));
+    await act(async () => {
+      await result.current.send();
+    });
+
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    expect(result.current.turns[0]?.assistant.error).toBeUndefined();
   });
 });

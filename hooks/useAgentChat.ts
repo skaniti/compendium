@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { streamAgentQuery } from "@/lib/agent-stream";
+import { frameCitedClusters } from "@/lib/graph/chat-interop";
 import type { CompleteEvent } from "@/lib/types";
 
 // Extracted verbatim (state/streaming logic only -- no JSX) from the old
@@ -123,8 +124,22 @@ export function useAgentChat(): UseAgentChat {
             buffer += text;
             scheduleFlush();
           },
-          onComplete: (meta) =>
-            updateAssistant(id, (a) => ({ ...a, text: buffer, done: true, status: "", meta })),
+          onComplete: (meta) => {
+            updateAssistant(id, (a) => ({ ...a, text: buffer, done: true, status: "", meta }));
+            // Task group C (C1, cluster-cite framing): port of
+            // search_stream.js's `if (metadata && metadata.cluster_ids) {
+            // highlightClusters(metadata.cluster_ids); }` (:831-832) --
+            // fire-and-forget, since framing the graph is a canvas side
+            // effect, not chat state. frameCitedClusters (lib/graph/
+            // chat-interop.ts) already no-ops on an absent/empty
+            // cluster_ids list and on a missing/not-yet-loaded graph
+            // module; the .catch here is a backstop against any other
+            // unexpected rejection, so this can never surface as an
+            // unhandled rejection or bleed into this turn's error state --
+            // chat must never crash while the canvas is loading or
+            // missing.
+            frameCitedClusters(meta.cluster_ids).catch(() => {});
+          },
         },
         ctrl.signal,
       );

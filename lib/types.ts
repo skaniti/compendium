@@ -26,7 +26,18 @@ export interface CompleteEvent {
   sources: string[];
   // Optional: the backend's early-exit completes (no OpenAI key, empty
   // compendium) omit cluster_ids and images entirely.
-  cluster_ids?: number[];
+  //
+  // Task group C fix: was `number[]` -- WRONG. Verified against
+  // backend/services/agent.py: `cluster_ids` is
+  // `list(set(state.clusters_cited))` and `clusters_cited: list[str]` is
+  // populated exclusively via `state.clusters_cited.append(c["cluster_slug"])`
+  // (agent.py:1286/1329/1355/1487/1827) -- these are cluster SLUGS
+  // (strings), matching GraphCluster.id (string) and the
+  // getClusterPages(clusterId: string) signature (lib/graph/vendor.d.ts)
+  // they're unioned through. The stale `number[]` annotation predates any
+  // consumer of this field (comment above said "currently unconsumed")
+  // and was never exercised against the real backend shape until now.
+  cluster_ids?: string[];
   // Shape per the backend's _extract_image_markers; rendering still deferred.
   images?: { thumb_url: string; source_url: string }[];
   // Optional: _redact_complete_event (backend/services/agent.py, P5)
