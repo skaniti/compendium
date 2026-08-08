@@ -44,6 +44,18 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // snapping back to fit-to-content (mirrors the Dash tuner's re-layout
     // sliders' behavior).
     preserveView?: boolean;
+    // Task group W (batch 03 Web Worker force sim, header comment delta
+    // #19/#20): fired once, synchronously within the FIRST worker `tick`
+    // message's handling (the phyllotaxis seed -- first painted
+    // positions), not on render()'s own return. render() itself starts
+    // the worker and returns immediately; this is how a caller learns
+    // "the canvas actually painted something" now that render() being
+    // synchronous no longer implies that. components/GraphCanvas.tsx's
+    // mount effect wires this to window.__compendiumGraphRendered instead
+    // of setting that flag right after calling render() (task-W-report.md
+    // W3; lib/vendor/vendor.d.ts's Window augmentation documents the flag
+    // itself).
+    onFirstPaint?: () => void;
   }
 
   // A1-1 promotion (vendor header comment delta #11): returns a dispose()

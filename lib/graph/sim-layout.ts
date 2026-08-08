@@ -565,42 +565,55 @@ function runClusterCentroidPhases(
     arr.push(c.id);
     collapsePack.set(gid, arr);
   });
-  collapsePack.forEach((mids) => {
-    if (mids.length < 2) return; // a lone cluster is already a blob
-    let gx = 0,
-      gy = 0,
-      gcnt = 0;
-    mids.forEach((mid) => {
-      const cn = byId.get(mid);
-      if (cn && cn.x != null && cn.y != null) {
-        gx += cn.x;
-        gy += cn.y;
-        gcnt++;
-      }
-    });
-    if (!gcnt) return;
-    gx /= gcnt;
-    gy /= gcnt;
-    let meanNebR = 0;
-    mids.forEach((mid) => {
-      meanNebR += estimateNebulaRadius(mid);
-    });
-    meanNebR /= mids.length;
-    const packR = meanNebR * 0.35;
-    mids
-      .map((mid) => {
+  // vendor's `Object.keys(collapsePack).forEach(...)` iterates a plain
+  // object keyed by NUMERIC group_id -- per the spec, integer-index-like
+  // keys enumerate in ASCENDING NUMERIC order, not insertion order (unlike
+  // every other keyed-by-string structure ported above, which vendor
+  // iterates via `for...in`/`Object.keys` on non-integer keys and so
+  // already matches this Map's insertion order). Each group's own
+  // repositioning only reads/writes ITS OWN members (disjoint from every
+  // other group), so processing order can't change any group's final
+  // result -- sorted here anyway so this loop's iteration order is
+  // byte-identical to vendor's, not merely "provably order-independent."
+  Array.from(collapsePack.keys())
+    .sort((a, b) => a - b)
+    .forEach((gid) => {
+      const mids = collapsePack.get(gid)!;
+      if (mids.length < 2) return; // a lone cluster is already a blob
+      let gx = 0,
+        gy = 0,
+        gcnt = 0;
+      mids.forEach((mid) => {
         const cn = byId.get(mid);
-        const angle = cn && cn.x != null && cn.y != null ? Math.atan2(cn.y - gy, cn.x - gx) : 0;
-        return { cn, angle };
-      })
-      .sort((a, b) => a.angle - b.angle)
-      .forEach((item, idx, arr) => {
-        if (!item.cn) return;
-        const th = (idx / arr.length) * 2 * Math.PI;
-        item.cn.x = gx + Math.cos(th) * packR;
-        item.cn.y = gy + Math.sin(th) * packR;
+        if (cn && cn.x != null && cn.y != null) {
+          gx += cn.x;
+          gy += cn.y;
+          gcnt++;
+        }
       });
-  });
+      if (!gcnt) return;
+      gx /= gcnt;
+      gy /= gcnt;
+      let meanNebR = 0;
+      mids.forEach((mid) => {
+        meanNebR += estimateNebulaRadius(mid);
+      });
+      meanNebR /= mids.length;
+      const packR = meanNebR * 0.35;
+      mids
+        .map((mid) => {
+          const cn = byId.get(mid);
+          const angle = cn && cn.x != null && cn.y != null ? Math.atan2(cn.y - gy, cn.x - gx) : 0;
+          return { cn, angle };
+        })
+        .sort((a, b) => a.angle - b.angle)
+        .forEach((item, idx, arr) => {
+          if (!item.cn) return;
+          const th = (idx / arr.length) * 2 * Math.PI;
+          item.cn.x = gx + Math.cos(th) * packR;
+          item.cn.y = gy + Math.sin(th) * packR;
+        });
+    });
 
   // Record fixed centroid positions (vendor :3584-3588).
   const centroidPos = new Map<string, { x: number; y: number }>();

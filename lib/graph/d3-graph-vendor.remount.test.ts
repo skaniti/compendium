@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GraphPayload } from "@/lib/types";
 import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
+import { createSimEngine } from "@/lib/graph/sim-layout";
+import type { MainToWorkerMessage, SimStartPayload, WorkerToMainMessage } from "@/lib/graph/sim-protocol";
 
 // S2 fix round 1 (review finding 2): exercises the REAL vendor module's
 // container-changed guard (header comment delta #10, extended by A1-1's
@@ -90,6 +92,69 @@ const NOISE_PAYLOAD: GraphPayload = {
   super_clusters: [],
   groups: [],
 };
+
+// Task group W (batch 03 Web Worker force sim): the real, unmocked vendor
+// module now starts a Web Worker (lib/graph/sim.worker.ts, via
+// lib/graph/useWorkerSim.ts) on every render() call -- jsdom implements no
+// `Worker` at all (verified: `"Worker" in new JSDOM(...).window` is
+// false), so every `it` in this file would otherwise throw the moment
+// render() reaches that call, same class of gap this file's header
+// comment already documents for `getScreenCTM`/ResizeObserver (jsdom-
+// missing-API, stubbed in the TEST, not vendor code).
+//
+// Rather than a dumb no-op stub, this runs the REAL pipeline
+// (lib/graph/sim-layout.ts's SimEngine, the same module sim.worker.ts
+// itself drives) SYNCHRONOUSLY inside `postMessage` -- entirely in-
+// process, no actual OS thread -- so render() completes (SVG built,
+// dots painted, hulls/labels/nebula drawn, `dispose()` returned) within
+// the SAME synchronous call every existing test in this file already
+// expects (this file predates task group W and asserts synchronously
+// right after `render(...)`, no `waitFor`/`await` gap -- rewriting every
+// one of those assertions was out of scope for what this file actually
+// tests: container-swap/dispose/toggleNoise/setFilterDim behavior, none
+// of which is about the async settle timing task group W introduces).
+// The real async pacing (paced `setTimeout`, live streamed positions) is
+// covered elsewhere: lib/graph/sim-protocol.test.ts (the client
+// contract, mocked Worker) and the W4 CDP acceptance trace
+// (task-W-report.md) against a real browser.
+class SyncFakeSimWorker {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+
+  // Signature matches `new Worker(url, options)` -- both args ignored,
+  // this fake never actually loads a script.
+  constructor(_scriptURL?: unknown, _options?: unknown) {}
+
+  postMessage(message: MainToWorkerMessage): void {
+    if (message.type !== "start") return; // stop/reheat: unexercised by this file's tests
+    const engine = createSimEngine(message as SimStartPayload);
+    this.emit({ type: "tick", positions: engine.snapshot() });
+    if (engine.done) {
+      this.emit({ type: "end", positions: engine.snapshot() });
+      return;
+    }
+    let done = false;
+    while (!done) {
+      done = engine.step();
+      this.emit(done ? { type: "end", positions: engine.snapshot() } : { type: "tick", positions: engine.snapshot() });
+    }
+  }
+
+  terminate(): void {
+    this.onmessage = null;
+  }
+
+  private emit(message: WorkerToMainMessage): void {
+    this.onmessage?.({ data: message } as MessageEvent<unknown>);
+  }
+}
+
+beforeEach(() => {
+  vi.stubGlobal("Worker", SyncFakeSimWorker);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("d3-graph-vendor render() container-changed guard", () => {
   beforeEach(() => {
