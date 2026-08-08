@@ -509,6 +509,19 @@
   opacity: 0.5;
 }
 
+/* Glyph stroke, driven by the grid's inline --topic-pick-* vars
+ * (theme-aware -- same idiom as style.css's .hbar-sc-pick-glyph /
+ * --scpick-* for the SUPERCLUSTERS icon picker; Task A1-5). */
+.icon-pick-glyph {
+  stroke: var(--topic-pick-idle, var(--text-muted, rgba(255, 255, 255, 0.55)));
+}
+.icon-pick-cell.active .icon-pick-glyph {
+  stroke: var(--topic-pick-active, var(--highlight, #7c5bff));
+}
+.icon-pick-cell.icon-pick-used .icon-pick-glyph {
+  stroke: var(--topic-pick-used, var(--text-muted, #666666));
+}
+
 /* Category-grouped picker sections (iOS-style sticky headers) */
 .icon-picker-category-section {
   /* Wrapper exists purely so the sticky header has a bounding box. */

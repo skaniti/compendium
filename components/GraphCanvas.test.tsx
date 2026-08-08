@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, waitFor, screen, act, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
@@ -1051,3 +1052,139 @@ describe("GraphCanvas live palette recolor (Task A1-2 wave 8: wire vendor recolo
     expect(screen.getByTestId("theme-variant")).toHaveTextContent("Pink");
   });
 });
+
+describe("GraphCanvas topic panel opening affordance (Task A1-5)", () => {
+  it("renders the 'topics' trigger inside #graph-debug-overlay, unconditionally (same un-gated shape as noise-toggle-btn)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+    const trigger = document.getElementById("topic-toggle-btn");
+    expect(trigger).not.toBeNull();
+    expect(trigger?.closest("#graph-debug-overlay")).not.toBeNull();
+    expect(document.getElementById("topic-panel")).toBeNull();
+  });
+
+  it("clicking the trigger opens the panel; clicking it again closes it", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    const trigger = document.getElementById("topic-toggle-btn") as HTMLElement;
+    act(() => trigger.click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+
+    act(() => trigger.click());
+    expect(document.getElementById("topic-panel")).toBeNull();
+  });
+
+  it("is keyboard-activatable via Enter/Space (mirrors noise-toggle-btn's a11y upgrade)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    const trigger = document.getElementById("topic-toggle-btn") as HTMLElement;
+    expect(trigger).toHaveAttribute("tabIndex", "0");
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+    fireEvent.keyDown(trigger, { key: " " });
+    expect(document.getElementById("topic-panel")).toBeNull();
+  });
+
+  it("the panel's own close button closes it", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+
+    act(() => (document.getElementById("topic-panel-close") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).toBeNull();
+  });
+
+  it("a click anywhere on #d3-graph-container closes the panel (Dash parity: toggle_topic_panel's Input=d3-graph-container n_clicks)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+
+    act(() => (document.getElementById("d3-graph-container") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).toBeNull();
+  });
+
+  it("a click inside the panel body does NOT close it (TopicPanel is a sibling of #d3-graph-container, not nested inside it)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([makeTopicFixture("Cooking")]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    await waitFor(() => expect(screen.getByText("Cooking")).toBeInTheDocument());
+
+    act(() => screen.getByText("Cooking").click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+  });
+
+  it("clicking noise-toggle-btn (inside #graph-debug-overlay) does NOT close the panel, despite #graph-debug-overlay being nested inside #d3-graph-container in this port", async () => {
+    // Regression test: in Dash, #graph-debug-overlay is a SIBLING of
+    // #d3-graph-container (graph_canvas.py's render_graph_canvas returns a
+    // flat list), so clicking "noise: off" there never bumps
+    // d3-graph-container's n_clicks. This port's OWN #graph-debug-overlay is
+    // nested INSIDE #d3-graph-container instead (a pre-existing, ratified
+    // deviation predating this task -- see GraphCanvas.tsx's header
+    // comment, "obligation 2"). Without handleCanvasClick's exclusion for
+    // #graph-debug-overlay, a bubbled click here would incorrectly close
+    // the topic panel -- something Dash's real sibling-based DOM would
+    // never do.
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+
+    act(() => screen.getByText("noise: off").click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+  });
+
+  it("clicking inside #compendium-empty-state does NOT close the panel (same sibling-vs-nested reasoning as the debug overlay)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+
+    act(() => (document.getElementById("compendium-empty-state") as HTMLElement).click());
+    expect(document.getElementById("topic-panel")).not.toBeNull();
+  });
+
+  it("passes the real useGraph() graphVersion/refresh through to TopicPanel (add flows into a real graph refresh)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
+    const addSpy = vi.spyOn(api, "addTopic").mockResolvedValue([]);
+    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+    const versionBefore = screen.getByTestId("graph-version").textContent;
+
+    act(() => (document.getElementById("topic-toggle-btn") as HTMLElement).click());
+    const input = screen.getByPlaceholderText("e.g. Earth Science");
+    await userEvent.type(input, "Earth Science{Enter}");
+
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith("Earth Science"));
+    await waitFor(() => expect(screen.getByTestId("graph-version").textContent).not.toBe(versionBefore));
+  });
+});
+
+function makeTopicFixture(keyword: string) {
+  return { keyword, icon_id: null, cluster_count: 0 };
+}
