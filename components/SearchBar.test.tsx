@@ -5,6 +5,7 @@ import SearchBar from "./SearchBar";
 import * as stream from "@/lib/agent-stream";
 import * as SessionProviderModule from "@/components/SessionProvider";
 import * as apiModule from "@/lib/api";
+import * as chatInterop from "@/lib/graph/chat-interop";
 import type { SessionRole } from "@/components/SessionProvider";
 
 // Ported from the old full-page Chat.test.tsx (Task 10: re-home into the
@@ -89,6 +90,91 @@ describe("SearchBar", () => {
     const [first, second] = screen.getAllByRole("link", { name: "example.com" });
     expect(first).toHaveAttribute("href", "https://example.com/a");
     expect(second).toHaveAttribute("href", "https://example.com/b");
+  });
+
+  // Task group C, C2 (P7 locate-glyph port, closes the gap this
+  // component's own doc comment used to document as NOT ported). Port of
+  // search_stream.js's makeLocatePillGroup (:190-232) gate, but tightened
+  // per task-C-brief.md: the glyph itself renders iff node_id is present
+  // AND hasGraphNode(node_id) resolves true -- no Dash-style "present but
+  // disabled" third state. hasGraphNode/frameSourceNode
+  // (lib/graph/chat-interop.ts) are mocked at this boundary; their own
+  // absent-module/rejection-swallowing contracts are covered directly in
+  // lib/graph/chat-interop.test.ts.
+  describe("source pill locate glyph (C2)", () => {
+    function sendWithSources(sourcesDetail?: Array<{ url: string; page_id: number | null; node_id: string | null }>) {
+      return vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+        h.onComplete?.({
+          type: "complete",
+          sources: ["https://example.com/x"],
+          sources_detail: sourcesDetail,
+          cluster_ids: [],
+          images: [],
+          tool_calls_made: [],
+          total_cost_usd: 0,
+          iterations: 1,
+          model: "m",
+        });
+      });
+    }
+
+    it("renders the locate glyph when node_id is present and hasGraphNode resolves true, and clicking it frames that node", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockImplementation(async (nodeId) => nodeId === "node-x");
+      const frameSpy = vi.spyOn(chatInterop, "frameSourceNode").mockResolvedValue(undefined);
+      sendWithSources([{ url: "https://example.com/x", page_id: null, node_id: "node-x" }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      const glyph = await screen.findByRole("button", { name: "Locate on map" });
+      expect(glyph.closest(".chat-source-pill-group")).not.toBeNull();
+      expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument();
+
+      await userEvent.click(glyph);
+      expect(frameSpy).toHaveBeenCalledWith("node-x");
+    });
+
+    it("renders a plain pill (no glyph) when sources_detail is entirely absent (redacted/early-exit shape)", async () => {
+      const hasNodeSpy = vi.spyOn(chatInterop, "hasGraphNode");
+      sendWithSources(undefined);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(hasNodeSpy).not.toHaveBeenCalled(); // no node_id to even check
+    });
+
+    it("renders a plain pill (no glyph) when the source's sources_detail entry has node_id: null", async () => {
+      const hasNodeSpy = vi.spyOn(chatInterop, "hasGraphNode");
+      sendWithSources([{ url: "https://example.com/x", page_id: 7, node_id: null }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(hasNodeSpy).not.toHaveBeenCalled();
+    });
+
+    it("renders a plain pill (no glyph) when hasGraphNode resolves false -- the node isn't on the current graph (also covers the absent/not-yet-loaded graph module, since hasGraphNode degrades to false for that case too)", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockResolvedValue(false);
+      const frameSpy = vi.spyOn(chatInterop, "frameSourceNode");
+      sendWithSources([{ url: "https://example.com/x", page_id: null, node_id: "node-not-on-map" }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
+      await waitFor(() => expect(chatInterop.hasGraphNode).toHaveBeenCalledWith("node-not-on-map"));
+      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(frameSpy).not.toHaveBeenCalled();
+    });
   });
 
   // Transcript persistence (chat parity fix 1): a completed answer must

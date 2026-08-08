@@ -6,6 +6,7 @@ import { useSearchBarResize } from "@/hooks/useSearchBarResize";
 import { useSession } from "@/components/SessionProvider";
 import { apiFetch } from "@/lib/api";
 import { renderMarkdown } from "@/lib/markdown";
+import { hasGraphNode, frameSourceNode } from "@/lib/graph/chat-interop";
 
 // GET /api/agent/internals response shape (backend/api/main.py's
 // agent_internals): system prompt + AGENT_TOOLS verbatim, OpenAI
@@ -66,17 +67,90 @@ function renderToolDefinition(tool: AgentTool) {
 //     #search-clear-btn control itself IS ported below (clears in-memory
 //     state); only the cross-reload persistence layer it also resets in
 //     Dash is out of scope here.
-//   - .chat-source-locate-btn (P7 locate-on-graph glyph, makeLocatePillGroup
-//     in search_stream.js) and .chat-images-row -- P7 depends on the
-//     batch-03 chat<->graph interop (__d3* API) which isn't ported yet, and
-//     images are a separate, not-yet-requested parity gap. Sources below
-//     (2026-07-28, chat parity fix 2) DO now port makeSourceLink's plain
-//     .tag-pill.chat-source-pill markup + the "sources:" label
-//     (search_stream.js ~161-188, ~699-713) -- just without the locate
-//     glyph wrapper. Diverges from Dash's makeSourceLink in one respect:
-//     the pill label stays hostname-only (no " · path-tail" suffix) per
-//     the batch brief -- matches what this component already showed before
-//     this fix, now just styled as a pill instead of a bullet.
+//   - .chat-images-row -- a separate, not-yet-requested parity gap
+//     (unrelated to the batch-03 chat<->graph interop below).
+// Sources below (2026-07-28, chat parity fix 2) port makeSourceLink's
+// plain .tag-pill.chat-source-pill markup + the "sources:" label
+// (search_stream.js ~161-188, ~699-713). Diverges from Dash's
+// makeSourceLink in one respect: the pill label stays hostname-only (no
+// " · path-tail" suffix) per the batch brief -- matches what this
+// component already showed before that fix, now just styled as a pill
+// instead of a bullet.
+//
+// Task group C, C2 (P7 locate-glyph port, batch 03): closes the gap the
+// paragraph above used to document as NOT ported. SourcePill (below) adds
+// the .chat-source-locate-btn bullseye glyph (makeLocatePillGroup,
+// search_stream.js :190-232) once the batch-03 chat<->graph interop
+// (lib/graph/chat-interop.ts, wrapping lib/graph/d3-graph-vendor.js's
+// module exports -- the Next equivalent of Dash's window.__d3* globals)
+// makes hasGraphNode/frameSourceNode available. Tightened vs. Dash's own
+// three-state gate (glyph absent / present-but-disabled / present-enabled):
+// this port only has two -- the glyph renders iff node_id is present AND
+// hasGraphNode(node_id) resolves true, degrading to the existing plain
+// pill otherwise (absent sources_detail, absent node_id, hasNode false, or
+// the graph module itself absent/not-yet-loaded all take that same plain-
+// pill path, per task-C-brief.md).
+function SourcePill({ url, nodeId }: { url: string; nodeId: string | null }) {
+  // hasGraphNode is async (the vendor module loads via dynamic import(),
+  // see chat-interop.ts's own header comment for why there's no
+  // synchronous equivalent to Dash's window.__d3HasNode check) -- `known`
+  // starts false so a pill always renders plain-first and upgrades to the
+  // glyph once/if the check resolves true, rather than blocking the
+  // sources row on the graph module loading.
+  const [known, setKnown] = useState(false);
+  useEffect(() => {
+    if (!nodeId) return;
+    let cancelled = false;
+    void hasGraphNode(nodeId).then((result) => {
+      if (!cancelled) setKnown(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId]);
+
+  const label = (() => {
+    try {
+      return new URL(url).hostname.replace("www.", "");
+    } catch {
+      return url;
+    }
+  })();
+
+  const pill = (
+    <a href={url} target="_blank" rel="noreferrer" className="tag-pill chat-source-pill">
+      {label}
+    </a>
+  );
+
+  if (!nodeId || !known) return pill;
+
+  return (
+    <span className="chat-source-pill-group">
+      {pill}
+      <button
+        type="button"
+        className="chat-source-locate-btn"
+        title="Locate on map"
+        aria-label="Locate on map"
+        onClick={(e) => {
+          // Port of makeLocatePillGroup's click handler (search_stream.js
+          // :221-225) -- the button isn't nested inside the pill's <a>
+          // here (unlike Dash's DOM, where the same guard is just
+          // defensive), but preventDefault/stopPropagation are kept for
+          // parity and as cheap insurance against this ever being
+          // refactored into a nested layout.
+          e.preventDefault();
+          e.stopPropagation();
+          void frameSourceNode(nodeId);
+        }}
+      >
+        {"◎"}
+      </button>
+    </span>
+  );
+}
+
 export default function SearchBar() {
   const { turns, busy, input, setInput, send, cancel, clear } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
@@ -223,30 +297,25 @@ export default function SearchBar() {
                     the "sources:" label wrapper (search_stream.js
                     ~161-188 build the pill, ~699-713 build the row +
                     label). One pill per URL (not deduped by hostname),
-                    same as Dash's loop over metadata.sources. Excludes
-                    the P7 locate-glyph wrapper (makeLocatePillGroup) --
-                    that needs the batch-03 __d3* graph interop, not
-                    ported yet; see the component doc comment above. */}
+                    same as Dash's loop over metadata.sources.
+                    Task group C, C2: each pill additionally gets the P7
+                    locate glyph (makeLocatePillGroup) when its
+                    sources_detail entry carries a node_id -- see
+                    SourcePill above. nodeIdByUrl mirrors Dash's own
+                    url->node_id lookup built just above its loop
+                    (search_stream.js ~716-720). */}
                 {assistant.meta && assistant.meta.sources.length > 0 && (
                   <div className="chat-sources-row">
                     <span className="chat-sources-label">sources:</span>
-                    {assistant.meta.sources.map((u) => (
-                      <a
-                        key={u}
-                        href={u}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="tag-pill chat-source-pill"
-                      >
-                        {(() => {
-                          try {
-                            return new URL(u).hostname.replace("www.", "");
-                          } catch {
-                            return u;
-                          }
-                        })()}
-                      </a>
-                    ))}
+                    {(() => {
+                      const nodeIdByUrl = new Map<string, string | null>();
+                      for (const d of assistant.meta.sources_detail ?? []) {
+                        if (d.url) nodeIdByUrl.set(d.url, d.node_id);
+                      }
+                      return assistant.meta.sources.map((u) => (
+                        <SourcePill key={u} url={u} nodeId={nodeIdByUrl.get(u) ?? null} />
+                      ));
+                    })()}
                   </div>
                 )}
 

@@ -21,11 +21,30 @@ export interface TokenEvent {
   text: string;
 }
 
+// Task group C, C2 (P7 locate-glyph port): one entry of the SSE complete
+// event's `sources_detail` list, verified against
+// backend/services/agent.py's `_build_sources_detail` (~195-215) and its
+// two call sites (AgentResponse.sources_detail ~307, the SSE
+// complete_event's own "sources_detail" key ~950) at explorer HEAD.
+// `node_id` reproduces graph_builder._slugify(title) -- the SAME id shape
+// GraphCluster.id / GraphNode.id use (lib/graph/vendor.d.ts's
+// getClusterPages/hasNode both take/return this id family) -- NOT
+// `page_id`, which indexes a different (page-row) table entirely and is
+// not usable for joining against the graph. Either field is null when the
+// citing tool couldn't resolve one (agent.py:1220-1240's own comment); the
+// client must degrade to a plain, non-interactive source pill in that case
+// rather than crash.
+export interface SourceDetail {
+  url: string;
+  page_id: number | null;
+  node_id: string | null;
+}
+
 export interface CompleteEvent {
   type: "complete";
   sources: string[];
   // Optional: the backend's early-exit completes (no OpenAI key, empty
-  // compendium) omit cluster_ids and images entirely.
+  // compendium) omit cluster_ids, sources_detail, and images entirely.
   //
   // Task group C fix: was `number[]` -- WRONG. Verified against
   // backend/services/agent.py: `cluster_ids` is
@@ -38,6 +57,12 @@ export interface CompleteEvent {
   // consumer of this field (comment above said "currently unconsumed")
   // and was never exercised against the real backend shape until now.
   cluster_ids?: string[];
+  // Task group C, C2 (P7 locate-glyph port): NOT stripped by
+  // _redact_complete_event (backend/services/agent.py ~568-583) -- that
+  // helper only pops total_cost_usd/tool_calls_made for non-admin
+  // sessions, so sources_detail (and cluster_ids above) survive redaction
+  // and are visible to every caller regardless of role.
+  sources_detail?: SourceDetail[];
   // Shape per the backend's _extract_image_markers; rendering still deferred.
   images?: { thumb_url: string; source_url: string }[];
   // Optional: _redact_complete_event (backend/services/agent.py, P5)

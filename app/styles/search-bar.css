@@ -255,7 +255,21 @@
    sources-label scale so the affordance is discoverable (the earlier muted
    0.68rem version was near-invisible); disabled state (page not resolvable
    on the current graph) dims hard rather than hiding, so enabled-vs-not
-   stays legible and hovering still surfaces the "not on the map" title. */
+   stays legible and hovering still surfaces the "not on the map" title.
+   .chat-source-pill-group itself was never given its own rule until
+   task group C (C2) actually rendered the wrapper -- Dash's own inline
+   `display:inline-flex;align-items:center;margin:1px 2px 1px 0;`
+   (search_stream.js :206) ported verbatim below; the child pill's own
+   margin is zeroed so the group (not the pill) owns the outer spacing,
+   mirroring Dash's `pill.style.margin = '0'` (:209). */
+.chat-source-pill-group {
+  display: inline-flex;
+  align-items: center;
+  margin: 1px 2px 1px 0;
+}
+.chat-source-pill-group .chat-source-pill {
+  margin: 0;
+}
 .chat-source-locate-btn {
   border: none;
   background: transparent;
