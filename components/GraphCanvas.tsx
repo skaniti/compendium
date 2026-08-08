@@ -369,6 +369,20 @@ export default function GraphCanvas() {
       // array IS the correct "no filter" call, not something to skip.
       vendor.setFilterDim(filterHighlightIdsRef.current);
       lastRenderedVersionRef.current = graphVersion;
+      // Task A1-4 (batch 03): render-complete signal for
+      // components/CompendiumLoader.tsx's dismiss trigger -- vendor.render()
+      // above is synchronous, so having reached this line IS first paint,
+      // no rAF/async tail to wait on (lib/vendor/vendor.d.ts's Window
+      // augmentation documents the flag itself; CompendiumLoader.tsx's
+      // tryDismiss polls it alongside window.__compendiumLoader). Set
+      // unconditionally on every successful mount-effect render (there is
+      // only ever one per page load by construction -- this effect runs
+      // once per `hasNodes` false->true transition), not guarded by a ref,
+      // since the loader-side latch (not this flag) is what makes a later
+      // re-signal a no-op. TODO(W3): superseded once dismissal moves to the
+      // first worker `positions` batch -- delete this line and the flag's
+      // declaration together then, don't leave both wired.
+      window.__compendiumGraphRendered = true;
     });
     return () => {
       cancelled = true;

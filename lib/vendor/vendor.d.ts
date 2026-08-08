@@ -55,4 +55,28 @@ interface Window {
   // reload) -- and so it can be reset per-test the same way the other two
   // globals here already are.
   __compendiumLoaderVendorInitStarted?: boolean;
+  // Task A1-4 (batch 03 graph canvas port): render-complete signal.
+  // components/GraphCanvas.tsx sets this `true` the first time its vendor's
+  // render() call returns -- render() is synchronous, so its return IS
+  // first paint (no rAF/async tail to wait on). components/CompendiumLoader.tsx's
+  // tryDismiss loop polls this ALONGSIDE window.__compendiumLoader before
+  // calling dismiss() (see that effect's own comment) -- replaces the
+  // mig-03 "vendor module finished initializing" stand-in trigger with the
+  // real one. Window-scoped (not a callback GraphCanvas looks up) because
+  // it mirrors the loader's own existing trigger-receiving shape: a level-
+  // triggered flag polled from a poll loop, not an edge-triggered callback
+  // -- so whichever of the two mounts/signals happens to resolve first, the
+  // other's poll picks it up with no ordering dependency between the two
+  // (unlike Header.tsx's replay()/GraphCanvas's onSelect, there is no
+  // shared React ancestor to lift a callback prop through; CompendiumLoader
+  // and GraphCanvas are siblings-of-siblings under AppShell). Same window-
+  // scoped-not-module-level shape as __compendiumLoaderVendorInitStarted
+  // above, for the same per-test-reset reason. Never cleared once set (not
+  // torn down on GraphCanvas unmount) -- same lifetime as
+  // window.__compendiumLoader itself: persists across a page's whole
+  // lifetime, resets only on a real page reload. TODO(W3): superseded once
+  // dismissal moves to the first worker `positions` batch instead of
+  // render()'s synchronous return -- this flag and both its read/write
+  // sites should be DELETED then, not layered under a second flag.
+  __compendiumGraphRendered?: boolean;
 }

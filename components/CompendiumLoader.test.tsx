@@ -31,6 +31,10 @@ afterEach(() => {
   // window-scoped specifically so it resets per-test the same way the two
   // globals above do -- see its own comment in lib/vendor/vendor.d.ts.
   delete window.__compendiumLoaderVendorInitStarted;
+  // Task A1-4: the graph render-complete signal (GraphCanvas.tsx) is the
+  // same window-scoped shape as the three globals above, for the same
+  // per-test-reset reason -- see its own comment in lib/vendor/vendor.d.ts.
+  delete window.__compendiumGraphRendered;
 });
 
 function getRoot(): HTMLElement {
@@ -41,6 +45,26 @@ function getRoot(): HTMLElement {
 
 async function waitForVendorReady(): Promise<void> {
   await waitFor(() => expect(window.__compendiumLoader).toBeDefined());
+}
+
+// Task A1-4: stands in for GraphCanvas.tsx's own render-complete write
+// (`window.__compendiumGraphRendered = true` once vendor.render() returns
+// for the first time) -- tests below drive it directly rather than
+// mounting a real GraphCanvas, mirroring how this file already drives
+// window.__compendiumLoader.dismiss()/.replay() directly instead of
+// mounting Header.tsx.
+function markGraphRendered(): void {
+  window.__compendiumGraphRendered = true;
+}
+
+// Real timers govern tryDismiss's 50ms poll (components/CompendiumLoader.tsx)
+// -- this parks the microtask queue for a few poll intervals so a test can
+// assert "still hasn't dismissed" without waiting out the full ~10s MAX_TRIES
+// ceiling.
+async function settleAFewPollTicks(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 160));
+  });
 }
 
 describe("CompendiumLoader mode selection", () => {
@@ -99,16 +123,59 @@ describe("CompendiumLoader replay", () => {
   });
 });
 
-describe("CompendiumLoader dismiss trigger (this batch's stand-in)", () => {
-  it("calls window.__compendiumLoader.dismiss() once the vendor module is ready", async () => {
+describe("CompendiumLoader dismiss trigger (Task A1-4: graph render-complete, replaces the mig-03 stand-in)", () => {
+  it("does NOT dismiss once the vendor is ready alone -- the graph render-complete signal is still pending", async () => {
     render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
     await waitForVendorReady();
 
+    // Several poll ticks pass with window.__compendiumGraphRendered still
+    // unset -- tryDismiss must keep polling, not fire on vendor-ready alone
+    // (that was the OLD stand-in behavior this task replaces).
+    await settleAFewPollTicks();
+    expect(getRoot()).not.toHaveClass("loader-dismiss");
+  });
+
+  it("dismisses once window.__compendiumGraphRendered turns true after the vendor is already ready", async () => {
+    render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+    await waitForVendorReady();
+    await settleAFewPollTicks();
+    expect(getRoot()).not.toHaveClass("loader-dismiss");
+
+    markGraphRendered();
+
     // 'return' mode: dismiss() finalizes synchronously via the
     // MutationObserver, so seeing loader-dismiss confirms the mount
-    // effect actually called dismiss() (TODO(mig-03) stand-in trigger),
-    // not just that the vendor module loaded.
+    // effect's tryDismiss loop actually called dismiss() once BOTH
+    // conditions were true, not just that the vendor module loaded.
     await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
+  });
+
+  it("dismisses even when the render-complete signal is already true BEFORE the vendor becomes ready (order-independent)", async () => {
+    markGraphRendered();
+    render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+
+    await waitForVendorReady();
+    await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
+  });
+
+  it("a LATER render-complete signal (a graphVersion-bump re-render) does not re-trigger dismiss() or resurrect the loader", async () => {
+    render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+    await waitForVendorReady();
+    markGraphRendered();
+    await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
+
+    // Swap in a spy AFTER the first (real) dismiss -- tryDismiss's own poll
+    // loop has already reached its terminal `completed` state by now (same
+    // latch the "vendor init guard" tests below exercise), so a later
+    // signal must be a pure no-op: nothing is still polling to react to it.
+    const dismissSpy = vi.fn();
+    window.__compendiumLoader!.dismiss = dismissSpy;
+
+    markGraphRendered(); // already true; re-asserting stands in for a second render's write
+
+    await settleAFewPollTicks();
+    expect(dismissSpy).not.toHaveBeenCalled();
+    expect(getRoot()).toHaveClass("loader-dismiss");
   });
 });
 
@@ -123,6 +190,7 @@ describe("CompendiumLoader vendor init guard (remount)", () => {
     // nothing has actually remounted in production yet).
     const { unmount } = render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
     await waitForVendorReady();
+    markGraphRendered(); // Task A1-4: dismiss now also gates on this
     // 'return' mode dismisses synchronously via the MutationObserver --
     // confirms the FIRST mount's tryDismiss trigger actually ran.
     await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
@@ -190,6 +258,7 @@ describe("CompendiumLoader vendor init guard (remount)", () => {
     render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
 
     await waitForVendorReady();
+    markGraphRendered(); // Task A1-4: dismiss now also gates on this
     await waitFor(() => expect(getRoot()).toHaveClass("loader-dismiss"));
   });
 });

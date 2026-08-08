@@ -118,6 +118,11 @@ afterEach(() => {
   // beforeEach uses; done in afterEach here instead since renderCanvas() is
   // called fresh at the START of each test body, not in a shared beforeEach).
   __resetGraphCacheForTest();
+  // Task A1-4: the render-complete signal for components/CompendiumLoader.tsx
+  // (lib/vendor/vendor.d.ts's Window augmentation) -- window-scoped, same
+  // per-test-reset reason as CompendiumLoader.test.tsx's own cleanup of the
+  // sibling globals it owns.
+  delete window.__compendiumGraphRendered;
 });
 
 // Test-only probe: exposes NavProvider's state as text + lets a test drive
@@ -268,6 +273,40 @@ describe("GraphCanvas mount + fetch", () => {
     await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
     expect(renderMock).not.toHaveBeenCalled();
     expect(document.querySelector("#compendium-empty-state")).toBeNull();
+  });
+});
+
+describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's real dismiss trigger)", () => {
+  it("sets window.__compendiumGraphRendered once vendor.render() has been called for the first time", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    expect(window.__compendiumGraphRendered).toBeUndefined();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+  });
+
+  it("does NOT set the signal while the fetch is still pending or the payload has zero nodes", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    expect(renderMock).not.toHaveBeenCalled();
+    expect(window.__compendiumGraphRendered).toBeUndefined();
+  });
+
+  it("stays true (does not get unset) across a LATER graphVersion-bump re-render", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+
+    expect(window.__compendiumGraphRendered).toBe(true);
   });
 });
 

@@ -221,42 +221,66 @@ export default function CompendiumLoader({
 
     void import("@/lib/vendor/compendium-loader.js").then(() => {
       if (cancelled) return;
-      // TODO(mig-03): this is a stand-in dismiss trigger, not the real
-      // one. Dash's actual signal is a SEPARATE clientside callback
+      // Task A1-4 (batch 03 graph canvas port): real dismiss trigger,
+      // replacing the mig-03 stand-in below it used to be ("the vendor
+      // module finished initializing", i.e. calling dismiss() as soon as
+      // window.__compendiumLoader appeared, before there was any graph to
+      // wait on). Dash's own signal is a SEPARATE clientside callback
       // (app.py) that flips #compendium-loader's className to add
-      // .loader-dismiss once refresh_graph_on_load's page-load graph
-      // fetch COMPLETES (graph-version goes 0 -> >0 -- deliberately not
-      // "nodes exist", see that callback's comment for why the
-      // distinction matters for an empty-but-loaded compendium). This
-      // migration slice has no graph load yet, so per this batch's brief
-      // the trigger is "the shell has mounted and chat is interactive" --
-      // approximated here as "the vendor module finished initializing",
-      // since components/SearchBar.tsx (the re-homed chat overlay, Task 10)
-      // has no async readiness gate of its own to wait on yet. Calling
-      // dismiss() early is safe for every mode:
-      // the vendor module's own MutationObserver defers first-run/replay
-      // finalization until their animation cycle completes regardless of
-      // when dismiss() is called (see lib/vendor/compendium-loader.js's
-      // mode-aware dismiss-defer logic) -- only 'return' mode (no
-      // animation to protect) finalizes immediately. Replace this whole
-      // block with a real graph-version watch when the D3 graph port
-      // lands.
+      // .loader-dismiss once refresh_graph_on_load's page-load graph fetch
+      // COMPLETES (graph-version goes 0 -> >0 -- deliberately not "nodes
+      // exist", see that callback's comment for why the distinction
+      // matters for an empty-but-loaded compendium). This port's analogue:
+      // window.__compendiumGraphRendered, set `true` by
+      // components/GraphCanvas.tsx the first time its vendor's render()
+      // call returns (synchronous -- return IS first paint, see that
+      // component's own comment; lib/vendor/vendor.d.ts documents the flag
+      // itself). tryDismiss below now polls BOTH window.__compendiumLoader
+      // (vendor ready) AND this flag (graph painted) before calling
+      // dismiss() -- order-independent (whichever condition becomes true
+      // last is what this poll is waiting on; a flag already true when
+      // this poll starts is picked up on the very next tick, same as
+      // window.__compendiumLoader already was before this change).
+      //
+      // Re-init constraint preserved: this only changes WHEN the existing
+      // dismiss() call fires, not whether/how the loader itself
+      // (re)initializes -- window.__compendiumLoader is still the SAME
+      // node the vendor's own poll binds ONCE (the constraint
+      // window.__compendiumLoaderVendorInitStarted's own comment
+      // documents above); no new mount/remount path is introduced here.
+      //
+      // Calling dismiss() is still safe for every mode regardless of
+      // timing: the vendor module's own MutationObserver defers first-run/
+      // replay finalization until their animation cycle completes
+      // regardless of when dismiss() is called (see
+      // lib/vendor/compendium-loader.js's mode-aware dismiss-defer logic)
+      // -- only 'return' mode (no animation to protect) finalizes
+      // immediately.
+      //
+      // TODO(W3): Group W will move this to the first worker `positions`
+      // batch instead of render()'s synchronous return -- replace this
+      // whole block (and window.__compendiumGraphRendered's read/write
+      // sites) then, don't layer a second flag alongside it.
       let tries = 0;
-      const MAX_TRIES = 200; // ~10s at 50ms, matching the vendor module's own poll ceiling
+      // ~10s at 50ms, matching the vendor module's own poll ceiling. Now
+      // also the give-up ceiling for "graph never painted" (e.g. a
+      // zero-node compendium, where GraphCanvas never calls the vendor's
+      // render() at all and this flag never arrives) -- see
+      // task-A1-4-report.md for why that case is knowingly left to this
+      // same fallback rather than special-cased in this slice.
+      const MAX_TRIES = 200;
       const tryDismiss = () => {
         if (cancelled) return;
-        if (window.__compendiumLoader) {
+        if (window.__compendiumLoader && window.__compendiumGraphRendered) {
           window.__compendiumLoader.dismiss();
           completed = true;
           return;
         }
         if (++tries > MAX_TRIES) {
-          // give up silently -- the div is already in the DOM by the time
-          // this effect runs, so the vendor module's own poll (same ~10s
-          // ceiling) failing here would mean it never armed its own
-          // watchdog either; not worth a second failure path for a case
-          // this unlikely. Still a TERMINAL state either way -- the latch
-          // stays permanent rather than retrying on a future remount.
+          // give up silently -- terminal state either way, the latch stays
+          // permanent rather than retrying on a future remount. See the
+          // MAX_TRIES comment above for the (now more reachable) case this
+          // covers.
           completed = true;
           return;
         }
