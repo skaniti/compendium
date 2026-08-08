@@ -25,6 +25,7 @@ const setSelectionMock = vi.fn();
 const disposeMock = vi.fn();
 const recolorMock = vi.fn();
 const toggleNoiseMock = vi.fn();
+const setFilterDimMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   render: (...args: unknown[]) => {
     renderMock(...args);
@@ -33,6 +34,7 @@ vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
   recolor: (...args: unknown[]) => recolorMock(...args),
   toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
+  setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
 }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -103,6 +105,7 @@ afterEach(() => {
   disposeMock.mockClear();
   recolorMock.mockClear();
   toggleNoiseMock.mockClear();
+  setFilterDimMock.mockClear();
   // ThemeProvider (wave 8) persists the picked variant to localStorage --
   // clear between tests so one test's setVariant() call can't seed the
   // next test's initial readStoredVariant() read (same convention
@@ -126,10 +129,15 @@ function NavProbe() {
     <div>
       <span data-testid="selected">{state.selectedNodeId ?? "null"}</span>
       <span data-testid="filter-key">{state.filterWindowKey ?? "null"}</span>
+      <span data-testid="filter-ids">{state.filterHighlightIds.join(",")}</span>
       <button onClick={() => dispatch({ type: "SELECT_NODE", id: "seed-node" })}>seed-select</button>
       <button onClick={() => dispatch({ type: "SET_WINDOW_FILTER", key: "win-1", nodeIds: ["a"] })}>
         seed-filter
       </button>
+      <button onClick={() => dispatch({ type: "SET_WINDOW_FILTER", key: "win-2", nodeIds: ["a", "b"] })}>
+        seed-filter-2
+      </button>
+      <button onClick={() => dispatch({ type: "CLEAR_FILTER" })}>clear-filter</button>
     </div>
   );
 }
@@ -568,6 +576,109 @@ describe("GraphCanvas inbound wiring: NavProvider -> vendor.setSelection (Step 5
     });
 
     await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", null));
+  });
+});
+
+describe("GraphCanvas filter dimming (Step 5: carried A1-1 deferral)", () => {
+  it("state.filterHighlightIds change calls vendor.setFilterDim with the id set", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    setFilterDimMock.mockClear(); // drop the initial mount-time apply ([] -- no filter yet)
+
+    act(() => screen.getByText("seed-filter").click());
+
+    expect(screen.getByTestId("filter-ids")).toHaveTextContent("a");
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+  });
+
+  it("does NOT clobber the current selection -- setSelection is not re-invoked as a side effect of a filter change", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-select").click());
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+    setSelectionMock.mockClear();
+
+    act(() => screen.getByText("seed-filter").click());
+
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+    // Selection state itself is untouched (NavProvider's own reducer row,
+    // lib/nav.ts's SET_WINDOW_FILTER: "selection is untouched").
+    expect(screen.getByTestId("selected")).toHaveTextContent("seed-node");
+    // And the vendor's own setSelection was never re-called by the filter
+    // effect -- filter dimming is a genuinely SEPARATE entry point, not
+    // routed through setSelection('nodes', ids) (the clobbering path A1-1
+    // ruled out).
+    expect(setSelectionMock).not.toHaveBeenCalled();
+  });
+
+  it("switching to a DIFFERENT filter window updates the vendor with the new id set", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-filter").click());
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+
+    act(() => screen.getByText("seed-filter-2").click());
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a", "b"]));
+  });
+
+  it("CLEAR_FILTER calls setFilterDim with an empty array, and leaves selection alone", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-select").click());
+    act(() => screen.getByText("seed-filter").click());
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+
+    act(() => screen.getByText("clear-filter").click());
+
+    expect(screen.getByTestId("filter-ids")).toHaveTextContent("");
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith([]));
+    expect(screen.getByTestId("selected")).toHaveTextContent("seed-node");
+  });
+
+  it("a background-tap HOME clears both selection and the filter, applying setFilterDim([])", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [
+      unknown,
+      unknown,
+      { onSelect: (kind: string | null, id: string | null) => void },
+    ];
+
+    act(() => screen.getByText("seed-select").click());
+    act(() => screen.getByText("seed-filter").click());
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+
+    act(() => opts.onSelect(null, null)); // background tap -> HOME
+
+    expect(screen.getByTestId("selected")).toHaveTextContent("null");
+    expect(screen.getByTestId("filter-ids")).toHaveTextContent("");
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenLastCalledWith([]));
+  });
+
+  it("does not call setFilterDim before the vendor mount has resolved (no crash on a null handle)", async () => {
+    // Empty payload -- the vendor never mounts, so setFilterDimRef.current
+    // stays null for this render's whole lifetime; dispatching a filter
+    // change must still be a safe no-op, not a crash.
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    expect(renderMock).not.toHaveBeenCalled();
+
+    act(() => screen.getByText("seed-filter").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(setFilterDimMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("filter-ids")).toHaveTextContent("a");
   });
 });
 

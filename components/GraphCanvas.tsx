@@ -221,6 +221,11 @@ export default function GraphCanvas() {
   // Task A1-3 (Step 4): the vendor's toggleNoise(show) setter, captured at
   // mount like setSelectionRef/recolorRef above.
   const toggleNoiseRef = useRef<((show: boolean) => void) | null>(null);
+  // Task A1-3 (Step 5): the vendor's setFilterDim(nodeIds) setter -- the
+  // independent dimming layer (vendor header comment delta #15) that
+  // composes with setSelection's own highlight set instead of clobbering
+  // it (the A1-1-ratified gap this closes).
+  const setFilterDimRef = useRef<((nodeIds: string[]) => void) | null>(null);
   // Task A1-3 (Step 2): the raw render() binding, captured once at mount so
   // a LATER graphVersion bump can re-invoke it directly (see the dedicated
   // effect below) without repeating the dynamic import() -- the module is
@@ -295,6 +300,11 @@ export default function GraphCanvas() {
   // time the async .then() below reads it.
   const selectedNodeIdRef = useRef(state.selectedNodeId);
   selectedNodeIdRef.current = state.selectedNodeId;
+  // Task A1-3 (Step 5): same always-current-ref pattern as
+  // selectedNodeIdRef above, for the SAME reason -- a filter dispatched
+  // during the vendor's dynamic-import mount window must not be dropped.
+  const filterHighlightIdsRef = useRef(state.filterHighlightIds);
+  filterHighlightIdsRef.current = state.filterHighlightIds;
 
   // Obligation 1 (see header comment): visible only once a fetch has
   // actually completed AND it reported zero nodes -- `payload !== null`
@@ -327,6 +337,7 @@ export default function GraphCanvas() {
       // the vendor module currently holds, no per-call arguments needed.
       recolorRef.current = vendor.recolor;
       toggleNoiseRef.current = vendor.toggleNoise;
+      setFilterDimRef.current = vendor.setFilterDim;
       disposeRef.current = vendor.render(containerRef.current, payload, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
@@ -353,6 +364,10 @@ export default function GraphCanvas() {
       // selection apply's `if`) because there is no meaningful "unset"
       // state for a boolean toggle to skip applying.
       vendor.toggleNoise(showNoiseRef.current);
+      // Task A1-3 (Step 5): same pattern again, via filterHighlightIdsRef
+      // (always current). Unconditional like toggleNoise above -- an empty
+      // array IS the correct "no filter" call, not something to skip.
+      vendor.setFilterDim(filterHighlightIdsRef.current);
       lastRenderedVersionRef.current = graphVersion;
     });
     return () => {
@@ -363,6 +378,7 @@ export default function GraphCanvas() {
       setSelectionRef.current = null;
       recolorRef.current = null;
       toggleNoiseRef.current = null;
+      setFilterDimRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once
     // against the first non-empty payload by design (see above);
@@ -404,15 +420,19 @@ export default function GraphCanvas() {
       onSelect: (kind, id) => selectFromCanvas(kind as "node" | "cluster" | null, id ?? undefined),
     });
     lastRenderedVersionRef.current = graphVersion;
-    // Re-apply selection against the freshly-drawn DOM -- render()'s own
-    // internal D3 data join (keyed by node id) preserves attributes on
-    // PERSISTING nodes untouched, but any node that newly ENTERS (wasn't in
-    // the previous dataset) is drawn with a flat default opacity, and
-    // hull-label groups are rebuilt outright -- so a currently-selected
-    // node's highlight is not reliably guaranteed to survive a data swap
-    // without this explicit re-apply. Mirrors the mount effect's own
-    // "apply whatever selection already exists" step above.
-    if (selectedNodeIdRef.current) setSelectionRef.current?.("node", selectedNodeIdRef.current);
+    // Re-apply selection AND filter dim against the freshly-drawn DOM.
+    // Confirmed directly in the vendor source (render()'s `if (!svg) {...}
+    // else {...}` branch, vendor ~:3990): every call past the FIRST wipes
+    // `.graph-root` (`selectAll('*').remove()`) and rebuilds every layer
+    // group from scratch before the circle/star/label data joins run --
+    // there is no persisting incremental D3 join across separate render()
+    // calls to rely on, only within a single call. Both setSelection and
+    // setFilterDim are unconditional-safe no-ops when their value is
+    // empty/null (see each setter's own vendor-side comment), so this
+    // reapplies unconditionally -- no `if` needed, mirrors the mount
+    // effect's own "apply whatever already exists" steps above.
+    setSelectionRef.current?.("node", selectedNodeIdRef.current);
+    setFilterDimRef.current?.(filterHighlightIdsRef.current);
   }, [graphVersion, payload, selectFromCanvas]);
 
   // Step 4b / Step 6: canvas Esc is a BUBBLE-phase (no `true` capture
@@ -454,23 +474,27 @@ export default function GraphCanvas() {
   // updateHighlighting(), which is exactly what CLEAR_SELECTION/HOME
   // should visually do here. No-ops (via the ref guard) until the vendor
   // mount effect above has actually resolved.
-  //
-  // filterHighlightIds (dimming for the active window filter): NavState
-  // DOES carry this today, but the vendor has no entry point that layers
-  // it independently of selection -- updateHighlighting()'s
-  // selectedNodeId/selectedClusterId/selectedNodeIds/selectedSessionId
-  // branches are mutually exclusive (a single if/else-if chain), so
-  // driving filterHighlightIds through the existing `setSelection('nodes',
-  // ids)` path would silently clobber a concurrent node/cluster selection
-  // instead of layering both, unlike NavState's own model (filter persists
-  // across selection changes -- lib/nav.ts's header comment). Wiring that
-  // correctly needs new vendor-side dimming plumbing, not just a call from
-  // here -- out of scope for "wire IF NavProvider exposes it" (that's
-  // about not inventing new NAV state; this would be inventing new VENDOR
-  // state). Left as a noted gap for A1-3/window work, per the brief.
   useEffect(() => {
     setSelectionRef.current?.("node", state.selectedNodeId);
   }, [state.selectedNodeId]);
+
+  // Task A1-3 (Step 5): filterHighlightIds (dimming for the active diary-
+  // window filter) -- CLOSES the A1-1-ratified gap the comment above this
+  // one used to describe (task-A1-1-report.md's Step 5 section): the
+  // vendor's updateHighlighting() branches for
+  // selectedNodeId/selectedClusterId/selectedNodeIds/selectedSessionId are
+  // still mutually exclusive, so this does NOT route through
+  // setSelection('nodes', ids) (that WOULD clobber a concurrent node/
+  // cluster selection). Instead it drives the vendor's new INDEPENDENT
+  // `setFilterDim` entry point (header comment delta #15), which
+  // updateHighlighting() unions with whatever the selection branches
+  // compute -- selection and filter compose (a selected node inside a
+  // dimmed-out set stays visible, matching the brief's own example),
+  // rather than one silently overwriting the other. Same ref-guard no-op
+  // shape as setSelection above.
+  useEffect(() => {
+    setFilterDimRef.current?.(state.filterHighlightIds);
+  }, [state.filterHighlightIds]);
 
   // Task A1-2 wave 8: live palette recolor. Subscribes to ThemeProvider's
   // `variant` (components/ThemeProvider.tsx) and calls the vendor's

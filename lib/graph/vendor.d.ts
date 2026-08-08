@@ -53,6 +53,11 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   // NODE_ENV !== "production" (see the vendor file's header comment,
   // delta #7). Loosely typed; not part of the sandbox's own contract.
   export function setSelection(type: string, id: unknown): void;
+  // Task A1-3 (header comment delta #15): the independent filter-dim layer
+  // (NavProvider's filterHighlightIds) -- unioned with setSelection's own
+  // highlight set by updateHighlighting(), not routed through it. Empty
+  // array/undefined clears the filter (dims nothing).
+  export function setFilterDim(nodeIds: string[] | undefined): void;
   export function toggleNoise(show: boolean): void;
   export function frameNodes(nodeIds: string[], visibleH?: number): void;
   export function getClusterPages(clusterId: string): string[];

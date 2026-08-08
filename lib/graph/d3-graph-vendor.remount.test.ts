@@ -41,6 +41,19 @@ const ONE_NODE_PAYLOAD: GraphPayload = {
   groups: [],
 };
 
+// Task A1-3 Step 5: D3 stores each element's bound datum on `__data__`
+// (standard D3 behavior, not a DOM attribute) -- reading it directly is far
+// more robust than assuming DOM insertion order matches array order, and
+// lets these tests identify which circle.page belongs to which node id
+// without the vendor needing a test-only data-* attribute.
+function circleOpacityById(container: HTMLElement, id: string): string | null {
+  for (const el of Array.from(container.querySelectorAll("circle.page"))) {
+    const datum = (el as unknown as { __data__?: { id?: string } }).__data__;
+    if (datum && datum.id === id) return el.getAttribute("opacity");
+  }
+  return null;
+}
+
 // Task A1-3 Step 4: one featured singleton (never hidden by the noise
 // toggle -- filterOutNoise only strips kind === "unclustered") plus one
 // unclustered "noise" node, 0 clusters/links (same jsdom-safety rationale
@@ -323,5 +336,153 @@ describe("d3-graph-vendor toggleNoise() (Task A1-3 Step 4)", () => {
     const { toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
     expect(() => toggleNoise(false)).not.toThrow();
     toggleNoise(true); // restore
+  });
+});
+
+// Task A1-3 Step 5 (header comment delta #15): three singletons, 0
+// clusters/links (same jsdom-safety rationale as ONE_NODE_PAYLOAD) --
+// enough to test composition (a selected node, a filter-visible node, and
+// a plain node that neither layer keeps visible) without needing the
+// cluster-label code paths.
+function threeNodePayload(): GraphPayload {
+  function singleton(id: string): GraphPayload["nodes"][number] {
+    return {
+      id,
+      label: id,
+      level: 0,
+      kind: "singleton",
+      visit_count: 1,
+      parent_id: null,
+      children_ids: [],
+      capture_ids: [],
+      page_urls: ["https://example.com/" + id],
+      first_visited_at: null,
+    };
+  }
+  return {
+    nodes: [singleton("page-1"), singleton("page-2"), singleton("page-3")],
+    links: [],
+    clusters: [],
+    super_clusters: [],
+    groups: [],
+  };
+}
+
+describe("d3-graph-vendor setFilterDim() composes with selection (Task A1-3 Step 5)", () => {
+  beforeEach(async () => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+    // selectedNodeId/selectedClusterId/.../filterDimNodeIds are module-level
+    // singletons that persist across tests in this file (same class of
+    // shared-state concern __mountedContainer/rawData/__showNoise already
+    // have here) -- reset BOTH selection and filter to a known-clear state
+    // before every test rather than assuming whatever the previous test
+    // left behind. updateHighlighting() itself no-ops harmlessly here since
+    // no container/svg exists yet at this point in a fresh test.
+    const { setSelection, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    setSelection("node", null); // null id clears every internal selection var (__vendorSetSelection)
+    setFilterDim([]);
+  });
+
+  afterEach(() => {
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  it("no selection, no filter -- everything full opacity", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("1");
+    expect(circleOpacityById(container, "page-3")).toBe("1");
+  });
+
+  it("filter alone dims everything NOT in the filter set", async () => {
+    const { render, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setFilterDim(["page-2"]);
+
+    expect(circleOpacityById(container, "page-1")).toBe("0.15");
+    expect(circleOpacityById(container, "page-2")).toBe("1");
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
+  });
+
+  it("selection alone (no filter) dims everything except the selected node -- pre-existing behavior, unchanged", async () => {
+    const { render, setSelection } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setSelection("node", "page-1");
+
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("0.15");
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
+  });
+
+  it("selection AND filter compose (union): a selected node inside a dimmed-out set stays visible, PLUS the filter's own set stays visible -- neither clobbers the other", async () => {
+    const { render, setSelection, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    // Filter keeps page-2 visible; page-1 (selected below) would otherwise
+    // be OUTSIDE that filter set -- this is exactly the brief's own
+    // "selected node inside a dimmed-out set" scenario.
+    setFilterDim(["page-2"]);
+    setSelection("node", "page-1");
+
+    expect(circleOpacityById(container, "page-1")).toBe("1"); // selection layer
+    expect(circleOpacityById(container, "page-2")).toBe("1"); // filter layer
+    expect(circleOpacityById(container, "page-3")).toBe("0.15"); // excluded by BOTH layers
+  });
+
+  it("setFilterDim does not clobber the current selection -- selection survives filter changes and clears", async () => {
+    const { render, setSelection, setFilterDim, debugGetSelection } = await import(
+      "@/lib/graph/d3-graph-vendor.js"
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setSelection("node", "page-1");
+    expect(debugGetSelection().selectedNodeId).toBe("page-1");
+
+    setFilterDim(["page-2"]);
+    expect(debugGetSelection().selectedNodeId).toBe("page-1"); // untouched by the filter call
+
+    setFilterDim([]); // clear the filter
+    expect(debugGetSelection().selectedNodeId).toBe("page-1"); // still untouched
+
+    // Back to selection-only behavior once the filter clears.
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("0.15");
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
+  });
+
+  it("clearing the filter (empty array) with NO selection restores full visibility for everyone", async () => {
+    const { render, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setFilterDim(["page-2"]);
+    expect(circleOpacityById(container, "page-1")).toBe("0.15");
+
+    setFilterDim([]);
+
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("1");
+    expect(circleOpacityById(container, "page-3")).toBe("1");
   });
 });
