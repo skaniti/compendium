@@ -549,7 +549,29 @@ describe("GraphCanvas Part 2 (decision C): tuner snapshot resolves before first 
     expect(renderMock).toHaveBeenCalledTimes(1);
   });
 
-  it("resolution runs WHILE the graph fetch is in flight -- GET /api/auth/me fires before fetchGraph settles, not gated on hasNodes", async () => {
+  // Review fix round 1, finding F1: TWO independent /api/auth/me callers
+  // exist in this tree -- SessionProvider (role/showNoise, mounted by
+  // renderCanvas()) and GraphCanvas's own resolveTunerSnapshotFromMe. A
+  // bare "was /api/auth/me called at least once" assertion does NOT
+  // discriminate a genuinely CONCURRENT tuner fetch from one wrongly
+  // SEQUENCED after the graph fetch (e.g. gated on `payload !== null`) --
+  // SessionProvider's own call satisfies "at least one" regardless of the
+  // tuner effect's timing. The reviewer empirically confirmed a serialized
+  // implementation still passed the old single-call assertion here, then
+  // reverted it. Asserting a COUNT of (at least) two calls observed BEFORE
+  // the graph fetch is released is what actually proves both callers fired
+  // concurrently, not just that SessionProvider's own (unrelated) call
+  // happened to satisfy the assertion.
+  function countMeCalls(): number {
+    return vi
+      .mocked(api.apiFetch)
+      .mock.calls.filter(([input]) => {
+        const url = typeof input === "string" ? input : String(input);
+        return url.includes("/api/auth/me");
+      }).length;
+  }
+
+  it("resolution runs WHILE the graph fetch is in flight -- BOTH /api/auth/me callers (SessionProvider's + the tuner resolution's) fire before fetchGraph settles, not gated on hasNodes", async () => {
     let releaseGraphFetch!: (payload: GraphPayload) => void;
     const graphFetchGate = new Promise<GraphPayload>((resolve) => {
       releaseGraphFetch = resolve;
@@ -558,10 +580,10 @@ describe("GraphCanvas Part 2 (decision C): tuner snapshot resolves before first 
     renderCanvas({ id: 7, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
 
     // The graph fetch is still pending (hasNodes stays false, vendor never
-    // mounts) -- but /api/auth/me must already have been called by now.
-    await waitFor(() =>
-      expect(api.apiFetch).toHaveBeenCalledWith(expect.stringContaining("/api/auth/me"))
-    );
+    // mounts) -- but BOTH /api/auth/me callers must already have fired by
+    // now. A serialized (gated-on-payload) implementation would only ever
+    // show SessionProvider's ONE call here.
+    await waitFor(() => expect(countMeCalls()).toBeGreaterThanOrEqual(2));
     expect(renderMock).not.toHaveBeenCalled();
 
     releaseGraphFetch(ONE_NODE_PAYLOAD);

@@ -188,6 +188,54 @@ describe("resolveTunerSnapshot: version gating (port of applyTunerSnapshot)", ()
     expect(result.BASE_SC_ICON_SIZE).toBe(77);
   });
 
+  // Review fix round 1, finding F2: the table above only ever exercises
+  // clLabel (typo-gated) and pageDot (ungated) of the 7 SCALE_THRESHOLDS
+  // entries -- scIcon/scName/singletonLabel/groupLabel/scLabel never
+  // appeared, so a source-level regression dropping any ONE of those five
+  // keys from TYPO_GATED_THRESHOLD_KEYS (tuner-snapshot.ts) would have
+  // gone undetected. This table exercises ALL SIX typo-gated entries
+  // individually: each must apply its own divergent value when TYPO_V is
+  // current, and drop to the code default (not the stale profile's value)
+  // when TYPO_V is stale. Removing any key from TYPO_GATED_THRESHOLD_KEYS
+  // makes that key's "drops when stale" assertion fail (the divergent
+  // value would incorrectly survive the stale stamp).
+  const ALL_TYPO_GATED_THRESHOLD_KEYS = [
+    "clLabel",
+    "scLabel",
+    "scName",
+    "singletonLabel",
+    "groupLabel",
+    "scIcon",
+  ] as const;
+
+  it.each(ALL_TYPO_GATED_THRESHOLD_KEYS)(
+    "SCALE_THRESHOLDS.%s: applies a divergent value when TYPO_V is current, drops to the code default when TYPO_V is stale",
+    (key) => {
+      const divergent = { k_min: 1.11, k_max: 2.22 };
+
+      const snapCurrent = fullSnapshot({ SCALE_THRESHOLDS: { [key]: divergent } });
+      const resultCurrent = resolveTunerSnapshot(withSlot1(snapCurrent), "1", makeStorage());
+      expect(resultCurrent.SCALE_THRESHOLDS?.[key]).toEqual(divergent);
+
+      const snapStale = fullSnapshot({
+        TYPO_V: TUNER_TYPO_VERSION - 1,
+        SCALE_THRESHOLDS: { [key]: divergent },
+      });
+      const resultStale = resolveTunerSnapshot(withSlot1(snapStale), "1", makeStorage());
+      // When the ONLY entry in the profile's SCALE_THRESHOLDS is this one
+      // (typo-gated) key, and it's dropped, NOTHING validated -- the whole
+      // SCALE_THRESHOLDS field is omitted from the partial (same
+      // merge-equivalent omission the "ignores a SCALE_THRESHOLDS entry
+      // with a non-numeric k_min/k_max" test above documents), not an
+      // object with this key defaulted and the rest absent. Assert via the
+      // same merge the real call site performs, so this checks the ACTUAL
+      // end state ("did the divergent value survive the stale stamp"),
+      // not the intermediate partial's exact shape.
+      const merged = { ...GRAPH_DEFAULTS.SCALE_THRESHOLDS, ...resultStale.SCALE_THRESHOLDS };
+      expect(merged[key]).toEqual(GRAPH_DEFAULTS.SCALE_THRESHOLDS[key]);
+    }
+  );
+
   // TABLE: [description, FOG_V, expectFogApplied]
   it.each([
     ["current FOG_V -- fog keys APPLY", TUNER_FOG_VERSION, true],

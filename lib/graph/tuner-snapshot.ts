@@ -155,6 +155,28 @@ function resolveEffectiveSlot(
   return null;
 }
 
+// Review fix round 1 rider (F3), deliberate deviation from the vendor:
+// applyTunerSnapshot applies k_min/k_max INDEPENDENTLY per field (vendor
+// `d3-graph-vendor.js:1047-1048` -- `if (typeof ...k_min === 'number')
+// ...k_min = ...;` and the k_max line right after it, two separate
+// `if`s), so a snapshot with a valid k_min but garbage/missing k_max
+// there leaves k_max at whatever the LIVE module var currently holds
+// (a previous mount's value, or the
+// compile-time default on a first mount) -- a half-applied, mount-history-
+// dependent result. This function is atomic per entry instead: BOTH
+// k_min and k_max must be valid numbers, or the whole entry is dropped
+// (falls back to GRAPH_DEFAULTS for that entry once merged at the call
+// site). Chosen deliberately, not an oversight: this module's entire
+// design point is handing the vendor a FULLY resolved, mount-history-
+// independent snapshot (see this file's and GraphCanvas.tsx's own
+// comments on why every real call site merges onto GRAPH_DEFAULTS rather
+// than passing a sparse partial) -- a half-valid k_min/k_max pair
+// producing a mixed stale-plus-new state would undermine exactly that
+// guarantee. Real saved profiles are always written as complete
+// {k_min,k_max} pairs by construction (there is no UI path that writes
+// just one of the two), so this only changes behavior for a hand-edited
+// or corrupted profile -- see task-B-report.md's fix-round-1 section for
+// the full writeup.
 function parseScaleThreshold(value: unknown): ScaleThreshold | null {
   if (!isPlainRecord(value)) return null;
   const { k_min, k_max } = value;
