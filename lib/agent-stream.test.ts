@@ -8,7 +8,7 @@ describe("extractEvents", () => {
       'data: {"type":"status","text":"Using search_compendium..."}\n\n' +
       'data: {"type":"token","text":"The "}\n\n' +
       'data: {"type":"token","text":"compendium"}\n\n' +
-      'data: {"type":"complete","sources":["https://x"],"cluster_ids":[1],"images":[],"tool_calls_made":[{"iteration":1,"tool":"search_compendium","arguments":{"q":"x"},"result_preview":"..."}],"total_cost_usd":0.001,"iterations":1,"model":"gpt-4o-mini"}\n\n';
+      'data: {"type":"complete","sources":["https://x"],"cluster_ids":["slug-a"],"images":[],"tool_calls_made":[{"iteration":1,"tool":"search_compendium","arguments":{"q":"x"},"result_preview":"..."}],"total_cost_usd":0.001,"iterations":1,"model":"gpt-4o-mini"}\n\n';
     const { events, rest } = extractEvents(buf);
     expect(events.map((e) => e.type)).toEqual(["status", "token", "token", "complete"]);
     expect(rest).toBe("");

@@ -262,11 +262,18 @@ export default function CompendiumLoader({
       //
       let tries = 0;
       // ~10s at 50ms, matching the vendor module's own poll ceiling. Now
-      // also the give-up ceiling for "graph never painted" (e.g. a
-      // zero-node compendium, where GraphCanvas never calls the vendor's
-      // render() at all and this flag never arrives) -- see
-      // task-A1-4-report.md for why that case is knowingly left to this
-      // same fallback rather than special-cased in this slice.
+      // also the give-up ceiling for "graph never painted" -- but A1-4
+      // (see the mount effect's own comment further up, and the
+      // showEmptyState/error effects right after it in GraphCanvas.tsx)
+      // means a zero-node compendium and a rejected fetch BOTH signal
+      // window.__compendiumGraphRendered promptly now, well under this
+      // ceiling; neither is the case this MAX_TRIES fallback actually
+      // exists for anymore. The one case left un-signaled is a fetch
+      // that never settles at all -- payload stays null forever, so
+      // none of the three write sites (mount/showEmptyState/error) ever
+      // fires -- see task-A1-4-report.md for why that case is knowingly
+      // left to this same fallback rather than special-cased in this
+      // slice.
       const MAX_TRIES = 200;
       const tryDismiss = () => {
         if (cancelled) return;
