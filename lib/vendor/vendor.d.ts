@@ -85,9 +85,14 @@ interface Window {
   // above, for the same per-test-reset reason. Never cleared once set (not
   // torn down on GraphCanvas unmount) -- same lifetime as
   // window.__compendiumLoader itself: persists across a page's whole
-  // lifetime, resets only on a real page reload. TODO(W3): superseded once
-  // dismissal moves to the first worker `positions` batch instead of
-  // render()'s synchronous return -- this flag and all three of its
-  // write sites should be DELETED then, not layered under a second flag.
+  // lifetime, resets only on a real page reload. Task group W (batch 03
+  // Web Worker force sim), W3 step: the RENDERED-path write site
+  // (components/GraphCanvas.tsx's mount effect) now fires from
+  // vendor.render()'s `onFirstPaint` callback -- the first worker `tick`
+  // message's positions painted -- instead of from render()'s own
+  // synchronous return, since render() starting a worker and returning no
+  // longer implies anything painted. The other two write sites
+  // (empty-settle, error-settle) are UNCHANGED: they're settle states
+  // with no sim to wait on.
   __compendiumGraphRendered?: boolean;
 }

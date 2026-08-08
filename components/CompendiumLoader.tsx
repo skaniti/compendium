@@ -232,10 +232,13 @@ export default function CompendiumLoader({
       // exist", see that callback's comment for why the distinction
       // matters for an empty-but-loaded compendium). This port's analogue:
       // window.__compendiumGraphRendered, set `true` by
-      // components/GraphCanvas.tsx the first time its vendor's render()
-      // call returns (synchronous -- return IS first paint, see that
-      // component's own comment; lib/vendor/vendor.d.ts documents the flag
-      // itself). tryDismiss below now polls BOTH window.__compendiumLoader
+      // components/GraphCanvas.tsx from vendor.render()'s `onFirstPaint`
+      // callback -- the first Web Worker `tick` message's positions
+      // painted (Task group W, W3 step; before that task, render() was
+      // itself synchronous and this fired right after it returned --
+      // see that component's own comment; lib/vendor/vendor.d.ts
+      // documents the flag itself). tryDismiss below now polls BOTH
+      // window.__compendiumLoader
       // (vendor ready) AND this flag (graph painted) before calling
       // dismiss() -- order-independent (whichever condition becomes true
       // last is what this poll is waiting on; a flag already true when
@@ -257,10 +260,6 @@ export default function CompendiumLoader({
       // -- only 'return' mode (no animation to protect) finalizes
       // immediately.
       //
-      // TODO(W3): Group W will move this to the first worker `positions`
-      // batch instead of render()'s synchronous return -- replace this
-      // whole block (and window.__compendiumGraphRendered's read/write
-      // sites) then, don't layer a second flag alongside it.
       let tries = 0;
       // ~10s at 50ms, matching the vendor module's own poll ceiling. Now
       // also the give-up ceiling for "graph never painted" (e.g. a

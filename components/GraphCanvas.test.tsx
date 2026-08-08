@@ -22,17 +22,29 @@ import type { GraphPayload } from "@/lib/types";
 // GraphA1.test.tsx established (real D3 force layout + SVG measurement
 // jsdom doesn't implement; lib/graph/d3-graph-vendor.remount.test.ts
 // covers the real, unmocked module separately).
-const renderMock = vi.fn();
-const setSelectionMock = vi.fn();
 const disposeMock = vi.fn();
+// Task group W, W3 step: mirrors the real vendor's contract -- render()
+// itself is synchronous, but `onFirstPaint` (the render-complete signal
+// GraphCanvas.tsx now wires window.__compendiumGraphRendered to) fires
+// from a LATER worker `tick` message, never synchronously within render().
+// Deferred a microtask here (not called inline) so tests can tell "not on
+// start" apart from "eventually true" -- see the render-complete signal
+// describe block below. This is renderMock's OWN default implementation
+// (not a wrapper AROUND renderMock) specifically so a test's
+// `renderMock.mockImplementationOnce(...)` genuinely overrides it -- the
+// mock factory below just forwards to renderMock verbatim, no separate
+// hardcoded behavior sitting outside its reach.
+const renderMock = vi.fn((...args: unknown[]) => {
+  const opts = args[2] as { onFirstPaint?: () => void } | undefined;
+  queueMicrotask(() => opts?.onFirstPaint?.());
+  return disposeMock;
+});
+const setSelectionMock = vi.fn();
 const recolorMock = vi.fn();
 const toggleNoiseMock = vi.fn();
 const setFilterDimMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
-  render: (...args: unknown[]) => {
-    renderMock(...args);
-    return disposeMock;
-  },
+  render: (...args: unknown[]) => renderMock(...args),
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
   recolor: (...args: unknown[]) => recolorMock(...args),
   toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
@@ -618,13 +630,63 @@ function spyOnGraphRenderedFlag(): { values: unknown[] } {
 }
 
 describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's real dismiss trigger)", () => {
-  it("sets window.__compendiumGraphRendered once vendor.render() has been called for the first time", async () => {
+  it("sets window.__compendiumGraphRendered once the vendor's onFirstPaint callback fires", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     renderCanvas();
 
     expect(window.__compendiumGraphRendered).toBeUndefined();
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+  });
+
+  // Task group W, W3 step: the signal moved from "render() returned" to
+  // "the worker's first tick painted" -- render() itself stays
+  // synchronous (starting a worker and returning immediately), so this
+  // pins the actual contract change: reaching/returning from render() is
+  // NOT sufficient on its own, only the onFirstPaint callback firing is.
+  it("does NOT set the signal merely from render() being called -- only from its onFirstPaint callback firing", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    let capturedOnFirstPaint: (() => void) | undefined;
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onFirstPaint?: () => void } | undefined;
+      capturedOnFirstPaint = opts?.onFirstPaint;
+      // Deliberately do not invoke it here -- this test controls exactly
+      // when "first paint" happens, unlike the shared mock's default
+      // (queueMicrotask-deferred, see the vi.mock factory above) which
+      // every other test in this file relies on for a plain eventual
+      // `waitFor`.
+      return disposeMock;
+    });
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(typeof capturedOnFirstPaint).toBe("function");
+    // render() has already been called (and, per its own synchronous
+    // contract, already returned) -- the signal must still be unset.
+    expect(window.__compendiumGraphRendered).toBeUndefined();
+
+    capturedOnFirstPaint?.();
+    expect(window.__compendiumGraphRendered).toBe(true);
+  });
+
+  it("is exactly-once even if the vendor's onFirstPaint callback fires more than once (idempotent write)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    const flag = spyOnGraphRenderedFlag();
+    let capturedOnFirstPaint: (() => void) | undefined;
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onFirstPaint?: () => void } | undefined;
+      capturedOnFirstPaint = opts?.onFirstPaint;
+      return disposeMock;
+    });
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    capturedOnFirstPaint?.();
+    capturedOnFirstPaint?.();
+    capturedOnFirstPaint?.();
+
+    expect(window.__compendiumGraphRendered).toBe(true);
+    expect(flag.values.every((v) => v === true)).toBe(true);
   });
 
   it("does NOT set the signal while the fetch is still pending", async () => {

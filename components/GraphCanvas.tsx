@@ -461,6 +461,14 @@ export default function GraphCanvas() {
         // to `{}` (see resolveTunerSnapshotFromMe's swallow-and-fall-back
         // contract), so this merge is then just GRAPH_DEFAULTS verbatim.
         tunerSnapshot: { ...GRAPH_DEFAULTS, ...tunerSnapshot },
+        // Task group W (batch 03 Web Worker force sim), W3 step: render()
+        // itself is synchronous (it starts the worker and returns), but
+        // "started" no longer means "painted" now that the force layout
+        // runs off-thread -- see the write site below, right after this
+        // call, for what used to fire here directly.
+        onFirstPaint: () => {
+          window.__compendiumGraphRendered = true;
+        },
       });
       // Task group B, Part 1 fix 1 (continued): EXPLICIT post-render
       // highlighting apply. svg/currentData now exist (render() just
@@ -488,24 +496,24 @@ export default function GraphCanvas() {
       // not the closed-over `graphVersion` param -- the LATEST version by
       // resolution time, not whatever it was when this effect started.
       lastRenderedVersionRef.current = graphVersionRef.current;
-      // Task A1-4 (batch 03): render-complete signal for
-      // components/CompendiumLoader.tsx's dismiss trigger -- vendor.render()
-      // above is synchronous, so having reached this line IS first paint,
-      // no rAF/async tail to wait on (lib/vendor/vendor.d.ts's Window
-      // augmentation documents the flag itself; CompendiumLoader.tsx's
-      // tryDismiss polls it alongside window.__compendiumLoader). Set
-      // unconditionally on every successful mount-effect render (there is
-      // only ever one per page load by construction -- this effect runs
-      // once per `hasNodes` false->true transition), not guarded by a ref,
-      // since the loader-side latch (not this flag) is what makes a later
-      // re-signal a no-op. This is one of THREE write sites for this flag
-      // (the other two -- the empty-state settle, and the error settle --
-      // are their own effects further down this component, fix round 1/2
-      // of task-A1-4-report.md). TODO(W3): superseded once dismissal moves
-      // to the first worker `positions` batch -- delete this line, the
-      // other two write sites, and the flag's declaration together then,
-      // don't leave any of them wired.
-      window.__compendiumGraphRendered = true;
+      // Task group W, W3 step (batch 03 Web Worker force sim):
+      // render-complete signal for components/CompendiumLoader.tsx's
+      // dismiss trigger now fires from the `onFirstPaint` callback passed
+      // into vendor.render() above, not from reaching this line --
+      // render() itself is synchronous (it starts the worker sim and
+      // returns), but that no longer implies anything painted (the force
+      // layout runs off-thread; first paint is the worker's first `tick`
+      // message, lib/vendor/vendor.d.ts's Window augmentation documents
+      // the flag itself; CompendiumLoader.tsx's tryDismiss polls it
+      // alongside window.__compendiumLoader). Idempotent regardless of
+      // how many times `onFirstPaint` fires (it fires at most once per
+      // render() call by the vendor's own contract) -- the loader-side
+      // latch, not this flag, is what makes a later re-signal a no-op.
+      // This is one of THREE write sites for this flag (the other two --
+      // the empty-state settle, and the error settle -- are their own
+      // effects further down this component, fix round 1/2 of
+      // task-A1-4-report.md, UNCHANGED by task group W: they're settle
+      // states with no sim to wait on).
     });
     return () => {
       cancelled = true;
@@ -542,10 +550,15 @@ export default function GraphCanvas() {
   // true), and CompendiumLoader.tsx's own `completed` latch (not this
   // flag) is what actually enforces "the loader dismisses at most once" on
   // its side, so a later same-value write here from any path is always a
-  // harmless no-op there. TODO(W3): same fate as the mount effect's own
-  // write -- delete all three write sites (this one, the mount effect's,
-  // and the error-settle effect just below) once dismissal moves to the
-  // first worker `positions` batch.
+  // harmless no-op there. Task group W (batch 03 Web Worker force sim),
+  // W3 step: UNCHANGED by the move to a worker-driven force layout -- the
+  // empty state has no sim to wait on (the mount effect above never even
+  // starts one for a zero-node payload), so "settled" still just means
+  // "showEmptyState became true," same as before. Only the mount effect's
+  // OWN write site moved (to vendor.render()'s new `onFirstPaint`
+  // callback, see that effect's comment) -- this one and the error-settle
+  // effect below are settle states with no sim, and stay exactly as they
+  // were.
   useEffect(() => {
     if (!showEmptyState) return;
     window.__compendiumGraphRendered = true;
