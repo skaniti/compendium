@@ -9,6 +9,7 @@ import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
 import * as preferences from "@/lib/preferences";
+import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 import type { GraphPayload } from "@/lib/types";
 
 // Task A1-1: unit-tests the GraphCanvas CONTRACT -- fetch -> mount, the
@@ -442,6 +443,131 @@ describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion
     // Must have painted the FRESH (window-7, second) payload -- the STALE
     // closure captured when the effect started would have been `first`.
     expect(deferredRenderMock.mock.calls[0][1]).toBe(second);
+  });
+});
+
+// Task group B, Part 2 (spec decision C): saved tuner profiles apply BEFORE
+// first paint, Next-native (no boot latch, no timeout). GraphCanvas.tsx
+// resolves this via a dedicated GET /api/auth/me call (id + preferences)
+// feeding lib/graph/tuner-snapshot.ts's resolveTunerSnapshot(), merged onto
+// GRAPH_DEFAULTS and handed to the vendor as opts.tunerSnapshot on the
+// FIRST (only) render call -- see task-B-report.md for the full wiring
+// design.
+describe("GraphCanvas Part 2 (decision C): tuner snapshot resolves before first paint", () => {
+  it("no saved profile -- opts.tunerSnapshot is exactly GRAPH_DEFAULTS (plain-demo / no-profile paints code defaults)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas({ id: 7, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    expect(opts.tunerSnapshot).toEqual(GRAPH_DEFAULTS);
+  });
+
+  it("a signed-out/failed /api/auth/me still paints code defaults -- no hang, no throw", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(SIGNED_OUT, 401); // renderCanvas()'s own default
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    expect(opts.tunerSnapshot).toEqual(GRAPH_DEFAULTS);
+  });
+
+  it("applies the server-default active profile, merged onto GRAPH_DEFAULTS", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      {
+        id: 7,
+        email: "u@example.com",
+        role: "user",
+        acting_as_demo: false,
+        preferences: {
+          tuner_profiles: {
+            "1": { TYPO_V: 3, FOG_V: 2, BASE_PAGE_DOT_SIZE: 4.2 },
+          },
+          tuner_active_profile: "1",
+        },
+      },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    expect(opts.tunerSnapshot).toMatchObject({ ...GRAPH_DEFAULTS, BASE_PAGE_DOT_SIZE: 4.2 });
+  });
+
+  it("a per-machine localStorage override wins over the server-default slot", async () => {
+    localStorage.setItem("compendium_tuner_slot_7", "2");
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      {
+        id: 7,
+        email: "u@example.com",
+        role: "user",
+        acting_as_demo: false,
+        preferences: {
+          tuner_profiles: {
+            "1": { TYPO_V: 3, FOG_V: 2, BASE_PAGE_DOT_SIZE: 1 },
+            "2": { TYPO_V: 3, FOG_V: 2, BASE_PAGE_DOT_SIZE: 2 },
+          },
+          tuner_active_profile: "1",
+        },
+      },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    expect(opts.tunerSnapshot).toMatchObject({ BASE_PAGE_DOT_SIZE: 2 });
+  });
+
+  it("a stale TYPO_V drops typography keys but keeps ungated spatial keys, on the FIRST paint (no late re-render snap)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      {
+        id: 7,
+        email: "u@example.com",
+        role: "user",
+        acting_as_demo: false,
+        preferences: {
+          tuner_profiles: {
+            "1": { TYPO_V: 2, FOG_V: 2, BASE_LABEL_FONT_SIZE: 99, BASE_PAGE_DOT_SIZE: 4.2 },
+          },
+          tuner_active_profile: "1",
+        },
+      },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    // Typography key dropped -- falls back to the code default.
+    expect(opts.tunerSnapshot?.BASE_LABEL_FONT_SIZE).toBe(GRAPH_DEFAULTS.BASE_LABEL_FONT_SIZE);
+    // Ungated spatial key still applies.
+    expect(opts.tunerSnapshot?.BASE_PAGE_DOT_SIZE).toBe(4.2);
+    // Only ONE render call -- no separate "corrected" re-render after the
+    // gate resolves; the gating already happened before this first call.
+    expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolution runs WHILE the graph fetch is in flight -- GET /api/auth/me fires before fetchGraph settles, not gated on hasNodes", async () => {
+    let releaseGraphFetch!: (payload: GraphPayload) => void;
+    const graphFetchGate = new Promise<GraphPayload>((resolve) => {
+      releaseGraphFetch = resolve;
+    });
+    vi.spyOn(api, "fetchGraph").mockReturnValue(graphFetchGate);
+    renderCanvas({ id: 7, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+
+    // The graph fetch is still pending (hasNodes stays false, vendor never
+    // mounts) -- but /api/auth/me must already have been called by now.
+    await waitFor(() =>
+      expect(api.apiFetch).toHaveBeenCalledWith(expect.stringContaining("/api/auth/me"))
+    );
+    expect(renderMock).not.toHaveBeenCalled();
+
+    releaseGraphFetch(ONE_NODE_PAYLOAD);
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    const [, , opts] = renderMock.mock.calls[0] as [unknown, unknown, { tunerSnapshot?: Record<string, unknown> }];
+    expect(opts.tunerSnapshot).toEqual(GRAPH_DEFAULTS);
   });
 });
 

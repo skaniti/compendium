@@ -25,7 +25,20 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // lib/icon-data.json / lib/icons.tsx. Keyed by icon id.
     icons?: Record<string, IconEntry>;
     // Applied once at first mount; defaults to GRAPH_DEFAULTS when omitted
-    // (sandbox behavior -- see the vendor file's render wrapper).
+    // (see the vendor file's render wrapper). Typed as the FULL
+    // GraphDefaults, not Partial<GraphDefaults>, deliberately: batch 03
+    // task group B's real caller (GraphCanvas.tsx) resolves a saved
+    // profile via lib/graph/tuner-snapshot.ts's resolveTunerSnapshot()
+    // (which DOES return a Partial -- only the keys that pass its
+    // TYPO_V/FOG_V gate) and merges it onto GRAPH_DEFAULTS
+    // (`{...GRAPH_DEFAULTS, ...snapshot}`) BEFORE calling render() -- so
+    // every real call site hands this a fully-populated object. Keeping
+    // this field required-shape (not optional-key-by-key) is intentional:
+    // the vendor's own applyTunerSnapshot only overwrites a module var
+    // when the incoming key is present, so a caller passing a bare
+    // sparse Partial directly (skipping the merge) would silently leave
+    // stale values from a PREVIOUS mount in place for any omitted key on
+    // a remount, instead of resetting them to GRAPH_DEFAULTS.
     tunerSnapshot?: GraphDefaults;
     // Re-applies the prior zoom/pan transform after a re-layout instead of
     // snapping back to fit-to-content (mirrors the Dash tuner's re-layout

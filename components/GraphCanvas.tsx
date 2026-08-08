@@ -18,6 +18,8 @@ import { useGraph } from "@/hooks/useGraph";
 import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
 import TopicPanel from "./TopicPanel";
+import { GRAPH_DEFAULTS, type GraphDefaults } from "@/lib/graph/constants";
+import { resolveTunerSnapshot } from "@/lib/graph/tuner-snapshot";
 
 // Type-only handle onto the vendor module's own shape (lib/graph/vendor.d.ts)
 // -- used below to type renderRef, which holds the raw render() binding
@@ -215,6 +217,35 @@ const ERROR_STYLE: CSSProperties = {
 // will-change rule that would trap it).
 const NODE_TOOLTIP_STYLE: CSSProperties = { display: "none" };
 
+// Task group B (batch 03, spec decision C): resolves whatever saved tuner
+// profile should apply BEFORE first paint -- Next-native, no boot latch, no
+// timeout. A DEDICATED GET /api/auth/me call (not SessionProvider's own --
+// that provider's hydration exposes role/showNoise only, and extending its
+// contract to also carry `id`/full `preferences` is out of scope for this
+// task) supplies both the `id` (userKey, namespaces the per-machine
+// localStorage override) and the `preferences` sub-object
+// resolveTunerSnapshot needs (lib/preferences.server.ts:255's own comment
+// notes this is the SAME /api/auth/me endpoint that reader already
+// consumes server-side -- no new endpoint here either). Swallows every
+// failure to `{}` (code defaults), the same "never let a nice-to-have read
+// break the UI" contract lib/preferences.ts's getPreferences already uses.
+async function resolveTunerSnapshotFromMe(): Promise<Partial<GraphDefaults>> {
+  try {
+    const res = await apiFetch("/api/auth/me");
+    if (!res.ok) return {};
+    const data: unknown = await res.json();
+    if (typeof data !== "object" || data === null) return {};
+    const me = data as { id?: unknown; preferences?: unknown };
+    const userKey = typeof me.id === "number" || typeof me.id === "string" ? String(me.id) : null;
+    const prefs = me.preferences;
+    const storage = typeof window !== "undefined" ? window.localStorage : null;
+    return resolveTunerSnapshot(prefs, userKey, storage);
+  } catch (err) {
+    console.error("resolveTunerSnapshotFromMe failed:", err);
+    return {};
+  }
+}
+
 export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const disposeRef = useRef<(() => void) | null>(null);
@@ -276,6 +307,20 @@ export default function GraphCanvas() {
   // initial mount load does not (useGraph.ts's own documented contract).
   const { graph: payload, error: graphError, graphVersion, setWindow, refresh } = useGraph();
   const error = graphError?.message ?? null;
+
+  // Task group B (spec decision C): kick off tuner-snapshot resolution
+  // UNCONDITIONALLY at mount -- NOT gated on hasNodes/payload the way the
+  // vendor mount effect below is -- so it runs WHILE the graph fetch
+  // (useGraph()'s own mount-time kick-off, same commit as this effect) is
+  // ALSO in flight, not sequentially after it. Stored in a ref (not state)
+  // since nothing here needs to trigger a re-render -- the vendor mount
+  // effect below reads tunerSnapshotPromiseRef.current directly. Runs
+  // exactly once per mount (empty deps); a later remount (new GraphCanvas
+  // instance) gets its own fresh promise.
+  const tunerSnapshotPromiseRef = useRef<Promise<Partial<GraphDefaults>> | null>(null);
+  useEffect(() => {
+    tunerSnapshotPromiseRef.current = resolveTunerSnapshotFromMe();
+  }, []);
 
   // Task A1-5: the legacy "Topic Interests" overlay's open/closed state.
   // TopicPanel unmounts entirely when closed (ScPopover's own philosophy --
@@ -352,7 +397,18 @@ export default function GraphCanvas() {
   useEffect(() => {
     if (!hasNodes) return;
     let cancelled = false;
-    void import("@/lib/graph/d3-graph-vendor.js").then((vendor) => {
+    // Task group B (spec decision C): wait on BOTH the vendor's dynamic
+    // import AND whatever tuner-snapshot resolution is already in flight
+    // (kicked off unconditionally at mount, above -- by now it is very
+    // likely already settled, since it started concurrently with the graph
+    // fetch this effect is itself gated behind). This is NOT a boot latch:
+    // there is no timeout and no fallback-after-N-ms -- the first render()
+    // call below simply waits on a real, already-in-flight promise, the
+    // same way it already waits on the vendor's own import(). A
+    // fetch/resolveTunerSnapshotFromMe failure resolves to `{}` (see that
+    // function's own comment), never rejects, so this can't hang.
+    const tunerPromise = tunerSnapshotPromiseRef.current ?? Promise.resolve({});
+    void Promise.all([import("@/lib/graph/d3-graph-vendor.js"), tunerPromise]).then(([vendor, tunerSnapshot]) => {
       // Task group B, Part 1 fix 2: read the ALWAYS-CURRENT payloadRef
       // here, not the `payload` param this effect closed over when it
       // started -- see payloadRef's own comment above for the race this
@@ -394,8 +450,17 @@ export default function GraphCanvas() {
         // why routing Esc through this same callback would incorrectly
         // resolve to HOME too and wipe the nav filter.
         onSelect: (kind, id) => selectFromCanvas(kind as "node" | "cluster" | null, id ?? undefined),
-        // opts.tunerSnapshot stays absent -- GRAPH_DEFAULTS applies until
-        // group B wires a saved profile.
+        // Task group B (spec decision C): the FULL merged object, not the
+        // bare (possibly sparse) Partial resolveTunerSnapshot returns --
+        // every mount hands the vendor a FULLY populated snapshot so its
+        // own per-key gate (applyTunerSnapshot) never interprets an
+        // absent key as "leave whatever a PREVIOUS mount left this at"
+        // (see lib/graph/tuner-snapshot.ts's own top-of-file comment and
+        // vendor.d.ts's tunerSnapshot field comment for the full
+        // reasoning). Plain-demo / no-profile paths resolve `tunerSnapshot`
+        // to `{}` (see resolveTunerSnapshotFromMe's swallow-and-fall-back
+        // contract), so this merge is then just GRAPH_DEFAULTS verbatim.
+        tunerSnapshot: { ...GRAPH_DEFAULTS, ...tunerSnapshot },
       });
       // Task group B, Part 1 fix 1 (continued): EXPLICIT post-render
       // highlighting apply. svg/currentData now exist (render() just
