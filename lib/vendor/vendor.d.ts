@@ -56,15 +56,19 @@ interface Window {
   // globals here already are.
   __compendiumLoaderVendorInitStarted?: boolean;
   // Task A1-4 (batch 03 graph canvas port): render-complete signal.
-  // components/GraphCanvas.tsx sets this `true` once the canvas reaches its
-  // first SETTLED state -- either its vendor's render() call returns
+  // components/GraphCanvas.tsx sets this `true` once the canvas reaches ANY
+  // of its three SETTLED states: (1) its vendor's render() call returns
   // (render() is synchronous, so its return IS first paint, no rAF/async
-  // tail to wait on) OR the canvas resolves to the empty state (payload
+  // tail to wait on), (2) the canvas resolves to the empty state (payload
   // committed, zero nodes -- a first-time user with nothing captured yet is
   // still a settled canvas, and is exactly the loader's own first-run
-  // audience; A1-4 fix, task-A1-4-report.md's "fix" section). Two write
-  // sites in that one component, same flag, same "idempotent, later
-  // same-value writes are a no-op" reasoning either way.
+  // audience; A1-4 fix round 1, task-A1-4-report.md's first "fix"
+  // section), or (3) the canvas resolves to the error state (fetchGraph
+  // rejected -- an already-rendered "Couldn't load graph: ..." message is
+  // also a settled canvas; A1-4 fix round 2, task-A1-4-report.md's second
+  // "fix" section). Three write sites in that one component, same flag,
+  // same "idempotent, later same-value writes are a no-op" reasoning in
+  // all three.
   // components/CompendiumLoader.tsx's tryDismiss loop polls this ALONGSIDE
   // window.__compendiumLoader before
   // calling dismiss() (see that effect's own comment) -- replaces the
@@ -83,7 +87,7 @@ interface Window {
   // window.__compendiumLoader itself: persists across a page's whole
   // lifetime, resets only on a real page reload. TODO(W3): superseded once
   // dismissal moves to the first worker `positions` batch instead of
-  // render()'s synchronous return -- this flag and both its read/write
-  // sites should be DELETED then, not layered under a second flag.
+  // render()'s synchronous return -- this flag and all three of its
+  // write sites should be DELETED then, not layered under a second flag.
   __compendiumGraphRendered?: boolean;
 }

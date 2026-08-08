@@ -379,9 +379,13 @@ export default function GraphCanvas() {
       // only ever one per page load by construction -- this effect runs
       // once per `hasNodes` false->true transition), not guarded by a ref,
       // since the loader-side latch (not this flag) is what makes a later
-      // re-signal a no-op. TODO(W3): superseded once dismissal moves to the
-      // first worker `positions` batch -- delete this line and the flag's
-      // declaration together then, don't leave both wired.
+      // re-signal a no-op. This is one of THREE write sites for this flag
+      // (the other two -- the empty-state settle, and the error settle --
+      // are their own effects further down this component, fix round 1/2
+      // of task-A1-4-report.md). TODO(W3): superseded once dismissal moves
+      // to the first worker `positions` batch -- delete this line, the
+      // other two write sites, and the flag's declaration together then,
+      // don't leave any of them wired.
       window.__compendiumGraphRendered = true;
     });
     return () => {
@@ -418,14 +422,34 @@ export default function GraphCanvas() {
   // the mount effect's own write above: idempotent (already-true stays
   // true), and CompendiumLoader.tsx's own `completed` latch (not this
   // flag) is what actually enforces "the loader dismisses at most once" on
-  // its side, so a later same-value write here from either path is always
-  // a harmless no-op there. TODO(W3): same fate as the mount effect's own
-  // write -- delete both once dismissal moves to the first worker
-  // `positions` batch.
+  // its side, so a later same-value write here from any path is always a
+  // harmless no-op there. TODO(W3): same fate as the mount effect's own
+  // write -- delete all three write sites (this one, the mount effect's,
+  // and the error-settle effect just below) once dismissal moves to the
+  // first worker `positions` batch.
   useEffect(() => {
     if (!showEmptyState) return;
     window.__compendiumGraphRendered = true;
   }, [showEmptyState]);
+
+  // Task A1-4 fix round 2 (review Finding 1, task-A1-4-report.md's second
+  // "fix" section): a REJECTED fetchGraph is ALSO a settled canvas -- the
+  // "Couldn't load graph: ..." error message below (`error &&` branch) has
+  // already painted, but `payload` stays null forever for this flight, so
+  // neither the mount effect above NOR the showEmptyState effect above
+  // ever fires (both require `payload !== null`). Without this, a backend
+  // outage at page load would strand the loader on the same ~10s
+  // MAX_TRIES fallback above an already-rendered error -- the pre-A1-4
+  // stand-in dismissed this scenario in well under 200ms. Same
+  // unconditional-write / idempotent / loader-latch-owns-exactly-once
+  // reasoning as the two effects above: fires on every settle into the
+  // error state, including a LATER one (a refresh() that fails again after
+  // a prior success), and a later recovery into a real render (retry
+  // succeeds) is just another same-value write, not a toggle.
+  useEffect(() => {
+    if (!error) return;
+    window.__compendiumGraphRendered = true;
+  }, [error]);
 
   // Task A1-3 (Step 1a/2): re-render the already-mounted vendor with fresh
   // graph data whenever graphVersion bumps (a refresh()-initiated flight

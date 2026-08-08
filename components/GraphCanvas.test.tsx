@@ -276,6 +276,30 @@ describe("GraphCanvas mount + fetch", () => {
   });
 });
 
+// Task A1-4 fix round 2 (review Finding 2): a plain before/after read of
+// window.__compendiumGraphRendered only proves the flag's value at the two
+// sampled instants, not that it was never toggled to something else at any
+// point in between -- the cross-transition tests below want the STRONGER
+// claim their own comments were making. This installs an accessor property
+// that records every value ever assigned, so the assertion can check the
+// full write sequence, not just its endpoints. `configurable: true` lets
+// the existing afterEach's `delete window.__compendiumGraphRendered`
+// remove the accessor cleanly, restoring plain-property behavior for the
+// next test.
+function spyOnGraphRenderedFlag(): { values: unknown[] } {
+  const values: unknown[] = [];
+  let current: unknown;
+  Object.defineProperty(window, "__compendiumGraphRendered", {
+    configurable: true,
+    get: () => current,
+    set: (v: unknown) => {
+      values.push(v);
+      current = v;
+    },
+  });
+  return { values };
+}
+
 describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's real dismiss trigger)", () => {
   it("sets window.__compendiumGraphRendered once vendor.render() has been called for the first time", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
@@ -332,6 +356,7 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
   });
 
   it("does not double-fire or resurrect when a later refetch goes EMPTY -> RENDERED (graphVersion bump)", async () => {
+    const flag = spyOnGraphRenderedFlag();
     vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(EMPTY_PAYLOAD).mockResolvedValueOnce(ONE_NODE_PAYLOAD);
     renderCanvas();
 
@@ -342,12 +367,18 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
     act(() => screen.getByText("trigger-refresh").click());
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
 
-    // Still true (never unset in between) -- the empty-state settle and the
-    // later real render are two writes of the SAME value, not a toggle.
-    expect(window.__compendiumGraphRendered).toBe(true);
+    // Stronger than an endpoint-only read (review Finding 2): every value
+    // EVER assigned to the flag across the WHOLE empty -> rendered
+    // transition was `true` -- the empty-state settle and the later real
+    // render are two writes of the SAME value, never a toggle through
+    // false/undefined at any point in between, not just at the instants
+    // this test happened to sample.
+    expect(flag.values.length).toBeGreaterThan(0);
+    expect(flag.values.every((v) => v === true)).toBe(true);
   });
 
   it("does not double-fire or resurrect when a later refetch goes RENDERED -> EMPTY (graphVersion bump)", async () => {
+    const flag = spyOnGraphRenderedFlag();
     vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(ONE_NODE_PAYLOAD).mockResolvedValueOnce(EMPTY_PAYLOAD);
     renderCanvas();
 
@@ -357,8 +388,44 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
     act(() => screen.getByText("trigger-refresh").click());
     await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
 
-    expect(window.__compendiumGraphRendered).toBe(true);
+    // Same stronger, full-sequence check as the EMPTY -> RENDERED test
+    // above (review Finding 2), mirrored for the opposite direction.
+    expect(flag.values.length).toBeGreaterThan(0);
+    expect(flag.values.every((v) => v === true)).toBe(true);
     expect(renderMock).toHaveBeenCalledTimes(1); // vendor never re-invoked for the now-empty payload
+  });
+
+  // Task A1-4 fix round 2 (review Finding 1): a REJECTED fetchGraph is
+  // ALSO a settled canvas -- payload stays null (neither the render() nor
+  // the showEmptyState write site above ever fires), but the "Couldn't
+  // load graph: ..." error message (JSX below, `error &&` branch) has
+  // already painted. Pre-fix, this scenario (e.g. backend down at page
+  // load) left the loader stuck on CompendiumLoader.tsx's ~10s MAX_TRIES
+  // fallback above an already-rendered error, when the pre-A1-4 stand-in
+  // dismissed in under 200ms.
+  it("sets window.__compendiumGraphRendered once the canvas settles into the error state (rejected fetch)", async () => {
+    vi.spyOn(api, "fetchGraph").mockRejectedValue(new Error("boom"));
+    renderCanvas();
+
+    await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
+    expect(renderMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+  });
+
+  it("does not double-fire or resurrect when the error recovers into a rendered graph (retry succeeds)", async () => {
+    const flag = spyOnGraphRenderedFlag();
+    vi.spyOn(api, "fetchGraph").mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+    expect(renderMock).not.toHaveBeenCalled();
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    expect(flag.values.length).toBeGreaterThan(0);
+    expect(flag.values.every((v) => v === true)).toBe(true);
   });
 });
 
