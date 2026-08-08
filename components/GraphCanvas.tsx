@@ -314,6 +314,24 @@ export default function GraphCanvas() {
   const filterHighlightIdsRef = useRef(state.filterHighlightIds);
   filterHighlightIdsRef.current = state.filterHighlightIds;
 
+  // Task group B, Part 1 fix 2 (carried A1-3 correction, task-B-brief.md):
+  // same always-current-ref pattern as selectedNodeIdRef/
+  // filterHighlightIdsRef above, for the SAME class of bug -- a window
+  // switch (or any other graphVersion-bumping commit) that lands DURING
+  // the vendor's dynamic import() window must not paint the STALE
+  // payload/graphVersion this effect closed over when it STARTED. Reading
+  // these refs instead of the `payload`/`graphVersion` params inside the
+  // async `.then()` below (payloadRef.current/graphVersionRef.current)
+  // picks up whatever is CURRENT by the time the import resolves --
+  // pre-fix, the mount effect closed over `payload`/`graphVersion`
+  // directly, so a same-hasNodes window switch mid-import painted the old
+  // window's data and recorded the old graphVersion, self-healing only on
+  // some LATER, unrelated graphVersion bump.
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
+  const graphVersionRef = useRef(graphVersion);
+  graphVersionRef.current = graphVersion;
+
   // Obligation 1 (see header comment): visible only once a fetch has
   // actually completed AND it reported zero nodes -- `payload !== null`
   // stands in for Dash's `graphVersion > 0` ("loaded"). NOTE: now that a
@@ -335,7 +353,11 @@ export default function GraphCanvas() {
     if (!hasNodes) return;
     let cancelled = false;
     void import("@/lib/graph/d3-graph-vendor.js").then((vendor) => {
-      if (cancelled || !containerRef.current || !payload) return;
+      // Task group B, Part 1 fix 2: read the ALWAYS-CURRENT payloadRef
+      // here, not the `payload` param this effect closed over when it
+      // started -- see payloadRef's own comment above for the race this
+      // closes.
+      if (cancelled || !containerRef.current || !payloadRef.current) return;
       renderRef.current = vendor.render;
       setSelectionRef.current = vendor.setSelection;
       // Task A1-2 wave 8: recolor() handle for the palette-change effect
@@ -346,7 +368,22 @@ export default function GraphCanvas() {
       recolorRef.current = vendor.recolor;
       toggleNoiseRef.current = vendor.toggleNoise;
       setFilterDimRef.current = vendor.setFilterDim;
-      disposeRef.current = vendor.render(containerRef.current, payload, {
+      // Task group B, Part 1 fix 1 (carried A1-3 correction,
+      // task-B-brief.md): apply the noise state BEFORE the first render()
+      // call, not after. The vendor accepts toggleNoise() pre-render --
+      // it writes __showNoise and no-ops the internal re-render (rawData
+      // is still null the first time), so the ONE layout pass below
+      // already reflects the correct state (see
+      // d3-graph-vendor.remount.test.ts's "toggleNoise() call BEFORE the
+      // first render()" case for that vendor-level contract). The OLD
+      // order (render, THEN toggleNoise) painted the vendor's own
+      // compile-time __showNoise default (true) on first paint regardless
+      // of the actual pref, then toggleNoise's OWN internal re-render
+      // (rawData now set) corrected it -- a full force layout running
+      // TWICE per mount, with a visible flash of noise nodes whenever the
+      // pref was false.
+      vendor.toggleNoise(showNoiseRef.current);
+      disposeRef.current = vendor.render(containerRef.current, payloadRef.current, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
         // lib/nav.ts's resolveCanvasTapAction -- kind-with-missing-id is a
@@ -360,23 +397,32 @@ export default function GraphCanvas() {
         // opts.tunerSnapshot stays absent -- GRAPH_DEFAULTS applies until
         // group B wires a saved profile.
       });
+      // Task group B, Part 1 fix 1 (continued): EXPLICIT post-render
+      // highlighting apply. svg/currentData now exist (render() just
+      // built them), so each call's own updateHighlighting() actually
+      // takes effect immediately -- neither depends on the OTHER
+      // incidentally re-running it. Pre-fix, this same pair of calls
+      // "worked" only because toggleNoise's OWN internal re-render (now
+      // eliminated above) wiped the DOM AFTER the selection apply, and
+      // setFilterDim's own updateHighlighting() call happened to run
+      // AFTER that wipe and rescue both selection and filter together --
+      // an incidental ordering dependency, not a designed one (see
+      // task-B-brief.md's Part 1 caution).
+      //
       // Apply whatever selection NavProvider already holds by the time the
       // import resolves (see selectedNodeIdRef's own comment above for why
       // this reads the ref, not the closed-over `state` -- the A1-1 fix).
       // The effect below only reacts to LATER changes, so this covers the
       // "already selected before/during mount" case explicitly.
       if (selectedNodeIdRef.current) vendor.setSelection("node", selectedNodeIdRef.current);
-      // Task A1-3 (Step 4): same "apply the current value at import-
-      // resolution time" pattern as selection above, via showNoiseRef
-      // (always current -- see its own comment). Unconditional (unlike the
-      // selection apply's `if`) because there is no meaningful "unset"
-      // state for a boolean toggle to skip applying.
-      vendor.toggleNoise(showNoiseRef.current);
       // Task A1-3 (Step 5): same pattern again, via filterHighlightIdsRef
       // (always current). Unconditional like toggleNoise above -- an empty
       // array IS the correct "no filter" call, not something to skip.
       vendor.setFilterDim(filterHighlightIdsRef.current);
-      lastRenderedVersionRef.current = graphVersion;
+      // Task group B, Part 1 fix 2 (continued): record via graphVersionRef,
+      // not the closed-over `graphVersion` param -- the LATEST version by
+      // resolution time, not whatever it was when this effect started.
+      lastRenderedVersionRef.current = graphVersionRef.current;
       // Task A1-4 (batch 03): render-complete signal for
       // components/CompendiumLoader.tsx's dismiss trigger -- vendor.render()
       // above is synchronous, so having reached this line IS first paint,

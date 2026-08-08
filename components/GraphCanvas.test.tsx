@@ -277,6 +277,174 @@ describe("GraphCanvas mount + fetch", () => {
   });
 });
 
+// Task group B, Part 1 fix 1 (carried A1-3 correction, task-B-brief.md):
+// mount previously applied noise AFTER vendor.render() and toggleNoise()
+// unconditionally re-renders once a dataset exists -- every mount ran the
+// full force layout TWICE, with a possible flash of noise nodes when the
+// pref was false. The vendor's own toggleNoise() contract (verified in
+// lib/graph/d3-graph-vendor.remount.test.ts's "toggleNoise() call BEFORE
+// the first render()" case) is a documented, pre-existing no-op-until-
+// rendered guard -- GraphCanvas.tsx now actually calls toggleNoise BEFORE
+// render() so the vendor's real internal re-render never fires at mount.
+// The genuinely discriminating assertion here is CALL ORDER: this
+// shallow-mocked renderMock/toggleNoiseMock pair can't observe the real
+// vendor's internal double-layout (the mock's own toggleNoise never calls
+// renderMock itself), so a plain "renderMock called once" check would pass
+// against the OLD, buggy order too -- invocationCallOrder instead directly
+// observes which of the two GraphCanvas.tsx itself calls first, which is
+// exactly the line this fix reorders.
+describe("GraphCanvas Part 1 fix 1: toggleNoise applied BEFORE the first render() call", () => {
+  it("calls vendor.toggleNoise() strictly BEFORE vendor.render() at mount", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      { id: 1, email: "u@example.com", role: "user", acting_as_demo: false, preferences: { show_noise: false } },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(false));
+
+    const toggleOrder = toggleNoiseMock.mock.invocationCallOrder[0];
+    const renderOrder = renderMock.mock.invocationCallOrder[0];
+    expect(toggleOrder).toBeLessThan(renderOrder);
+  });
+
+  it("still applies mount-time selection + filter dim, EXPLICITLY after render (not incidentally via a since-eliminated second render pass)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+    // Seed both BEFORE the vendor mount resolves -- same "during the import
+    // window" timing the existing A1-1 minor test uses.
+    act(() => screen.getByText("seed-select").click());
+    act(() => screen.getByText("seed-filter").click());
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+
+    // Both applies happen strictly after the (one and only) render call --
+    // the explicit ordering this fix establishes, rather than depending on
+    // setFilterDim happening to run last.
+    const renderOrder = renderMock.mock.invocationCallOrder[0];
+    expect(setSelectionMock.mock.invocationCallOrder[0]).toBeGreaterThan(renderOrder);
+    expect(setFilterDimMock.mock.invocationCallOrder[0]).toBeGreaterThan(renderOrder);
+  });
+
+  it("mounts with exactly ONE call to vendor.render() regardless of the noise pref value", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas(
+      { id: 1, email: "u@example.com", role: "user", acting_as_demo: false, preferences: { show_noise: true } },
+      200
+    );
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Task group B, Part 1 fix 2 (carried A1-3 correction, task-B-brief.md):
+// the mount effect's `.then()` previously closed over `payload`/
+// `graphVersion` at effect-DEFINITION time. A window switch committing
+// DURING the vendor's dynamic import() window (same `hasNodes` value, so
+// the mount effect does not re-run) painted the STALE payload and recorded
+// a stale graphVersion, self-healing only on some LATER, unrelated
+// graphVersion bump. This is the SAME class of bug the A1-1 selection fix
+// (above, "A1-1 ledgered minor") already closed for `state.selectedNodeId`
+// -- fixed here with the same always-current-ref pattern.
+//
+// progress.md flags the EXISTING A1-1 regression test as non-discriminating
+// (it dispatches its state change before `hasNodes` even flips true, well
+// before the import is ever kicked off -- "needs deferrable import/fetch to
+// discriminate"). This describe block builds that deferrable import via
+// vi.resetModules() + vi.doMock() scoped to ONE test, so the race window
+// between "the mount effect starts (import kicked off)" and "the import
+// resolves" is under full, deterministic test control -- a plain
+// `await Promise.resolve()` gap is far too fast/implementation-dependent to
+// reliably land a real fetchGraph commit inside that window otherwise.
+describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion via always-current refs", () => {
+  afterEach(() => {
+    // Restore the file-wide shared mock EXACTLY as declared at the top of
+    // this file, so every other (non-resetModules) test in this file keeps
+    // resolving the fast/shallow mock rather than this block's own
+    // deferred-gate override -- vi.resetModules() clears the module
+    // registry's cached resolution, and only a fresh vi.doMock()
+    // registration (not vi.doUnmock(), which disables mocking for the path
+    // entirely) restores the ORIGINAL hoisted factory for the next import.
+    vi.doMock("@/lib/graph/d3-graph-vendor.js", () => ({
+      render: (...args: unknown[]) => {
+        renderMock(...args);
+        return disposeMock;
+      },
+      setSelection: (...args: unknown[]) => setSelectionMock(...args),
+      recolor: (...args: unknown[]) => recolorMock(...args),
+      toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
+      setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
+    }));
+  });
+
+  it("a window switch committing DURING the vendor's dynamic-import window paints the FRESH payload/graphVersion, not the stale closure from when the effect started", async () => {
+    vi.resetModules();
+    let releaseImport!: () => void;
+    const importGate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    // Untyped vi.fn() (matching renderMock's own file-top declaration
+    // style) -- an inline `() => vi.fn()` implementation would infer a
+    // ZERO-arg call signature, breaking `mock.calls[0][1]` below even
+    // though the real vendor.render() is always called with 3 args.
+    const deferredRenderMock = vi.fn();
+    deferredRenderMock.mockReturnValue(vi.fn());
+    vi.doMock("@/lib/graph/d3-graph-vendor.js", async () => {
+      await importGate;
+      return {
+        render: deferredRenderMock,
+        setSelection: vi.fn(),
+        recolor: vi.fn(),
+        toggleNoise: vi.fn(),
+        setFilterDim: vi.fn(),
+      };
+    });
+
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    const fetchSpy = vi
+      .spyOn(api, "fetchGraph")
+      .mockImplementation(async (window) => (window === "7" ? second : first));
+    renderCanvas();
+
+    // The mount effect has started against the FIRST payload (hasNodes
+    // flipped true) -- its dynamic import is now pending behind
+    // importGate, unresolved.
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("all"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(deferredRenderMock).not.toHaveBeenCalled();
+
+    // Commit a window switch BEFORE releasing the import -- `hasNodes`
+    // stays true (both payloads have nodes), so the SAME mount-effect
+    // instance (still awaiting importGate) is the one that will eventually
+    // paint this.
+    act(() => screen.getByText("window-7").click());
+    await waitFor(() => expect(fetchSpy).toHaveBeenLastCalledWith("7"));
+    await waitFor(() => expect(screen.getByTestId("graph-version")).toHaveTextContent("1"));
+    expect(deferredRenderMock).not.toHaveBeenCalled(); // import STILL pending
+
+    // NOW release the import -- the mount effect's `.then()` finally runs.
+    releaseImport();
+    await waitFor(() => expect(deferredRenderMock).toHaveBeenCalledTimes(1));
+
+    // Must have painted the FRESH (window-7, second) payload -- the STALE
+    // closure captured when the effect started would have been `first`.
+    expect(deferredRenderMock.mock.calls[0][1]).toBe(second);
+  });
+});
+
 // Task A1-4 fix round 2 (review Finding 2): a plain before/after read of
 // window.__compendiumGraphRendered only proves the flag's value at the two
 // sampled instants, not that it was never toggled to something else at any
