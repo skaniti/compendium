@@ -898,6 +898,35 @@ describe("d3-graph-vendor setFilterDim() precedence vs. selection (Task A1-3 Ste
     expect(circleOpacityById(container, "page-3")).toBe("0.15");
   });
 
+  // Coordinator-flagged (V3 fix-round, after item 1's review): the second
+  // half of the ruling -- "no selection -> filter dim" -- was correct in
+  // source (updateHighlighting()'s `!hasSelection` guard, delta #27) but
+  // had no discriminating test of its own: every existing test here either
+  // starts from no selection, or never clears one back to none while a
+  // filter stays active. This is the RESTORE path: selection wins only
+  // while it's actually present -- clearing it (setSelection(type, null),
+  // which resets every selectedNodeId/selectedClusterId/selectedNodeIds/
+  // selectedSessionId var and re-runs updateHighlighting()) must bring the
+  // still-active filter-dim layer back, not leave the graph stuck at full
+  // visibility from the selection-wins state that preceded it.
+  it("clearing the selection while a filter is still active RESTORES the filter-dim layer (ruling's second half: selection wins only while present)", async () => {
+    const { render, setSelection, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setFilterDim(["page-2"]);
+    setSelection("node", "page-1"); // selection wins -- filter dropped entirely
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("0.15");
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
+
+    setSelection("node", null); // clear the selection -- filter is STILL active
+    expect(circleOpacityById(container, "page-1")).toBe("0.15"); // no longer selected
+    expect(circleOpacityById(container, "page-2")).toBe("1"); // filter-dim layer restored
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
+  });
+
   it("setFilterDim does not clobber the current selection -- selection survives filter changes and clears", async () => {
     const { render, setSelection, setFilterDim, debugGetSelection } = await import(
       "@/lib/graph/d3-graph-vendor.js"

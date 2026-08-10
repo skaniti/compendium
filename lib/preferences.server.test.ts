@@ -283,12 +283,28 @@ describe("getInitialPanelWidths", () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({
       ok: true,
-      json: async () => ({ panel_left_width: "32%", panel_right_width: "20%" }),
+      // V3 fix-round (coordinator review after item 3): also carries
+      // compendium_loader_seen so this SAME shared, no-cookie fetch can
+      // double as getInitialCompendiumLoaderSeen's own no-cookie
+      // discriminating test below -- fetchPreferencesRow's mocked cache
+      // (this file's own top comment) is keyed by token, and token is
+      // undefined for every no-cookie call regardless of which reader
+      // makes it, so a SEPARATE no-cookie test for getInitialCompendiumLoaderSeen
+      // would silently collide with (and be shadowed by) THIS test's own
+      // cached entry rather than exercising an independent fetch.
+      json: async () => ({ panel_left_width: "32%", panel_right_width: "20%", compendium_loader_seen: true }),
     });
 
     await expect(getInitialPanelWidths()).resolves.toEqual({
       panelLeftWidth: "32%",
       panelRightWidth: "20%",
+    });
+    // Same shared fetch, same no-cookie request -- getInitialCompendiumLoaderSeen
+    // (V3 fix-round fix) now also resolves the real persisted value instead
+    // of the pre-fix {hasSeen:false, canPersist:false} short-circuit.
+    await expect(getInitialCompendiumLoaderSeen()).resolves.toEqual({
+      hasSeen: true,
+      canPersist: true,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -313,6 +329,46 @@ describe("getInitialPanelWidths", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/preferences"),
       expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer panel-token-1" }) })
+    );
+  });
+});
+
+// V3 fix-round (coordinator review after item 3): same class of bug as
+// getInitialPanelWidths (item 5) -- a cookie-less dev session still has a
+// real, persisted compendium_loader_seen value on the backend row, but
+// this function used to discard it unconditionally, forcing first-run to
+// replay on EVERY refresh for such a session (independent of item 3's
+// vendor-side onFirstPaint fix, a separate bug) and leaving canPersist
+// false so the dismiss-time persist write never even attempted. The
+// no-cookie discriminating test lives in the "preferences fetch
+// deduplication" describe block below, NOT here -- fetchPreferencesRow's
+// mocked cache (this file's own top comment) is keyed by token, and a
+// bare no-cookie call here would collide with getInitialPanelWidths's own
+// no-cookie test (same token=undefined key, same shared cache) rather
+// than exercising an independent fetch; testing both readers together
+// against ONE shared no-cookie fetch is the architecturally correct
+// (and simpler) way to cover this, matching that describe block's own
+// existing "shares a single backend fetch... for the same token" pattern.
+describe("getInitialCompendiumLoaderSeen", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("forwards the caller's access token as Bearer auth when a cookie is present (unchanged from before this fix)", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "loader-token-1" }) as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ compendium_loader_seen: false }),
+    });
+
+    await expect(getInitialCompendiumLoaderSeen()).resolves.toEqual({
+      hasSeen: false,
+      canPersist: true,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/preferences"),
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer loader-token-1" }) })
     );
   });
 });

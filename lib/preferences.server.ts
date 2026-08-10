@@ -155,12 +155,14 @@ export interface InitialCompendiumLoaderState {
   // first-run tutorial, not silently skipping it).
   hasSeen: boolean;
   // Mirrors compendium_loader.py's `user_id is not None` -> non-empty
-  // data-user-id -> canPersist gate in the vendor JS: true once we have a
-  // resolvable authenticated session (a valid token AND a successful
-  // preferences read), so the loader's first-run dismiss knows whether
-  // persisting the seen-flag is meaningful. false on any auth/fetch
-  // failure -- same fallback direction as hasSeen (degrade to "don't
-  // persist" rather than risk writing on an unauthenticated request).
+  // data-user-id -> canPersist gate in the vendor JS: true once the
+  // backend confirms a resolvable session for the request actually sent
+  // (a successful preferences read) -- NOT "a cookie was present"; see
+  // this function's own V3 fix-round comment for why a cookie-less
+  // request can still resolve true (dev-mode backend auth bypass). false
+  // on any auth/fetch failure -- same fallback direction as hasSeen
+  // (degrade to "don't persist" rather than risk writing on a request the
+  // backend didn't actually authenticate).
   canPersist: boolean;
 }
 
@@ -180,8 +182,22 @@ export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiu
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
   const token = (await cookies()).get("access_token")?.value;
-  if (!token) return { hasSeen: false, canPersist: false };
 
+  // V3 fix-round (coordinator review after item 3): same fix shape as
+  // getInitialPanelWidths (item 5) -- no longer short-circuits to
+  // {hasSeen:false, canPersist:false} when `token` is absent. A
+  // cookie-less dev session (AUTH_REQUIRED unset, no forced /login) still
+  // has a real, persisted compendium_loader_seen value on the backend
+  // row; discarding it here meant first-run replayed on EVERY refresh for
+  // such a session regardless of item 3's vendor fix (which only repairs
+  // onFirstPaint's signal loss, a SEPARATE bug from this read-side gate),
+  // and canPersist stayed false so CompendiumLoader.tsx's dismiss-time
+  // persist call never even attempted the write. fetchPreferencesRow now
+  // only conditionally adds the Authorization header (see that function's
+  // own comment) -- production outcome is unchanged: no header -> the
+  // backend's real verify_api_key check 401s -> fetched.ok is false ->
+  // falls through to the SAME {hasSeen:false, canPersist:false} fallback
+  // as before.
   const fetched = await fetchPreferencesRow(token);
   if (!fetched.ok) return { hasSeen: false, canPersist: false };
 
