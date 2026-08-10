@@ -778,7 +778,7 @@ function threeNodePayload(): GraphPayload {
   };
 }
 
-describe("d3-graph-vendor setFilterDim() composes with selection (Task A1-3 Step 5)", () => {
+describe("d3-graph-vendor setFilterDim() precedence vs. selection (Task A1-3 Step 5, reversed by Task V3 item 1)", () => {
   beforeEach(async () => {
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     (
@@ -841,21 +841,36 @@ describe("d3-graph-vendor setFilterDim() composes with selection (Task A1-3 Step
     expect(circleOpacityById(container, "page-3")).toBe("0.15");
   });
 
-  it("selection AND filter compose (union): a selected node inside a dimmed-out set stays visible, PLUS the filter's own set stays visible -- neither clobbers the other", async () => {
+  it("selection wins over filter (Task V3 item 1, user ruling 2026-08-10, P1): a selection present drops the filter layer entirely, matching Dash's dispatch", async () => {
     const { render, setSelection, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
     document.body.appendChild(container);
     render(container, threeNodePayload(), {});
 
-    // Filter keeps page-2 visible; page-1 (selected below) would otherwise
-    // be OUTSIDE that filter set -- this is exactly the brief's own
-    // "selected node inside a dimmed-out set" scenario.
+    // Filter would otherwise keep page-2 visible, but a selection is
+    // present (page-1) -- delta #15's union composition is REJECTED by
+    // user ruling; selection wins outright and the filter layer does not
+    // render at all while a selection is active.
     setFilterDim(["page-2"]);
     setSelection("node", "page-1");
 
     expect(circleOpacityById(container, "page-1")).toBe("1"); // selection layer
-    expect(circleOpacityById(container, "page-2")).toBe("1"); // filter layer
-    expect(circleOpacityById(container, "page-3")).toBe("0.15"); // excluded by BOTH layers
+    expect(circleOpacityById(container, "page-2")).toBe("0.15"); // filter dropped, not selected
+    expect(circleOpacityById(container, "page-3")).toBe("0.15"); // excluded by selection
+  });
+
+  it("selection wins regardless of call order: setSelection then setFilterDim still drops the filter layer", async () => {
+    const { render, setSelection, setFilterDim } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, threeNodePayload(), {});
+
+    setSelection("node", "page-1");
+    setFilterDim(["page-2"]); // applied AFTER the selection -- must still not compose
+
+    expect(circleOpacityById(container, "page-1")).toBe("1");
+    expect(circleOpacityById(container, "page-2")).toBe("0.15");
+    expect(circleOpacityById(container, "page-3")).toBe("0.15");
   });
 
   it("setFilterDim does not clobber the current selection -- selection survives filter changes and clears", async () => {

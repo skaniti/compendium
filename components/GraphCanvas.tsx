@@ -713,13 +713,15 @@ export default function GraphCanvas() {
   // selectedNodeId/selectedClusterId/selectedNodeIds/selectedSessionId are
   // still mutually exclusive, so this does NOT route through
   // setSelection('nodes', ids) (that WOULD clobber a concurrent node/
-  // cluster selection). Instead it drives the vendor's new INDEPENDENT
-  // `setFilterDim` entry point (header comment delta #15), which
-  // updateHighlighting() unions with whatever the selection branches
-  // compute -- selection and filter compose (a selected node inside a
-  // dimmed-out set stays visible, matching the brief's own example),
-  // rather than one silently overwriting the other. Same ref-guard no-op
-  // shape as setSelection above.
+  // cluster selection). Instead it drives the vendor's INDEPENDENT
+  // `setFilterDim` entry point (header comment delta #15/#27). Task V3
+  // item 1 (user ruling 2026-08-10, P1) REVERSED delta #15's union
+  // composition inside updateHighlighting(): a selection, when present,
+  // wins outright and the filter layer does not render at all -- matching
+  // Dash's actual dispatch (app.py ~:3040). This effect's shape is
+  // unchanged (still an independent setFilterDim call, not routed through
+  // setSelection), only the vendor-side precedence moved. Same ref-guard
+  // no-op shape as setSelection above.
   useEffect(() => {
     setFilterDimRef.current?.(state.filterHighlightIds);
   }, [state.filterHighlightIds]);

@@ -79,9 +79,12 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   // delta #7). Loosely typed; not part of the sandbox's own contract.
   export function setSelection(type: string, id: unknown): void;
   // Task A1-3 (header comment delta #15): the independent filter-dim layer
-  // (NavProvider's filterHighlightIds) -- unioned with setSelection's own
-  // highlight set by updateHighlighting(), not routed through it. Empty
-  // array/undefined clears the filter (dims nothing).
+  // (NavProvider's filterHighlightIds) -- NOT routed through setSelection.
+  // Task V3 item 1 (delta #27, user ruling 2026-08-10, P1) reversed the
+  // original union: updateHighlighting() now only applies this layer when
+  // NO selection is active -- a selection, once present, wins outright and
+  // this layer does not render. Empty array/undefined clears the filter
+  // (dims nothing).
   export function setFilterDim(nodeIds: string[] | undefined): void;
   export function toggleNoise(show: boolean): void;
   export function frameNodes(nodeIds: string[], visibleH?: number): void;
