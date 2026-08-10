@@ -351,8 +351,17 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     // bounded step instead of either staying frozen at applied1 (no glide
     // at all) or already sitting at the fully-converged target (no bound
     // applied -- i.e. the pre-fix teleport).
-    const changedX = Math.abs(converged.x - applied1.x) > 1e-6;
-    const changedY = Math.abs(converged.y - applied1.y) > 1e-6;
+    // The per-axis gate is 1.0 world unit, NOT a float epsilon: the
+    // non-cliff axis can drift by a tiny amount between draws (the force
+    // sim re-runs with unseeded Math.random), and for a drift in the
+    // window just above a float epsilon the single bounded step rounds to
+    // one of the bounds in the transform-attribute string round-trip --
+    // strictly-between then fails with exact boundary equality (observed
+    // as a rare full-suite flake, 2026-08-10). The forced cliff axis
+    // moves thousands of units, so a 1.0 gate keeps the discriminating
+    // assertion while never asserting on round-trip noise.
+    const changedX = Math.abs(converged.x - applied1.x) > 1.0;
+    const changedY = Math.abs(converged.y - applied1.y) > 1.0;
     expect(changedX || changedY).toBe(true); // the cliff produced a genuinely different target
 
     if (changedX) {
@@ -393,13 +402,27 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
       Math.abs(independentTarget.x - converged.x) + Math.abs(independentTarget.y - converged.y);
     expect(targetDrift).toBeLessThan(25);
 
-    // Assertion 3b: advancing further time changes nothing -- proof the
-    // rAF loop actually stopped scheduling itself once converged, rather
-    // than continuing to tick (and potentially drift) forever.
+    // Assertion 3b: the rAF loop terminates. NOT asserted as equality to
+    // `independentTarget`: when the re-simulation drift between draw 2 and
+    // draw 3 exceeds the SCREEN-space snap epsilon (0.5px / k), draw 3
+    // legitimately GLIDES to its slightly-shifted target instead of
+    // snapping, so the post-flush read above is a mid-glide position --
+    // exact equality against it flakes with the size of the unseeded
+    // Math.random sim drift (observed 2026-08-10, ~25% of full-suite
+    // runs). Assert the two things 3b actually means: (1) after generous
+    // extra time the plate is EXACTLY stationary across a further
+    // advancement -- the loop stopped scheduling; (2) where it rests is
+    // still the stateless target, within the same re-sim tolerance 3a
+    // already uses.
     await vi.advanceTimersByTimeAsync(1000);
+    const settled = parseTranslate(watermarkTransform(container, kw + "-beta"));
+    await vi.advanceTimersByTimeAsync(500);
     const afterExtraTime = parseTranslate(watermarkTransform(container, kw + "-beta"));
-    expect(afterExtraTime.x).toBe(independentTarget.x);
-    expect(afterExtraTime.y).toBe(independentTarget.y);
+    expect(afterExtraTime.x).toBe(settled.x);
+    expect(afterExtraTime.y).toBe(settled.y);
+    const restDrift =
+      Math.abs(settled.x - independentTarget.x) + Math.abs(settled.y - independentTarget.y);
+    expect(restDrift).toBeLessThan(25);
   });
 
   it("a keyword absent from a later draw is pruned -- reappearing later snaps instead of gliding from the stale offset", async () => {
