@@ -897,3 +897,235 @@ describe("d3-graph-vendor setFilterDim() composes with selection (Task A1-3 Step
     expect(circleOpacityById(container, "page-3")).toBe("1");
   });
 });
+
+// Task V2 (vision-review F5): knot expand loses its frame on Next. Root
+// cause (task-V2-report.md has the full instrumentation writeup): Dash's
+// own toggleGroupExpansion calls render() SYNCHRONOUSLY, so by the time it
+// calls frameWorldBBox, render()'s own preserveView restore already ran and
+// the frame is the last word. Task group W's async worker relayout broke
+// that ordering -- render() only kicks off the worker and returns
+// immediately, so the OLD code's synchronous frameWorldBBox call (a) read a
+// stale, pre-relayout bbox and (b) started a transition the settle-end
+// preserveView restore (finishRenderAfterSettle, running seconds later once
+// the worker actually finishes) unconditionally overwrote. The fix hands
+// the group id to render() as `frameGroupId`, applied by
+// finishRenderAfterSettle AFTER its own preserveView restore -- same net
+// order as Dash, triggered by the worker's `end` instead of render()
+// returning.
+describe("d3-graph-vendor toggleGroupExpansion() frame (Task V2, vision-review F5)", () => {
+  const GROUP_ID = 42;
+
+  // One plain solo cluster (keeps the overall fit-to-content bbox large)
+  // plus one casual/binge group cluster (page_ids tight enough that
+  // frameWorldBBox's clamp -- the SAME {minRatio:1.6, maxRatio:2.6} call
+  // toggleGroupExpansion has always used -- pins the framed scale well
+  // above the plain fit scale). Fresh object graph per call: render()
+  // mutates node.x/y in place, and this file's existing payload factories
+  // (e.g. threeNodePayload above) follow the same per-call-fresh pattern
+  // to avoid cross-test contamination.
+  function twoClusterGroupPayload(): GraphPayload {
+    function member(id: string, parent: string): GraphPayload["nodes"][number] {
+      return {
+        id,
+        label: id,
+        level: 0,
+        kind: "cluster",
+        visit_count: 1,
+        parent_id: parent,
+        children_ids: [],
+        capture_ids: [],
+        page_urls: ["https://example.com/" + id],
+        first_visited_at: null,
+      };
+    }
+    return {
+      nodes: [member("page-1", "solo"), member("page-2", "grp"), member("page-3", "grp")],
+      links: [],
+      clusters: [
+        { id: "solo", name: "Solo Cluster", page_ids: ["page-1"] },
+        {
+          id: "grp",
+          name: "Group Cluster",
+          page_ids: ["page-2", "page-3"],
+          group_id: GROUP_ID,
+          group_tier: "casual",
+          group_label: "Test Group",
+        },
+      ],
+      super_clusters: [],
+      groups: [],
+    };
+  }
+
+  function graphRootTransform(container: HTMLElement): string | null {
+    return container.querySelector("svg g.graph-root")?.getAttribute("transform") ?? null;
+  }
+  function parseScale(transform: string | null): number {
+    const m = transform?.match(/scale\(([^)]+)\)/);
+    return m ? parseFloat(m[1]) : NaN;
+  }
+  function clickCaption(container: HTMLElement, label: string): void {
+    const groups = Array.from(container.querySelectorAll("g.group-label-group"));
+    const target = groups.find((g) => g.querySelector("text")?.textContent?.includes(label));
+    if (!target) throw new Error("caption not found for label: " + label);
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  }
+
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+    // expandedGroups is a module-level singleton (same shared-state class
+    // as selection/filter above) -- reset the one group id these tests use
+    // so a previous test's expand/collapse doesn't leak into this one.
+    const w = window as unknown as { __d3ExpandedGroups?: Record<number, boolean> };
+    if (w.__d3ExpandedGroups) delete w.__d3ExpandedGroups[GROUP_ID];
+  });
+
+  afterEach(() => {
+    flushSettleChunks();
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  it("expand -> settle -> frames the expanded group instead of restoring the pre-click transform", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, twoClusterGroupPayload(), {});
+    // Mount's own settle-tail (chunks 2/3, incl. the FIRST fitToContent)
+    // is rAF-deferred -- drain it so .graph-root carries its baseline
+    // fit-to-content transform before this test reads it.
+    flushSettleChunks();
+
+    const baselineTransform = graphRootTransform(container);
+    expect(baselineTransform).toBeTruthy();
+    const baselineScale = parseScale(baselineTransform);
+    expect(Number.isNaN(baselineScale)).toBe(false);
+
+    clickCaption(container, "Test Group");
+    // SyncFakeSimWorker (this file's default Worker stub) runs the click's
+    // render(rawData, {preserveView:true, frameGroupId}) call synchronously
+    // to `end`, but finishRenderAfterSettle's own chunk 2/3 are still
+    // rAF-deferred (jsdom: setTimeout(cb,16) fallback) -- drain them so the
+    // frame (chunk 3) has actually run before asserting.
+    flushSettleChunks();
+
+    // frameWorldBBox itself applies via `svg.transition().duration(500)`
+    // (unchanged by this fix -- same call toggleGroupExpansion always
+    // made), which schedules real, ANIMATED interpolation through d3's own
+    // timer queue -- a completely separate scheduling system from the
+    // vendor's __rafSchedule/scheduleSettleChunk that flushSettleChunks()
+    // drains above, so it needs real elapsed wall-clock time (this file
+    // never stubs timers) rather than another synchronous flush. Confirmed
+    // empirically: reading immediately after flushSettleChunks() (no wait)
+    // sees the transition still parked at its start value -- indistinguishable
+    // from the pre-fix bug's own byte-identical restore, which is exactly
+    // why this wait is load-bearing, not padding.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    const afterTransform = graphRootTransform(container);
+    // Pre-fix: settle-end unconditionally restored ctx.prevTransform, so
+    // afterTransform === baselineTransform (the F5 bug, byte-for-byte --
+    // verified against the pre-fix code, see task-V2-report.md). Post-fix:
+    // the frame is the last word, and its {minRatio:1.6, maxRatio:2.6}
+    // clamp (unchanged from the removed synchronous call site) puts a group
+    // this tight relative to the solo cluster's much larger fit bbox well
+    // above the plain fit scale.
+    expect(afterTransform).not.toBe(baselineTransform);
+    const afterScale = parseScale(afterTransform);
+    expect(afterScale).toBeGreaterThan(baselineScale * 1.5);
+  });
+
+  it("collapse never re-frames -- the camera stays exactly where the expand click's own settle left it (Dash parity)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, twoClusterGroupPayload(), {});
+    flushSettleChunks();
+
+    clickCaption(container, "Test Group"); // expand
+    flushSettleChunks();
+    // Let the expand's frameWorldBBox transition (real d3 timer, not the
+    // vendor's own rAF fallback flushSettleChunks() drains -- see the
+    // sibling "expand -> settle" test's own comment) actually finish
+    // before capturing "where the frame left the camera" and clicking
+    // collapse -- otherwise this test would only prove collapse leaves an
+    // UN-transitioned transform alone, which is true but not what "Dash
+    // parity" actually means here.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const framedTransform = graphRootTransform(container);
+    expect(framedTransform).toBeTruthy();
+
+    clickCaption(container, "Test Group"); // collapse (same caption, now "▾ ...")
+    flushSettleChunks();
+
+    const afterCollapseTransform = graphRootTransform(container);
+    // toggleGroupExpansion only ever sets frameGroupId when `expanding` is
+    // true -- a collapse's settle-end restores ctx.prevTransform (the
+    // transform captured right when the collapse click fired, i.e. the
+    // framed view) and applies no frame on top of it, exactly like Dash's
+    // own "collapsing never moves the camera" contract (vendor R4.3
+    // comment).
+    expect(afterCollapseTransform).toBe(framedTransform);
+  });
+
+  // Task group W fix round 1 established the dispose-mid-settle contract
+  // (the "unmount mid-settle" test above) for the plain preserveView
+  // restore; this closes the SAME gap for the frame this task adds. Uses
+  // ManualStepSimWorker (not SyncFakeSimWorker, which always completes a
+  // run in one synchronous call) to genuinely pause the expand's run
+  // between ticks before disposing.
+  it("dispose() mid-expand-settle applies no late frame (no restore either -- the DOM is untouched past whatever was last painted)", async () => {
+    vi.stubGlobal("Worker", ManualStepSimWorker);
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const dispose = render(container, twoClusterGroupPayload(), {});
+    const mountWorker = ManualStepSimWorker.lastInstance!;
+    expect(mountWorker).toBeTruthy();
+    // Drive the mount's own run fully to `end` and flush its settle tail
+    // so there's a real, painted baseline transform to compare against.
+    for (let i = 0; i < 200; i++) mountWorker.step();
+    flushSettleChunks();
+    const baselineTransform = graphRootTransform(container);
+    expect(baselineTransform).toBeTruthy();
+
+    // Expand click -- starts a NEW run (createWorkerSim.start() always
+    // tears down the prior worker and constructs a fresh one, see
+    // lib/graph/useWorkerSim.ts's own attachWorker).
+    clickCaption(container, "Test Group");
+    const expandWorker = ManualStepSimWorker.lastInstance!;
+    expect(expandWorker).not.toBe(mountWorker);
+
+    // Phase 2 always runs a FIXED 150 ticks per cluster regardless of
+    // member count (sim-layout.ts's own header comment) -- a handful of
+    // manual steps is reliably still mid-settle, not a race.
+    for (let i = 0; i < 5; i++) expandWorker.step();
+
+    dispose();
+
+    // Simulate the worker "still trying" to deliver more messages after
+    // dispose() -- including driving it all the way to a hypothetical
+    // `end` -- exercising both createWorkerSim's client-side suppression
+    // AND the vendor's own __simRunCtx null-out.
+    for (let i = 0; i < 200; i++) expandWorker.step();
+    flushSettleChunks();
+
+    const afterTransform = graphRootTransform(container);
+    // No restore AND no frame -- dispose() deliberately does not touch the
+    // DOM (vendor comment on the dispose() function itself), so whatever
+    // was last painted (the mount's baseline fit) simply stays.
+    expect(afterTransform).toBe(baselineTransform);
+    // Belt-and-suspenders: the expanded group's caption text never even
+    // flipped to "▾" (chunk 1's drawGroupLabels never ran for this
+    // disposed run either -- same "reached a live end" gate as chunk 3).
+    const captionTexts = Array.from(container.querySelectorAll("g.group-label-group text")).map(
+      (t) => t.textContent,
+    );
+    expect(captionTexts.some((t) => t?.startsWith("▾"))).toBe(false);
+  });
+});
