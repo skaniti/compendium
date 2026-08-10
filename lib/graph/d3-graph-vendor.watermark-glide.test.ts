@@ -414,14 +414,35 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     // advancement -- the loop stopped scheduling; (2) where it rests is
     // still the stateless target, within the same re-sim tolerance 3a
     // already uses.
-    await vi.advanceTimersByTimeAsync(1000);
-    const settled = parseTranslate(watermarkTransform(container, kw + "-beta"));
-    await vi.advanceTimersByTimeAsync(500);
-    const afterExtraTime = parseTranslate(watermarkTransform(container, kw + "-beta"));
-    expect(afterExtraTime.x).toBe(settled.x);
-    expect(afterExtraTime.y).toBe(settled.y);
+    // Quiescence POLL, not fixed windows: d3-timer keeps an unfaked
+    // wake-up backstop (`setInterval(poke, 1000)` -- setInterval is
+    // deliberately absent from this file's toFake list), so late
+    // pipeline redraws (draw 3's fitToContent zoom transition) can be
+    // pumped on REAL wall-clock time under full-suite load, landing
+    // nondeterministically relative to any fixed fake-time read window
+    // (observed as the residual full-suite flake, 2026-08-10: the plate
+    // moved between a t+1000ms and a t+1500ms read -- impossible for the
+    // glide itself, whose motion decays below the snap epsilon within
+    // ~40 frames). Both endpoint states are deterministic and within
+    // 3a's re-sim tolerance of the independently re-derived target; only
+    // their ORDER vs the reads varies. So: advance fake time in 500ms
+    // slabs until two consecutive reads are identical (true rest -- a
+    // crawling glide cannot hold string-identical transforms across a
+    // 500ms slab, it snaps below the epsilon first), bounded at 5s of
+    // fake time. Termination of the rAF loop is asserted by quiescence
+    // being reachable at all; where the plate rests is asserted against
+    // the stateless target under the same tolerance 3a uses.
+    let prevRest = parseTranslate(watermarkTransform(container, kw + "-beta"));
+    let quiescent = false;
+    for (let i = 0; i < 10 && !quiescent; i++) {
+      await vi.advanceTimersByTimeAsync(500);
+      const cur = parseTranslate(watermarkTransform(container, kw + "-beta"));
+      quiescent = cur.x === prevRest.x && cur.y === prevRest.y;
+      prevRest = cur;
+    }
+    expect(quiescent).toBe(true);
     const restDrift =
-      Math.abs(settled.x - independentTarget.x) + Math.abs(settled.y - independentTarget.y);
+      Math.abs(prevRest.x - independentTarget.x) + Math.abs(prevRest.y - independentTarget.y);
     expect(restDrift).toBeLessThan(25);
   });
 
