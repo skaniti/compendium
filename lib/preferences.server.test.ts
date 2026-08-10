@@ -264,6 +264,59 @@ describe("getInitialThemeVariant", () => {
   });
 });
 
+// Task V3 item 5 fix: root-caused "panel width not restored after hard
+// refresh" (task-V3-report.md) to this function's own pre-fix
+// `if (!token) return {};` short-circuit -- the ONLY of the five
+// getInitialX readers in this module lacking any dedicated no-cookie test
+// before this fix landed, matching the coverage gap that let the bug slip
+// through. hooks/usePanelResize.ts's own mouseup PATCH was ALREADY
+// persisting panel_left_width/panel_right_width correctly without a
+// cookie (live-verified via CDP) -- the bug was entirely on this read
+// side, discarding an already-saved drag on every load.
+describe("getInitialPanelWidths", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("attempts the backend WITHOUT an Authorization header when there is no access_token cookie, and returns the persisted widths if the backend allows it (dev-mode auth bypass)", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ panel_left_width: "32%", panel_right_width: "20%" }),
+    });
+
+    await expect(getInitialPanelWidths()).resolves.toEqual({
+      panelLeftWidth: "32%",
+      panelRightWidth: "20%",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/preferences"),
+      expect.objectContaining({
+        headers: expect.not.objectContaining({ authorization: expect.anything() }),
+      })
+    );
+  });
+
+  it("forwards the caller's access token as Bearer auth when a cookie is present (unchanged from before this fix)", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "panel-token-1" }) as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ panel_left_width: "35%", panel_right_width: "22%" }),
+    });
+
+    await expect(getInitialPanelWidths()).resolves.toEqual({
+      panelLeftWidth: "35%",
+      panelRightWidth: "22%",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/preferences"),
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer panel-token-1" }) })
+    );
+  });
+});
+
 describe("preferences fetch deduplication (React.cache)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

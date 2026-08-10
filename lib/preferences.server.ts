@@ -34,10 +34,17 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // confirmed even though the body was unusable -- but false in the former).
 type PreferencesFetchResult = { ok: true; body: unknown } | { ok: false };
 
-const fetchPreferencesRow = cache(async (token: string): Promise<PreferencesFetchResult> => {
+// `token` is optional -- see getInitialPanelWidths's own comment (Task V3
+// item 5 fix) for the one caller that now invokes this WITHOUT a token,
+// deliberately. Every other caller still gates on a real token before ever
+// reaching here, so this only widens what's ACCEPTED, not what those
+// callers actually send.
+const fetchPreferencesRow = cache(async (token: string | undefined): Promise<PreferencesFetchResult> => {
   try {
+    const headers: Record<string, string> = {};
+    if (token) headers.authorization = `Bearer ${token}`;
     const res = await fetch(`${BACKEND}/api/auth/preferences`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers,
       cache: "no-store",
     });
     if (!res.ok) return { ok: false };
@@ -72,8 +79,29 @@ export async function getInitialPanelWidths(): Promise<InitialPanelWidths> {
   // producing a spurious build-time log without changing the outcome --
   // app/api/[...path]/route.ts's proxy calls it the same unguarded way).
   const token = (await cookies()).get("access_token")?.value;
-  if (!token) return {};
 
+  // Task V3 item 5 fix: no longer short-circuits to {} when `token` is
+  // absent -- attempts fetchPreferencesRow() regardless (which now only
+  // conditionally adds the Authorization header, mirroring
+  // app/api/[...path]/route.ts's own "inject if present" idiom, same fix
+  // shape as Task V3 item 4's /api/auth/view-as and /api/auth/return
+  // routes). Root cause (CDP-instrumented, live-reproduced): usePanelResize's
+  // own mouseup PATCH (hooks/usePanelResize.ts) already succeeds and
+  // persists panel_left_width/panel_right_width correctly WITHOUT a cookie
+  // -- it goes through apiFetch -> the lenient app/api/[...path]/route.ts
+  // catch-all, which forwards regardless of cookie presence, and the
+  // backend's verify_api_key (backend/api/main.py, explorer repo, read-
+  // only) bypasses auth entirely in dev mode. The bug was ENTIRELY on this
+  // read side: an admin/user session that AUTH_REQUIRED=unset (proxy.ts's
+  // own documented "local dev keeps its existing no-auth loop" contract)
+  // never forces through /login, so it never acquires a cookie -- THIS
+  // function used to always return {} regardless of what was actually persisted --
+  // PanelGrid.tsx then fell back to the ported CSS's own 20% default on
+  // every load, discarding a drag that had genuinely already saved
+  // server-side. In production (AUTH_REQUIRED=1, backend not in dev mode)
+  // a request with no Authorization header still gets a real 401 from the
+  // backend's own check, `fetched.ok` is false, and this still correctly
+  // falls back to {} -- unchanged outcome there.
   const fetched = await fetchPreferencesRow(token);
   if (!fetched.ok) return {};
 
