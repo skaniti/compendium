@@ -45,14 +45,24 @@ describe("POST /api/auth/return", () => {
     vi.mocked(cookies).mockReset();
   });
 
-  it("returns 401 without calling the backend when there is no access_token cookie", async () => {
+  // Task V3 item 4 fix: same flip as the sibling /api/auth/view-as route's
+  // own test (see that file's own comment for the full root-cause
+  // writeup) -- forwards WITHOUT an Authorization header instead of
+  // self-rejecting with 401, matching app/api/[...path]/route.ts's own
+  // "inject if present" idiom.
+  it("forwards to the backend WITHOUT an Authorization header when there is no access_token cookie (backend's own auth policy decides, not this route)", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
-    const res = await POST();
+    await POST();
 
-    expect(res.status).toBe(401);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/return-to-admin"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.not.objectContaining({ authorization: expect.anything() }),
+      })
+    );
   });
 
   it("forwards the caller's (acting) access token as Bearer auth to return-to-admin", async () => {

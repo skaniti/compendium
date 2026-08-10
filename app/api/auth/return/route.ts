@@ -11,18 +11,23 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // /api/auth/view-as -- this route forwards the caller's acting access
 // token as Bearer auth and, on success, swaps the cookie back to the
 // admin's own.
+//
+// Task V3 item 4 fix: same fix as the sibling /api/auth/view-as route
+// (see that file's own comment for the full root-cause writeup) -- no
+// longer self-rejects with 401 when the access_token cookie is absent,
+// only conditionally adds the Authorization header, mirroring
+// app/api/[...path]/route.ts's own "inject if present" idiom.
 export async function POST(): Promise<Response> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
-  if (!accessToken) {
-    return Response.json({ error: "Not authenticated." }, { status: 401 });
-  }
 
   let res: Response;
   try {
+    const headers: Record<string, string> = {};
+    if (accessToken) headers.authorization = `Bearer ${accessToken}`;
     res = await fetch(`${BACKEND}/api/auth/return-to-admin`, {
       method: "POST",
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers,
     });
   } catch (err) {
     console.error("return-to-admin: backend request failed:", err);

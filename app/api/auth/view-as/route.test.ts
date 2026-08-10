@@ -47,14 +47,31 @@ describe("POST /api/auth/view-as", () => {
     vi.mocked(cookies).mockReset();
   });
 
-  it("returns 401 without calling the backend when there is no access_token cookie", async () => {
+  // Task V3 item 4 fix: flipped from the pre-fix "401 without calling the
+  // backend" behavior (task-V3-report.md) -- that self-imposed gate was
+  // STRICTER than what the backend actually requires (its verify_api_key
+  // bypasses auth entirely in dev mode), and tripped lib/api.ts's apiFetch
+  // 401 -> redirect-to-/login interceptor for an admin session that
+  // AUTH_REQUIRED=unset never forces through /login to begin with (so it
+  // never acquires a cookie) -- live-reproduced via CDP: "view demo" as
+  // admin with no cookie landed on /login, 100% reproducible. Now forwards
+  // WITHOUT an Authorization header instead of self-rejecting, matching
+  // app/api/[...path]/route.ts's own "inject if present" idiom -- the
+  // backend's own auth policy (dev bypass, or a real 401 in production)
+  // decides from here, not this route.
+  it("forwards to the backend WITHOUT an Authorization header when there is no access_token cookie (backend's own auth policy decides, not this route)", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
-    const res = await POST();
+    await POST();
 
-    expect(res.status).toBe(401);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/view-as"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.not.objectContaining({ authorization: expect.anything() }),
+      })
+    );
   });
 
   it("forwards the caller's access token as Bearer auth with profile:demo", async () => {
