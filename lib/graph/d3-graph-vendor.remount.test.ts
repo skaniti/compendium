@@ -747,6 +747,31 @@ describe("d3-graph-vendor toggleNoise() (Task A1-3 Step 4)", () => {
     expect(() => toggleNoise(false)).not.toThrow();
     toggleNoise(true); // restore
   });
+
+  // Task V3 item 3 fix (header comment delta #28): root-caused the "tutorial
+  // replays on every refresh" bug to THIS exact seam -- toggleNoise()'s own
+  // re-render tail (:5936-ish, `render(rawData)`) omits `opts` BY DESIGN
+  // ("re-run with whatever's already configured"), which used to silently
+  // drop `onFirstPaint` from the run that actually wins the race to paint
+  // -- CompendiumLoader.tsx's tryDismiss() never saw
+  // window.__compendiumGraphRendered flip true, so its first-run dismiss
+  // (and the seen-flag PATCH inside it) never fired. Discriminating test:
+  // this FAILS on the pre-fix code (onFirstPaint called once, not twice).
+  it("Task V3 item 3 fix: toggleNoise()'s opts-omitted re-render still fires onFirstPaint (the persisted signal survives losing the caller's opts object)", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onFirstPaint = vi.fn();
+    toggleNoise(true);
+    render(container, NOISE_PAYLOAD, { onFirstPaint });
+    expect(onFirstPaint).toHaveBeenCalledTimes(1);
+
+    toggleNoise(false); // internally: render(rawData) -- opts omitted
+    expect(onFirstPaint).toHaveBeenCalledTimes(2);
+
+    toggleNoise(true); // restore for any test ordering after this one
+  });
 });
 
 // Task A1-3 Step 5 (header comment delta #15): three singletons, 0
