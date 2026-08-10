@@ -877,6 +877,67 @@ describe("GraphCanvas <-> useGraph() binding (Step 1a/2: graphVersion re-render,
     await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
   });
 
+  // Task V1 (vision-review fix loop, F1) discriminating test. The test
+  // above already covers "setSelectionMock is EVENTUALLY called again after
+  // a graphVersion bump" -- both the pre-fix and post-fix code satisfy that,
+  // since renderMock's DEFAULT implementation fires onFirstPaint via a
+  // queueMicrotask regardless of where GraphCanvas.tsx's own reapply call
+  // sits, so `waitFor` can't tell the two apart. This test instead pins
+  // down WHEN, by overriding renderMock's implementation for the re-render
+  // call to capture (not auto-fire) onFirstPaint -- the real vendor's own
+  // contract: paintPageDots (and therefore circle.page/use.star-spikes)
+  // does not exist until the worker's first `tick` message, which
+  // onFirstPaint signals. Pre-fix, GraphCanvas.tsx called
+  // setSelectionRef.current?.(...)/setFilterDimRef.current?.(...)
+  // synchronously right after renderRef.current(...) returned -- i.e.
+  // BEFORE onFirstPaint could possibly have fired against a real worker.
+  // Live-verified via CDP against the real (unmocked) vendor + a real
+  // Worker (task-V1-report.md): the reapply landed on a DOM the vendor had
+  // already wiped for the new render but not yet repainted, a silent no-op
+  // that was never corrected once the real paint eventually arrived.
+  it("does NOT reapply selection/filter until onFirstPaint fires (not synchronously after render() returns)", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("seed-select").click());
+    act(() => screen.getByText("seed-filter").click());
+    await waitFor(() => expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node"));
+    await waitFor(() => expect(setFilterDimMock).toHaveBeenCalledWith(["a"]));
+    setSelectionMock.mockClear();
+    setFilterDimMock.mockClear();
+
+    // Intercept the NEXT render() call: capture onFirstPaint instead of the
+    // default mock's auto-fire-via-microtask behavior, so this test controls
+    // exactly when the vendor's "DOM now exists" signal fires.
+    let capturedOnFirstPaint: (() => void) | undefined;
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onFirstPaint?: () => void };
+      capturedOnFirstPaint = opts.onFirstPaint;
+      return disposeMock;
+    });
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    expect(capturedOnFirstPaint).toBeDefined();
+
+    // The DISCRIMINATING assertion: onFirstPaint has NOT fired yet, so
+    // neither reapply call may have happened. This is exactly the
+    // regression -- pre-fix, GraphCanvas.tsx called setSelectionRef/
+    // setFilterDimRef immediately after renderRef.current(...) returned,
+    // which would already have satisfied these two calls at this point.
+    expect(setSelectionMock).not.toHaveBeenCalled();
+    expect(setFilterDimMock).not.toHaveBeenCalled();
+
+    // Now fire the vendor's real "DOM now exists" signal -- the reapply
+    // must happen from here, not before.
+    act(() => capturedOnFirstPaint?.());
+    expect(setSelectionMock).toHaveBeenCalledWith("node", "seed-node");
+    expect(setFilterDimMock).toHaveBeenCalledWith(["a"]);
+  });
+
   it("A1-1 ledgered minor (fixed): a selection made DURING the vendor's dynamic-import mount window is not dropped", async () => {
     // Previously (task-A1-1-report.md / progress.md): the mount effect read
     // state.selectedNodeId via closure at effect-DEFINITION time, so a

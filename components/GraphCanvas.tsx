@@ -466,32 +466,48 @@ export default function GraphCanvas() {
         // "started" no longer means "painted" now that the force layout
         // runs off-thread -- see the write site below, right after this
         // call, for what used to fire here directly.
+        //
+        // Task V1 fix (vision-review fix loop, F1): ALSO the post-render
+        // highlighting-apply site now, moved here from immediately after
+        // this vendor.render() call. Task group B's original comment there
+        // read "svg/currentData now exist (render() just built them), so
+        // each call's own updateHighlighting() actually takes effect
+        // immediately" -- true when it was written (render() was still
+        // synchronous end-to-end), but Group W's async-worker refactor
+        // silently invalidated it: svg/currentData existing is no longer
+        // sufficient for updateHighlighting() to have anything to paint.
+        // circle.page/use.star-spikes are created by paintPageDots, which
+        // now only runs from the worker's first `tick` message -- this same
+        // onFirstPaint signal -- strictly AFTER render() returns. Calling
+        // vendor.setSelection/setFilterDim synchronously right after
+        // vendor.render() (Task B's original site) raced an empty DOM:
+        // svg.selectAll('circle.page') found nothing, so the dim/emphasis
+        // attrs silently never landed, and nothing ever re-ran
+        // updateHighlighting() once paintPageDots eventually created the
+        // real elements (they got the plain resting-opacity defaults
+        // instead, permanently, until the next explicit selection/filter
+        // change). Live-verified via CDP (task-V1-report.md): vendor
+        // internal state (selectedClusterId etc.) was correct, the visible
+        // dim was not -- confirmed both for the FIRST mount (this site) and
+        // for the graphVersion-bump re-render effect below (same fix
+        // applied there). onFirstPaint is the vendor's own "DOM now exists"
+        // signal (fires exactly once per render() call) -- the correct
+        // place for a synchronous updateHighlighting()-driven reapply.
         onFirstPaint: () => {
           window.__compendiumGraphRendered = true;
+          // Apply whatever selection NavProvider already holds by the time
+          // the import resolves (see selectedNodeIdRef's own comment above
+          // for why this reads the ref, not the closed-over `state` -- the
+          // A1-1 fix). The inbound-wiring effect below only reacts to
+          // LATER changes, so this covers the "already selected before/
+          // during mount" case explicitly.
+          if (selectedNodeIdRef.current) vendor.setSelection("node", selectedNodeIdRef.current);
+          // Task A1-3 (Step 5): same pattern again, via filterHighlightIdsRef
+          // (always current). Unconditional -- an empty array IS the
+          // correct "no filter" call, not something to skip.
+          vendor.setFilterDim(filterHighlightIdsRef.current);
         },
       });
-      // Task group B, Part 1 fix 1 (continued): EXPLICIT post-render
-      // highlighting apply. svg/currentData now exist (render() just
-      // built them), so each call's own updateHighlighting() actually
-      // takes effect immediately -- neither depends on the OTHER
-      // incidentally re-running it. Pre-fix, this same pair of calls
-      // "worked" only because toggleNoise's OWN internal re-render (now
-      // eliminated above) wiped the DOM AFTER the selection apply, and
-      // setFilterDim's own updateHighlighting() call happened to run
-      // AFTER that wipe and rescue both selection and filter together --
-      // an incidental ordering dependency, not a designed one (see
-      // task-B-brief.md's Part 1 caution).
-      //
-      // Apply whatever selection NavProvider already holds by the time the
-      // import resolves (see selectedNodeIdRef's own comment above for why
-      // this reads the ref, not the closed-over `state` -- the A1-1 fix).
-      // The effect below only reacts to LATER changes, so this covers the
-      // "already selected before/during mount" case explicitly.
-      if (selectedNodeIdRef.current) vendor.setSelection("node", selectedNodeIdRef.current);
-      // Task A1-3 (Step 5): same pattern again, via filterHighlightIdsRef
-      // (always current). Unconditional like toggleNoise above -- an empty
-      // array IS the correct "no filter" call, not something to skip.
-      vendor.setFilterDim(filterHighlightIdsRef.current);
       // Task group B, Part 1 fix 2 (continued): record via graphVersionRef,
       // not the closed-over `graphVersion` param -- the LATEST version by
       // resolution time, not whatever it was when this effect started.
@@ -612,21 +628,39 @@ export default function GraphCanvas() {
     disposeRef.current = renderRef.current(containerRef.current, payload, {
       icons: iconData.icons,
       onSelect: (kind, id) => selectFromCanvas(kind as "node" | "cluster" | null, id ?? undefined),
+      // Task V1 fix (vision-review fix loop, F1): re-apply selection AND
+      // filter dim from onFirstPaint, NOT synchronously right after this
+      // renderRef.current() call returns (the previous site, and the
+      // regression -- see the mount effect's onFirstPaint comment above for
+      // the full writeup). This effect's render() call is a re-render into
+      // an EXISTING container (renderRef.current !== null, guarded above),
+      // so it always hits the vendor's `else` branch: confirmed directly in
+      // the vendor source (render()'s `if (!svg) {...} else {...}` branch,
+      // vendor ~:3990) that every call past the FIRST wipes `.graph-root`
+      // (`selectAll('*').remove()`) and rebuilds every layer group from
+      // scratch -- there is no persisting incremental D3 join across
+      // separate render() calls to rely on, only within a single call. That
+      // wipe happens SYNCHRONOUSLY inside this render() call; the REBUILD
+      // (paintPageDots creating circle.page/use.star-spikes) does not --
+      // Group W moved it to the worker's first `tick` message, which is
+      // exactly what onFirstPaint signals. A synchronous reapply here (the
+      // pre-fix site) landed on the WIPED, not-yet-rebuilt DOM every single
+      // time -- live-verified via CDP (task-V1-report.md): selecting a
+      // cluster, then bumping graphVersion (e.g. a window-pill click) while
+      // selected, permanently lost the dim, 100% reproducible, not a timing
+      // race -- this effect's render() call and its old reapply call always
+      // ran in the same synchronous tick, strictly before the worker could
+      // possibly have posted anything back. Both setSelection and
+      // setFilterDim are unconditional-safe no-ops when their value is
+      // empty/null (see each setter's own vendor-side comment), so this
+      // reapplies unconditionally -- no `if` needed, mirrors the mount
+      // effect's own "apply whatever already exists" steps.
+      onFirstPaint: () => {
+        setSelectionRef.current?.("node", selectedNodeIdRef.current);
+        setFilterDimRef.current?.(filterHighlightIdsRef.current);
+      },
     });
     lastRenderedVersionRef.current = graphVersion;
-    // Re-apply selection AND filter dim against the freshly-drawn DOM.
-    // Confirmed directly in the vendor source (render()'s `if (!svg) {...}
-    // else {...}` branch, vendor ~:3990): every call past the FIRST wipes
-    // `.graph-root` (`selectAll('*').remove()`) and rebuilds every layer
-    // group from scratch before the circle/star/label data joins run --
-    // there is no persisting incremental D3 join across separate render()
-    // calls to rely on, only within a single call. Both setSelection and
-    // setFilterDim are unconditional-safe no-ops when their value is
-    // empty/null (see each setter's own vendor-side comment), so this
-    // reapplies unconditionally -- no `if` needed, mirrors the mount
-    // effect's own "apply whatever already exists" steps above.
-    setSelectionRef.current?.("node", selectedNodeIdRef.current);
-    setFilterDimRef.current?.(filterHighlightIdsRef.current);
   }, [graphVersion, payload, selectFromCanvas]);
 
   // Step 4b / Step 6: canvas Esc is a BUBBLE-phase (no `true` capture
