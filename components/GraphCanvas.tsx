@@ -6,7 +6,6 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { apiFetch } from "@/lib/api";
 import { patchPreferences } from "@/lib/preferences";
@@ -17,7 +16,6 @@ import { useTimeWindow } from "./TimeWindowProvider";
 import { useGraph } from "@/hooks/useGraph";
 import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
-import TopicPanel from "./TopicPanel";
 import { GRAPH_DEFAULTS, type GraphDefaults } from "@/lib/graph/constants";
 import { resolveTunerSnapshot } from "@/lib/graph/tuner-snapshot";
 
@@ -321,12 +319,6 @@ export default function GraphCanvas() {
   useEffect(() => {
     tunerSnapshotPromiseRef.current = resolveTunerSnapshotFromMe();
   }, []);
-
-  // Task A1-5: the legacy "Topic Interests" overlay's open/closed state.
-  // TopicPanel unmounts entirely when closed (ScPopover's own philosophy --
-  // no display:none-but-in-DOM branch to track) rather than Dash's
-  // persistent-DOM-with-style-toggle model.
-  const [topicPanelOpen, setTopicPanelOpen] = useState(false);
 
   // Task A1-3 (Step 3): TimeWindowProvider's second reader (the DATE RANGE
   // header card is the first). setWindow() is idempotent against the
@@ -820,57 +812,9 @@ export default function GraphCanvas() {
     handleToggleNoise();
   }
 
-  // Task A1-5: opens/closes the legacy "Topic Interests" overlay. See
-  // TopicPanel.tsx's own header comment for why this trigger exists at all
-  // when Dash's own :8051 has had none since 2026-05-22 (commit 3d4b4b4) --
-  // short version: the human-authored mig-03 plan explicitly keeps this
-  // task in scope as a "user-facing graph affordance", and
-  // app/styles/search-bar.css already carries `#topic-toggle-btn`
-  // hover/focus rules from an earlier batch, anticipating exactly this
-  // element.
-  function handleToggleTopicPanel(): void {
-    setTopicPanelOpen((open) => !open);
-  }
-
-  function handleTopicToggleKeyDown(e: ReactKeyboardEvent<HTMLSpanElement>): void {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    handleToggleTopicPanel();
-  }
-
-  // Dash's own close trigger for #topic-panel (besides the close button):
-  // ANY click within #d3-graph-container (callbacks/topics.py's
-  // toggle_topic_panel, Input=d3-graph-container n_clicks) -- NOT a
-  // document-wide "click outside" listener like ScPopover's. TopicPanel is
-  // mounted as a SIBLING of this div (not nested inside it, unlike
-  // #graph-debug-overlay/#compendium-empty-state above), so a click landing
-  // on the panel itself never reaches this handler -- exactly mirrors
-  // Dash's DOM topology, where #topic-panel is also a sibling of
-  // #d3-graph-container, not a descendant.
-  //
-  // The exclusion below is REQUIRED, not defensive extra caution: in Dash,
-  // #graph-debug-overlay/#compendium-empty-state are ALSO siblings of
-  // #d3-graph-container (graph_canvas.py's render_graph_canvas returns them
-  // as a flat list), so clicking "noise: off"/"view demo"/"topics" itself
-  // never bumps d3-graph-container's n_clicks there. This port's OWN debug-
-  // overlay/empty-state divs are nested INSIDE #d3-graph-container instead
-  // (a pre-existing, ratified deviation -- see this file's header comment,
-  // "obligation 2") purely for DOM-organization convenience, predating this
-  // task. Without this guard, a click on e.g. the noise toggle would bubble
-  // to this handler and incorrectly close the topic panel -- a click
-  // Dash's real sibling-based DOM would never route there at all.
-  function handleCanvasClick(e: ReactMouseEvent<HTMLDivElement>): void {
-    if (!topicPanelOpen) return;
-    const target = e.target;
-    if (target instanceof Element && target.closest("#graph-debug-overlay, #compendium-empty-state, .graph-load-error")) {
-      return;
-    }
-    setTopicPanelOpen(false);
-  }
-
   return (
     <>
-      <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE} onClick={handleCanvasClick}>
+      <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE}>
         {showEmptyState && (
           <div id="compendium-empty-state" style={EMPTY_STATE_STYLE}>
             <div style={EMPTY_STATE_LEAD_STYLE}>{EMPTY_STATE_BODY}</div>
@@ -925,29 +869,8 @@ export default function GraphCanvas() {
           >
             {showNoise ? "noise: on" : "noise: off"}
           </span>
-          {/* Task A1-5: restored trigger for the legacy "Topic Interests"
-              overlay -- see handleToggleTopicPanel's own comment above for
-              why this exists despite Dash's :8051 no longer having one.
-              Styled identically to noise-toggle-btn (same un-individually-
-              gated shape, same NOISE_TOGGLE_STYLE-equivalent inline dict) --
-              app/styles/search-bar.css's #topic-toggle-btn hover/focus rules
-              (an earlier batch) already expect exactly this id + shape. */}
-          <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-          <span
-            id="topic-toggle-btn"
-            role="button"
-            tabIndex={0}
-            style={NOISE_TOGGLE_STYLE}
-            onClick={handleToggleTopicPanel}
-            onKeyDown={handleTopicToggleKeyDown}
-          >
-            topics
-          </span>
         </div>
       </div>
-      {topicPanelOpen && (
-        <TopicPanel onClose={() => setTopicPanelOpen(false)} graphVersion={graphVersion} refresh={refresh} />
-      )}
       <div id="node-tooltip" className="node-tooltip" style={NODE_TOOLTIP_STYLE} />
     </>
   );
