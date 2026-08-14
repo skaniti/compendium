@@ -1,3 +1,7 @@
+> **2026-08-14 — commit policy (Claude Code):** this repo's commit policy lives in
+> `.claude/commit-policy.local.md` (untracked). Absent file = global `scoped` default.
+> Convention: `~/dev/misc/docs/commit-policy-local-convention.md`.
+
 # Compendium (Next.js) — project instructions
 
 This repo is the born-clean, future-public home of the Compendium app. Its ENTIRE
