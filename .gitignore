@@ -31,6 +31,9 @@
 # (canonical copies live with the migration plans; see routing-guard-handoff.md)
 .claude/*.local.md
 
+# machine-local claude settings (permission grants reference private paths)
+.claude/settings.local.json
+
 # local dev logs (timestamped; keep the README, drop the logs)
 logs/*
 !logs/README.md
