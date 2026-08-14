@@ -1,0 +1,12 @@
+How does classifier-free guidance work, and why does it improve sample quality without a separately trained classifier?
+What's the mathematical link between DDPM training and score-based generative modeling?
+Why does training on noisy images at multiple noise levels work better than learning to denoise directly?
+How do the Romans adapt Athena into Minerva -- what stays the same, what changes?
+Why is the Trojan War remembered as a Greek triumph in Homer but a Roman origin myth in Virgil's Aeneid?
+How does Hesiod's Theogony describe the Olympian succession, and does Roman mythology preserve the same generational structure?
+How does an Arduino's PWM (`analogWrite`) actually drive an LED's brightness, and what's the physical principle behind it?
+What's the historical line from the Bell Labs transistor to the Arduino?
+How do you debounce a mechanical switch -- what's the difference between hardware and software debouncing?
+Why are cephalopods (especially octopuses and cuttlefish) considered intelligent compared to other invertebrates?
+How do cephalopods change color, and how is it tied to their nervous system?
+Why do cephalopods have such short lifespans?
