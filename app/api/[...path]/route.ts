@@ -41,5 +41,6 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
 type Ctx = { params: Promise<{ path: string[] }> };
 export async function GET(req: Request, ctx: Ctx) { return proxy(req, (await ctx.params).path); }
 export async function POST(req: Request, ctx: Ctx) { return proxy(req, (await ctx.params).path); }
+export async function PUT(req: Request, ctx: Ctx) { return proxy(req, (await ctx.params).path); }
 export async function PATCH(req: Request, ctx: Ctx) { return proxy(req, (await ctx.params).path); }
 export async function DELETE(req: Request, ctx: Ctx) { return proxy(req, (await ctx.params).path); }
