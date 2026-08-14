@@ -44,6 +44,18 @@ logs/*
 .archive/
 /*.png
 
+# personal plan-annotator launchers (machine-local tooling, not product)
+/annotate.sh
+/annotate.bat
+/annotate-hidden.vbs
+
+# machine-local editor/runtime config
+/.vscode/
+.python-version
+
+# font design workbench (parked here; not part of the app)
+/Constellation-inspired font design/
+
 # project plans -- symlink to dev
 /docs/project-plans
 
