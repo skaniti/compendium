@@ -2,19 +2,21 @@
 // demo/server.mjs -- dependency-free node:http stub backend replaying Task
 // 3's committed demo fixtures, so the Next frontend can run end-to-end
 // against BACKEND_URL without a real backend. Task 4 implemented read-only
-// GET endpoints; Task 5 adds the auth suite (login/logout/refresh/view-as/
+// GET endpoints; Task 5 added the auth suite (login/logout/refresh/view-as/
 // return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs).
+// Task 6 added in-memory mutations (topics CRUD, exclusions, preferences
+// PATCH, recluster) -- see createMutableState/the `gated` write gate below.
 // Later tasks append to the SAME ordered `routes` array below rather than
-// building a second router: mutations (Task 6), SSE chat + preview/asset
-// streaming (Task 7).
+// building a second router: SSE chat + preview/asset streaming (Task 7).
 //
 // Route-table discipline (read before adding a route): entries are checked
 // in array order, first match wins. Static/exact-path routes are listed
 // before parameterized (regex-capturing) ones for the same path prefix --
 // e.g. `/api/topics/exclusions` sits above `/api/topics/{keyword}/members`
-// so a literal "exclusions" path can never be mistaken for a topic keyword
-// by a looser pattern (the routing trap documented in endpoints.md). Keep
-// that ordering invariant when appending new routes.
+// (and, as of Task 6, above the generic DELETE `/api/topics/{keyword}`) so a
+// literal "exclusions" path can never be mistaken for a topic keyword by a
+// looser pattern (the routing trap documented in endpoints.md). Keep that
+// ordering invariant when appending new routes.
 
 import http from "node:http";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -118,6 +120,37 @@ function loadFixtures(fixturesDir) {
 }
 
 // ---------------------------------------------------------------------------
+// Mutable state (Task 6) -- seeded fresh from the just-loaded fixtures on
+// every `startServer` call (loadFixtures itself re-reads the JSON files from
+// disk each call, so this is a genuine per-call reset, not a shared
+// module-level singleton). Deep-cloned via per-item spreads rather than a
+// shared reference into `fixtures.*`, so mutating state never corrupts the
+// fixtures object other code in this module still reads.
+// ---------------------------------------------------------------------------
+
+function createMutableState(fixtures) {
+  return {
+    topics: fixtures.topics.topics.map((t) => ({ ...t })),
+    exclusions: fixtures.exclusions.exclusions.map((e) => ({ ...e })),
+    preferences: { ...fixtures.preferences },
+    clusteringStatus: { ...fixtures.clusteringStatus },
+  };
+}
+
+// Lowercase/underscore slug for a cluster name -- matches the shape
+// (`cluster_slug`) the real backend derives for exclusion entries; not
+// consumed by the frontend today, but keeps the stub's exclusion entries
+// shaped like the real contract (endpoints.md: {keyword, cluster_slug,
+// cluster_name, created_at}).
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+// ---------------------------------------------------------------------------
 // Response helper
 // ---------------------------------------------------------------------------
 
@@ -216,9 +249,18 @@ function buildMeVariants(fixtures, accounts) {
   return { meDemo, meActing };
 }
 
-function buildRoutes(fixtures) {
+function buildRoutes(fixtures, state, { reclusterDelayMs }) {
   const accounts = buildAccounts(fixtures);
   const { meDemo, meActing } = buildMeVariants(fixtures, accounts);
+
+  // Task 6 write gate: every mutation handler gets wrapped with this so the
+  // 403-for-plain-demo check is applied uniformly and can't be forgotten on
+  // a newly-added route. isPlainDemo (Task 5) never throws, so this never
+  // needs its own try/catch.
+  const gated = (handler) => (req, res, m, url) => {
+    if (isPlainDemo(req)) return sendJson(res, 403, { detail: "forbidden" });
+    return handler(req, res, m, url);
+  };
 
   return [
     // Health-probe target (scripts/dev.sh) -- any 2xx is sufficient.
@@ -290,26 +332,156 @@ function buildRoutes(fixtures) {
     {
       method: "GET",
       pattern: /^\/api\/clustering\/status$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.clusteringStatus),
+      handler: (req, res) => sendJson(res, 200, state.clusteringStatus),
     },
 
-    // GET /api/topics
+    // POST /api/recluster (no body) -- ~2s delay (injectable via startServer's
+    // reclusterDelayMs, default 2000; tests pass small/zero so the suite
+    // doesn't pay the real delay), bumps run_number, updates the status
+    // title's embedded run number, leaves every other status string as-is.
+    // Response values are awaited but never rendered (endpoints.md) -- any
+    // plausible numbers satisfy the contract.
+    {
+      method: "POST",
+      pattern: /^\/api\/recluster$/,
+      handler: gated(async (req, res) => {
+        await new Promise((resolve) => setTimeout(resolve, reclusterDelayMs));
+        state.clusteringStatus.run_number += 1;
+        state.clusteringStatus.title = state.clusteringStatus.title.replace(
+          /RUN #\d+/,
+          `RUN #${state.clusteringStatus.run_number}`
+        );
+        sendJson(res, 200, {
+          cluster_count: 49,
+          noise_count: 9,
+          naming_cost: 0.02,
+          elapsed_seconds: reclusterDelayMs / 1000,
+        });
+      }),
+    },
+
+    // GET /api/topics -- reflects mutations (Task 6).
     {
       method: "GET",
       pattern: /^\/api\/topics$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.topics),
+      handler: (req, res) => sendJson(res, 200, { topics: state.topics }),
+    },
+
+    // POST /api/topics {keyword} -> {topic, topics} (only `topics` is
+    // consumed downstream; `topic` is returned per contract regardless).
+    // New topics get icon_id null and a plausible (0) cluster_count.
+    {
+      method: "POST",
+      pattern: /^\/api\/topics$/,
+      handler: gated(async (req, res) => {
+        const body = await readJsonBody(req);
+        const topic = { keyword: typeof body.keyword === "string" ? body.keyword : "", icon_id: null, cluster_count: 0 };
+        state.topics.push(topic);
+        sendJson(res, 200, { topic, topics: state.topics });
+      }),
     },
 
     // GET /api/topics/exclusions -- MUST precede the /{keyword}/... pattern
-    // below (routing trap; see module-header comment).
+    // below (routing trap; see module-header comment). Reflects mutations.
     {
       method: "GET",
       pattern: /^\/api\/topics\/exclusions$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.exclusions),
+      handler: (req, res) => sendJson(res, 200, { exclusions: state.exclusions }),
+    },
+
+    // POST /api/topics/exclusions {keyword, cluster_name} -> {exclusions,
+    // unlabeled}. `unlabeled` mirrors the real backend's shape (a bool: was
+    // a currently-painted cluster unlabeled by this exclusion) -- this stub
+    // has no cluster-painting state to actually unlabel, so it's always
+    // false. Dedupes case-insensitively on (keyword, cluster_name), matching
+    // the real backend.
+    {
+      method: "POST",
+      pattern: /^\/api\/topics\/exclusions$/,
+      handler: gated(async (req, res) => {
+        const body = await readJsonBody(req);
+        const keyword = typeof body.keyword === "string" ? body.keyword : "";
+        const clusterName = typeof body.cluster_name === "string" ? body.cluster_name : "";
+        const exists = state.exclusions.some(
+          (e) => e.keyword.toLowerCase() === keyword.toLowerCase() && e.cluster_name.toLowerCase() === clusterName.toLowerCase()
+        );
+        if (!exists) {
+          state.exclusions.push({
+            keyword,
+            cluster_slug: slugify(clusterName),
+            cluster_name: clusterName,
+            created_at: new Date().toISOString(),
+          });
+        }
+        sendJson(res, 200, { exclusions: state.exclusions, unlabeled: false });
+      }),
+    },
+
+    // DELETE /api/topics/exclusions WITH A JSON BODY {keyword, cluster_name}
+    // -> {exclusions}. MUST precede the generic DELETE /api/topics/{keyword}
+    // pattern below -- this is the routing trap made real for the first
+    // time (module-header comment): without this ordering, a bare
+    // `([^/]+)$` pattern on DELETE /api/topics/{keyword} would capture
+    // "exclusions" as a keyword instead.
+    {
+      method: "DELETE",
+      pattern: /^\/api\/topics\/exclusions$/,
+      handler: gated(async (req, res) => {
+        const body = await readJsonBody(req);
+        state.exclusions = state.exclusions.filter(
+          (e) => !(e.keyword === body.keyword && e.cluster_name === body.cluster_name)
+        );
+        sendJson(res, 200, { exclusions: state.exclusions });
+      }),
+    },
+
+    // DELETE /api/topics/{keyword} -> {topics}. Sits AFTER the exclusions
+    // routes above (same method-group ordering discipline).
+    {
+      method: "DELETE",
+      pattern: /^\/api\/topics\/([^/]+)$/,
+      handler: gated((req, res, m) => {
+        const keyword = decodeURIComponent(m[1]);
+        state.topics = state.topics.filter((t) => t.keyword !== keyword);
+        sendJson(res, 200, { topics: state.topics });
+      }),
+    },
+
+    // PATCH /api/topics/{keyword} {keyword:<new>} -> {topics}. No PATCH
+    // /api/topics/exclusions route exists in the contract, so there is no
+    // ordering trap on this method -- a rename attempt against a
+    // nonexistent "exclusions" topic is simply a no-op.
+    {
+      method: "PATCH",
+      pattern: /^\/api\/topics\/([^/]+)$/,
+      handler: gated(async (req, res, m) => {
+        const keyword = decodeURIComponent(m[1]);
+        const body = await readJsonBody(req);
+        const topic = state.topics.find((t) => t.keyword === keyword);
+        if (topic && typeof body.keyword === "string") topic.keyword = body.keyword;
+        sendJson(res, 200, { topics: state.topics });
+      }),
+    },
+
+    // PUT /api/topics/{keyword}/icon {icon_id} -> {topics}.
+    {
+      method: "PUT",
+      pattern: /^\/api\/topics\/([^/]+)\/icon$/,
+      handler: gated(async (req, res, m) => {
+        const keyword = decodeURIComponent(m[1]);
+        const body = await readJsonBody(req);
+        const topic = state.topics.find((t) => t.keyword === keyword);
+        if (topic && typeof body.icon_id === "string") topic.icon_id = body.icon_id;
+        sendJson(res, 200, { topics: state.topics });
+      }),
     },
 
     // GET /api/topics/{keyword}/members[?limit=5|50] -- files on disk are
     // percent-encoded keyword names: members/<encodeURIComponent(keyword)>-<limit>.json.
+    // A keyword that exists in current state but has no fixture file (added
+    // at runtime via POST, or renamed away from one of the original 4) gets
+    // {members: []} rather than 404 -- fixture member files only exist for
+    // the original 4 topics.
     {
       method: "GET",
       pattern: /^\/api\/topics\/([^/]+)\/members$/,
@@ -317,8 +489,9 @@ function buildRoutes(fixtures) {
         const keyword = decodeURIComponent(m[1]);
         const limit = url.searchParams.get("limit") === "5" ? 5 : 50;
         const file = path.join(fixtures.membersDir, `${encodeURIComponent(keyword)}-${limit}.json`);
-        if (!existsSync(file)) return sendJson(res, 404, { detail: "unknown topic" });
-        sendJson(res, 200, JSON.parse(readFileSync(file, "utf8")));
+        if (existsSync(file)) return sendJson(res, 200, JSON.parse(readFileSync(file, "utf8")));
+        if (state.topics.some((t) => t.keyword === keyword)) return sendJson(res, 200, { members: [] });
+        sendJson(res, 404, { detail: "unknown topic" });
       },
     },
 
@@ -340,16 +513,34 @@ function buildRoutes(fixtures) {
       pattern: /^\/api\/auth\/me$/,
       handler: (req, res) => {
         const payload = decodeToken(bearerFromRequest(req));
-        if (!payload || payload.role !== "demo") return sendJson(res, 200, fixtures.me);
-        sendJson(res, 200, payload.acting_as_demo ? meActing : meDemo);
+        const base = !payload || payload.role !== "demo" ? fixtures.me : payload.acting_as_demo ? meActing : meDemo;
+        // `preferences` is overridden from the mutable state fresh on every
+        // request (Task 6) rather than baked into meDemo/meActing at
+        // buildRoutes time, so a PATCH /api/auth/preferences shows up here
+        // immediately.
+        sendJson(res, 200, { ...base, preferences: state.preferences });
       },
     },
 
-    // GET /api/auth/preferences -- PATCH (mutation) is Task 6's.
+    // GET /api/auth/preferences -- reflects mutations (Task 6).
     {
       method: "GET",
       pattern: /^\/api\/auth\/preferences$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.preferences),
+      handler: (req, res) => sendJson(res, 200, state.preferences),
+    },
+
+    // PATCH /api/auth/preferences {preferences:{...partial}} (wrapper
+    // shape!) -- shallow-merges the partial into the mutable prefs state.
+    {
+      method: "PATCH",
+      pattern: /^\/api\/auth\/preferences$/,
+      handler: gated(async (req, res) => {
+        const body = await readJsonBody(req);
+        if (body.preferences && typeof body.preferences === "object") {
+          Object.assign(state.preferences, body.preferences);
+        }
+        sendJson(res, 200, state.preferences);
+      }),
     },
 
     // POST /api/auth/login -- {email, password} -> {access_token,
@@ -452,10 +643,11 @@ export function isPlainDemo(req) {
 // Server
 // ---------------------------------------------------------------------------
 
-export function startServer({ port = 0, fixturesDir = "demo/fixtures" } = {}) {
+export function startServer({ port = 0, fixturesDir = "demo/fixtures", reclusterDelayMs = 2000 } = {}) {
   const resolvedFixturesDir = path.resolve(process.cwd(), fixturesDir);
   const fixtures = loadFixtures(resolvedFixturesDir);
-  const routes = buildRoutes(fixtures);
+  const state = createMutableState(fixtures);
+  const routes = buildRoutes(fixtures, state, { reclusterDelayMs });
 
   const onHandlerError = (req, res, url, err) => {
     console.error(`[demo-server] handler error for ${req.method} ${url.pathname}:`, err);

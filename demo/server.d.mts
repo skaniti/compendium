@@ -5,6 +5,11 @@
 export interface StartServerOptions {
   port?: number;
   fixturesDir?: string;
+  // Task 6: injectable delay for POST /api/recluster (default 2000ms,
+  // matching the real ~2s backend recluster). Tests pass a small/zero value
+  // so the suite doesn't pay the real delay -- see server.mjs's `gated`
+  // POST /api/recluster handler.
+  reclusterDelayMs?: number;
 }
 
 export interface StartedServer {

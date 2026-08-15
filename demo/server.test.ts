@@ -37,6 +37,39 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
 }
 
+// Task 6: mutation helpers. Generalized request helper (any method, optional
+// JSON body, optional bearer) parameterized by base URL, since mutation
+// tests spin up their own isolated servers rather than sharing the
+// module-level `baseUrl` -- mutating shared state would make unrelated
+// earlier/later assertions in this file order-dependent.
+function req(base: string, method: string, pathAndQuery: string, body?: unknown, token?: string) {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (token) headers.authorization = `Bearer ${token}`;
+  return fetch(`${base}${pathAndQuery}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+// Spins up a fresh, isolated server (near-zero recluster delay so mutation
+// tests stay fast) for the duration of `fn`, closing it afterward even on
+// failure.
+async function withServer<T>(fn: (base: string) => Promise<T>): Promise<T> {
+  const server = await startServer({ port: 0, fixturesDir: "demo/fixtures", reclusterDelayMs: 0 });
+  const base = `http://localhost:${server.port}`;
+  try {
+    return await fn(base);
+  } finally {
+    await server.close();
+  }
+}
+
+const adminToken = () => mintToken({ id: 1, email: "admin@demo.local", role: "admin" });
+const plainDemoToken = () => mintToken({ id: 2, email: "demo@demo.local", role: "demo" });
+const actingDemoToken = () => mintToken({ id: 2, email: "demo@demo.local", role: "demo" }, { actingAsDemo: true });
+
 describe("startServer", () => {
   it("binds an ephemeral port and returns {port, close()}", async () => {
     const server = await startServer({ port: 0, fixturesDir: "demo/fixtures" });
@@ -454,6 +487,312 @@ describe("isPlainDemo (exported for Task 6's write gate)", () => {
 
   it("false for a garbage bearer token (admin default, never throws)", () => {
     expect(isPlainDemo({ headers: { authorization: "Bearer garbage" } })).toBe(false);
+  });
+});
+
+describe("mutation endpoints (Task 6): topics CRUD", () => {
+  it("adds, renames, deletes a topic; topics list reflects each", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const before = await (await req(base, "GET", "/api/topics")).json();
+      expect(before.topics.length).toBe(4);
+
+      const addRes = await req(base, "POST", "/api/topics", { keyword: "New Topic" }, admin);
+      expect(addRes.status).toBe(200);
+      const added = await addRes.json();
+      expect(added.topic).toMatchObject({ keyword: "New Topic", icon_id: null });
+      expect(added.topics.length).toBe(5);
+      expect(added.topics.some((t: { keyword: string }) => t.keyword === "New Topic")).toBe(true);
+
+      const afterAdd = await (await req(base, "GET", "/api/topics")).json();
+      expect(afterAdd.topics.length).toBe(5);
+
+      const renameRes = await req(
+        base,
+        "PATCH",
+        `/api/topics/${encodeURIComponent("New Topic")}`,
+        { keyword: "Renamed Topic" },
+        admin
+      );
+      expect(renameRes.status).toBe(200);
+      const renamed = await renameRes.json();
+      expect(renamed.topics.some((t: { keyword: string }) => t.keyword === "Renamed Topic")).toBe(true);
+      expect(renamed.topics.some((t: { keyword: string }) => t.keyword === "New Topic")).toBe(false);
+
+      const deleteRes = await req(
+        base,
+        "DELETE",
+        `/api/topics/${encodeURIComponent("Renamed Topic")}`,
+        undefined,
+        admin
+      );
+      expect(deleteRes.status).toBe(200);
+      const afterDelete = await deleteRes.json();
+      expect(afterDelete.topics.length).toBe(4);
+
+      const finalGet = await (await req(base, "GET", "/api/topics")).json();
+      expect(finalGet.topics.length).toBe(4);
+    });
+  });
+
+  it("sets a topic icon via PUT", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const res = await req(
+        base,
+        "PUT",
+        `/api/topics/${encodeURIComponent("Cephalopods")}/icon`,
+        { icon_id: "squid" },
+        admin
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const topic = body.topics.find((t: { keyword: string }) => t.keyword === "Cephalopods");
+      expect(topic.icon_id).toBe("squid");
+    });
+  });
+
+  it("new topics get icon_id null and a plausible cluster_count", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const res = await req(base, "POST", "/api/topics", { keyword: "Fresh Topic" }, admin);
+      const body = await res.json();
+      expect(body.topic.icon_id).toBeNull();
+      expect(typeof body.topic.cluster_count).toBe("number");
+      expect(body.topic.cluster_count).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it("a topic added at runtime serves {members: []} instead of 404 (no fixture file exists for it)", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      await req(base, "POST", "/api/topics", { keyword: "Runtime Topic" }, admin);
+      const res = await req(base, "GET", `/api/topics/${encodeURIComponent("Runtime Topic")}/members`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toEqual({ members: [] });
+    });
+  });
+});
+
+describe("mutation endpoints (Task 6): exclusions", () => {
+  it("adds and deletes an exclusion (delete carries a json body); GET reflects state", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const addRes = await req(
+        base,
+        "POST",
+        "/api/topics/exclusions",
+        { keyword: "Cephalopods", cluster_name: "Animal Coloration" },
+        admin
+      );
+      expect(addRes.status).toBe(200);
+      const added = await addRes.json();
+      expect(added.exclusions.length).toBe(1);
+      expect(added.exclusions[0]).toMatchObject({ keyword: "Cephalopods", cluster_name: "Animal Coloration" });
+      expect(typeof added.exclusions[0].cluster_slug).toBe("string");
+      expect(typeof added.exclusions[0].created_at).toBe("string");
+
+      const getRes = await req(base, "GET", "/api/topics/exclusions");
+      const getBody = await getRes.json();
+      expect(getBody.exclusions.length).toBe(1);
+
+      const deleteRes = await req(
+        base,
+        "DELETE",
+        "/api/topics/exclusions",
+        { keyword: "Cephalopods", cluster_name: "Animal Coloration" },
+        admin
+      );
+      expect(deleteRes.status).toBe(200);
+      const deleted = await deleteRes.json();
+      expect(deleted.exclusions.length).toBe(0);
+
+      const getAfter = await (await req(base, "GET", "/api/topics/exclusions")).json();
+      expect(getAfter.exclusions.length).toBe(0);
+    });
+  });
+});
+
+describe("routing trap: DELETE /api/topics/exclusions vs DELETE /api/topics/{keyword}", () => {
+  it("routes DELETE /api/topics/exclusions (with a json body) to the exclusions handler, not a keyword deletion", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const res = await req(
+        base,
+        "DELETE",
+        "/api/topics/exclusions",
+        { keyword: "whoever", cluster_name: "whatever" },
+        admin
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(Array.isArray(body.exclusions)).toBe(true);
+      // A keyword-deletion response carries `topics`, never `exclusions`.
+      expect(body.topics).toBeUndefined();
+
+      // The 4 declared topics must be untouched -- proves "exclusions" was
+      // never matched as a topic keyword to delete.
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+    });
+  });
+});
+
+describe("mutation endpoints (Task 6): PATCH /api/auth/preferences", () => {
+  it("wrapper shape {preferences:{...partial}} merges into state; GET and /api/auth/me reflect it", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const before = await (await req(base, "GET", "/api/auth/preferences")).json();
+      expect(before.theme).toBe("Brown");
+
+      const patchRes = await req(
+        base,
+        "PATCH",
+        "/api/auth/preferences",
+        { preferences: { theme: "Slate", show_noise: true } },
+        admin
+      );
+      expect(patchRes.status).toBeGreaterThanOrEqual(200);
+      expect(patchRes.status).toBeLessThan(300);
+
+      const after = await (await req(base, "GET", "/api/auth/preferences")).json();
+      expect(after.theme).toBe("Slate");
+      expect(after.show_noise).toBe(true);
+      // Unmentioned keys survive the merge (partial patch, not a replace).
+      expect(after.starfield).toBe("twinkle");
+
+      const me = await (await req(base, "GET", "/api/auth/me", undefined, admin)).json();
+      expect(me.preferences.theme).toBe("Slate");
+      expect(me.preferences.show_noise).toBe(true);
+    });
+  });
+});
+
+describe("mutation endpoints (Task 6): POST /api/recluster", () => {
+  it("bumps run_number in subsequent clustering-status; title tracks the new number, other strings unchanged", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const before = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(before.run_number).toBe(141);
+
+      const reclusterRes = await req(base, "POST", "/api/recluster", undefined, admin);
+      expect(reclusterRes.status).toBe(200);
+      const reclustered = await reclusterRes.json();
+      expect(typeof reclustered.cluster_count).toBe("number");
+      expect(typeof reclustered.noise_count).toBe("number");
+      expect(typeof reclustered.naming_cost).toBe("number");
+      expect(typeof reclustered.elapsed_seconds).toBe("number");
+
+      const after = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(after.run_number).toBe(142);
+      expect(after.title).toContain("RUN #142");
+      expect(after.freshness_color).toBe(before.freshness_color);
+      expect(after.stats_line1).toBe(before.stats_line1);
+    });
+  });
+
+  it("delay is injectable via reclusterDelayMs -- a near-zero delay keeps the test fast", async () => {
+    const server = await startServer({ port: 0, fixturesDir: "demo/fixtures", reclusterDelayMs: 5 });
+    const base = `http://localhost:${server.port}`;
+    try {
+      const admin = adminToken();
+      const start = Date.now();
+      const res = await req(base, "POST", "/api/recluster", undefined, admin);
+      const elapsedMs = Date.now() - start;
+      expect(res.status).toBe(200);
+      expect(elapsedMs).toBeLessThan(500); // real default (2000ms) would blow this budget
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe("mutation endpoints (Task 6): plain-demo write gate", () => {
+  it('plain-demo token gets 403 {detail:"forbidden"} on every mutation; nothing is actually mutated', async () => {
+    await withServer(async (base) => {
+      const plainDemo = plainDemoToken();
+      const attempts: Array<[string, string, unknown]> = [
+        ["POST", "/api/topics", { keyword: "Nope" }],
+        ["DELETE", `/api/topics/${encodeURIComponent("Cephalopods")}`, undefined],
+        ["PATCH", `/api/topics/${encodeURIComponent("Cephalopods")}`, { keyword: "Nope" }],
+        ["PUT", `/api/topics/${encodeURIComponent("Cephalopods")}/icon`, { icon_id: "x" }],
+        ["POST", "/api/topics/exclusions", { keyword: "Cephalopods", cluster_name: "Animal Coloration" }],
+        ["DELETE", "/api/topics/exclusions", { keyword: "Cephalopods", cluster_name: "Animal Coloration" }],
+        ["PATCH", "/api/auth/preferences", { preferences: { theme: "Nope" } }],
+        ["POST", "/api/recluster", undefined],
+      ];
+      for (const [method, pathAndQuery, body] of attempts) {
+        const res = await req(base, method, pathAndQuery, body, plainDemo);
+        expect(res.status).toBe(403);
+        const resBody = await res.json();
+        expect(resBody).toEqual({ detail: "forbidden" });
+      }
+
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+      const exclusions = await (await req(base, "GET", "/api/topics/exclusions")).json();
+      expect(exclusions.exclusions.length).toBe(0);
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.run_number).toBe(141);
+      const prefs = await (await req(base, "GET", "/api/auth/preferences")).json();
+      expect(prefs.theme).toBe("Brown");
+    });
+  });
+
+  it("an acting-as-demo token IS allowed to mutate (isPlainDemo is false for it)", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/topics", { keyword: "Acting Added" }, actingDemoToken());
+      expect(res.status).toBe(200);
+    });
+  });
+
+  it("a plain admin token is allowed to mutate", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/topics", { keyword: "Admin Added" }, adminToken());
+      expect(res.status).toBe(200);
+    });
+  });
+});
+
+describe("mutation endpoints (Task 6): reset on restart", () => {
+  it("fresh startServer resets mutated state (topics, exclusions, preferences, clustering-status all reseed)", async () => {
+    const admin = adminToken();
+
+    const server1 = await startServer({ port: 0, fixturesDir: "demo/fixtures", reclusterDelayMs: 0 });
+    const base1 = `http://localhost:${server1.port}`;
+    await req(base1, "POST", "/api/topics", { keyword: "Leftover Topic" }, admin);
+    await req(
+      base1,
+      "POST",
+      "/api/topics/exclusions",
+      { keyword: "Cephalopods", cluster_name: "Animal Coloration" },
+      admin
+    );
+    await req(base1, "PATCH", "/api/auth/preferences", { preferences: { theme: "Leftover" } }, admin);
+    await req(base1, "POST", "/api/recluster", undefined, admin);
+    const during = await (await req(base1, "GET", "/api/topics")).json();
+    expect(during.topics.length).toBe(5);
+    await server1.close();
+
+    const server2 = await startServer({ port: 0, fixturesDir: "demo/fixtures", reclusterDelayMs: 0 });
+    const base2 = `http://localhost:${server2.port}`;
+    try {
+      const topics = await (await req(base2, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+      expect(topics.topics.some((t: { keyword: string }) => t.keyword === "Leftover Topic")).toBe(false);
+
+      const exclusions = await (await req(base2, "GET", "/api/topics/exclusions")).json();
+      expect(exclusions.exclusions.length).toBe(0);
+
+      const prefs = await (await req(base2, "GET", "/api/auth/preferences")).json();
+      expect(prefs.theme).toBe("Brown");
+
+      const status = await (await req(base2, "GET", "/api/clustering/status")).json();
+      expect(status.run_number).toBe(141);
+    } finally {
+      await server2.close();
+    }
   });
 });
 
