@@ -13,3 +13,11 @@ export interface StartedServer {
 }
 
 export function startServer(options?: StartServerOptions): Promise<StartedServer>;
+
+// Task 5: exported for Task 6's write gate. Duck-typed against the subset
+// of http.IncomingMessage actually read (just the Authorization header) --
+// see demo/lib/tokens.d.mts's BearerCarrier, which this matches exactly.
+export interface BearerCarrier {
+  headers: { authorization?: string };
+}
+export function isPlainDemo(req: BearerCarrier): boolean;

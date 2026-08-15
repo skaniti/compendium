@@ -3,7 +3,8 @@
 // no mocking, since the whole point is to prove the router + fixture loader
 // + date shift work together against Task 3's actual committed fixtures.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startServer } from "./server.mjs";
+import { isPlainDemo, startServer } from "./server.mjs";
+import { mintToken } from "./lib/tokens.mjs";
 
 let baseUrl: string;
 let close: () => Promise<void>;
@@ -18,8 +19,22 @@ afterAll(async () => {
   await close();
 });
 
-function get(pathAndQuery: string) {
-  return fetch(`${baseUrl}${pathAndQuery}`);
+function get(pathAndQuery: string, token?: string) {
+  return fetch(`${baseUrl}${pathAndQuery}`, token ? { headers: { authorization: `Bearer ${token}` } } : undefined);
+}
+
+function post(pathAndQuery: string, body?: unknown, token?: string) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
+  return fetch(`${baseUrl}${pathAndQuery}`, {
+    method: "POST",
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
 }
 
 describe("startServer", () => {
@@ -249,11 +264,43 @@ describe("GET /api/auth/me", () => {
     expect(body.role).toBe("admin");
   });
 
-  it("still never 401s even with a garbage bearer token", async () => {
+  it("still never 401s even with a garbage bearer token -- falls back to the admin fixture", async () => {
     const res = await fetch(`${baseUrl}/api/auth/me`, {
       headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.role).toBe("admin");
+  });
+
+  it("an admin login token also serves the fixture identity, role admin, not acting", async () => {
+    const token = mintToken({ id: 1, email: "admin@demo.local", role: "admin" });
+    const res = await get("/api/auth/me", token);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.role).toBe("admin");
+    expect(body.acting_as_demo).toBe(false);
+  });
+
+  it("a plain-demo login token -> role demo, not acting, demo identity", async () => {
+    const token = mintToken({ id: 2, email: "demo@demo.local", role: "demo" });
+    const res = await get("/api/auth/me", token);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.role).toBe("demo");
+    expect(body.acting_as_demo).toBe(false);
+    expect(body.email).toBe("demo@demo.local");
+    expect(body).not.toHaveProperty("admin_origin_email");
+  });
+
+  it("an acting (view-as) token -> role demo, acting_as_demo true, admin_origin_email set", async () => {
+    const token = mintToken({ id: 2, email: "demo@demo.local", role: "demo" }, { actingAsDemo: true });
+    const res = await get("/api/auth/me", token);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.role).toBe("demo");
+    expect(body.acting_as_demo).toBe(true);
+    expect(body.admin_origin_email).toBe("admin@demo.local");
   });
 });
 
@@ -264,6 +311,149 @@ describe("GET /api/auth/preferences", () => {
     const body = await res.json();
     expect(body).toHaveProperty("theme");
     expect(body).toHaveProperty("starfield");
+  });
+});
+
+describe("POST /api/auth/login", () => {
+  it("demo/demo -> tokens + user; me (with the returned token) shows role demo, not acting", async () => {
+    const res = await post("/api/auth/login", { email: "demo@demo.local", password: "demo" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.access_token).toBe("string");
+    expect(typeof body.refresh_token).toBe("string");
+    expect(body.user).toMatchObject({ email: "demo@demo.local" });
+    expect(body.access_token.split(".").length).toBe(3);
+
+    const meRes = await get("/api/auth/me", body.access_token);
+    const me = await meRes.json();
+    expect(me.role).toBe("demo");
+    expect(me.acting_as_demo).toBe(false);
+  });
+
+  it("admin/admin -> tokens + user, decoded role admin", async () => {
+    const res = await post("/api/auth/login", { email: "admin@demo.local", password: "admin" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.user).toMatchObject({ email: "admin@demo.local" });
+    expect(decodeJwtPayload(body.access_token).role).toBe("admin");
+  });
+
+  it("wrong password -> 401, the ONE permitted 401 in the whole stub", async () => {
+    const res = await post("/api/auth/login", { email: "demo@demo.local", password: "wrong" });
+    expect(res.status).toBe(401);
+  });
+
+  it("unknown email -> 401", async () => {
+    const res = await post("/api/auth/login", { email: "nobody@demo.local", password: "whatever" });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/auth/logout", () => {
+  it("returns 2xx", async () => {
+    const res = await post("/api/auth/logout", { refresh_token: "whatever" });
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+  });
+
+  it("returns 2xx even with no body / a garbage refresh_token (failures swallowed)", async () => {
+    const res = await post("/api/auth/logout");
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+  });
+});
+
+describe("POST /api/auth/refresh", () => {
+  it("rotates both access_token and refresh_token to new, distinct values", async () => {
+    const loginRes = await post("/api/auth/login", { email: "demo@demo.local", password: "demo" });
+    const login = await loginRes.json();
+
+    const refreshRes = await post("/api/auth/refresh", { refresh_token: login.refresh_token });
+    expect(refreshRes.status).toBe(200);
+    const refreshed = await refreshRes.json();
+    expect(typeof refreshed.access_token).toBe("string");
+    expect(typeof refreshed.refresh_token).toBe("string");
+    expect(refreshed.token_type).toBeTruthy();
+    expect(refreshed.access_token).not.toBe(login.access_token);
+    expect(refreshed.refresh_token).not.toBe(login.refresh_token);
+  });
+
+  it("preserves the demo identity/role across rotation", async () => {
+    const loginRes = await post("/api/auth/login", { email: "demo@demo.local", password: "demo" });
+    const login = await loginRes.json();
+    const refreshRes = await post("/api/auth/refresh", { refresh_token: login.refresh_token });
+    const refreshed = await refreshRes.json();
+    expect(decodeJwtPayload(refreshed.access_token).role).toBe("demo");
+  });
+});
+
+describe("POST /api/auth/view-as and /api/auth/return-to-admin", () => {
+  it("view-as then me -> acting_as_demo true; return-to-admin then me -> restores admin", async () => {
+    const loginRes = await post("/api/auth/login", { email: "admin@demo.local", password: "admin" });
+    const login = await loginRes.json();
+
+    const viewAsRes = await post("/api/auth/view-as", { profile: "demo" }, login.access_token);
+    expect(viewAsRes.status).toBe(200);
+    const viewAs = await viewAsRes.json();
+    expect(viewAs.token_type).toBeTruthy();
+    expect(viewAs.user).toBeTruthy();
+
+    const meActingRes = await get("/api/auth/me", viewAs.access_token);
+    const meActing = await meActingRes.json();
+    expect(meActing.acting_as_demo).toBe(true);
+    expect(meActing.admin_origin_email).toBe("admin@demo.local");
+
+    const returnRes = await post("/api/auth/return-to-admin", undefined, viewAs.access_token);
+    expect(returnRes.status).toBe(200);
+    const back = await returnRes.json();
+
+    const meBackRes = await get("/api/auth/me", back.access_token);
+    const meBack = await meBackRes.json();
+    expect(meBack.role).toBe("admin");
+    expect(meBack.acting_as_demo).toBe(false);
+  });
+
+  it("view-as response carries NO refresh_token key", async () => {
+    const loginRes = await post("/api/auth/login", { email: "admin@demo.local", password: "admin" });
+    const login = await loginRes.json();
+    const viewAsRes = await post("/api/auth/view-as", { profile: "demo" }, login.access_token);
+    const viewAs = await viewAsRes.json();
+    expect(viewAs).not.toHaveProperty("refresh_token");
+  });
+
+  it("return-to-admin response carries NO refresh_token key", async () => {
+    const loginRes = await post("/api/auth/login", { email: "admin@demo.local", password: "admin" });
+    const login = await loginRes.json();
+    const viewAsRes = await post("/api/auth/view-as", { profile: "demo" }, login.access_token);
+    const viewAs = await viewAsRes.json();
+    const returnRes = await post("/api/auth/return-to-admin", undefined, viewAs.access_token);
+    const back = await returnRes.json();
+    expect(back).not.toHaveProperty("refresh_token");
+  });
+});
+
+describe("isPlainDemo (exported for Task 6's write gate)", () => {
+  it("true for a plain demo login token", () => {
+    const token = mintToken({ id: 2, email: "demo@demo.local", role: "demo" });
+    expect(isPlainDemo({ headers: { authorization: `Bearer ${token}` } })).toBe(true);
+  });
+
+  it("false for an acting-as-demo token", () => {
+    const token = mintToken({ id: 2, email: "demo@demo.local", role: "demo" }, { actingAsDemo: true });
+    expect(isPlainDemo({ headers: { authorization: `Bearer ${token}` } })).toBe(false);
+  });
+
+  it("false for an admin token", () => {
+    const token = mintToken({ id: 1, email: "admin@demo.local", role: "admin" });
+    expect(isPlainDemo({ headers: { authorization: `Bearer ${token}` } })).toBe(false);
+  });
+
+  it("false when there is no Authorization header (admin default)", () => {
+    expect(isPlainDemo({ headers: {} })).toBe(false);
+  });
+
+  it("false for a garbage bearer token (admin default, never throws)", () => {
+    expect(isPlainDemo({ headers: { authorization: "Bearer garbage" } })).toBe(false);
   });
 });
 
