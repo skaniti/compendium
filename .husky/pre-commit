@@ -11,8 +11,18 @@ if printf '%s\n' "$staged" | grep -Eq '(^|/)\.specstory/'; then
 fi
 
 # Scan the staged diff (added lines) for secret-shaped strings + private IPs.
-if git diff --cached -U0 --no-color | grep -E '^\+' \
-  | grep -nE '(sk-[A-Za-z0-9]{16,}|sk-ant-[A-Za-z0-9_-]{16,}|hf_[A-Za-z0-9]{16,}|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|password[[:space:]]*=[[:space:]]*["'\''][^"'\'']+|\b10\.([0-9]{1,3}\.){2}[0-9]{1,3}\b|\b192\.168\.[0-9]{1,3}\.[0-9]{1,3}\b)' >&2; then
+added=$(git diff --cached -U0 --no-color | grep -E '^\+')
+hits=$(printf '%s\n' "$added" | grep -nE '(sk-[A-Za-z0-9]{16,}|sk-ant-[A-Za-z0-9_-]{16,}|hf_[A-Za-z0-9]{16,}|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|password[[:space:]]*=[[:space:]]*["'\''][^"'\'']+|\b192\.168\.[0-9]{1,3}\.[0-9]{1,3}\b)' || true)
+# Private 10.x.x.x addresses, via a separate PCRE clause with a negative
+# lookahead: a bare private IP has exactly 3 dots (10.0.0.x); a CiteSeerX
+# academic-paper id (e.g. 10.1.1.297.6604) continues past the 4th octet
+# with a 5th dot-number, which (?!\.\d) excludes -- confirmed false
+# positive when demo/fixtures/ started shipping real Wikipedia/arXiv page
+# text (2026-08-14). Kept as its own grep -P clause (not folded into the
+# -E alternation above) since POSIX ERE has no lookahead.
+hits_ip10=$(printf '%s\n' "$added" | grep -nP '\b10\.(\d{1,3}\.){2}\d{1,3}\b(?!\.\d)' || true)
+if [ -n "$hits" ] || [ -n "$hits_ip10" ]; then
+  { [ -n "$hits" ] && printf '%s\n' "$hits"; [ -n "$hits_ip10" ] && printf '%s\n' "$hits_ip10"; } >&2
   echo 'pre-commit: staged change contains a secret-shaped string (matches above). Remove it or tune the scan.' >&2
   exit 1
 fi
