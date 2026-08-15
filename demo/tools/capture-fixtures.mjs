@@ -90,6 +90,42 @@ async function writeRawBuffer(relPath, buf) {
   await writeFileP(full, buf);
 }
 
+const ASSETS_DIR = path.join(OUT_ROOT, 'assets');
+
+// Asset paths are regex-extracted from archived third-party HTML -- they are
+// UNTRUSTED input, not internally-generated names. A crafted
+// src="/captured-assets/../../../../etc/passwd"-shaped value would fetch
+// fine (WHATWG URL parsing collapses "../" before the request goes out) but
+// must never be allowed to resolve outside demo/fixtures/raw/assets/ on
+// write. Reject any ".." path segment outright, then re-check containment
+// on the resolved absolute path as defense in depth.
+function resolveAssetWritePath(assetPath) {
+  const rel = assetPath.replace(/^\/+/, '');
+  if (rel.split('/').includes('..')) {
+    throw new Error(`refusing to write asset with a ".." path segment: ${assetPath}`);
+  }
+  const full = path.resolve(ASSETS_DIR, rel);
+  const relToAssets = path.relative(ASSETS_DIR, full);
+  if (relToAssets.startsWith('..') || path.isAbsolute(relToAssets)) {
+    throw new Error(`refusing to write asset outside assets/: ${assetPath}`);
+  }
+  return full;
+}
+
+async function fileExistsAbs(fullPath) {
+  try {
+    const st = await statP(fullPath);
+    return st.isFile() && st.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function writeRawBufferAbs(fullPath, buf) {
+  await mkdirP(path.dirname(fullPath), { recursive: true });
+  await writeFileP(fullPath, buf);
+}
+
 // Core fetch wrapper: throws loudly on any non-2xx status not explicitly
 // allowed. This is the binding policy for this tool -- non-404 HTTP errors
 // (and 404s outside the documented-legitimate cases) must fail the run.
@@ -311,8 +347,8 @@ async function main() {
       const myIdx = assetIdx;
       assetIdx += 1;
       const assetPath = assetList[myIdx];
-      const relOut = path.join('assets', assetPath.replace(/^\//, ''));
-      if (await fileExists(relOut)) {
+      const outFull = resolveAssetWritePath(assetPath); // throws on traversal attempts
+      if (await fileExistsAbs(outFull)) {
         skippedCount += 1;
         assetsSkipped += 1;
         assetsDownloaded += 1;
@@ -320,7 +356,7 @@ async function main() {
       }
       const res = await apiFetchFrom(ASSETS_BACKEND, assetPath);
       const buf = Buffer.from(await res.arrayBuffer());
-      await writeRawBuffer(relOut, buf);
+      await writeRawBufferAbs(outFull, buf);
       assetsDownloaded += 1;
       if (assetsDownloaded % 100 === 0) {
         console.log(`  ... ${assetsDownloaded}/${assetList.length} assets present (${assetsSkipped} skipped, already-captured)`);
@@ -494,6 +530,10 @@ async function main() {
   console.log(`  chat: ${chatOk} ok / ${chatFailed} failed (of ${questions.length})`);
   if (chatFailed > 0) {
     console.warn(`  WARNING: ${chatFailed} chat capture(s) failed -- see raw/chat/index.json for details.`);
+    // All remaining questions still ran (chat failures are per-question, not
+    // fatal to the loop) but the run as a whole must not report success: a
+    // future re-capture must not exit clean while chat fixtures are broken.
+    process.exitCode = 1;
   }
   console.log('Done.');
 }
