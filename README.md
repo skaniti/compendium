@@ -1,5 +1,7 @@
 # Compendium
 
+![CI](https://github.com/skaniti/compendium/actions/workflows/ci.yml/badge.svg)
+
 Turn curiosity-driven browsing into a topic-based knowledge compendium: every
 page you read gets clustered into topics, laid out as an explorable
 constellation graph, and made queryable through a RAG chat agent that cites
