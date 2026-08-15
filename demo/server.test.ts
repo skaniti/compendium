@@ -4,9 +4,11 @@
 // + date shift work together against Task 3's actual committed fixtures.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import http from "node:http";
+import net from "node:net";
 import { readFileSync } from "node:fs";
 import { isPlainDemo, startServer } from "./server.mjs";
 import { mintToken } from "./lib/tokens.mjs";
+import { pickPort } from "./launcher.mjs";
 
 let baseUrl: string;
 let close: () => Promise<void>;
@@ -1083,5 +1085,32 @@ describe("GET /captured-assets/<path> (top-level, not under /api)", () => {
         expect(status).toBe(404);
       }
     });
+  });
+});
+
+describe("pickPort (Task 8 launcher port logic)", () => {
+  it("returns the preferred port when it's free", async () => {
+    // Bind an ephemeral port and immediately release it, so `freePort` is a
+    // real port number known to be unused an instant before pickPort tries it.
+    const probe = net.createServer();
+    await new Promise<void>((resolve) => probe.listen(0, () => resolve()));
+    const freePort = (probe.address() as net.AddressInfo).port;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+    const port = await pickPort(freePort);
+    expect(port).toBe(freePort);
+  });
+
+  it("falls back to another port when a dummy server already holds the preferred one", async () => {
+    const holder = net.createServer();
+    await new Promise<void>((resolve) => holder.listen(0, () => resolve()));
+    const heldPort = (holder.address() as net.AddressInfo).port;
+    try {
+      const port = await pickPort(heldPort);
+      expect(port).not.toBe(heldPort);
+      expect(port).toBeGreaterThan(0);
+    } finally {
+      await new Promise<void>((resolve) => holder.close(() => resolve()));
+    }
   });
 });

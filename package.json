@@ -6,6 +6,7 @@
     "test": "vitest run",
     "prepare": "husky",
     "dev": "next dev",
+    "demo": "node demo/launcher.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
