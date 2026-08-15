@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "dream",
+    "label": "Dream",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "time_sleep_and_dreams",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Dream"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T21:00:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "dream",
+      "label": "Dream",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "time_sleep_and_dreams",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Dream"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T21:00:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

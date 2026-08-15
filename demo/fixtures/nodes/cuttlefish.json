@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "cuttlefish",
+    "label": "Cuttlefish",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cephalopod_marine_life",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Cuttlefish"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T00:33:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "cuttlefish",
+      "label": "Cuttlefish",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cephalopod_marine_life",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cuttlefish"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T00:33:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

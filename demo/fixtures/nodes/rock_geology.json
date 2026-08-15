@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "rock_geology",
+    "label": "Rock (geology)",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "natural_earth_features",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Stone"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_materials_chemistry_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T20:04:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "rock_geology",
+      "label": "Rock (geology)",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "natural_earth_features",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Stone"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T20:04:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "composition_visual_arts",
+    "label": "Composition (visual arts)",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "visual_arts_composition",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Composition_(visual_arts)"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_photography_composition_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-02T21:25:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "composition_visual_arts",
+      "label": "Composition (visual arts)",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "visual_arts_composition",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Composition_(visual_arts)"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_photography_composition_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-02T21:25:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

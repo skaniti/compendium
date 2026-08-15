@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "semelparity_and_iteroparity",
+    "label": "Semelparity and iteroparity",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_12926",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Semelparity_and_iteroparity"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-24T00:39:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.6579233607545755
+  },
+  "subtree": [
+    {
+      "id": "semelparity_and_iteroparity",
+      "label": "Semelparity and iteroparity",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_12926",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Semelparity_and_iteroparity"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-24T00:39:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.6579233607545755
+    }
+  ]
+}

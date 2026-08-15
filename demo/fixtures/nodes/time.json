@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "time",
+    "label": "Time",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "time_sleep_and_dreams",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Time"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_physics_generic_concepts_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-16T18:50:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "time",
+      "label": "Time",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "time_sleep_and_dreams",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Time"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-16T18:50:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

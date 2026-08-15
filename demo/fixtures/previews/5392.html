@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Preview</title>
+<link rel="stylesheet" href="/captured-assets/2c/2c806c2e66226e49154dc297892d2b639e966546734a265e8a5f681f603be9ee.css"/>
+<link rel="stylesheet" href="/captured-assets/ee/eefe1bc45c4e6f93dd68da6813a2367154251898f7d4728824d2c15066d0d370.css"/>
+
+<style>
+body { margin: 16px; font-family: sans-serif; color: #202122; background: #fff; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; }
+table { border-collapse: collapse; }
+body div, body table, body td, body section, body article, body aside, body nav { max-height: none !important; overflow-y: visible !important; }
+body img, body video, body canvas, body svg { max-width: 100% !important; height: auto !important; }
+body table, body figure, body .thumb, body .thumbinner, body .mw-default-size { max-width: 100% !important; box-sizing: border-box !important; }
+body .infobox, body table.infobox { width: auto !important; max-width: 100% !important; float: none !important; margin: 0 auto 1em auto !important; }
+body .noresize, body .thumbinner, body .thumbimage, body .center, body .mw-file-description { display: block !important; max-width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
+body * { overflow-wrap: break-word !important; }
+</style>
+</head><body>
+
+
+<h1>Pulse Width Modulation</h1>
+<p>
+<a href="https://learn.sparkfun.com" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">≡ Pages</a>
+</p>
+<h2>What is Pulse-width Modulation?</h2>
+<p><a href="http://en.wikipedia.org/wiki/Pulse-width_modulation" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Pulse Width Modulation</a> (PWM) is a fancy term for describing a type of digital signal. Pulse width modulation is used in a variety of applications including sophisticated control circuitry. A common way we use them here at SparkFun is to control dimming of <a href="https://www.sparkfun.com/products/105" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">RGB LEDs</a> or to control the direction of a <a href="https://www.sparkfun.com/servos" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">servo</a>. We can accomplish a range of results in both applications because pulse width modulation allows us to vary how much time the signal is high in an analog fashion. While the signal can only be high (usually 5V) or low (ground) at any time, we can change the proportion of time the signal is high compared to when it is low over a consistent time interval.</p>
+
+<h3>Suggested Reading</h3>
+<p>Some background tutorials you might consider first:</p>
+<h2>Duty Cycle</h2>
+<p>When the signal is high, we call this "on time". To describe the amount of "on time" , we use the concept of duty cycle. Duty cycle is measured in percentage. The percentage duty cycle specifically describes the percentage of time a digital signal is on over an interval or period of time. This period is the inverse of the frequency of the waveform.</p>
+<p>If a digital signal spends half of the time on and the other half off, we would say the digital signal has a duty cycle of 50% and resembles an ideal square wave. If the percentage is higher than 50%, the digital signal spends more time in the high state than the low state and vice versa if the duty cycle is less than 50%. Here is a graph that illustrates these three scenarios:</p>
+<p>100% duty cycle would be the same as setting the voltage to 5 Volts (high). 0% duty cycle would be the same as grounding the signal.</p>
+<h2>Examples</h2>
+<p>You can control the brightness of an LED by adjusting the duty cycle.</p>
+
+<p>With an <a href="https://www.sparkfun.com/products/105" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">RGB (red green blue) LED</a>, you can control how much of each of the three colors you want in the mix of color by dimming them with various amounts.</p>
+
+<p>If all three are on in equal amounts, the result will be white light of varying brightness. Blue equally mixed with green will get teal. As slightly more complex example, try turning red fully on, and green 50% duty cycle and blue fully off to get an orange color.</p>
+
+<p>The frequency of the square wave does need to be sufficiently high enough when controlling LEDs to get the proper dimming effect. A 20% duty cycle wave at 1 Hz will be obvious that it’s turning on and off to your eyes meanwhile, 20% duty cycle at 100 Hz or above will just look dimmer than fully on. Essentially, the period can not be too large if you’re aiming for a dimming effect with the LEDs.</p>
+<p>You can also use pulse width modulation to control the angle of a servo motor attached to something mechanical like a robot arm. Servos have a shaft that turns to specific position based on its control line. Our <a href="https://www.sparkfun.com/products/9347" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">servo motors</a> have a range of about 180 degrees.</p>
+<p>Frequency/period are specific to controlling a specific servo. A typical servo motor expects to be updated every 20 ms with a pulse between 1 ms and 2 ms, or in other words, between a 5 and 10% duty cycle on a 50 Hz waveform. With a 1.5 ms pulse, the servo motor will be at the natural 90 degree position. With a 1 ms pulse, the servo will be at the 0 degree position, and with a 2 ms pulse, the servo will be at 180 degrees. You can obtain the full range of motion by updating the servo with an value in between.</p>
+
+<h2>Resources and Going Further</h2>
+<p>Pulse width modulation is used in a variety of applications particularly for control. You already know it can be used for the dimming of LEDs and controlling the angle of servo motors and now you can begin to explore other possible uses. If you feel lost, feel free to check out the <a href="https://www.sparkfun.com/products/11227" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">SparkFun Inventor's Kit</a> which has examples using pulse width modulation. If you're ready to jump into coding immediately and have an Arduino, look at the <a href="http://arduino.cc/en/Reference/AnalogWrite" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">PWM coding example here</a>.</p>
+<p>Feel free to keep exploring:</p>
+<ul style="max-width: 100%;">
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/motors-and-selecting-the-right-one" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Motors and Selecting the Right One</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/what-is-an-arduino" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">What is an Arduino</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/analog-to-digital-conversion" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Analog to Digital Conversion</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/light" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Light</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/light-emitting-diodes-leds" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">LEDs</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/ir-communication" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">IR Communication</a>
+</li>
+<li style="max-width: 100%;">
+<a href="https://learn.sparkfun.com/tutorials/interactive-hanging-led-array" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Interactive Hanging LED Array</a>
+</li>
+</ul>
+<p></p>
+<p></p>
+
+
+</body></html>

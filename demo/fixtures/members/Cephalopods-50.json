@@ -1,0 +1,49 @@
+{
+  "members": [
+    {
+      "cluster_name": "Animal Coloration",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Cephalopod Biology",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Marine Ecosystems",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Mythical Sea Creatures",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Seafood Dishes",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Squid Giant Axon",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Cephalopod Marine Life",
+      "page_count": 3,
+      "mean_membership_probability": 0.9493
+    },
+    {
+      "cluster_name": "Cephalopods in Cuisine and Science",
+      "page_count": 3,
+      "mean_membership_probability": 0.9095
+    },
+    {
+      "cluster_name": "Biological Processes",
+      "page_count": 4,
+      "mean_membership_probability": 0.8354
+    }
+  ]
+}

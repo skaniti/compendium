@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "music",
+    "label": "Music",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "music_theory_concepts",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Music"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_domains_disciplines_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-24T19:54:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "music",
+      "label": "Music",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Music"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-24T19:54:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

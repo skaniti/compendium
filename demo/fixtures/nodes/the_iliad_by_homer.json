@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "the_iliad_by_homer",
+    "label": "The Iliad by Homer",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "trojan_war_and_iliad",
+    "children_ids": [],
+    "page_urls": [
+      "https://www.gutenberg.org/ebooks/6130"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-24T01:42:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "the_iliad_by_homer",
+      "label": "The Iliad by Homer",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "trojan_war_and_iliad",
+      "children_ids": [],
+      "page_urls": [
+        "https://www.gutenberg.org/ebooks/6130"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-24T01:42:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "politics",
+    "label": "Politics",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "human_behavior_and_society",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Politics"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_humanities_social_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T19:06:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "politics",
+      "label": "Politics",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "human_behavior_and_society",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Politics"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T19:06:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

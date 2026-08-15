@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "denoising_diffusion_probabilistic_models",
+    "label": "Denoising Diffusion Probabilistic Models",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_models_in_generative_modeling",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2006.11239"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T23:32:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "denoising_diffusion_probabilistic_models",
+      "label": "Denoising Diffusion Probabilistic Models",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_models_in_generative_modeling",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2006.11239"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T23:32:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

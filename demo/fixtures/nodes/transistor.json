@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "transistor",
+    "label": "Transistor",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "pulse_width_modulation",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Transistor"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T02:32:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "transistor",
+      "label": "Transistor",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "pulse_width_modulation",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Transistor"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T02:32:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

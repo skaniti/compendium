@@ -1,0 +1,3875 @@
+{
+  "nodes": [
+    {
+      "id": "deep_unsupervised_learning_using_nonequilibrium_thermodynamics",
+      "label": "Deep Unsupervised Learning using Nonequilibrium Thermodynamics",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1503.03585"
+      ],
+      "first_visited_at": "2026-08-14T23:31:45+00:00"
+    },
+    {
+      "id": "denoising_diffusion_probabilistic_models",
+      "label": "Denoising Diffusion Probabilistic Models",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models_in_generative_modeling",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2006.11239"
+      ],
+      "first_visited_at": "2026-08-13T23:32:45+00:00"
+    },
+    {
+      "id": "denoising_diffusion_implicit_models",
+      "label": "Denoising Diffusion Implicit Models",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_based_generative_models",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2010.02502"
+      ],
+      "first_visited_at": "2026-08-09T23:33:45+00:00"
+    },
+    {
+      "id": "score_based_generative_modeling_through_stochastic_differential_equations",
+      "label": "Score-Based Generative Modeling through Stochastic Differential Equations",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2011.13456"
+      ],
+      "first_visited_at": "2026-08-07T23:34:45+00:00"
+    },
+    {
+      "id": "diffusion_models_beat_gans_on_image_synthesis",
+      "label": "Diffusion Models Beat GANs on Image Synthesis",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models_in_image_synthesis",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2105.05233"
+      ],
+      "first_visited_at": "2026-08-06T23:35:45+00:00"
+    },
+    {
+      "id": "high_resolution_image_synthesis_with_latent_diffusion_models",
+      "label": "High-Resolution Image Synthesis with Latent Diffusion Models",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_12911",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2112.10752"
+      ],
+      "first_visited_at": "2026-08-02T23:36:45+00:00"
+    },
+    {
+      "id": "hierarchical_text_conditional_image_generation_with_clip_latents",
+      "label": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12912",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2204.06125"
+      ],
+      "first_visited_at": "2026-07-31T23:37:45+00:00",
+      "outlier_score": 0.4283109587022751
+    },
+    {
+      "id": "photorealistic_text_to_image_diffusion_models_with_deep_language_understanding",
+      "label": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models_in_image_synthesis",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2205.11487"
+      ],
+      "first_visited_at": "2026-07-30T23:38:45+00:00"
+    },
+    {
+      "id": "elucidating_the_design_space_of_diffusion_based_generative_models",
+      "label": "Elucidating the Design Space of Diffusion-Based Generative Models",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_based_generative_models",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2206.00364"
+      ],
+      "first_visited_at": "2026-07-26T23:39:45+00:00"
+    },
+    {
+      "id": "classifier_free_diffusion_guidance",
+      "label": "Classifier-Free Diffusion Guidance",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2207.12598"
+      ],
+      "first_visited_at": "2026-07-24T23:40:45+00:00"
+    },
+    {
+      "id": "diffusion_model",
+      "label": "Diffusion model",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_12916",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)"
+      ],
+      "first_visited_at": "2026-07-23T23:41:45+00:00"
+    },
+    {
+      "id": "what_are_diffusion_models",
+      "label": "What are Diffusion Models?",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "page_urls": [
+        "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/"
+      ],
+      "first_visited_at": "2026-07-19T23:42:45+00:00"
+    },
+    {
+      "id": "cephalopod",
+      "label": "Cephalopod",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopod_marine_life",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cephalopod"
+      ],
+      "first_visited_at": "2026-07-16T00:31:45+00:00"
+    },
+    {
+      "id": "octopus",
+      "label": "Octopus",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopod_marine_life",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Octopus"
+      ],
+      "first_visited_at": "2026-07-13T00:32:45+00:00"
+    },
+    {
+      "id": "cuttlefish",
+      "label": "Cuttlefish",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopod_marine_life",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cuttlefish"
+      ],
+      "first_visited_at": "2026-08-14T00:33:45+00:00"
+    },
+    {
+      "id": "squid",
+      "label": "Squid",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "seafood_dishes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Squid"
+      ],
+      "first_visited_at": "2026-08-13T00:34:45+00:00"
+    },
+    {
+      "id": "cephalopod_ink",
+      "label": "Cephalopod ink",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopod_biology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cephalopod_ink"
+      ],
+      "first_visited_at": "2026-08-07T00:35:45+00:00"
+    },
+    {
+      "id": "cephalopod_intelligence",
+      "label": "Cephalopod intelligence",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopod_biology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cephalopod_intelligence"
+      ],
+      "first_visited_at": "2026-08-06T00:36:45+00:00"
+    },
+    {
+      "id": "chromatophore",
+      "label": "Chromatophore",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "animal_coloration",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Chromatophore"
+      ],
+      "first_visited_at": "2026-07-31T00:37:45+00:00"
+    },
+    {
+      "id": "squid_giant_axon",
+      "label": "Squid giant axon",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "squid_giant_axon",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Squid_giant_axon"
+      ],
+      "first_visited_at": "2026-07-30T00:38:45+00:00"
+    },
+    {
+      "id": "semelparity_and_iteroparity",
+      "label": "Semelparity and iteroparity",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12926",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Semelparity_and_iteroparity"
+      ],
+      "first_visited_at": "2026-07-24T00:39:45+00:00",
+      "outlier_score": 0.6579233607545755
+    },
+    {
+      "id": "a_turing_based_bimodal_population_code_can_specify_cephalopod_chromatic_skin_displays",
+      "label": "A Turing-based bimodal population code can specify Cephalopod chromatic skin displays",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12927",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2205.11500"
+      ],
+      "first_visited_at": "2026-07-23T00:40:45+00:00",
+      "outlier_score": 0.5022962439929124
+    },
+    {
+      "id": "metabolic_efficiency_with_fast_spiking_in_the_squid_axon",
+      "label": "Metabolic efficiency with fast spiking in the squid axon",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "squid_giant_axon",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1211.6662"
+      ],
+      "first_visited_at": "2026-08-14T00:41:45+00:00"
+    },
+    {
+      "id": "modeling_the_neuromuscular_control_system_of_an_octopus_arm",
+      "label": "Modeling the Neuromuscular Control System of an Octopus Arm",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopods_in_cuisine_and_science",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2211.06767"
+      ],
+      "first_visited_at": "2026-08-13T00:42:45+00:00"
+    },
+    {
+      "id": "greek_mythology",
+      "label": "Greek mythology",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "classical_mythology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Greek_mythology"
+      ],
+      "first_visited_at": "2026-08-07T01:31:45+00:00"
+    },
+    {
+      "id": "roman_mythology",
+      "label": "Roman mythology",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "classical_mythology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Roman_mythology"
+      ],
+      "first_visited_at": "2026-08-06T01:32:45+00:00"
+    },
+    {
+      "id": "interpretatio_graeca",
+      "label": "Interpretatio graeca",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mythological_interpretation_and_analysis",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Interpretatio_graeca"
+      ],
+      "first_visited_at": "2026-08-14T01:33:45+00:00"
+    },
+    {
+      "id": "athena",
+      "label": "Athena",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "greek_mythology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Athena"
+      ],
+      "first_visited_at": "2026-08-13T01:34:45+00:00"
+    },
+    {
+      "id": "minerva",
+      "label": "Minerva",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12934",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Minerva"
+      ],
+      "first_visited_at": "2026-08-09T01:35:45+00:00",
+      "outlier_score": 0.4674340332287652
+    },
+    {
+      "id": "twelve_olympians",
+      "label": "Twelve Olympians",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "greek_mythology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Twelve_Olympians"
+      ],
+      "first_visited_at": "2026-08-07T01:36:45+00:00"
+    },
+    {
+      "id": "trojan_war",
+      "label": "Trojan War",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "trojan_war_and_iliad",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Trojan_War"
+      ],
+      "first_visited_at": "2026-08-06T01:37:45+00:00"
+    },
+    {
+      "id": "iliad",
+      "label": "Iliad",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "trojan_war_and_iliad",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Iliad"
+      ],
+      "first_visited_at": "2026-08-02T01:38:45+00:00"
+    },
+    {
+      "id": "aeneid",
+      "label": "Aeneid",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Aeneid"
+      ],
+      "first_visited_at": "2026-07-31T01:39:45+00:00"
+    },
+    {
+      "id": "theogony",
+      "label": "Theogony",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "greek_mythology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Theogony"
+      ],
+      "first_visited_at": "2026-07-30T01:40:45+00:00"
+    },
+    {
+      "id": "homer",
+      "label": "Homer",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "trojan_war_and_iliad",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Homer"
+      ],
+      "first_visited_at": "2026-07-26T01:41:45+00:00"
+    },
+    {
+      "id": "the_iliad_by_homer",
+      "label": "The Iliad by Homer",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "trojan_war_and_iliad",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://www.gutenberg.org/ebooks/6130"
+      ],
+      "first_visited_at": "2026-07-24T01:42:45+00:00"
+    },
+    {
+      "id": "the_aeneid_by_virgil",
+      "label": "The Aeneid by Virgil",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://www.gutenberg.org/ebooks/228"
+      ],
+      "first_visited_at": "2026-07-23T01:43:45+00:00"
+    },
+    {
+      "id": "hesiod_the_homeric_hymns_and_homerica_by_hesiod",
+      "label": "Hesiod, the Homeric Hymns, and Homerica by Hesiod",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://www.gutenberg.org/ebooks/348"
+      ],
+      "first_visited_at": "2026-07-19T01:44:45+00:00"
+    },
+    {
+      "id": "analysis_of_communities_in_a_mythological_social_network",
+      "label": "Analysis of communities in a mythological social network",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mythological_interpretation_and_analysis",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1306.2537"
+      ],
+      "first_visited_at": "2026-07-16T01:45:45+00:00"
+    },
+    {
+      "id": "dido_s_problem_when_a_myth_of_ancient_literature_became_a_problem_of_variational_calculus",
+      "label": "Dido's Problem. When a myth of ancient literature became a problem of variational calculus",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2301.02917"
+      ],
+      "first_visited_at": "2026-07-13T01:46:45+00:00"
+    },
+    {
+      "id": "pulse_width_modulation",
+      "label": "Pulse-width modulation",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 2,
+      "parent_id": "pulse_width_modulation",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Pulse-width_modulation",
+        "https://learn.sparkfun.com/tutorials/pulse-width-modulation/all"
+      ],
+      "first_visited_at": "2026-08-14T02:31:45+00:00"
+    },
+    {
+      "id": "transistor",
+      "label": "Transistor",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "pulse_width_modulation",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Transistor"
+      ],
+      "first_visited_at": "2026-08-13T02:32:45+00:00"
+    },
+    {
+      "id": "history_of_the_transistor",
+      "label": "History of the transistor",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "transistor_technology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/History_of_the_transistor"
+      ],
+      "first_visited_at": "2026-08-07T02:33:45+00:00"
+    },
+    {
+      "id": "william_shockley",
+      "label": "William Shockley",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "semiconductor_history",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/William_Shockley"
+      ],
+      "first_visited_at": "2026-08-06T02:34:45+00:00"
+    },
+    {
+      "id": "bell_labs",
+      "label": "Bell Labs",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "semiconductor_history",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Bell_Labs"
+      ],
+      "first_visited_at": "2026-07-31T02:35:45+00:00"
+    },
+    {
+      "id": "integrated_circuit",
+      "label": "Integrated circuit",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "integrated_circuits_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Integrated_circuit"
+      ],
+      "first_visited_at": "2026-07-30T02:36:45+00:00"
+    },
+    {
+      "id": "microcontroller",
+      "label": "Microcontroller",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "integrated_circuits_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Microcontroller"
+      ],
+      "first_visited_at": "2026-07-24T02:37:45+00:00"
+    },
+    {
+      "id": "arduino",
+      "label": "Arduino",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Arduino"
+      ],
+      "first_visited_at": "2026-07-23T02:38:45+00:00"
+    },
+    {
+      "id": "homebrew_computer_club",
+      "label": "Homebrew Computer Club",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Homebrew_Computer_Club"
+      ],
+      "first_visited_at": "2026-08-14T02:39:45+00:00"
+    },
+    {
+      "id": "arduino_lesson_3_rgb_leds",
+      "label": "Arduino Lesson 3. RGB LEDs",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "button_debouncing_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://learn.adafruit.com/adafruit-arduino-lesson-3-rgb-leds"
+      ],
+      "first_visited_at": "2026-08-13T02:41:45+00:00"
+    },
+    {
+      "id": "thomasfredericks_bounce2",
+      "label": "thomasfredericks/Bounce2",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "button_debouncing_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://github.com/thomasfredericks/Bounce2"
+      ],
+      "first_visited_at": "2026-08-07T02:42:45+00:00"
+    },
+    {
+      "id": "arduino_arduino",
+      "label": "arduino/Arduino",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://github.com/arduino/Arduino"
+      ],
+      "first_visited_at": "2026-08-06T02:43:45+00:00"
+    },
+    {
+      "id": "evolution_of_timekeeping_from_water_clock_to_quartz_clock_the_curious_case_of_the_bulova_accutron_214_the_first_transistorized_wristwatch",
+      "label": "Evolution of timekeeping from water clock to quartz clock -- the curious case of the Bulova ACCUTRON 214 the first transistorized wristwatch",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "transistor_technology",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2209.00656"
+      ],
+      "first_visited_at": "2026-08-14T02:44:45+00:00"
+    },
+    {
+      "id": "the_implementation_of_arduino_microcontroller_boards_in_science_a_bibliometric_analysis_from_2008_to_2022",
+      "label": "The Implementation of Arduino Microcontroller Boards in Science: A Bibliometric Analysis from 2008 to 2022",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2312.10840"
+      ],
+      "first_visited_at": "2026-08-13T02:45:45+00:00"
+    },
+    {
+      "id": "declarative_programming_for_microcontrollers_datalog_on_arduino",
+      "label": "Declarative Programming for Microcontrollers -- Datalog on Arduino",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1909.00043"
+      ],
+      "first_visited_at": "2026-08-09T02:46:45+00:00"
+    },
+    {
+      "id": "a_model_for_including_arduino_microcontroller_programming_in_the_introductory_physics_lab",
+      "label": "A model for including Arduino microcontroller programming in the introductory physics lab",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12962",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1407.7613"
+      ],
+      "first_visited_at": "2026-08-07T02:47:45+00:00",
+      "outlier_score": 0.4616728238443317
+    },
+    {
+      "id": "embedded_programming_pwm_analogwrite",
+      "label": "Embedded Programming: PWM & analogWrite()",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_12963",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://www.youtube.com/watch?v=6gqsIeIGJoo"
+      ],
+      "first_visited_at": "2026-08-06T02:48:45+00:00"
+    },
+    {
+      "id": "is_it_possible_to_use_just_a_capacitor_to_debounce_a_button",
+      "label": "Is it possible to use just a capacitor to debounce a button?",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "button_debouncing_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "page_urls": [
+        "https://electronics.stackexchange.com/questions/64770/is-it-possible-to-use-just-a-capacitor-to-debounce-a-button"
+      ],
+      "first_visited_at": "2026-08-02T02:49:45+00:00"
+    },
+    {
+      "id": "sourdough",
+      "label": "Sourdough",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "bread_and_sourdough",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cooking_technique_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sourdough"
+      ],
+      "first_visited_at": "2026-07-31T17:20:56+00:00"
+    },
+    {
+      "id": "yeast",
+      "label": "Yeast",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "bread_and_sourdough",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cooking_technique_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Yeast"
+      ],
+      "first_visited_at": "2026-07-30T17:21:56+00:00"
+    },
+    {
+      "id": "bread",
+      "label": "Bread",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "bread_and_sourdough",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cooking_technique_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Bread"
+      ],
+      "first_visited_at": "2026-07-26T17:22:56+00:00"
+    },
+    {
+      "id": "plate_tectonics",
+      "label": "Plate tectonics",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "plate_tectonics_and_continental_drift",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_geology_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Plate_tectonics"
+      ],
+      "first_visited_at": "2026-07-24T18:20:56+00:00"
+    },
+    {
+      "id": "volcano",
+      "label": "Volcano",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "volcanic_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_geology_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Volcano"
+      ],
+      "first_visited_at": "2026-07-23T18:21:56+00:00"
+    },
+    {
+      "id": "caldera",
+      "label": "Caldera",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "volcanic_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_geology_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Caldera"
+      ],
+      "first_visited_at": "2026-07-19T18:22:56+00:00"
+    },
+    {
+      "id": "time",
+      "label": "Time",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "time_sleep_and_dreams",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Time"
+      ],
+      "first_visited_at": "2026-07-16T18:50:53+00:00"
+    },
+    {
+      "id": "energy",
+      "label": "Energy",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "thermodynamics_and_energy",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Energy"
+      ],
+      "first_visited_at": "2026-07-13T18:51:53+00:00"
+    },
+    {
+      "id": "light",
+      "label": "Light",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "light_and_color",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Light"
+      ],
+      "first_visited_at": "2026-08-14T18:52:53+00:00"
+    },
+    {
+      "id": "sound",
+      "label": "Sound",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "thermodynamics_and_energy",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sound"
+      ],
+      "first_visited_at": "2026-08-13T18:53:53+00:00"
+    },
+    {
+      "id": "heat",
+      "label": "Heat",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "thermodynamics_and_energy",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Heat"
+      ],
+      "first_visited_at": "2026-08-07T18:54:53+00:00"
+    },
+    {
+      "id": "mass",
+      "label": "Mass",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "thermodynamics_and_energy",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mass"
+      ],
+      "first_visited_at": "2026-08-06T18:55:53+00:00"
+    },
+    {
+      "id": "color",
+      "label": "Color",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "light_and_color",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Color"
+      ],
+      "first_visited_at": "2026-07-31T18:56:53+00:00"
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13012",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Memory"
+      ],
+      "first_visited_at": "2026-07-30T18:57:53+00:00",
+      "outlier_score": 0.5495946738643339
+    },
+    {
+      "id": "philosophy",
+      "label": "Philosophy",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "philosophy_and_economics",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Philosophy"
+      ],
+      "first_visited_at": "2026-07-24T19:03:53+00:00"
+    },
+    {
+      "id": "psychology",
+      "label": "Psychology",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "human_behavior_and_society",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Psychology"
+      ],
+      "first_visited_at": "2026-07-23T19:04:53+00:00"
+    },
+    {
+      "id": "economics",
+      "label": "Economics",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "philosophy_and_economics",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Economics"
+      ],
+      "first_visited_at": "2026-08-14T19:05:53+00:00"
+    },
+    {
+      "id": "politics",
+      "label": "Politics",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "human_behavior_and_society",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Politics"
+      ],
+      "first_visited_at": "2026-08-13T19:06:53+00:00"
+    },
+    {
+      "id": "law",
+      "label": "Law",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "law_and_religion",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Law"
+      ],
+      "first_visited_at": "2026-08-07T19:07:53+00:00"
+    },
+    {
+      "id": "sociology",
+      "label": "Sociology",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "social_sciences",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sociology"
+      ],
+      "first_visited_at": "2026-08-06T19:08:53+00:00"
+    },
+    {
+      "id": "literature",
+      "label": "Literature",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13041",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Literature"
+      ],
+      "first_visited_at": "2026-08-14T19:09:53+00:00",
+      "outlier_score": 0.5113568397676537
+    },
+    {
+      "id": "education",
+      "label": "Education",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "education_and_language",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Education"
+      ],
+      "first_visited_at": "2026-08-13T19:10:53+00:00"
+    },
+    {
+      "id": "bayesian_inference",
+      "label": "Bayesian inference",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_statistics_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Bayesian_inference"
+      ],
+      "first_visited_at": "2026-08-09T19:20:56+00:00"
+    },
+    {
+      "id": "markov_chain",
+      "label": "Markov chain",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12982",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_statistics_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Markov_chain"
+      ],
+      "first_visited_at": "2026-08-07T19:21:56+00:00",
+      "outlier_score": 0.5776669486277004
+    },
+    {
+      "id": "statistical_hypothesis_test",
+      "label": "Statistical hypothesis test",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_12983",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_statistics_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Hypothesis_testing"
+      ],
+      "first_visited_at": "2026-08-06T19:22:56+00:00",
+      "outlier_score": 0.6656639879853309
+    },
+    {
+      "id": "animal",
+      "label": "Animal",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "animal_coloration",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Animal"
+      ],
+      "first_visited_at": "2026-08-02T19:50:53+00:00"
+    },
+    {
+      "id": "computer",
+      "label": "Computer",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "ancient_computing_devices",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Computer"
+      ],
+      "first_visited_at": "2026-07-31T19:51:53+00:00"
+    },
+    {
+      "id": "mathematics",
+      "label": "Mathematics",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mathematics_and_linear_algebra",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mathematics"
+      ],
+      "first_visited_at": "2026-07-30T19:52:53+00:00"
+    },
+    {
+      "id": "art",
+      "label": "Art",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Art"
+      ],
+      "first_visited_at": "2026-07-26T19:53:53+00:00"
+    },
+    {
+      "id": "music",
+      "label": "Music",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Music"
+      ],
+      "first_visited_at": "2026-07-24T19:54:53+00:00"
+    },
+    {
+      "id": "history",
+      "label": "History",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "social_sciences",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/History"
+      ],
+      "first_visited_at": "2026-07-23T19:55:53+00:00"
+    },
+    {
+      "id": "religion",
+      "label": "Religion",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "law_and_religion",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Religion"
+      ],
+      "first_visited_at": "2026-07-19T19:56:53+00:00"
+    },
+    {
+      "id": "architecture",
+      "label": "Architecture",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "architectural_styles",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Architecture"
+      ],
+      "first_visited_at": "2026-07-16T19:57:53+00:00"
+    },
+    {
+      "id": "astronomy",
+      "label": "Astronomy",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mathematics_and_linear_algebra",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Astronomy"
+      ],
+      "first_visited_at": "2026-07-13T19:58:53+00:00"
+    },
+    {
+      "id": "geography",
+      "label": "Geography",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_13022",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Geography"
+      ],
+      "first_visited_at": "2026-08-14T19:59:53+00:00"
+    },
+    {
+      "id": "iron",
+      "label": "Iron",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_earth_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Iron"
+      ],
+      "first_visited_at": "2026-08-13T20:03:53+00:00"
+    },
+    {
+      "id": "rock_geology",
+      "label": "Rock (geology)",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_earth_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Stone"
+      ],
+      "first_visited_at": "2026-08-07T20:04:53+00:00"
+    },
+    {
+      "id": "glass",
+      "label": "Glass",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "materials_science",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Glass"
+      ],
+      "first_visited_at": "2026-08-06T20:05:53+00:00"
+    },
+    {
+      "id": "wood",
+      "label": "Wood",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "materials_science",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Wood"
+      ],
+      "first_visited_at": "2026-07-31T20:06:53+00:00"
+    },
+    {
+      "id": "salt",
+      "label": "Salt",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13047",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_materials_chemistry_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Salt"
+      ],
+      "first_visited_at": "2026-07-30T20:07:53+00:00",
+      "outlier_score": 0.5656823417368586
+    },
+    {
+      "id": "edo_period",
+      "label": "Edo period",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "historical_periods",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Edo_period"
+      ],
+      "first_visited_at": "2026-07-24T20:20:56+00:00"
+    },
+    {
+      "id": "industrial_revolution",
+      "label": "Industrial Revolution",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "historical_periods",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Industrial_Revolution"
+      ],
+      "first_visited_at": "2026-07-23T20:21:56+00:00"
+    },
+    {
+      "id": "photosynthesis",
+      "label": "Photosynthesis",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Photosynthesis"
+      ],
+      "first_visited_at": "2026-08-14T20:22:56+00:00"
+    },
+    {
+      "id": "chord_music",
+      "label": "Chord (music)",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_music_theory_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Chord_(music)"
+      ],
+      "first_visited_at": "2026-08-13T20:23:09+00:00"
+    },
+    {
+      "id": "continental_drift",
+      "label": "Continental drift",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "plate_tectonics_and_continental_drift",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Continental_drift"
+      ],
+      "first_visited_at": "2026-08-07T20:23:56+00:00"
+    },
+    {
+      "id": "major_scale",
+      "label": "Major scale",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_music_theory_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Major_scale"
+      ],
+      "first_visited_at": "2026-08-06T20:24:09+00:00"
+    },
+    {
+      "id": "bauhaus",
+      "label": "Bauhaus",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "architectural_styles",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Bauhaus"
+      ],
+      "first_visited_at": "2026-08-14T20:24:56+00:00"
+    },
+    {
+      "id": "tempo",
+      "label": "Tempo",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_music_theory_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Tempo"
+      ],
+      "first_visited_at": "2026-08-13T20:25:09+00:00"
+    },
+    {
+      "id": "sahara",
+      "label": "Sahara",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_geographical_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sahara"
+      ],
+      "first_visited_at": "2026-08-09T20:25:56+00:00"
+    },
+    {
+      "id": "tea",
+      "label": "Tea",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "beverages_tea_and_coffee",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Tea"
+      ],
+      "first_visited_at": "2026-08-07T20:26:56+00:00"
+    },
+    {
+      "id": "coffee",
+      "label": "Coffee",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "beverages_tea_and_coffee",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Coffee"
+      ],
+      "first_visited_at": "2026-08-06T20:27:56+00:00"
+    },
+    {
+      "id": "indo_european_languages",
+      "label": "Indo-European languages",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cultural_exchange_and_languages",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Indo-European_languages"
+      ],
+      "first_visited_at": "2026-08-02T20:28:56+00:00"
+    },
+    {
+      "id": "sleep",
+      "label": "Sleep",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "time_sleep_and_dreams",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sleep"
+      ],
+      "first_visited_at": "2026-07-31T20:29:56+00:00"
+    },
+    {
+      "id": "marine_biology",
+      "label": "Marine biology",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "marine_ecosystems",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Marine_biology"
+      ],
+      "first_visited_at": "2026-07-30T20:50:53+00:00"
+    },
+    {
+      "id": "linear_algebra",
+      "label": "Linear algebra",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mathematics_and_linear_algebra",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Linear_algebra"
+      ],
+      "first_visited_at": "2026-07-26T20:51:53+00:00"
+    },
+    {
+      "id": "ancient_greece",
+      "label": "Ancient Greece",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_13025",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Ancient_Greece"
+      ],
+      "first_visited_at": "2026-07-24T20:52:53+00:00"
+    },
+    {
+      "id": "robotics",
+      "label": "Robotics",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_13026",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Robotics"
+      ],
+      "first_visited_at": "2026-07-23T20:53:53+00:00"
+    },
+    {
+      "id": "language",
+      "label": "Language",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "education_and_language",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Language"
+      ],
+      "first_visited_at": "2026-07-19T20:54:53+00:00"
+    },
+    {
+      "id": "wine",
+      "label": "Wine",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "beverages_tea_and_coffee",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Wine"
+      ],
+      "first_visited_at": "2026-07-16T20:55:53+00:00"
+    },
+    {
+      "id": "spice",
+      "label": "Spice",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "beverages_tea_and_coffee",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Spice"
+      ],
+      "first_visited_at": "2026-07-13T20:56:53+00:00"
+    },
+    {
+      "id": "travel",
+      "label": "Travel",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13030",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Travel"
+      ],
+      "first_visited_at": "2026-08-14T20:57:53+00:00",
+      "outlier_score": 0.5601010711640843
+    },
+    {
+      "id": "painting",
+      "label": "Painting",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts_composition",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Painting"
+      ],
+      "first_visited_at": "2026-08-13T20:58:53+00:00"
+    },
+    {
+      "id": "theatre",
+      "label": "Theatre",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Theatre"
+      ],
+      "first_visited_at": "2026-08-07T20:59:53+00:00"
+    },
+    {
+      "id": "dream",
+      "label": "Dream",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "time_sleep_and_dreams",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Dream"
+      ],
+      "first_visited_at": "2026-08-06T21:00:53+00:00"
+    },
+    {
+      "id": "fashion",
+      "label": "Fashion",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Fashion"
+      ],
+      "first_visited_at": "2026-07-31T21:01:53+00:00"
+    },
+    {
+      "id": "dna",
+      "label": "DNA",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/DNA"
+      ],
+      "first_visited_at": "2026-07-30T21:03:53+00:00"
+    },
+    {
+      "id": "medicine",
+      "label": "Medicine",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_13049",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Medicine"
+      ],
+      "first_visited_at": "2026-07-24T21:04:53+00:00"
+    },
+    {
+      "id": "evolution",
+      "label": "Evolution",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Evolution"
+      ],
+      "first_visited_at": "2026-07-23T21:05:53+00:00"
+    },
+    {
+      "id": "calendar",
+      "label": "Calendar",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13051",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Calendar"
+      ],
+      "first_visited_at": "2026-08-14T21:06:53+00:00",
+      "outlier_score": 0.5862698612238221
+    },
+    {
+      "id": "mountain",
+      "label": "Mountain",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_landforms",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mountain"
+      ],
+      "first_visited_at": "2026-08-13T21:07:53+00:00"
+    },
+    {
+      "id": "river",
+      "label": "River",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_landforms",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/River"
+      ],
+      "first_visited_at": "2026-08-07T21:08:53+00:00"
+    },
+    {
+      "id": "garden",
+      "label": "Garden",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13054",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Garden"
+      ],
+      "first_visited_at": "2026-08-06T21:09:53+00:00",
+      "outlier_score": 0.5934366976405306
+    },
+    {
+      "id": "generative_adversarial_networks",
+      "label": "Generative Adversarial Networks",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "diffusion_models_in_generative_modeling",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_diffusion_lineage_20260510"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1406.2661"
+      ],
+      "first_visited_at": "2026-08-14T21:20:56+00:00"
+    },
+    {
+      "id": "auto_encoding_variational_bayes",
+      "label": "Auto-Encoding Variational Bayes",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_diffusion_lineage_20260510"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1312.6114"
+      ],
+      "first_visited_at": "2026-08-13T21:21:56+00:00"
+    },
+    {
+      "id": "variational_inference_with_normalizing_flows",
+      "label": "Variational Inference with Normalizing Flows",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_diffusion_lineage_20260510"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/1505.05770"
+      ],
+      "first_visited_at": "2026-08-09T21:22:56+00:00"
+    },
+    {
+      "id": "rule_of_thirds",
+      "label": "Rule of thirds",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts_composition",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_photography_composition_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Rule_of_thirds"
+      ],
+      "first_visited_at": "2026-08-07T21:23:09+00:00"
+    },
+    {
+      "id": "aperture",
+      "label": "Aperture",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13059",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_photography_composition_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Aperture"
+      ],
+      "first_visited_at": "2026-08-06T21:24:09+00:00",
+      "outlier_score": 0.6315561496842992
+    },
+    {
+      "id": "composition_visual_arts",
+      "label": "Composition (visual arts)",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "visual_arts_composition",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_photography_composition_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Composition_(visual_arts)"
+      ],
+      "first_visited_at": "2026-08-02T21:25:09+00:00"
+    },
+    {
+      "id": "sushi",
+      "label": "Sushi",
+      "level": 1,
+      "kind": "unclustered",
+      "visit_count": 1,
+      "parent_id": "_solo_12997",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sushi"
+      ],
+      "first_visited_at": "2026-07-31T22:20:56+00:00"
+    },
+    {
+      "id": "takoyaki",
+      "label": "Takoyaki",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "seafood_dishes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Takoyaki"
+      ],
+      "first_visited_at": "2026-07-30T22:21:56+00:00"
+    },
+    {
+      "id": "squid_as_food",
+      "label": "Squid as food",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopods_in_cuisine_and_science",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Calamari"
+      ],
+      "first_visited_at": "2026-07-26T22:22:56+00:00"
+    },
+    {
+      "id": "thermohaline_circulation",
+      "label": "Thermohaline circulation",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13061",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_physical_oceanography_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Thermohaline_circulation"
+      ],
+      "first_visited_at": "2026-07-24T22:23:09+00:00",
+      "outlier_score": 0.6442173032474698
+    },
+    {
+      "id": "octopus_as_food",
+      "label": "Octopus as food",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cephalopods_in_cuisine_and_science",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Octopus_as_food"
+      ],
+      "first_visited_at": "2026-07-23T22:23:56+00:00"
+    },
+    {
+      "id": "mariana_trench",
+      "label": "Mariana Trench",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_geographical_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_physical_oceanography_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mariana_Trench"
+      ],
+      "first_visited_at": "2026-07-19T22:24:09+00:00"
+    },
+    {
+      "id": "coral_reef",
+      "label": "Coral reef",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "marine_ecosystems",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_physical_oceanography_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Coral_reef"
+      ],
+      "first_visited_at": "2026-07-16T22:25:09+00:00"
+    },
+    {
+      "id": "antikythera_mechanism",
+      "label": "Antikythera mechanism",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "ancient_computing_devices",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_bridges_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Antikythera_mechanism"
+      ],
+      "first_visited_at": "2026-07-13T23:20:56+00:00"
+    },
+    {
+      "id": "kraken",
+      "label": "Kraken",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mythical_sea_creatures",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase1_bridges_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Kraken"
+      ],
+      "first_visited_at": "2026-08-14T23:21:56+00:00"
+    },
+    {
+      "id": "roman_roads",
+      "label": "Roman roads",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13064",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Roman_roads"
+      ],
+      "first_visited_at": "2026-08-13T23:23:09+00:00",
+      "outlier_score": 0.6031517226118728
+    },
+    {
+      "id": "silk_road",
+      "label": "Silk Road",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "cultural_exchange_and_languages",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Silk_Road"
+      ],
+      "first_visited_at": "2026-08-07T23:24:09+00:00"
+    },
+    {
+      "id": "antibiotic",
+      "label": "Antibiotic",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Antibiotic"
+      ],
+      "first_visited_at": "2026-08-06T23:25:09+00:00"
+    },
+    {
+      "id": "brutalist_architecture",
+      "label": "Brutalist architecture",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "architectural_styles",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Brutalist_architecture"
+      ],
+      "first_visited_at": "2026-07-31T23:26:09+00:00"
+    },
+    {
+      "id": "vernacular_architecture",
+      "label": "Vernacular architecture",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "architectural_styles",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Vernacular_architecture"
+      ],
+      "first_visited_at": "2026-07-30T23:27:09+00:00"
+    },
+    {
+      "id": "ring_of_fire",
+      "label": "Ring of Fire",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "natural_geographical_features",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Pacific_Ring_of_Fire"
+      ],
+      "first_visited_at": "2026-07-24T23:28:09+00:00"
+    },
+    {
+      "id": "mediterranean_diet",
+      "label": "Mediterranean diet",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13070",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mediterranean_diet"
+      ],
+      "first_visited_at": "2026-07-23T23:29:09+00:00",
+      "outlier_score": 0.7054369595481353
+    },
+    {
+      "id": "etymology",
+      "label": "Etymology",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13071",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Etymology"
+      ],
+      "first_visited_at": "2026-08-14T23:30:09+00:00",
+      "outlier_score": 0.5460720300086495
+    },
+    {
+      "id": "gothic_architecture",
+      "label": "Gothic architecture",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "architectural_styles",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Gothic_architecture"
+      ],
+      "first_visited_at": "2026-08-13T23:31:09+00:00"
+    },
+    {
+      "id": "whale",
+      "label": "Whale",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13073",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Whale"
+      ],
+      "first_visited_at": "2026-08-07T23:32:09+00:00",
+      "outlier_score": 0.5823186824289559
+    },
+    {
+      "id": "protein_language_models_and_structure_prediction_connection_and_progression",
+      "label": "Protein Language Models and Structure Prediction: Connection and Progression",
+      "level": 1,
+      "kind": "singleton",
+      "visit_count": 1,
+      "parent_id": "_solo_13074",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_bridges_20260511"
+      ],
+      "page_urls": [
+        "https://arxiv.org/abs/2211.16742"
+      ],
+      "first_visited_at": "2026-08-06T00:23:09+00:00",
+      "outlier_score": 0.627447365789813
+    },
+    {
+      "id": "scylla",
+      "label": "Scylla",
+      "level": 1,
+      "kind": "cluster",
+      "visit_count": 1,
+      "parent_id": "mythical_sea_creatures",
+      "children_ids": [],
+      "capture_ids": [
+        "demo_noise_phase2_bridges_20260511"
+      ],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Scylla"
+      ],
+      "first_visited_at": "2026-08-14T00:24:09+00:00"
+    }
+  ],
+  "links": [
+    {
+      "source": "diffusion_models_in_generative_modeling",
+      "target": "diffusion_based_generative_models",
+      "type": "similarity",
+      "weight": 0.814
+    },
+    {
+      "source": "diffusion_models_in_image_synthesis",
+      "target": "diffusion_based_generative_models",
+      "type": "similarity",
+      "weight": 0.793
+    },
+    {
+      "source": "diffusion_models",
+      "target": "diffusion_based_generative_models",
+      "type": "similarity",
+      "weight": 0.739
+    },
+    {
+      "source": "diffusion_models_in_image_synthesis",
+      "target": "diffusion_models_in_generative_modeling",
+      "type": "similarity",
+      "weight": 0.723
+    },
+    {
+      "source": "diffusion_models",
+      "target": "diffusion_models_in_image_synthesis",
+      "type": "similarity",
+      "weight": 0.716
+    },
+    {
+      "source": "the_aeneid_by_virgil",
+      "target": "trojan_war_and_iliad",
+      "type": "similarity",
+      "weight": 0.715
+    },
+    {
+      "source": "variational_inference_techniques",
+      "target": "diffusion_models_in_generative_modeling",
+      "type": "similarity",
+      "weight": 0.669
+    },
+    {
+      "source": "cephalopod_biology",
+      "target": "cephalopod_marine_life",
+      "type": "similarity",
+      "weight": 0.668
+    },
+    {
+      "source": "cephalopod_marine_life",
+      "target": "seafood_dishes",
+      "type": "similarity",
+      "weight": 0.665
+    },
+    {
+      "source": "cephalopod_marine_life",
+      "target": "cephalopods_in_cuisine_and_science",
+      "type": "similarity",
+      "weight": 0.633
+    },
+    {
+      "source": "social_sciences",
+      "target": "human_behavior_and_society",
+      "type": "similarity",
+      "weight": 0.629
+    },
+    {
+      "source": "greek_mythology",
+      "target": "trojan_war_and_iliad",
+      "type": "similarity",
+      "weight": 0.626
+    },
+    {
+      "source": "human_behavior_and_society",
+      "target": "philosophy_and_economics",
+      "type": "similarity",
+      "weight": 0.621
+    },
+    {
+      "source": "social_sciences",
+      "target": "philosophy_and_economics",
+      "type": "similarity",
+      "weight": 0.612
+    },
+    {
+      "source": "seafood_dishes",
+      "target": "cephalopods_in_cuisine_and_science",
+      "type": "similarity",
+      "weight": 0.606
+    },
+    {
+      "source": "variational_inference_techniques",
+      "target": "diffusion_models",
+      "type": "similarity",
+      "weight": 0.572
+    },
+    {
+      "source": "greek_mythology",
+      "target": "the_aeneid_by_virgil",
+      "type": "similarity",
+      "weight": 0.561
+    },
+    {
+      "source": "classical_mythology",
+      "target": "greek_mythology",
+      "type": "similarity",
+      "weight": 0.558
+    },
+    {
+      "source": "mathematics_and_linear_algebra",
+      "target": "philosophy_and_economics",
+      "type": "similarity",
+      "weight": 0.55
+    },
+    {
+      "source": "visual_arts",
+      "target": "visual_arts_composition",
+      "type": "similarity",
+      "weight": 0.536
+    },
+    {
+      "source": "arduino_and_microcontrollers",
+      "target": "integrated_circuits_and_microcontrollers",
+      "type": "similarity",
+      "weight": 0.527
+    },
+    {
+      "source": "arduino_and_microcontrollers",
+      "target": "button_debouncing_techniques",
+      "type": "similarity",
+      "weight": 0.525
+    },
+    {
+      "source": "classical_mythology",
+      "target": "mythological_interpretation_and_analysis",
+      "type": "similarity",
+      "weight": 0.519
+    },
+    {
+      "source": "law_and_religion",
+      "target": "human_behavior_and_society",
+      "type": "similarity",
+      "weight": 0.517
+    },
+    {
+      "source": "law_and_religion",
+      "target": "social_sciences",
+      "type": "similarity",
+      "weight": 0.513
+    },
+    {
+      "source": "education_and_language",
+      "target": "law_and_religion",
+      "type": "similarity",
+      "weight": 0.509
+    },
+    {
+      "source": "classical_mythology",
+      "target": "the_aeneid_by_virgil",
+      "type": "similarity",
+      "weight": 0.504
+    },
+    {
+      "source": "architectural_styles",
+      "target": "visual_arts",
+      "type": "similarity",
+      "weight": 0.504
+    },
+    {
+      "source": "beverages_tea_and_coffee",
+      "target": "bread_and_sourdough",
+      "type": "similarity",
+      "weight": 0.494
+    },
+    {
+      "source": "light_and_color",
+      "target": "thermodynamics_and_energy",
+      "type": "similarity",
+      "weight": 0.492
+    },
+    {
+      "source": "cephalopod_biology",
+      "target": "cephalopods_in_cuisine_and_science",
+      "type": "similarity",
+      "weight": 0.492
+    },
+    {
+      "source": "biological_processes",
+      "target": "animal_coloration",
+      "type": "similarity",
+      "weight": 0.49
+    },
+    {
+      "source": "thermodynamics_and_energy",
+      "target": "time_sleep_and_dreams",
+      "type": "similarity",
+      "weight": 0.49
+    },
+    {
+      "source": "marine_ecosystems",
+      "target": "animal_coloration",
+      "type": "similarity",
+      "weight": 0.475
+    },
+    {
+      "source": "biological_processes",
+      "target": "marine_ecosystems",
+      "type": "similarity",
+      "weight": 0.469
+    },
+    {
+      "source": "volcanic_features",
+      "target": "natural_geographical_features",
+      "type": "similarity",
+      "weight": 0.463
+    },
+    {
+      "source": "biological_processes",
+      "target": "bread_and_sourdough",
+      "type": "similarity",
+      "weight": 0.462
+    },
+    {
+      "source": "music_theory_concepts",
+      "target": "thermodynamics_and_energy",
+      "type": "similarity",
+      "weight": 0.458
+    },
+    {
+      "source": "music_theory_concepts",
+      "target": "visual_arts",
+      "type": "similarity",
+      "weight": 0.457
+    },
+    {
+      "source": "cephalopod_biology",
+      "target": "seafood_dishes",
+      "type": "similarity",
+      "weight": 0.449
+    },
+    {
+      "source": "transistor_technology",
+      "target": "pulse_width_modulation",
+      "type": "similarity",
+      "weight": 0.445
+    },
+    {
+      "source": "materials_science",
+      "target": "natural_earth_features",
+      "type": "similarity",
+      "weight": 0.441
+    },
+    {
+      "source": "music_theory_concepts",
+      "target": "visual_arts_composition",
+      "type": "similarity",
+      "weight": 0.438
+    },
+    {
+      "source": "architectural_styles",
+      "target": "visual_arts_composition",
+      "type": "similarity",
+      "weight": 0.435
+    },
+    {
+      "source": "beverages_tea_and_coffee",
+      "target": "materials_science",
+      "type": "similarity",
+      "weight": 0.426
+    },
+    {
+      "source": "natural_earth_features",
+      "target": "natural_landforms",
+      "type": "similarity",
+      "weight": 0.422
+    },
+    {
+      "source": "ancient_computing_devices",
+      "target": "arduino_and_microcontrollers",
+      "type": "similarity",
+      "weight": 0.419
+    },
+    {
+      "source": "ancient_computing_devices",
+      "target": "mathematics_and_linear_algebra",
+      "type": "similarity",
+      "weight": 0.416
+    },
+    {
+      "source": "ancient_computing_devices",
+      "target": "integrated_circuits_and_microcontrollers",
+      "type": "similarity",
+      "weight": 0.414
+    },
+    {
+      "source": "pulse_width_modulation",
+      "target": "integrated_circuits_and_microcontrollers",
+      "type": "similarity",
+      "weight": 0.412
+    },
+    {
+      "source": "mathematics_and_linear_algebra",
+      "target": "education_and_language",
+      "type": "similarity",
+      "weight": 0.411
+    },
+    {
+      "source": "plate_tectonics_and_continental_drift",
+      "target": "natural_geographical_features",
+      "type": "similarity",
+      "weight": 0.405
+    },
+    {
+      "source": "natural_landforms",
+      "target": "volcanic_features",
+      "type": "similarity",
+      "weight": 0.404
+    },
+    {
+      "source": "architectural_styles",
+      "target": "education_and_language",
+      "type": "similarity",
+      "weight": 0.403
+    },
+    {
+      "source": "natural_landforms",
+      "target": "natural_geographical_features",
+      "type": "similarity",
+      "weight": 0.386
+    },
+    {
+      "source": "bread_and_sourdough",
+      "target": "materials_science",
+      "type": "similarity",
+      "weight": 0.385
+    },
+    {
+      "source": "pulse_width_modulation",
+      "target": "button_debouncing_techniques",
+      "type": "similarity",
+      "weight": 0.385
+    },
+    {
+      "source": "beverages_tea_and_coffee",
+      "target": "light_and_color",
+      "type": "similarity",
+      "weight": 0.37
+    },
+    {
+      "source": "light_and_color",
+      "target": "time_sleep_and_dreams",
+      "type": "similarity",
+      "weight": 0.369
+    },
+    {
+      "source": "plate_tectonics_and_continental_drift",
+      "target": "volcanic_features",
+      "type": "similarity",
+      "weight": 0.369
+    },
+    {
+      "source": "marine_ecosystems",
+      "target": "natural_earth_features",
+      "type": "similarity",
+      "weight": 0.366
+    },
+    {
+      "source": "squid_giant_axon",
+      "target": "mythical_sea_creatures",
+      "type": "similarity",
+      "weight": 0.362
+    },
+    {
+      "source": "transistor_technology",
+      "target": "button_debouncing_techniques",
+      "type": "similarity",
+      "weight": 0.354
+    },
+    {
+      "source": "mythological_interpretation_and_analysis",
+      "target": "trojan_war_and_iliad",
+      "type": "similarity",
+      "weight": 0.353
+    },
+    {
+      "source": "mythological_interpretation_and_analysis",
+      "target": "variational_inference_techniques",
+      "type": "similarity",
+      "weight": 0.329
+    },
+    {
+      "source": "animal_coloration",
+      "target": "squid_giant_axon",
+      "type": "similarity",
+      "weight": 0.315
+    },
+    {
+      "source": "historical_periods",
+      "target": "transistor_technology",
+      "type": "similarity",
+      "weight": 0.314
+    },
+    {
+      "source": "cultural_exchange_and_languages",
+      "target": "historical_periods",
+      "type": "similarity",
+      "weight": 0.305
+    },
+    {
+      "source": "plate_tectonics_and_continental_drift",
+      "target": "time_sleep_and_dreams",
+      "type": "similarity",
+      "weight": 0.295
+    },
+    {
+      "source": "squid_giant_axon",
+      "target": "semiconductor_history",
+      "type": "similarity",
+      "weight": 0.231
+    },
+    {
+      "source": "historical_periods",
+      "target": "semiconductor_history",
+      "type": "similarity",
+      "weight": 0.204
+    },
+    {
+      "source": "cultural_exchange_and_languages",
+      "target": "mythical_sea_creatures",
+      "type": "similarity",
+      "weight": 0.188
+    }
+  ],
+  "clusters": [
+    {
+      "id": "variational_inference_techniques",
+      "name": "Variational Inference Techniques",
+      "page_ids": [
+        "deep_unsupervised_learning_using_nonequilibrium_thermodynamics",
+        "score_based_generative_modeling_through_stochastic_differential_equations",
+        "bayesian_inference",
+        "auto_encoding_variational_bayes",
+        "variational_inference_with_normalizing_flows"
+      ],
+      "super_cluster": "Diffusion models",
+      "super_cluster_icon": "dna",
+      "group_id": 119,
+      "group_tier": "declared",
+      "group_label": "Diffusion models"
+    },
+    {
+      "id": "diffusion_models_in_generative_modeling",
+      "name": "Diffusion Models in Generative Modeling",
+      "page_ids": [
+        "denoising_diffusion_probabilistic_models",
+        "generative_adversarial_networks"
+      ],
+      "super_cluster": "Diffusion models",
+      "super_cluster_icon": "dna",
+      "group_id": 119,
+      "group_tier": "declared",
+      "group_label": "Diffusion models"
+    },
+    {
+      "id": "diffusion_based_generative_models",
+      "name": "Diffusion-Based Generative Models",
+      "page_ids": [
+        "denoising_diffusion_implicit_models",
+        "elucidating_the_design_space_of_diffusion_based_generative_models"
+      ],
+      "super_cluster": "Diffusion models",
+      "super_cluster_icon": "dna",
+      "group_id": 119,
+      "group_tier": "declared",
+      "group_label": "Diffusion models"
+    },
+    {
+      "id": "diffusion_models_in_image_synthesis",
+      "name": "Diffusion Models in Image Synthesis",
+      "page_ids": [
+        "diffusion_models_beat_gans_on_image_synthesis",
+        "photorealistic_text_to_image_diffusion_models_with_deep_language_understanding"
+      ],
+      "super_cluster": "Diffusion models",
+      "super_cluster_icon": "dna",
+      "group_id": 119,
+      "group_tier": "declared",
+      "group_label": "Diffusion models"
+    },
+    {
+      "id": "_solo_12911",
+      "name": "",
+      "page_ids": [
+        "high_resolution_image_synthesis_with_latent_diffusion_models"
+      ]
+    },
+    {
+      "id": "_solo_12912",
+      "name": "",
+      "page_ids": [
+        "hierarchical_text_conditional_image_generation_with_clip_latents"
+      ]
+    },
+    {
+      "id": "diffusion_models",
+      "name": "Diffusion Models",
+      "page_ids": [
+        "classifier_free_diffusion_guidance",
+        "what_are_diffusion_models"
+      ],
+      "super_cluster": "Diffusion models",
+      "super_cluster_icon": "dna",
+      "group_id": 119,
+      "group_tier": "declared",
+      "group_label": "Diffusion models"
+    },
+    {
+      "id": "_solo_12916",
+      "name": "",
+      "page_ids": [
+        "diffusion_model"
+      ]
+    },
+    {
+      "id": "cephalopod_marine_life",
+      "name": "Cephalopod Marine Life",
+      "page_ids": [
+        "cephalopod",
+        "octopus",
+        "cuttlefish"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "seafood_dishes",
+      "name": "Seafood Dishes",
+      "page_ids": [
+        "squid",
+        "takoyaki"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "cephalopod_biology",
+      "name": "Cephalopod Biology",
+      "page_ids": [
+        "cephalopod_ink",
+        "cephalopod_intelligence"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "animal_coloration",
+      "name": "Animal Coloration",
+      "page_ids": [
+        "chromatophore",
+        "animal"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 120,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "squid_giant_axon",
+      "name": "Squid Giant Axon",
+      "page_ids": [
+        "squid_giant_axon",
+        "metabolic_efficiency_with_fast_spiking_in_the_squid_axon"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "_solo_12926",
+      "name": "",
+      "page_ids": [
+        "semelparity_and_iteroparity"
+      ]
+    },
+    {
+      "id": "_solo_12927",
+      "name": "",
+      "page_ids": [
+        "a_turing_based_bimodal_population_code_can_specify_cephalopod_chromatic_skin_displays"
+      ]
+    },
+    {
+      "id": "cephalopods_in_cuisine_and_science",
+      "name": "Cephalopods in Cuisine and Science",
+      "page_ids": [
+        "modeling_the_neuromuscular_control_system_of_an_octopus_arm",
+        "squid_as_food",
+        "octopus_as_food"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "classical_mythology",
+      "name": "Classical Mythology",
+      "page_ids": [
+        "greek_mythology",
+        "roman_mythology"
+      ],
+      "super_cluster": "Greek and Roman mythology",
+      "super_cluster_icon": "trident",
+      "group_id": 118,
+      "group_tier": "declared",
+      "group_label": "Greek and Roman mythology"
+    },
+    {
+      "id": "mythological_interpretation_and_analysis",
+      "name": "Mythological Interpretation and Analysis",
+      "page_ids": [
+        "interpretatio_graeca",
+        "analysis_of_communities_in_a_mythological_social_network"
+      ],
+      "super_cluster": "Greek and Roman mythology",
+      "super_cluster_icon": "trident",
+      "group_id": 118,
+      "group_tier": "declared",
+      "group_label": "Greek and Roman mythology"
+    },
+    {
+      "id": "greek_mythology",
+      "name": "Greek Mythology",
+      "page_ids": [
+        "athena",
+        "twelve_olympians",
+        "theogony"
+      ],
+      "super_cluster": "Greek and Roman mythology",
+      "super_cluster_icon": "trident",
+      "group_id": 118,
+      "group_tier": "declared",
+      "group_label": "Greek and Roman mythology"
+    },
+    {
+      "id": "_solo_12934",
+      "name": "",
+      "page_ids": [
+        "minerva"
+      ]
+    },
+    {
+      "id": "trojan_war_and_iliad",
+      "name": "Trojan War and Iliad",
+      "page_ids": [
+        "trojan_war",
+        "iliad",
+        "homer",
+        "the_iliad_by_homer"
+      ],
+      "super_cluster": "Greek and Roman mythology",
+      "super_cluster_icon": "trident",
+      "group_id": 118,
+      "group_tier": "declared",
+      "group_label": "Greek and Roman mythology"
+    },
+    {
+      "id": "the_aeneid_by_virgil",
+      "name": "The Aeneid by Virgil",
+      "page_ids": [
+        "aeneid",
+        "the_aeneid_by_virgil",
+        "hesiod_the_homeric_hymns_and_homerica_by_hesiod",
+        "dido_s_problem_when_a_myth_of_ancient_literature_became_a_problem_of_variational_calculus"
+      ],
+      "super_cluster": "Greek and Roman mythology",
+      "super_cluster_icon": "trident",
+      "group_id": 118,
+      "group_tier": "declared",
+      "group_label": "Greek and Roman mythology"
+    },
+    {
+      "id": "pulse_width_modulation",
+      "name": "Pulse-width Modulation",
+      "page_ids": [
+        "pulse_width_modulation",
+        "transistor"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "transistor_technology",
+      "name": "Transistor Technology",
+      "page_ids": [
+        "history_of_the_transistor",
+        "evolution_of_timekeeping_from_water_clock_to_quartz_clock_the_curious_case_of_the_bulova_accutron_214_the_first_transistorized_wristwatch"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "semiconductor_history",
+      "name": "Semiconductor History",
+      "page_ids": [
+        "william_shockley",
+        "bell_labs"
+      ],
+      "group_id": 123,
+      "group_tier": "casual",
+      "group_label": "Semiconductor Development"
+    },
+    {
+      "id": "integrated_circuits_and_microcontrollers",
+      "name": "Integrated Circuits and Microcontrollers",
+      "page_ids": [
+        "integrated_circuit",
+        "microcontroller"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "arduino_and_microcontrollers",
+      "name": "Arduino and Microcontrollers",
+      "page_ids": [
+        "arduino",
+        "homebrew_computer_club",
+        "arduino_arduino",
+        "the_implementation_of_arduino_microcontroller_boards_in_science_a_bibliometric_analysis_from_2008_to_2022",
+        "declarative_programming_for_microcontrollers_datalog_on_arduino"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "button_debouncing_techniques",
+      "name": "Button Debouncing Techniques",
+      "page_ids": [
+        "arduino_lesson_3_rgb_leds",
+        "thomasfredericks_bounce2",
+        "is_it_possible_to_use_just_a_capacitor_to_debounce_a_button"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "_solo_12962",
+      "name": "",
+      "page_ids": [
+        "a_model_for_including_arduino_microcontroller_programming_in_the_introductory_physics_lab"
+      ]
+    },
+    {
+      "id": "_solo_12963",
+      "name": "",
+      "page_ids": [
+        "embedded_programming_pwm_analogwrite"
+      ]
+    },
+    {
+      "id": "bread_and_sourdough",
+      "name": "Bread and Sourdough",
+      "page_ids": [
+        "sourdough",
+        "yeast",
+        "bread"
+      ],
+      "group_id": 124,
+      "group_tier": "binge",
+      "group_label": "Food and Beverages"
+    },
+    {
+      "id": "plate_tectonics_and_continental_drift",
+      "name": "Plate Tectonics and Continental Drift",
+      "page_ids": [
+        "plate_tectonics",
+        "continental_drift"
+      ],
+      "group_id": 126,
+      "group_tier": "binge",
+      "group_label": "Geological Features"
+    },
+    {
+      "id": "volcanic_features",
+      "name": "Volcanic Features",
+      "page_ids": [
+        "volcano",
+        "caldera"
+      ],
+      "group_id": 126,
+      "group_tier": "binge",
+      "group_label": "Geological Features"
+    },
+    {
+      "id": "time_sleep_and_dreams",
+      "name": "Time, Sleep, and Dreams",
+      "page_ids": [
+        "time",
+        "sleep",
+        "dream"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "thermodynamics_and_energy",
+      "name": "Thermodynamics and Energy",
+      "page_ids": [
+        "energy",
+        "sound",
+        "heat",
+        "mass"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "light_and_color",
+      "name": "Light and Color",
+      "page_ids": [
+        "light",
+        "color"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "_solo_13012",
+      "name": "",
+      "page_ids": [
+        "memory"
+      ]
+    },
+    {
+      "id": "philosophy_and_economics",
+      "name": "Philosophy and Economics",
+      "page_ids": [
+        "philosophy",
+        "economics"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "human_behavior_and_society",
+      "name": "Human Behavior and Society",
+      "page_ids": [
+        "psychology",
+        "politics"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "law_and_religion",
+      "name": "Law and Religion",
+      "page_ids": [
+        "law",
+        "religion"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "social_sciences",
+      "name": "Social Sciences",
+      "page_ids": [
+        "sociology",
+        "history"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "_solo_13041",
+      "name": "",
+      "page_ids": [
+        "literature"
+      ]
+    },
+    {
+      "id": "education_and_language",
+      "name": "Education and Language",
+      "page_ids": [
+        "education",
+        "language"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "_solo_12982",
+      "name": "",
+      "page_ids": [
+        "markov_chain"
+      ]
+    },
+    {
+      "id": "_solo_12983",
+      "name": "",
+      "page_ids": [
+        "statistical_hypothesis_test"
+      ]
+    },
+    {
+      "id": "ancient_computing_devices",
+      "name": "Ancient Computing Devices",
+      "page_ids": [
+        "computer",
+        "antikythera_mechanism"
+      ],
+      "super_cluster": "Electronics and Arduino",
+      "super_cluster_icon": "code",
+      "group_id": 121,
+      "group_tier": "declared",
+      "group_label": "Electronics and Arduino"
+    },
+    {
+      "id": "mathematics_and_linear_algebra",
+      "name": "Mathematics and Linear Algebra",
+      "page_ids": [
+        "mathematics",
+        "astronomy",
+        "linear_algebra"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "visual_arts",
+      "name": "Visual Arts",
+      "page_ids": [
+        "art",
+        "theatre",
+        "fashion"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "music_theory_concepts",
+      "name": "Music Theory Concepts",
+      "page_ids": [
+        "music",
+        "chord_music",
+        "major_scale",
+        "tempo"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "architectural_styles",
+      "name": "Architectural Styles",
+      "page_ids": [
+        "architecture",
+        "bauhaus",
+        "brutalist_architecture",
+        "vernacular_architecture",
+        "gothic_architecture"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "_solo_13022",
+      "name": "",
+      "page_ids": [
+        "geography"
+      ]
+    },
+    {
+      "id": "natural_earth_features",
+      "name": "Natural Earth Features",
+      "page_ids": [
+        "iron",
+        "rock_geology"
+      ],
+      "group_id": 124,
+      "group_tier": "binge",
+      "group_label": "Food and Beverages"
+    },
+    {
+      "id": "materials_science",
+      "name": "Materials Science",
+      "page_ids": [
+        "glass",
+        "wood"
+      ],
+      "group_id": 124,
+      "group_tier": "binge",
+      "group_label": "Food and Beverages"
+    },
+    {
+      "id": "_solo_13047",
+      "name": "",
+      "page_ids": [
+        "salt"
+      ]
+    },
+    {
+      "id": "historical_periods",
+      "name": "Historical Periods",
+      "page_ids": [
+        "edo_period",
+        "industrial_revolution"
+      ],
+      "group_id": 117,
+      "group_tier": "casual",
+      "group_label": "Historical Studies"
+    },
+    {
+      "id": "biological_processes",
+      "name": "Biological Processes",
+      "page_ids": [
+        "photosynthesis",
+        "dna",
+        "evolution",
+        "antibiotic"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 120,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "natural_geographical_features",
+      "name": "Natural Geographical Features",
+      "page_ids": [
+        "sahara",
+        "mariana_trench",
+        "ring_of_fire"
+      ],
+      "group_id": 126,
+      "group_tier": "binge",
+      "group_label": "Geological Features"
+    },
+    {
+      "id": "beverages_tea_and_coffee",
+      "name": "Beverages: Tea and Coffee",
+      "page_ids": [
+        "tea",
+        "coffee",
+        "wine",
+        "spice"
+      ],
+      "group_id": 124,
+      "group_tier": "binge",
+      "group_label": "Food and Beverages"
+    },
+    {
+      "id": "cultural_exchange_and_languages",
+      "name": "Cultural Exchange and Languages",
+      "page_ids": [
+        "indo_european_languages",
+        "silk_road"
+      ],
+      "group_id": 116,
+      "group_tier": "casual",
+      "group_label": "Cultural Exchange"
+    },
+    {
+      "id": "marine_ecosystems",
+      "name": "Marine Ecosystems",
+      "page_ids": [
+        "marine_biology",
+        "coral_reef"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 120,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "_solo_13025",
+      "name": "",
+      "page_ids": [
+        "ancient_greece"
+      ]
+    },
+    {
+      "id": "_solo_13026",
+      "name": "",
+      "page_ids": [
+        "robotics"
+      ]
+    },
+    {
+      "id": "_solo_13030",
+      "name": "",
+      "page_ids": [
+        "travel"
+      ]
+    },
+    {
+      "id": "visual_arts_composition",
+      "name": "Visual Arts Composition",
+      "page_ids": [
+        "painting",
+        "rule_of_thirds",
+        "composition_visual_arts"
+      ],
+      "group_id": 125,
+      "group_tier": "binge",
+      "group_label": "Interdisciplinary Studies"
+    },
+    {
+      "id": "_solo_13049",
+      "name": "",
+      "page_ids": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "_solo_13051",
+      "name": "",
+      "page_ids": [
+        "calendar"
+      ]
+    },
+    {
+      "id": "natural_landforms",
+      "name": "Natural Landforms",
+      "page_ids": [
+        "mountain",
+        "river"
+      ],
+      "group_id": 126,
+      "group_tier": "binge",
+      "group_label": "Geological Features"
+    },
+    {
+      "id": "_solo_13054",
+      "name": "",
+      "page_ids": [
+        "garden"
+      ]
+    },
+    {
+      "id": "_solo_13059",
+      "name": "",
+      "page_ids": [
+        "aperture"
+      ]
+    },
+    {
+      "id": "_solo_12997",
+      "name": "",
+      "page_ids": [
+        "sushi"
+      ]
+    },
+    {
+      "id": "_solo_13061",
+      "name": "",
+      "page_ids": [
+        "thermohaline_circulation"
+      ]
+    },
+    {
+      "id": "mythical_sea_creatures",
+      "name": "Mythical Sea Creatures",
+      "page_ids": [
+        "kraken",
+        "scylla"
+      ],
+      "super_cluster": "Cephalopods",
+      "super_cluster_icon": "octopus",
+      "group_id": 122,
+      "group_tier": "declared",
+      "group_label": "Cephalopods"
+    },
+    {
+      "id": "_solo_13064",
+      "name": "",
+      "page_ids": [
+        "roman_roads"
+      ]
+    },
+    {
+      "id": "_solo_13070",
+      "name": "",
+      "page_ids": [
+        "mediterranean_diet"
+      ]
+    },
+    {
+      "id": "_solo_13071",
+      "name": "",
+      "page_ids": [
+        "etymology"
+      ]
+    },
+    {
+      "id": "_solo_13073",
+      "name": "",
+      "page_ids": [
+        "whale"
+      ]
+    },
+    {
+      "id": "_solo_13074",
+      "name": "",
+      "page_ids": [
+        "protein_language_models_and_structure_prediction_connection_and_progression"
+      ]
+    }
+  ],
+  "super_clusters": [
+    {
+      "keyword": "Diffusion models",
+      "icon_id": "dna"
+    },
+    {
+      "keyword": "Cephalopods",
+      "icon_id": "octopus"
+    },
+    {
+      "keyword": "Greek and Roman mythology",
+      "icon_id": "trident"
+    },
+    {
+      "keyword": "Electronics and Arduino",
+      "icon_id": "code"
+    }
+  ],
+  "groups": [
+    {
+      "id": 125,
+      "label": "Interdisciplinary Studies",
+      "tier": "binge",
+      "source": "suggested"
+    },
+    {
+      "id": 121,
+      "label": "Electronics and Arduino",
+      "tier": "declared",
+      "source": "keyword"
+    },
+    {
+      "id": 118,
+      "label": "Greek and Roman mythology",
+      "tier": "declared",
+      "source": "keyword"
+    },
+    {
+      "id": 122,
+      "label": "Cephalopods",
+      "tier": "declared",
+      "source": "keyword"
+    },
+    {
+      "id": 119,
+      "label": "Diffusion models",
+      "tier": "declared",
+      "source": "keyword"
+    },
+    {
+      "id": 124,
+      "label": "Food and Beverages",
+      "tier": "binge",
+      "source": "suggested"
+    },
+    {
+      "id": 126,
+      "label": "Geological Features",
+      "tier": "binge",
+      "source": "suggested"
+    },
+    {
+      "id": 120,
+      "label": "Cephalopods",
+      "tier": "declared",
+      "source": "keyword"
+    },
+    {
+      "id": 123,
+      "label": "Semiconductor Development",
+      "tier": "casual",
+      "source": "suggested"
+    },
+    {
+      "id": 117,
+      "label": "Historical Studies",
+      "tier": "casual",
+      "source": "suggested"
+    },
+    {
+      "id": 116,
+      "label": "Cultural Exchange",
+      "tier": "casual",
+      "source": "suggested"
+    }
+  ]
+}

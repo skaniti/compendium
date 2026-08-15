@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "river",
+    "label": "River",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "natural_landforms",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/River"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_bio_health_natural_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T21:08:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "river",
+      "label": "River",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "natural_landforms",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/River"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T21:08:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

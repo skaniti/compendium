@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "takoyaki",
+    "label": "Takoyaki",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "seafood_dishes",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Takoyaki"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_cephalopod_cuisine_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-30T22:21:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "takoyaki",
+      "label": "Takoyaki",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "seafood_dishes",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Takoyaki"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-30T22:21:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

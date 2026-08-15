@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "dna",
+    "label": "DNA",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "biological_processes",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/DNA"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_bio_health_natural_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-30T21:03:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "dna",
+      "label": "DNA",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/DNA"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_bio_health_natural_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-30T21:03:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

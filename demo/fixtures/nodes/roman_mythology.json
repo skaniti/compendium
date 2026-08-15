@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "roman_mythology",
+    "label": "Roman mythology",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "classical_mythology",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Roman_mythology"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T01:32:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "roman_mythology",
+      "label": "Roman mythology",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "classical_mythology",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Roman_mythology"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T01:32:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

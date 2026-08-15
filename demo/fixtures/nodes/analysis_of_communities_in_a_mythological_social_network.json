@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "analysis_of_communities_in_a_mythological_social_network",
+    "label": "Analysis of communities in a mythological social network",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "mythological_interpretation_and_analysis",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/1306.2537"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-16T01:45:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "analysis_of_communities_in_a_mythological_social_network",
+      "label": "Analysis of communities in a mythological social network",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "mythological_interpretation_and_analysis",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/1306.2537"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-16T01:45:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

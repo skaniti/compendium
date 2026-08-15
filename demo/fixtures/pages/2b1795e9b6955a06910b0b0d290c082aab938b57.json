@@ -1,0 +1,9 @@
+{
+  "pid": 5366,
+  "url": "https://arxiv.org/abs/2211.06767",
+  "domain": "arxiv.org",
+  "extracted_text": "The octopus arm is a neuromechanical system that involves a complex interplay between peripheral nervous system (PNS) and arm musculature. This makes the arm capable of carrying out rich maneuvers. In this paper, we build a model for the PNS and integrate it with a muscular soft octopus arm. The proposed neuromuscular architecture is used to qualitatively reproduce several biophysical observations in real octopuses, including curled rest shapes and target-directed arm reaching motions. Two control laws are proposed for target-oriented arm motions, and their performance is compared against a benchmark. Several analytical results, including rest-state characterization and stability properties of the proposed control laws, are provided.",
+  "content_summary": "Modeling the Neuromuscular Control System of an Octopus Arm\n\nThe octopus arm is a muscular hydrostatic limb characterized by virtually infinite degrees of freedom and extreme flexibility (Kennedy et al., 2020 ; Levy et al., 2017 ) . Octopus arm movements have been widely studied by biologists over t",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

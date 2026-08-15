@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "diffusion_model",
+    "label": "Diffusion model",
+    "level": 1,
+    "kind": "unclustered",
+    "parent_id": "_solo_12916",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T23:41:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "diffusion_model",
+      "label": "Diffusion model",
+      "level": 1,
+      "kind": "unclustered",
+      "parent_id": "_solo_12916",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T23:41:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

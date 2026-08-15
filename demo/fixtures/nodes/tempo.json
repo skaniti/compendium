@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "tempo",
+    "label": "Tempo",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "music_theory_concepts",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Tempo"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_music_theory_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T20:25:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "tempo",
+      "label": "Tempo",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "music_theory_concepts",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Tempo"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_music_theory_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T20:25:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

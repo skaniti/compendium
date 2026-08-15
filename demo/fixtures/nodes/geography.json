@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "geography",
+    "label": "Geography",
+    "level": 1,
+    "kind": "unclustered",
+    "parent_id": "_solo_13022",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Geography"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_domains_disciplines_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T19:59:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "geography",
+      "label": "Geography",
+      "level": 1,
+      "kind": "unclustered",
+      "parent_id": "_solo_13022",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Geography"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_domains_disciplines_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T19:59:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

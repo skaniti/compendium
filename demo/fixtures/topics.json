@@ -1,0 +1,24 @@
+{
+  "topics": [
+    {
+      "icon_id": "dna",
+      "keyword": "Diffusion models",
+      "cluster_count": 5
+    },
+    {
+      "icon_id": "octopus",
+      "keyword": "Cephalopods",
+      "cluster_count": 9
+    },
+    {
+      "icon_id": "trident",
+      "keyword": "Greek and Roman mythology",
+      "cluster_count": 5
+    },
+    {
+      "icon_id": "code",
+      "keyword": "Electronics and Arduino",
+      "cluster_count": 6
+    }
+  ]
+}

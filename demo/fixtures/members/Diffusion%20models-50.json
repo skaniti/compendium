@@ -1,0 +1,29 @@
+{
+  "members": [
+    {
+      "cluster_name": "Diffusion-Based Generative Models",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Diffusion Models",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Diffusion Models in Generative Modeling",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Diffusion Models in Image Synthesis",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Variational Inference Techniques",
+      "page_count": 5,
+      "mean_membership_probability": 0.7949
+    }
+  ]
+}

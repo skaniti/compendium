@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Preview</title>
+<link rel="stylesheet" href="/captured-assets/24/245cbe1addce5b5c7f2efaeebd8aade61a6cf0482f67cabe537ae79be985c381.css"/>
+<link rel="stylesheet" href="/captured-assets/89/89b12452f5eda16e04db0c84d696267a73fa9c443c437ddf2ceffef9d837081b.css"/>
+<link rel="stylesheet" href="/captured-assets/4c/4c5ab450af7d4f59df5fc2a8f058f5cd3cc7e069db41b18667f5d40f751662d8.css"/>
+<link rel="stylesheet" href="/captured-assets/07/07c91e7b3a62066b4677cbb0897d20098ef72a7067033cf021d068fbb42a9dfc.css"/>
+<link rel="stylesheet" href="/captured-assets/21/212bed40ba81ab95c8b8077308e5b377fb89f5299a11e33ba7ec99beb98038d6.css"/>
+<link rel="stylesheet" href="/captured-assets/11/114dab0b706e38187ca06b487096b006842bd52c6370d3a95a658a5fc963d30a.css"/>
+<link rel="stylesheet" href="/captured-assets/1c/1ce228eaad147957dc868553dc1c72a54ca6440f5eacca8d27e1485c6fcc4e10.css"/>
+<link rel="stylesheet" href="/captured-assets/b4/b4bed01a4b6322b04355cee4c6f2ef875147357311f12cd8989e809c7f9448dd.css"/>
+<link rel="stylesheet" href="/captured-assets/e7/e75dd16c7ac11b03c85bc223ed0ecc87c84df3d9058ad786584bd8bbdcefc66f.css"/>
+<link rel="stylesheet" href="/captured-assets/6a/6a7cce7c83347e8f6ba033b5b0e64cfb270fdf44d799c59e065e3fd8ff1e16a8.css"/>
+<link rel="stylesheet" href="/captured-assets/1a/1aef429fd0bb435caec7c37eab21729d8c368ab4f248bd8315eba87e70dac6d1.css"/>
+<link rel="stylesheet" href="/captured-assets/f5/f5f511328fc269b6b8603b2750ef839c707a44c6bedcb5677e77d9ff64a456d8.css"/>
+<link rel="stylesheet" href="/captured-assets/e4/e4990f0dcd0c87d9823b56d8a97b9da569aba34f53add724c33a5349e0a71bb9.css"/>
+<link rel="stylesheet" href="/captured-assets/09/099105e4cf2e744acdc54394bb7aefbc5c767f1a07340f916c5a8eefaaa32fa5.css"/>
+<link rel="stylesheet" href="/captured-assets/eb/ebe9858621b05b2a5e0856259b13f5c8a1f014db2b4d784a8ef5c96cc874dd79.css"/>
+<link rel="stylesheet" href="/captured-assets/b0/b0b1c8c322ec9928e57e9645ca06ad1d6b015fe28a1ea9ceeceda8cf66ba3b77.css"/>
+<link rel="stylesheet" href="/captured-assets/34/347b451102c185fc7d5a03191c7b1e09997d0b186285b6b4f212e9b40f873bba.css"/>
+
+<style>
+body { margin: 16px; font-family: sans-serif; color: #202122; background: #fff; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; }
+table { border-collapse: collapse; }
+body div, body table, body td, body section, body article, body aside, body nav { max-height: none !important; overflow-y: visible !important; }
+body img, body video, body canvas, body svg { max-width: 100% !important; height: auto !important; }
+body table, body figure, body .thumb, body .thumbinner, body .mw-default-size { max-width: 100% !important; box-sizing: border-box !important; }
+body .infobox, body table.infobox { width: auto !important; max-width: 100% !important; float: none !important; margin: 0 auto 1em auto !important; }
+body .noresize, body .thumbinner, body .thumbimage, body .center, body .mw-file-description { display: block !important; max-width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
+body * { overflow-wrap: break-word !important; }
+</style>
+</head><body>
+
+
+<p>Debouncing library for Arduino and Wiring by Thomas Ouellet Fredericks and many <a href="https://github.com/thomasfredericks/Bounce2/graphs/contributors" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">contributors</a>.</p>
+<p>The mechanical part of buttons and switches vibrate slightly when closed or opened causing multiple undesired false states (similar to noise). This library filters out these undesired state changes. You can learn more about debouncing here:</p>
+<ul style="max-width: 100%;">
+<li style="max-width: 100%;">
+<a href="http://www.skillbank.co.uk/arduino/switchbounce.htm" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">John Errington's Experiments with an Arduino - Using digital inputs: Switch bounce and solutions to it</a>
+</li>
+<li style="max-width: 100%;">
+<a href="http://en.wikipedia.org/wiki/Debounce#Contact_bounce" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Wikipedia article on contact Debouncing</a>
+</li>
+</ul>
+<p>The library is composed of three classes:</p>
+<ul style="max-width: 100%;">
+<li style="max-width: 100%;"><pre style="max-width: 100%;">Bounce2::Button</pre>: The class that most people will use. It is the most feature rich class for deboucing hardware buttons.</li>
+<li style="max-width: 100%;"><pre style="max-width: 100%;">Debouncer</pre>: The code that does the actual debouncing. Only advanced users should use this class for creating their own implememtations.</li>
+<li style="max-width: 100%;"><pre style="max-width: 100%;">Bounce</pre>: This class links the<pre style="max-width: 100%;">Debouncer</pre>class to a hardware pin on your board. (The odd naming of<pre style="max-width: 100%;">Bounce</pre>ensures backward compatibility with previous versions of this library.</li>
+</ul>
+<p>Please post your usage questions on the <a href="https://forum.arduino.cc/latest" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">Arduino Forums</a>.</p>
+<p>Install through your software's Library Manager or download the latest version <a href="https://github.com/thomasfredericks/Bounce2/archive/master.zip" rel="noopener noreferrer" style="max-width: 100%;" target="_blank">here</a> and put the "Bounce2" folder in your "libraries" folder.</p>
+<p>Please note that the original version of this library (Bounce 1) is included in the "extras" folder of the download but not supported anymore.</p>
+<pre style="max-width: 100%;">#include &lt;Bounce2.h&gt; 
+Bounce2::Button button = Bounce2::Button(); // INSTANTIATE A Bounce2::Button OBJECT</pre>
+<p>In the code sample below :</p>
+<ul style="max-width: 100%;">
+<li style="max-width: 100%;">Change PIN to the hardware pin of the button.</li>
+<li style="max-width: 100%;">Change PIN_MODE to <pre style="max-width: 100%;">INPUT_PULLUP</pre>if using an internal pullup, or<pre style="max-width: 100%;">INPUT</pre>if using an external pullup.</li>
+<li style="max-width: 100%;">Change INTERVAL_IN_MS to the debounce interval in millisecons. <pre style="max-width: 100%;">5</pre>is a good value.</li>
+<li style="max-width: 100%;">Change PRESSED_STATE to <pre style="max-width: 100%;">LOW</pre>if the button outputs a<pre style="max-width: 100%;">LOW</pre>when pressed, or to<pre style="max-width: 100%;">HIGH</pre>if the button outputs a<pre style="max-width: 100%;">HIGH</pre>when pressed.</li>
+</ul>
+<pre style="max-width: 100%;">button.attach ( PIN , PIN_MODE );
+button.interval( INTERVAL_IN_MS );
+button.setPressedState( PRESSED_STATE ); </pre>
+<pre style="max-width: 100%;">// UPDATE THE BUTTON BY CALLING .update() AT THE BEGINNING OF THE LOOP:
+button.update();
+
+// IF THE BUTTON WAS PRESSED THIS LOOP:
+if ( button.pressed() ) {
+    // DO SOMETHING IF THE BUTTON WAS PRESSED THIS LOOP...
+}</pre>
+<pre style="max-width: 100%;">/* 
+ DESCRIPTION
+ ====================
+ This is an example of the Bounce2::Button class. 
+ When the user presses a physical button, it toggles a LED on or off.
+ The Button class matches an electrical state to a physical action. 
+ Use .setPressedState(LOW or HIGH) to set the detection state for when the button is pressed.
+ INSTRUCTIONS
+ ====================
+ Set BUTTON_PIN to the pin attached to the button.
+ Set LED_PIN to the pin attached to a LED.
+ 
+ */
+ 
+// Include the Bounce2 library found here :
+// https://github.com/thomasfredericks/Bounce2
+#include &lt;Bounce2.h&gt;
+
+// INSTANTIATE A Button OBJECT
+Bounce2::Button button = Bounce2::Button();
+
+// WE WILL attach() THE BUTTON TO THE FOLLOWING PIN IN setup()
+#define BUTTON_PIN 39 
+
+// DEFINE THE PIN FOR THE LED :
+// 1) SOME BOARDS HAVE A DEFAULT LED (LED_BUILTIN)
+//#define LED_PIN LED_BUILTIN
+// 2) OTHERWISE SET YOUR OWN PIN
+#define LED_PIN 13
+
+// SET A VARIABLE TO STORE THE LED STATE
+bool ledState = LOW;
+
+void setup() {
+
+  // BUTTON SETUP 
+  
+  // SELECT ONE OF THE FOLLOWING :
+  // 1) IF YOUR BUTTON HAS AN INTERNAL PULL-UP
+  // button.attach( BUTTON_PIN ,  INPUT_PULLUP ); // USE INTERNAL PULL-UP
+  // 2) IF YOUR BUTTON USES AN EXTERNAL PULL-UP
+  button.attach( BUTTON_PIN, INPUT ); // USE EXTERNAL PULL-UP
+
+  // DEBOUNCE INTERVAL IN MILLISECONDS
+  button.interval(5); 
+
+  // INDICATE THAT THE LOW STATE CORRESPONDS TO PHYSICALLY PRESSING THE BUTTON
+  button.setPressedState(LOW); 
+  
+  // LED SETUP
+  pinMode(LED_PIN,OUTPUT);
+  digitalWrite(LED_PIN,ledState);
+
+}
+
+void loop() {
+  // UPDATE THE BUTTON
+  // YOU MUST CALL THIS EVERY LOOP
+  button.update();
+
+  if ( button.pressed() ) {
+    
+    // TOGGLE THE LED STATE : 
+    ledState = !ledState; // SET ledState TO THE OPPOSITE OF ledState
+    digitalWrite(LED_PIN,ledState);
+
+  }
+}</pre>
+<p>You can find more examples in the examples folder.</p>
+<p>The </p><pre style="max-width: 100%;">Bounce2::Button</pre> class extends <pre style="max-width: 100%;">Bounce</pre> and adds  <pre style="max-width: 100%;">pressed()</pre> and <pre style="max-width: 100%;">released()</pre> methods. It is the most feature rich class of the library.<p></p>
+
+
+Method
+Description
+
+<table style="max-width: 100%;">               </table>
+<p>The </p><pre style="max-width: 100%;">Bounce</pre> class extends <pre style="max-width: 100%;">Debouncer</pre> and links it to a hardware pin. This class is odly named, but it will be kept that so it stays compatible with previous code.<p></p>
+
+
+Method
+Description
+
+<table style="max-width: 100%;">          </table>
+<p>The </p><pre style="max-width: 100%;">Debouncer</pre> class. Just the debouncing code separated from all hardware.<p></p>
+
+
+Method
+Description
+
+<table style="max-width: 100%;">        </table>
+<p>The following alternate debouncing algorithms are for advanced users or specific cases.</p>
+<p>By default, the Bounce library uses a stable interval to process the debouncing. This is simpler to understand and can cancel unwanted noise.</p>
+<p>By defining "#define BOUNCE_LOCK_OUT" in "Bounce.h" you can activate an alternative debouncing method. This method is a lot more responsive, but does not cancel noise.</p>
+<pre style="max-width: 100%;">      <pre style="max-width: 100%;">#define BOUNCE_LOCK_OUT
+</pre>
+    </pre>
+<p>By defining "#define BOUNCE_WITH_PROMPT_DETECTION" in "Bounce.h" you can activate an alternative debouncing method. Button state changes are available immediately so long as the previous state has been stable for the timeout period. Otherwise the state will be updated as soon as the timeout period allows.</p>
+<ul style="max-width: 100%;">
+<li style="max-width: 100%;">Able to report acurate switch time normally with no delay.</li>
+<li style="max-width: 100%;">Use when accurate switch transition timing is important.</li>
+</ul>
+<pre style="max-width: 100%;">      <pre style="max-width: 100%;">#define BOUNCE_WITH_PROMPT_DETECTION
+</pre>
+    </pre>
+
+
+</body></html>

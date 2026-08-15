@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "kraken",
+    "label": "Kraken",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "mythical_sea_creatures",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Kraken"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_bridges_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T23:21:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "kraken",
+      "label": "Kraken",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "mythical_sea_creatures",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Kraken"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_bridges_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T23:21:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

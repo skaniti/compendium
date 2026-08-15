@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "antibiotic",
+    "label": "Antibiotic",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "biological_processes",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Antibiotic"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_phase_2_singletons_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T23:25:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "antibiotic",
+      "label": "Antibiotic",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "biological_processes",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Antibiotic"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T23:25:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "cephalopod_intelligence",
+    "label": "Cephalopod intelligence",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cephalopod_biology",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Cephalopod_intelligence"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T00:36:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "cephalopod_intelligence",
+      "label": "Cephalopod intelligence",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cephalopod_biology",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cephalopod_intelligence"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T00:36:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

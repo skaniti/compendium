@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "whale",
+    "label": "Whale",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13073",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Whale"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_phase_2_singletons_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T23:32:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.5823186824289559
+  },
+  "subtree": [
+    {
+      "id": "whale",
+      "label": "Whale",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13073",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Whale"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T23:32:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.5823186824289559
+    }
+  ]
+}

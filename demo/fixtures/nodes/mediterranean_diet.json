@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "mediterranean_diet",
+    "label": "Mediterranean diet",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13070",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Mediterranean_diet"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_phase_2_singletons_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T23:29:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.7054369595481353
+  },
+  "subtree": [
+    {
+      "id": "mediterranean_diet",
+      "label": "Mediterranean diet",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13070",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Mediterranean_diet"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_phase_2_singletons_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T23:29:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.7054369595481353
+    }
+  ]
+}

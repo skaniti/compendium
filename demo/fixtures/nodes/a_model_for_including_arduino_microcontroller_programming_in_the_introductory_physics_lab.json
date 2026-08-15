@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "a_model_for_including_arduino_microcontroller_programming_in_the_introductory_physics_lab",
+    "label": "A model for including Arduino microcontroller programming in the introductory physics lab",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_12962",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/1407.7613"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T02:47:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.4616728238443317
+  },
+  "subtree": [
+    {
+      "id": "a_model_for_including_arduino_microcontroller_programming_in_the_introductory_physics_lab",
+      "label": "A model for including Arduino microcontroller programming in the introductory physics lab",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_12962",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/1407.7613"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T02:47:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.4616728238443317
+    }
+  ]
+}

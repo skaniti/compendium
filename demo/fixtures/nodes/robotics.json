@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "robotics",
+    "label": "Robotics",
+    "level": 1,
+    "kind": "unclustered",
+    "parent_id": "_solo_13026",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Robotics"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T20:53:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "robotics",
+      "label": "Robotics",
+      "level": 1,
+      "kind": "unclustered",
+      "parent_id": "_solo_13026",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Robotics"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T20:53:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

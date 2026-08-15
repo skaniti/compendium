@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "history_of_the_transistor",
+    "label": "History of the transistor",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "transistor_technology",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/History_of_the_transistor"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T02:33:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "history_of_the_transistor",
+      "label": "History of the transistor",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "transistor_technology",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/History_of_the_transistor"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T02:33:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

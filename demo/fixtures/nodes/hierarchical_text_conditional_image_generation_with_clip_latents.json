@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "hierarchical_text_conditional_image_generation_with_clip_latents",
+    "label": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_12912",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2204.06125"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-31T23:37:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.4283109587022751
+  },
+  "subtree": [
+    {
+      "id": "hierarchical_text_conditional_image_generation_with_clip_latents",
+      "label": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_12912",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2204.06125"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-31T23:37:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.4283109587022751
+    }
+  ]
+}

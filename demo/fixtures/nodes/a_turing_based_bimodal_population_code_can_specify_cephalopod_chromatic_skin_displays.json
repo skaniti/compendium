@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "a_turing_based_bimodal_population_code_can_specify_cephalopod_chromatic_skin_displays",
+    "label": "A Turing-based bimodal population code can specify Cephalopod chromatic skin displays",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_12927",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2205.11500"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T00:40:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.5022962439929124
+  },
+  "subtree": [
+    {
+      "id": "a_turing_based_bimodal_population_code_can_specify_cephalopod_chromatic_skin_displays",
+      "label": "A Turing-based bimodal population code can specify Cephalopod chromatic skin displays",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_12927",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2205.11500"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T00:40:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.5022962439929124
+    }
+  ]
+}

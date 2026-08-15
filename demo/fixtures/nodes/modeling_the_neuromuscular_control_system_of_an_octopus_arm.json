@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "modeling_the_neuromuscular_control_system_of_an_octopus_arm",
+    "label": "Modeling the Neuromuscular Control System of an Octopus Arm",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cephalopods_in_cuisine_and_science",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2211.06767"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T00:42:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "modeling_the_neuromuscular_control_system_of_an_octopus_arm",
+      "label": "Modeling the Neuromuscular Control System of an Octopus Arm",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cephalopods_in_cuisine_and_science",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2211.06767"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T00:42:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

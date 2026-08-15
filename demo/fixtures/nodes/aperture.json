@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "aperture",
+    "label": "Aperture",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13059",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Aperture"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_photography_composition_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T21:24:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.6315561496842992
+  },
+  "subtree": [
+    {
+      "id": "aperture",
+      "label": "Aperture",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13059",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Aperture"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_photography_composition_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T21:24:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.6315561496842992
+    }
+  ]
+}

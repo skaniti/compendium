@@ -1,0 +1,29 @@
+{
+  "members": [
+    {
+      "cluster_name": "Classical Mythology",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Mythological Interpretation and Analysis",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Greek Mythology",
+      "page_count": 3,
+      "mean_membership_probability": 0.9639
+    },
+    {
+      "cluster_name": "Trojan War and Iliad",
+      "page_count": 4,
+      "mean_membership_probability": 0.6914
+    },
+    {
+      "cluster_name": "The Aeneid by Virgil",
+      "page_count": 4,
+      "mean_membership_probability": 0.6867
+    }
+  ]
+}

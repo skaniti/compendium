@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "memory",
+    "label": "Memory",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13012",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Memory"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_physics_generic_concepts_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-30T18:57:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.5495946738643339
+  },
+  "subtree": [
+    {
+      "id": "memory",
+      "label": "Memory",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13012",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Memory"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-30T18:57:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.5495946738643339
+    }
+  ]
+}

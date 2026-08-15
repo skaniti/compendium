@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "microcontroller",
+    "label": "Microcontroller",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "integrated_circuits_and_microcontrollers",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Microcontroller"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-24T02:37:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "microcontroller",
+      "label": "Microcontroller",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "integrated_circuits_and_microcontrollers",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Microcontroller"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-24T02:37:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

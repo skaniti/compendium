@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "cephalopod",
+    "label": "Cephalopod",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cephalopod_marine_life",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Cephalopod"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-16T00:31:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "cephalopod",
+      "label": "Cephalopod",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cephalopod_marine_life",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Cephalopod"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-16T00:31:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

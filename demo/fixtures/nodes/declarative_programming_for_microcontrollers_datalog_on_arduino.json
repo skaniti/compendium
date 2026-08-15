@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "declarative_programming_for_microcontrollers_datalog_on_arduino",
+    "label": "Declarative Programming for Microcontrollers -- Datalog on Arduino",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "arduino_and_microcontrollers",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/1909.00043"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-09T02:46:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "declarative_programming_for_microcontrollers_datalog_on_arduino",
+      "label": "Declarative Programming for Microcontrollers -- Datalog on Arduino",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "arduino_and_microcontrollers",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/1909.00043"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-09T02:46:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

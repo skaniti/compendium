@@ -1,0 +1,662 @@
+data: {"type": "status", "text": "Using search_compendium..."}
+
+data: {"type": "token", "text": "The"}
+
+data: {"type": "token", "text": " mathematical"}
+
+data: {"type": "token", "text": " link"}
+
+data: {"type": "token", "text": " between"}
+
+data: {"type": "token", "text": " D"}
+
+data: {"type": "token", "text": "eno"}
+
+data: {"type": "token", "text": "ising"}
+
+data: {"type": "token", "text": " Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " Prob"}
+
+data: {"type": "token", "text": "abil"}
+
+data: {"type": "token", "text": "istic"}
+
+data: {"type": "token", "text": " Models"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "DD"}
+
+data: {"type": "token", "text": "PM"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " modeling"}
+
+data: {"type": "token", "text": " lies"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " their"}
+
+data: {"type": "token", "text": " equival"}
+
+data: {"type": "token", "text": "ence"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " generating"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " learned"}
+
+data: {"type": "token", "text": " distribution"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " Specifically"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " network"}
+
+data: {"type": "token", "text": " trained"}
+
+data: {"type": "token", "text": " using"}
+
+data: {"type": "token", "text": " DD"}
+
+data: {"type": "token", "text": "PM"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " also"}
+
+data: {"type": "token", "text": " function"}
+
+data: {"type": "token", "text": " as"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " Noise"}
+
+data: {"type": "token", "text": " Conditional"}
+
+data: {"type": "token", "text": " Score"}
+
+data: {"type": "token", "text": " Network"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "N"}
+
+data: {"type": "token", "text": "CS"}
+
+data: {"type": "token", "text": "N"}
+
+data: {"type": "token", "text": "),"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " vice"}
+
+data: {"type": "token", "text": " versa"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Equ"}
+
+data: {"type": "token", "text": "ivalence"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " Both"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": " utilize"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " generate"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " In"}
+
+data: {"type": "token", "text": " DD"}
+
+data: {"type": "token", "text": "PM"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " learns"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " reverse"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": " that"}
+
+data: {"type": "token", "text": " gradually"}
+
+data: {"type": "token", "text": " adds"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " while"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " modeling"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " are"}
+
+data: {"type": "token", "text": " generated"}
+
+data: {"type": "token", "text": " using"}
+
+data: {"type": "token", "text": " Lange"}
+
+data: {"type": "token", "text": "vin"}
+
+data: {"type": "token", "text": " dynamics"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " which"}
+
+data: {"type": "token", "text": " relies"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " gradients"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": " distribution"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "the"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " estimated"}
+
+data: {"type": "token", "text": " through"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": " matching"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "2"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Mat"}
+
+data: {"type": "token", "text": "hemat"}
+
+data: {"type": "token", "text": "ical"}
+
+data: {"type": "token", "text": " Framework"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " The"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " defined"}
+
+data: {"type": "token", "text": " as"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " gradient"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " log"}
+
+data: {"type": "token", "text": " probability"}
+
+data: {"type": "token", "text": " density"}
+
+data: {"type": "token", "text": " function"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": " distribution"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " be"}
+
+data: {"type": "token", "text": " computed"}
+
+data: {"type": "token", "text": " at"}
+
+data: {"type": "token", "text": " various"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": " involves"}
+
+data: {"type": "token", "text": " sampling"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " distribution"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " iter"}
+
+data: {"type": "token", "text": "atively"}
+
+data: {"type": "token", "text": " refining"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " using"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " estimated"}
+
+data: {"type": "token", "text": " scores"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "For"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " deeper"}
+
+data: {"type": "token", "text": " understanding"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " you"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " refer"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " following"}
+
+data: {"type": "token", "text": " sources"}
+
+data: {"type": "token", "text": ":\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " \u2014"}
+
+data: {"type": "token", "text": " Their"}
+
+data: {"type": "token", "text": " equival"}
+
+data: {"type": "token", "text": "ence"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "en"}
+
+data: {"type": "token", "text": ".wikipedia"}
+
+data: {"type": "token", "text": ".org"}
+
+data: {"type": "token", "text": "/wiki"}
+
+data: {"type": "token", "text": "/D"}
+
+data: {"type": "token", "text": "iff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": "_model"}
+
+data: {"type": "token", "text": "_("}
+
+data: {"type": "token", "text": "machine"}
+
+data: {"type": "token", "text": "_learning"}
+
+data: {"type": "token", "text": "))"}
+
+data: {"type": "token", "text": " explains"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " equival"}
+
+data: {"type": "token", "text": "ence"}
+
+data: {"type": "token", "text": " between"}
+
+data: {"type": "token", "text": " DD"}
+
+data: {"type": "token", "text": "PM"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": ".\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "D"}
+
+data: {"type": "token", "text": "eno"}
+
+data: {"type": "token", "text": "ising"}
+
+data: {"type": "token", "text": " Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " Imp"}
+
+data: {"type": "token", "text": "licit"}
+
+data: {"type": "token", "text": " Models"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "ar"}
+
+data: {"type": "token", "text": "xiv"}
+
+data: {"type": "token", "text": ".org"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "abs"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "201"}
+
+data: {"type": "token", "text": "0"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": "025"}
+
+data: {"type": "token", "text": "02"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " discusses"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " sampling"}
+
+data: {"type": "token", "text": " processes"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " DD"}
+
+data: {"type": "token", "text": "PM"}
+
+data: {"type": "token", "text": "s"}
+
+data: {"type": "token", "text": ".\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "What"}
+
+data: {"type": "token", "text": " are"}
+
+data: {"type": "token", "text": " Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " Models"}
+
+data: {"type": "token", "text": "?"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "l"}
+
+data: {"type": "token", "text": "ilian"}
+
+data: {"type": "token", "text": "weng"}
+
+data: {"type": "token", "text": ".github"}
+
+data: {"type": "token", "text": ".io"}
+
+data: {"type": "token", "text": "/posts"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "202"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "07"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "11"}
+
+data: {"type": "token", "text": "-d"}
+
+data: {"type": "token", "text": "iff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": "-model"}
+
+data: {"type": "token", "text": "s"}
+
+data: {"type": "token", "text": "/)"}
+
+data: {"type": "token", "text": " provides"}
+
+data: {"type": "token", "text": " an"}
+
+data: {"type": "token", "text": " overview"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " concepts"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " methods"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " including"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " approaches"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "complete", "sources": ["https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "https://arxiv.org/abs/2010.02502", "https://arxiv.org/abs/2206.00364", "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/"], "sources_detail": [{"url": "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "page_id": 12916, "node_id": "diffusion_model"}, {"url": "https://arxiv.org/abs/2010.02502", "page_id": 12908, "node_id": "denoising_diffusion_implicit_models"}, {"url": "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/", "page_id": 12917, "node_id": "what_are_diffusion_models"}, {"url": "https://arxiv.org/abs/2206.00364", "page_id": 12914, "node_id": "elucidating_the_design_space_of_diffusion_based_generative_models"}], "cluster_ids": ["diffusion_based_generative_models", "diffusion_models"], "images": [], "iterations": 2, "model": "gpt-4o-mini"}
+

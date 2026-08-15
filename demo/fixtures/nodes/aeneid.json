@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "aeneid",
+    "label": "Aeneid",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "the_aeneid_by_virgil",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Aeneid"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-31T01:39:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "aeneid",
+      "label": "Aeneid",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Aeneid"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-31T01:39:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

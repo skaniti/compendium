@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "scylla",
+    "label": "Scylla",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "mythical_sea_creatures",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Scylla"
+    ],
+    "capture_ids": [
+      "demo_noise_phase2_bridges_20260511"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T00:24:09+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "scylla",
+      "label": "Scylla",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "mythical_sea_creatures",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Scylla"
+      ],
+      "capture_ids": [
+        "demo_noise_phase2_bridges_20260511"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T00:24:09+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "pid": 5397,
+  "url": "https://arxiv.org/abs/2312.10840",
+  "domain": "arxiv.org",
+  "extracted_text": "The name \"Arduino\" made its international debut in 2005, marking the age of Arduino as one of the most user-friendly and cost-effective microcontroller boards (MCBs) for novices. The science implementation of Arduino boards in automation, networking and data acquisition has been increasing steadily. This study provides a thorough Bibliometric analysis from 1122 papers focused on the Scopus database of published microcontroller research, from the first year the Arduino keyword appeared in 2008 until 2022. Various science articles indexed by Scopus and referring to the use of Arduino MCBs are selected. The Bibliometric analysis explores comprehensive and general key attributes that form a trend from the Scopus articles based on authors, titles, publication years, keywords, citations, affiliations, abstracts, funding information, and languages. The generated data is visualized and analyzed to find patterns that appear within the time span. This study found a significant increase in the number of articles on Arduino boards in Biology, Physics, Chemistry, Science, and STEM category of the paper. Despite using only the Scopus database, this study opens up to view the direction of the growing application of Arduino boards in Science. The use of Bibliometric analysis maps the scientific implementation of Arduino boards as an extensive guide for future collaborations in education and industry.",
+  "content_summary": "The Implementation of Arduino Microcontroller Boards in Science: A Bibliometric Analysis from 2008 to 2022\n\nThe  use  of  Arduino  microcontroller  boards (MCBs) has evolved steadily over the years, and it has been  developed  in  many  research  areas.  Various integrations  in  the  research  pape",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

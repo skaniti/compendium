@@ -1,0 +1,9 @@
+{
+  "pid": 5382,
+  "url": "https://arxiv.org/abs/2301.02917",
+  "domain": "arxiv.org",
+  "extracted_text": "When introducing the calculus of variations, we may invoke Dido's problem to illustrate the most fundamental variational problem: to find the curve of given perimeter which bounds the greatest area. This type of problem led mathematicians to invent solution methods of maxima and minima, and the genesis of variational calculus as a distinct branch of analysis. Dido's problem was inspired by the mythical tale of the foundation of Carthage (ancient city in North Africa) by a Phoenician princess as told independently by Roman poet Virgil, and by Latin historian Justinus in the first two centuries BC. Historians have debated the facts surrounding Carthage's birth; however, contemporary mathematicians have accepted the vague events described by Virgil in his Aeneid, adding details to Dido's story to extrapolate a few verses and use as a basis for the isoperimetric theorem. Was Leonhard Euler or Lord Kelvin who first interpreted Virgil's poem as Dido's problem of variational calculus? In this article I attempt to resolve a question of historical attribution to identify who first defined Dido's problem.",
+  "content_summary": "Dido's Problem. When a myth of ancient literature became a problem of variational calculus\n\nIn 1937, Karl Menger 1 1 1 Menger (1937) wrote: “The first human being to solve a problem of calculus of variations seems to have been Queen Dido of Carthage.” Contemporary mathematics books 2 2 2 See for exa",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

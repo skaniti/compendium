@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "thomasfredericks_bounce2",
+    "label": "thomasfredericks/Bounce2",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "button_debouncing_techniques",
+    "children_ids": [],
+    "page_urls": [
+      "https://github.com/thomasfredericks/Bounce2"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T02:42:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "thomasfredericks_bounce2",
+      "label": "thomasfredericks/Bounce2",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "button_debouncing_techniques",
+      "children_ids": [],
+      "page_urls": [
+        "https://github.com/thomasfredericks/Bounce2"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T02:42:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

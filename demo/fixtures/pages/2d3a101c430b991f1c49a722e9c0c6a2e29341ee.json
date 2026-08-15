@@ -1,0 +1,9 @@
+{
+  "pid": 5398,
+  "url": "https://arxiv.org/abs/1909.00043",
+  "domain": "arxiv.org",
+  "extracted_text": "In this paper we describe an approach to programming microcontrollers based on the Arduino platform using Datalog as a clear and concise description language for system behaviors. The application areas of cheap and easily programmable microcontrollers, like robotics, home automation, and IoT devices hold mainstream appeal and are often used as motivation in natural science and technology teaching. The choice of programming languages for microcontrollers is severely limited, especially with regard to rule-based declarative languages. We use an approach that is based on the Dedalus language augmented with operations that allow for side-effects and takes the limited resources of a microcontroller into account. Our compiler and runtime environment allow to run Datalog programs on Arduino-based systems.",
+  "content_summary": "Declarative Programming for Microcontrollers -- Datalog on Arduino\n\nLogic and declarative programming is often and successfully used as parts of desktop and server applications. We value the declarative techniques because it is easier to write programs that relate closely to the specification (or ev",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

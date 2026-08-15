@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "hesiod_the_homeric_hymns_and_homerica_by_hesiod",
+    "label": "Hesiod, the Homeric Hymns, and Homerica by Hesiod",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "the_aeneid_by_virgil",
+    "children_ids": [],
+    "page_urls": [
+      "https://www.gutenberg.org/ebooks/348"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-19T01:44:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "hesiod_the_homeric_hymns_and_homerica_by_hesiod",
+      "label": "Hesiod, the Homeric Hymns, and Homerica by Hesiod",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "page_urls": [
+        "https://www.gutenberg.org/ebooks/348"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-19T01:44:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

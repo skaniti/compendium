@@ -1,0 +1,9 @@
+{
+  "pid": 5396,
+  "url": "https://arxiv.org/abs/2209.00656",
+  "domain": "arxiv.org",
+  "extracted_text": "The technological discoveries and developments since dawn of civilization that resulted in the modern wristwatch are linked to the evolution of Science itself. A history of over 6000 years filled with amazing technical prowess since the emergence of the first cities in Mesopotamia established by the Šumer civilization. Usage of gears for timekeeping has its origin in the Islamic Golden Age about 1000 years ago. Although gears have been known for over 2000 years such as found in the Antikythera Mechanism. Only in the seventeenth century springs started to be used in clock making. In the eighteenth century the amazing \\textit{Tourbillon} was designed and built to increase clock accuracy. In the nineteenth century the tuning fork was used for the first time as timebase. Wristwatches started to become popular in the beginning of the twentieth century. Later in the second half of the twentieth century the first electronic wristwatch was designed and produced, which brings us to the curious case of the Bulova \\textit{ACCUTRON} caliber 214 the first transistorized wristwatch, another marvel of technological innovation and craftsmanship whose operation is frequently misunderstood. In this paper the historical evolution of timekeeping is presented. The goal is to show the early connection between Science and Engineering in the development of timekeeping devices. This linked development only became common along the twentieth century and beyond.",
+  "content_summary": "Evolution of timekeeping from water clock to quartz clock -- the curious case of the Bulova ACCUTRON 214 the first transistorized wristwatch\n\nPerhaps some 6000 years ago somebody concluded that by using whole fingers alone was not enough for daily counting needs and decided to use knuckles or phalan",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

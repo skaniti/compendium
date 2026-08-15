@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "sourdough",
+    "label": "Sourdough",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "bread_and_sourdough",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Sourdough"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_cooking_technique_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-31T17:20:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "sourdough",
+      "label": "Sourdough",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "bread_and_sourdough",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sourdough"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_cooking_technique_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-31T17:20:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

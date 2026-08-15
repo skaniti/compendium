@@ -1,0 +1,29 @@
+{
+  "members": [
+    {
+      "cluster_name": "Animal Coloration",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Cephalopod Biology",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Marine Ecosystems",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Mythical Sea Creatures",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Seafood Dishes",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    }
+  ]
+}

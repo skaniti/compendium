@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "sound",
+    "label": "Sound",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "thermodynamics_and_energy",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Sound"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_physics_generic_concepts_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T18:53:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "thermodynamics_and_energy",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Sound"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_physics_generic_concepts_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T18:53:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

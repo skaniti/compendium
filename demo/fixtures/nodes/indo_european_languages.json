@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "indo_european_languages",
+    "label": "Indo-European languages",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cultural_exchange_and_languages",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Indo-European_languages"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_phase_1_singletons_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-02T20:28:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "indo_european_languages",
+      "label": "Indo-European languages",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cultural_exchange_and_languages",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Indo-European_languages"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_phase_1_singletons_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-02T20:28:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

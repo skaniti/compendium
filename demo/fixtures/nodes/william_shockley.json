@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "william_shockley",
+    "label": "William Shockley",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "semiconductor_history",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/William_Shockley"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T02:34:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "william_shockley",
+      "label": "William Shockley",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "semiconductor_history",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/William_Shockley"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T02:34:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

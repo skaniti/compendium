@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "greek_mythology",
+    "label": "Greek mythology",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "classical_mythology",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Greek_mythology"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T01:31:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "greek_mythology",
+      "label": "Greek mythology",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "classical_mythology",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Greek_mythology"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T01:31:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

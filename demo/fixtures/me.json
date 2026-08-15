@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "email": "admin@demo.local",
+  "name": "Demo Admin",
+  "api_key_prefix": "tbd_AScB",
+  "created_at": "2026-04-27T19:59:57.757135+00:00",
+  "preferences": {
+    "theme": "Brown",
+    "starfield": "twinkle",
+    "panel_left_width": null,
+    "panel_right_width": null,
+    "compendium_loader_seen": false,
+    "show_noise": false
+  },
+  "role": "admin",
+  "acting_as_demo": false
+}

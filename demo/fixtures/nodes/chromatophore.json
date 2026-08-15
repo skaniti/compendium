@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "chromatophore",
+    "label": "Chromatophore",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "animal_coloration",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Chromatophore"
+    ],
+    "capture_ids": [
+      "demo_cephalopods_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-31T00:37:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "chromatophore",
+      "label": "Chromatophore",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "animal_coloration",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Chromatophore"
+      ],
+      "capture_ids": [
+        "demo_cephalopods_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-31T00:37:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

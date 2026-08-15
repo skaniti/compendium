@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "psychology",
+    "label": "Psychology",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "human_behavior_and_society",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Psychology"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_humanities_social_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T19:04:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "psychology",
+      "label": "Psychology",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "human_behavior_and_society",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Psychology"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T19:04:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

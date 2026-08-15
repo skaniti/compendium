@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "literature",
+    "label": "Literature",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13041",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Literature"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden2_humanities_social_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T19:09:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.5113568397676537
+  },
+  "subtree": [
+    {
+      "id": "literature",
+      "label": "Literature",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13041",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Literature"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden2_humanities_social_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T19:09:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.5113568397676537
+    }
+  ]
+}

@@ -1,0 +1,750 @@
+data: {"type": "status", "text": "Using search_compendium..."}
+
+data: {"type": "status", "text": "Using get_page_detail..."}
+
+data: {"type": "status", "text": "Using get_page_detail..."}
+
+data: {"type": "token", "text": "An"}
+
+data: {"type": "token", "text": " Arduino"}
+
+data: {"type": "token", "text": " uses"}
+
+data: {"type": "token", "text": " Pulse"}
+
+data: {"type": "token", "text": " Width"}
+
+data: {"type": "token", "text": " Mod"}
+
+data: {"type": "token", "text": "ulation"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "PWM"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " through"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " `"}
+
+data: {"type": "token", "text": "analog"}
+
+data: {"type": "token", "text": "Write"}
+
+data: {"type": "token", "text": "`"}
+
+data: {"type": "token", "text": " function"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " control"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " brightness"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " an"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " Here's"}
+
+data: {"type": "token", "text": " how"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " works"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " physical"}
+
+data: {"type": "token", "text": " principles"}
+
+data: {"type": "token", "text": " behind"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": ":\n\n"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "PWM"}
+
+data: {"type": "token", "text": " Basics"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " PWM"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " technique"}
+
+data: {"type": "token", "text": " that"}
+
+data: {"type": "token", "text": " mod"}
+
+data: {"type": "token", "text": "ulates"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " width"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " pulses"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " digital"}
+
+data: {"type": "token", "text": " signal"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " Instead"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " providing"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " continuous"}
+
+data: {"type": "token", "text": " voltage"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "analog"}
+
+data: {"type": "token", "text": " signal"}
+
+data: {"type": "token", "text": "),"}
+
+data: {"type": "token", "text": " PWM"}
+
+data: {"type": "token", "text": " rapidly"}
+
+data: {"type": "token", "text": " switches"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " output"}
+
+data: {"type": "token", "text": " between"}
+
+data: {"type": "token", "text": " HIGH"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "on"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " LOW"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "off"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " states"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " The"}
+
+data: {"type": "token", "text": " ratio"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " time"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " signal"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " HIGH"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " total"}
+
+data: {"type": "token", "text": " time"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " one"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " called"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " duty"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "2"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Brightness"}
+
+data: {"type": "token", "text": " Control"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " When"}
+
+data: {"type": "token", "text": " you"}
+
+data: {"type": "token", "text": " use"}
+
+data: {"type": "token", "text": " `"}
+
+data: {"type": "token", "text": "analog"}
+
+data: {"type": "token", "text": "Write"}
+
+data: {"type": "token", "text": "(pin"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " value"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": "`,"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " `"}
+
+data: {"type": "token", "text": "value"}
+
+data: {"type": "token", "text": "`"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " range"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "0"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "255"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " A"}
+
+data: {"type": "token", "text": " value"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "0"}
+
+data: {"type": "token", "text": " means"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " off"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "0"}
+
+data: {"type": "token", "text": "%"}
+
+data: {"type": "token", "text": " duty"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": "),"}
+
+data: {"type": "token", "text": " while"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " value"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "255"}
+
+data: {"type": "token", "text": " means"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " fully"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "100"}
+
+data: {"type": "token", "text": "%"}
+
+data: {"type": "token", "text": " duty"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": ")."}
+
+data: {"type": "token", "text": " Intermediate"}
+
+data: {"type": "token", "text": " values"}
+
+data: {"type": "token", "text": " result"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " varying"}
+
+data: {"type": "token", "text": " brightness"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " For"}
+
+data: {"type": "token", "text": " example"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " value"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "128"}
+
+data: {"type": "token", "text": " corresponds"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "50"}
+
+data: {"type": "token", "text": "%"}
+
+data: {"type": "token", "text": " duty"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " meaning"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " half"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " time"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " off"}
+
+data: {"type": "token", "text": " half"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " time"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " resulting"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " dim"}
+
+data: {"type": "token", "text": "mer"}
+
+data: {"type": "token", "text": " light"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "3"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Physical"}
+
+data: {"type": "token", "text": " Principle"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " The"}
+
+data: {"type": "token", "text": " human"}
+
+data: {"type": "token", "text": " eye"}
+
+data: {"type": "token", "text": " perce"}
+
+data: {"type": "token", "text": "ives"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " average"}
+
+data: {"type": "token", "text": " brightness"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": " over"}
+
+data: {"type": "token", "text": " time"}
+
+data: {"type": "token", "text": " rather"}
+
+data: {"type": "token", "text": " than"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " rapid"}
+
+data: {"type": "token", "text": " switching"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " due"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " persistence"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " vision"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " where"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " eye"}
+
+data: {"type": "token", "text": " retains"}
+
+data: {"type": "token", "text": " an"}
+
+data: {"type": "token", "text": " image"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " fraction"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " second"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " Therefore"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " even"}
+
+data: {"type": "token", "text": " though"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " LED"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " turning"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " off"}
+
+data: {"type": "token", "text": " quickly"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " appears"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " glow"}
+
+data: {"type": "token", "text": " at"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " consistent"}
+
+data: {"type": "token", "text": " brightness"}
+
+data: {"type": "token", "text": " level"}
+
+data: {"type": "token", "text": " based"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " duty"}
+
+data: {"type": "token", "text": " cycle"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "For"}
+
+data: {"type": "token", "text": " more"}
+
+data: {"type": "token", "text": " detailed"}
+
+data: {"type": "token", "text": " information"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " you"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " refer"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " following"}
+
+data: {"type": "token", "text": " resources"}
+
+data: {"type": "token", "text": ":\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Pulse"}
+
+data: {"type": "token", "text": " Width"}
+
+data: {"type": "token", "text": " Mod"}
+
+data: {"type": "token", "text": "ulation"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "learn"}
+
+data: {"type": "token", "text": ".spark"}
+
+data: {"type": "token", "text": "fun"}
+
+data: {"type": "token", "text": ".com"}
+
+data: {"type": "token", "text": "/tutorial"}
+
+data: {"type": "token", "text": "s"}
+
+data: {"type": "token", "text": "/p"}
+
+data: {"type": "token", "text": "ulse"}
+
+data: {"type": "token", "text": "-width"}
+
+data: {"type": "token", "text": "-mod"}
+
+data: {"type": "token", "text": "ulation"}
+
+data: {"type": "token", "text": "/all"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " Spark"}
+
+data: {"type": "token", "text": "Fun"}
+
+data: {"type": "token", "text": ".\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Arduino"}
+
+data: {"type": "token", "text": " Lesson"}
+
+data: {"type": "token", "text": " "}
+
+data: {"type": "token", "text": "3"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " RGB"}
+
+data: {"type": "token", "text": " LEDs"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "learn"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": "ada"}
+
+data: {"type": "token", "text": "fruit"}
+
+data: {"type": "token", "text": ".com"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "ada"}
+
+data: {"type": "token", "text": "fruit"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "ardu"}
+
+data: {"type": "token", "text": "ino"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "lesson"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "3"}
+
+data: {"type": "token", "text": "-r"}
+
+data: {"type": "token", "text": "gb"}
+
+data: {"type": "token", "text": "-led"}
+
+data: {"type": "token", "text": "s"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " Ad"}
+
+data: {"type": "token", "text": "afruit"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "complete", "sources": ["https://www.youtube.com/watch?v=6gqsIeIGJoo", "https://learn.sparkfun.com/tutorials/pulse-width-modulation/all", "https://learn.adafruit.com/adafruit-arduino-lesson-3-rgb-leds"], "sources_detail": [{"url": "https://learn.adafruit.com/adafruit-arduino-lesson-3-rgb-leds", "page_id": 12956, "node_id": "arduino_lesson_3_rgb_leds"}, {"url": "https://www.youtube.com/watch?v=6gqsIeIGJoo", "page_id": 12963, "node_id": "embedded_programming_pwm_analogwrite"}, {"url": "https://learn.sparkfun.com/tutorials/pulse-width-modulation/all", "page_id": 12955, "node_id": "pulse_width_modulation"}], "cluster_ids": ["button_debouncing_techniques", "pulse_width_modulation"], "images": [], "iterations": 4, "model": "gpt-4o-mini"}
+

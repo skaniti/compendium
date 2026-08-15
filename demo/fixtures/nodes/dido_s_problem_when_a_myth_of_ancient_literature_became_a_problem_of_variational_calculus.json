@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "dido_s_problem_when_a_myth_of_ancient_literature_became_a_problem_of_variational_calculus",
+    "label": "Dido's Problem. When a myth of ancient literature became a problem of variational calculus",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "the_aeneid_by_virgil",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2301.02917"
+    ],
+    "capture_ids": [
+      "demo_mythology_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-13T01:46:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "dido_s_problem_when_a_myth_of_ancient_literature_became_a_problem_of_variational_calculus",
+      "label": "Dido's Problem. When a myth of ancient literature became a problem of variational calculus",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "the_aeneid_by_virgil",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2301.02917"
+      ],
+      "capture_ids": [
+        "demo_mythology_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-13T01:46:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

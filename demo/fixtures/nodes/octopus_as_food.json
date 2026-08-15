@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "octopus_as_food",
+    "label": "Octopus as food",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "cephalopods_in_cuisine_and_science",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Octopus_as_food"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_cephalopod_cuisine_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-23T22:23:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "octopus_as_food",
+      "label": "Octopus as food",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "cephalopods_in_cuisine_and_science",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Octopus_as_food"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_cephalopod_cuisine_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-23T22:23:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

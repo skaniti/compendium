@@ -1,0 +1,708 @@
+data: {"type": "status", "text": "Using search_compendium..."}
+
+data: {"type": "status", "text": "Using search_compendium..."}
+
+data: {"type": "token", "text": "Training"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " noisy"}
+
+data: {"type": "token", "text": " images"}
+
+data: {"type": "token", "text": " at"}
+
+data: {"type": "token", "text": " multiple"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": " tends"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " be"}
+
+data: {"type": "token", "text": " more"}
+
+data: {"type": "token", "text": " effective"}
+
+data: {"type": "token", "text": " than"}
+
+data: {"type": "token", "text": " directly"}
+
+data: {"type": "token", "text": " learning"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " den"}
+
+data: {"type": "token", "text": "oise"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " several"}
+
+data: {"type": "token", "text": " reasons"}
+
+data: {"type": "token", "text": ":\n\n"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Rob"}
+
+data: {"type": "token", "text": "ust"}
+
+data: {"type": "token", "text": "ness"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " Vari"}
+
+data: {"type": "token", "text": "ability"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " By"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " images"}
+
+data: {"type": "token", "text": " with"}
+
+data: {"type": "token", "text": " varying"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " learn"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " general"}
+
+data: {"type": "token", "text": "ize"}
+
+data: {"type": "token", "text": " better"}
+
+data: {"type": "token", "text": " across"}
+
+data: {"type": "token", "text": " different"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " conditions"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " variability"}
+
+data: {"type": "token", "text": " helps"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " become"}
+
+data: {"type": "token", "text": " more"}
+
+data: {"type": "token", "text": " robust"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " as"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " encounters"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " wider"}
+
+data: {"type": "token", "text": " range"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " scenarios"}
+
+data: {"type": "token", "text": " during"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "2"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Better"}
+
+data: {"type": "token", "text": " Feature"}
+
+data: {"type": "token", "text": " Learning"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " When"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " exposed"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " multiple"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " learn"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " extract"}
+
+data: {"type": "token", "text": " features"}
+
+data: {"type": "token", "text": " that"}
+
+data: {"type": "token", "text": " are"}
+
+data: {"type": "token", "text": " invariant"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " crucial"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " tasks"}
+
+data: {"type": "token", "text": " like"}
+
+data: {"type": "token", "text": " image"}
+
+data: {"type": "token", "text": " den"}
+
+data: {"type": "token", "text": "o"}
+
+data: {"type": "token", "text": "ising"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " where"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " needs"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " discern"}
+
+data: {"type": "token", "text": " between"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " actual"}
+
+data: {"type": "token", "text": " image"}
+
+data: {"type": "token", "text": " content"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "3"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Noise"}
+
+data: {"type": "token", "text": " Conditioning"}
+
+data: {"type": "token", "text": " Aug"}
+
+data: {"type": "token", "text": "mentation"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " Techniques"}
+
+data: {"type": "token", "text": " like"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " conditioning"}
+
+data: {"type": "token", "text": " augmentation"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " which"}
+
+data: {"type": "token", "text": " involve"}
+
+data: {"type": "token", "text": " applying"}
+
+data: {"type": "token", "text": " strong"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": " augmentation"}
+
+data: {"type": "token", "text": " strategies"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " enhance"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": "'s"}
+
+data: {"type": "token", "text": " ability"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " generate"}
+
+data: {"type": "token", "text": " high"}
+
+data: {"type": "token", "text": "-quality"}
+
+data: {"type": "token", "text": " outputs"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " approach"}
+
+data: {"type": "token", "text": " allows"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " learn"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " underlying"}
+
+data: {"type": "token", "text": " structure"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": " while"}
+
+data: {"type": "token", "text": " being"}
+
+data: {"type": "token", "text": " conditioned"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " level"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " leading"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " improved"}
+
+data: {"type": "token", "text": " performance"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " generating"}
+
+data: {"type": "token", "text": " or"}
+
+data: {"type": "token", "text": " reconstruct"}
+
+data: {"type": "token", "text": "ing"}
+
+data: {"type": "token", "text": " images"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "4"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Grad"}
+
+data: {"type": "token", "text": "ual"}
+
+data: {"type": "token", "text": " D"}
+
+data: {"type": "token", "text": "eno"}
+
+data: {"type": "token", "text": "ising"}
+
+data: {"type": "token", "text": " Process"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " Training"}
+
+data: {"type": "token", "text": " with"}
+
+data: {"type": "token", "text": " multiple"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " levels"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " simulate"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " gradual"}
+
+data: {"type": "token", "text": " den"}
+
+data: {"type": "token", "text": "o"}
+
+data: {"type": "token", "text": "ising"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " akin"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " allows"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " learn"}
+
+data: {"type": "token", "text": " how"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " progressively"}
+
+data: {"type": "token", "text": " refine"}
+
+data: {"type": "token", "text": " an"}
+
+data: {"type": "token", "text": " image"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " noisy"}
+
+data: {"type": "token", "text": " state"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " clearer"}
+
+data: {"type": "token", "text": " one"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " rather"}
+
+data: {"type": "token", "text": " than"}
+
+data: {"type": "token", "text": " attempting"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " make"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " single"}
+
+data: {"type": "token", "text": " leap"}
+
+data: {"type": "token", "text": " from"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " clarity"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "These"}
+
+data: {"type": "token", "text": " principles"}
+
+data: {"type": "token", "text": " are"}
+
+data: {"type": "token", "text": " often"}
+
+data: {"type": "token", "text": " discussed"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " context"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": "-based"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " modeling"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " where"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " designed"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " handle"}
+
+data: {"type": "token", "text": " noise"}
+
+data: {"type": "token", "text": " effectively"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " leverage"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " better"}
+
+data: {"type": "token", "text": " gener"}
+
+data: {"type": "token", "text": "ative"}
+
+data: {"type": "token", "text": " performance"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "L"}
+
+data: {"type": "token", "text": "ilian"}
+
+data: {"type": "token", "text": " W"}
+
+data: {"type": "token", "text": "eng"}
+
+data: {"type": "token", "text": "'s"}
+
+data: {"type": "token", "text": " post"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "l"}
+
+data: {"type": "token", "text": "ilian"}
+
+data: {"type": "token", "text": "weng"}
+
+data: {"type": "token", "text": ".github"}
+
+data: {"type": "token", "text": ".io"}
+
+data: {"type": "token", "text": "/posts"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "202"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "07"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": "11"}
+
+data: {"type": "token", "text": "-d"}
+
+data: {"type": "token", "text": "iff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": "-model"}
+
+data: {"type": "token", "text": "s"}
+
+data: {"type": "token", "text": "/)"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Wikipedia"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "en"}
+
+data: {"type": "token", "text": ".wikipedia"}
+
+data: {"type": "token", "text": ".org"}
+
+data: {"type": "token", "text": "/wiki"}
+
+data: {"type": "token", "text": "/D"}
+
+data: {"type": "token", "text": "iff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": "_model"}
+
+data: {"type": "token", "text": "_("}
+
+data: {"type": "token", "text": "machine"}
+
+data: {"type": "token", "text": "_learning"}
+
+data: {"type": "token", "text": "))."}
+
+data: {"type": "complete", "sources": ["https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/"], "sources_detail": [{"url": "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/", "page_id": 12917, "node_id": "what_are_diffusion_models"}, {"url": "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "page_id": 12916, "node_id": "diffusion_model"}], "cluster_ids": ["diffusion_models"], "images": [{"thumb_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Diffusion_Architecture.png/330px-Diffusion_Architecture.png", "source_url": "https://upload.wikimedia.org/wikipedia/commons/4/45/Diffusion_Architecture.png"}, {"thumb_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Flow0.gif/330px-Flow0.gif", "source_url": "https://upload.wikimedia.org/wikipedia/commons/8/81/Flow0.gif"}, {"thumb_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Flow1.gif/330px-Flow1.gif", "source_url": "https://upload.wikimedia.org/wikipedia/commons/b/b0/Flow1.gif"}], "iterations": 3, "model": "gpt-4o-mini"}
+

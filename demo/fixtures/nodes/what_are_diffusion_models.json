@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "what_are_diffusion_models",
+    "label": "What are Diffusion Models?",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_models",
+    "children_ids": [],
+    "page_urls": [
+      "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-19T23:42:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "what_are_diffusion_models",
+      "label": "What are Diffusion Models?",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_models",
+      "children_ids": [],
+      "page_urls": [
+        "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-19T23:42:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

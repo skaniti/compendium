@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "travel",
+    "label": "Travel",
+    "level": 1,
+    "kind": "singleton",
+    "parent_id": "_solo_13030",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Travel"
+    ],
+    "capture_ids": [
+      "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T20:57:53+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": 0.5601010711640843
+  },
+  "subtree": [
+    {
+      "id": "travel",
+      "label": "Travel",
+      "level": 1,
+      "kind": "singleton",
+      "parent_id": "_solo_13030",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Travel"
+      ],
+      "capture_ids": [
+        "demo_noise_hidden_topic_adjacent_and_curiosities_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T20:57:53+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": 0.5601010711640843
+    }
+  ]
+}

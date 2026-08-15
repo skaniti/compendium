@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "elucidating_the_design_space_of_diffusion_based_generative_models",
+    "label": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_based_generative_models",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2206.00364"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-26T23:39:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "elucidating_the_design_space_of_diffusion_based_generative_models",
+      "label": "Elucidating the Design Space of Diffusion-Based Generative Models",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_based_generative_models",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2206.00364"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-26T23:39:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "arduino_lesson_3_rgb_leds",
+    "label": "Arduino Lesson 3. RGB LEDs",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "button_debouncing_techniques",
+    "children_ids": [],
+    "page_urls": [
+      "https://learn.adafruit.com/adafruit-arduino-lesson-3-rgb-leds"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-13T02:41:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "arduino_lesson_3_rgb_leds",
+      "label": "Arduino Lesson 3. RGB LEDs",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "button_debouncing_techniques",
+      "children_ids": [],
+      "page_urls": [
+        "https://learn.adafruit.com/adafruit-arduino-lesson-3-rgb-leds"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-13T02:41:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

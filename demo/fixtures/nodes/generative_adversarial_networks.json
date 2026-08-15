@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "generative_adversarial_networks",
+    "label": "Generative Adversarial Networks",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_models_in_generative_modeling",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/1406.2661"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_diffusion_lineage_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T21:20:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "generative_adversarial_networks",
+      "label": "Generative Adversarial Networks",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_models_in_generative_modeling",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/1406.2661"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_diffusion_lineage_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T21:20:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

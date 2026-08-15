@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "diffusion_models_beat_gans_on_image_synthesis",
+    "label": "Diffusion Models Beat GANs on Image Synthesis",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_models_in_image_synthesis",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2105.05233"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-06T23:35:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "diffusion_models_beat_gans_on_image_synthesis",
+      "label": "Diffusion Models Beat GANs on Image Synthesis",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_models_in_image_synthesis",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2105.05233"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-06T23:35:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

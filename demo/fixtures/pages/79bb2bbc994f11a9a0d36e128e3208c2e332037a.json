@@ -1,0 +1,9 @@
+{
+  "pid": 5345,
+  "url": "https://arxiv.org/abs/2010.02502",
+  "domain": "arxiv.org",
+  "extracted_text": "Denoising diffusion probabilistic models (DDPMs) have achieved high quality image generation without adversarial training, yet they require simulating a Markov chain for many steps to produce a sample. To accelerate sampling, we present denoising diffusion implicit models (DDIMs), a more efficient class of iterative implicit probabilistic models with the same training procedure as DDPMs. In DDPMs, the generative process is defined as the reverse of a Markovian diffusion process. We construct a class of non-Markovian diffusion processes that lead to the same training objective, but whose reverse process can be much faster to sample from. We empirically demonstrate that DDIMs can produce high quality samples $10 \\times$ to $50 \\times$ faster in terms of wall-clock time compared to DDPMs, allow us to trade off computation for sample quality, and can perform semantically meaningful image interpolation directly in the latent space.",
+  "content_summary": "Denoising Diffusion Implicit Models\n\nDeep generative models have demonstrated the ability to produce high quality samples in many domains (Karras et al., 2020 ; van den Oord et al., 2016a ) . In terms of image generation, generative adversarial networks (GANs, Goodfellow et al. ( 2014 ) ) currently ",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

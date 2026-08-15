@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "score_based_generative_modeling_through_stochastic_differential_equations",
+    "label": "Score-Based Generative Modeling through Stochastic Differential Equations",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "variational_inference_techniques",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2011.13456"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-07T23:34:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "score_based_generative_modeling_through_stochastic_differential_equations",
+      "label": "Score-Based Generative Modeling through Stochastic Differential Equations",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "variational_inference_techniques",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2011.13456"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-07T23:34:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

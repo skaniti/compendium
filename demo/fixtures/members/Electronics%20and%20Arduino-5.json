@@ -1,0 +1,29 @@
+{
+  "members": [
+    {
+      "cluster_name": "Ancient Computing Devices",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Integrated Circuits and Microcontrollers",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Transistor Technology",
+      "page_count": 2,
+      "mean_membership_probability": 1
+    },
+    {
+      "cluster_name": "Pulse-width Modulation",
+      "page_count": 3,
+      "mean_membership_probability": 0.9027
+    },
+    {
+      "cluster_name": "Button Debouncing Techniques",
+      "page_count": 3,
+      "mean_membership_probability": 0.8944
+    }
+  ]
+}

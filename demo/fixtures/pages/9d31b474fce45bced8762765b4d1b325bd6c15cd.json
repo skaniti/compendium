@@ -1,0 +1,9 @@
+{
+  "pid": 5364,
+  "url": "https://arxiv.org/abs/2205.11500",
+  "domain": "arxiv.org",
+  "extracted_text": "The skin of a cephalopod forms a dazzling array of patterns made by chromatophores, elastic sacs of pigment that can be expanded by muscles to reveal their color. Tens of thousands of these chromatophores can work together to generate a stable display of stripes, spots, mottled grainy camouflage, or dynamic oscillations and traveling waves of activation. How does a neuromuscular system organize the coactivation of thousands of degrees of freedom through simple central commands? We provide a minimally-complex physiologically-plausible mathematical model, using Turing's morphogenetic equations, that can generate the array of twelve static and four dynamic types of skin displays seen in several cephalopod species. These equations specify how muscle cells on the skin need to locally interact for the global chromatic patterns to be formed. We also demonstrate a link between Turing neural computations and the asynchronous type of computing that has been extensively demonstrated in brain systems: population coding, using bimodal codes, with the relative heights of the modes specifying the kind of global pattern generated. Since Cephalopod skins are a \"visible neural net\", we believe that the computational principles uncovered through their study may have wider implications for the functioning of other neural systems.",
+  "content_summary": "A Turing-based bimodal population code can specify Cephalopod chromatic skin displays\n\nThe skin of a cephalopod forms a dazzling array of patterns made by chromatophores, elastic sacs of pigment that can be expanded by muscles to reveal their color. Thousands of these chromatophores in different par",
+  "tool_selected": "fetch_arxiv_paper",
+  "has_usable_html": true
+}

@@ -1,0 +1,110 @@
+[
+  {
+    "n": "01",
+    "question": "How does classifier-free guidance work, and why does it improve sample quality without a separately trained classifier?",
+    "file": "chat/01.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8.4
+  },
+  {
+    "n": "02",
+    "question": "What's the mathematical link between DDPM training and score-based generative modeling?",
+    "file": "chat/02.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8.3
+  },
+  {
+    "n": "03",
+    "question": "Why does training on noisy images at multiple noise levels work better than learning to denoise directly?",
+    "file": "chat/03.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 9.4
+  },
+  {
+    "n": "04",
+    "question": "How do the Romans adapt Athena into Minerva -- what stays the same, what changes?",
+    "file": "chat/04.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 6.9
+  },
+  {
+    "n": "05",
+    "question": "Why is the Trojan War remembered as a Greek triumph in Homer but a Roman origin myth in Virgil's Aeneid?",
+    "file": "chat/05.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 7.4
+  },
+  {
+    "n": "06",
+    "question": "How does Hesiod's Theogony describe the Olympian succession, and does Roman mythology preserve the same generational structure?",
+    "file": "chat/06.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8
+  },
+  {
+    "n": "07",
+    "question": "How does an Arduino's PWM (`analogWrite`) actually drive an LED's brightness, and what's the physical principle behind it?",
+    "file": "chat/07.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8.8
+  },
+  {
+    "n": "08",
+    "question": "What's the historical line from the Bell Labs transistor to the Arduino?",
+    "file": "chat/08.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8.9
+  },
+  {
+    "n": "09",
+    "question": "How do you debounce a mechanical switch -- what's the difference between hardware and software debouncing?",
+    "file": "chat/09.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 9.5
+  },
+  {
+    "n": "10",
+    "question": "Why are cephalopods (especially octopuses and cuttlefish) considered intelligent compared to other invertebrates?",
+    "file": "chat/10.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 8.2
+  },
+  {
+    "n": "11",
+    "question": "How do cephalopods change color, and how is it tied to their nervous system?",
+    "file": "chat/11.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 5.1
+  },
+  {
+    "n": "12",
+    "question": "Why do cephalopods have such short lifespans?",
+    "file": "chat/12.sse",
+    "ok": true,
+    "http_status": 200,
+    "error": null,
+    "elapsed_s": 4.6
+  }
+]

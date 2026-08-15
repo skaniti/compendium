@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "denoising_diffusion_implicit_models",
+    "label": "Denoising Diffusion Implicit Models",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "diffusion_based_generative_models",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2010.02502"
+    ],
+    "capture_ids": [
+      "demo_diffusion_20260508"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-09T23:33:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "denoising_diffusion_implicit_models",
+      "label": "Denoising Diffusion Implicit Models",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "diffusion_based_generative_models",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2010.02502"
+      ],
+      "capture_ids": [
+        "demo_diffusion_20260508"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-09T23:33:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

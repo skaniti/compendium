@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "evolution_of_timekeeping_from_water_clock_to_quartz_clock_the_curious_case_of_the_bulova_accutron_214_the_first_transistorized_wristwatch",
+    "label": "Evolution of timekeeping from water clock to quartz clock -- the curious case of the Bulova ACCUTRON 214 the first transistorized wristwatch",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "transistor_technology",
+    "children_ids": [],
+    "page_urls": [
+      "https://arxiv.org/abs/2209.00656"
+    ],
+    "capture_ids": [
+      "demo_hardware_20260509"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-08-14T02:44:45+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "evolution_of_timekeeping_from_water_clock_to_quartz_clock_the_curious_case_of_the_bulova_accutron_214_the_first_transistorized_wristwatch",
+      "label": "Evolution of timekeeping from water clock to quartz clock -- the curious case of the Bulova ACCUTRON 214 the first transistorized wristwatch",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "transistor_technology",
+      "children_ids": [],
+      "page_urls": [
+        "https://arxiv.org/abs/2209.00656"
+      ],
+      "capture_ids": [
+        "demo_hardware_20260509"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-08-14T02:44:45+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

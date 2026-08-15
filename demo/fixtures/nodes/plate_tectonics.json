@@ -1,0 +1,42 @@
+{
+  "node": {
+    "id": "plate_tectonics",
+    "label": "Plate tectonics",
+    "level": 1,
+    "kind": "cluster",
+    "parent_id": "plate_tectonics_and_continental_drift",
+    "children_ids": [],
+    "page_urls": [
+      "https://en.wikipedia.org/wiki/Plate_tectonics"
+    ],
+    "capture_ids": [
+      "demo_noise_phase1_geology_20260510"
+    ],
+    "visit_count": 1,
+    "first_visited_at": "2026-07-24T18:20:56+00:00",
+    "x": null,
+    "y": null,
+    "outlier_score": null
+  },
+  "subtree": [
+    {
+      "id": "plate_tectonics",
+      "label": "Plate tectonics",
+      "level": 1,
+      "kind": "cluster",
+      "parent_id": "plate_tectonics_and_continental_drift",
+      "children_ids": [],
+      "page_urls": [
+        "https://en.wikipedia.org/wiki/Plate_tectonics"
+      ],
+      "capture_ids": [
+        "demo_noise_phase1_geology_20260510"
+      ],
+      "visit_count": 1,
+      "first_visited_at": "2026-07-24T18:20:56+00:00",
+      "x": null,
+      "y": null,
+      "outlier_score": null
+    }
+  ]
+}

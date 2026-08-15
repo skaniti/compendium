@@ -1,0 +1,670 @@
+data: {"type": "status", "text": "Using search_compendium..."}
+
+data: {"type": "status", "text": "Using get_page_detail..."}
+
+data: {"type": "status", "text": "Using get_page_detail..."}
+
+data: {"type": "token", "text": "Classifier"}
+
+data: {"type": "token", "text": "-free"}
+
+data: {"type": "token", "text": " guidance"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "CFG"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " technique"}
+
+data: {"type": "token", "text": " used"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " models"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " enhance"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " quality"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " generated"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " without"}
+
+data: {"type": "token", "text": " relying"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " separately"}
+
+data: {"type": "token", "text": " trained"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " Here's"}
+
+data: {"type": "token", "text": " how"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " works"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " why"}
+
+data: {"type": "token", "text": " it"}
+
+data: {"type": "token", "text": " improves"}
+
+data: {"type": "token", "text": " sample"}
+
+data: {"type": "token", "text": " quality"}
+
+data: {"type": "token", "text": ":\n\n"}
+
+data: {"type": "token", "text": "1"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Mechan"}
+
+data: {"type": "token", "text": "ism"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " In"}
+
+data: {"type": "token", "text": " traditional"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": " guidance"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " used"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " steer"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " generation"}
+
+data: {"type": "token", "text": " process"}
+
+data: {"type": "token", "text": " towards"}
+
+data: {"type": "token", "text": " desired"}
+
+data: {"type": "token", "text": " outputs"}
+
+data: {"type": "token", "text": " by"}
+
+data: {"type": "token", "text": " modifying"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " sampling"}
+
+data: {"type": "token", "text": " distribution"}
+
+data: {"type": "token", "text": " based"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " class"}
+
+data: {"type": "token", "text": " labels"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " However"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " CFG"}
+
+data: {"type": "token", "text": " eliminates"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " need"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " separate"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": " by"}
+
+data: {"type": "token", "text": " utilizing"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": "'s"}
+
+data: {"type": "token", "text": " own"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": " function"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " It"}
+
+data: {"type": "token", "text": " achieves"}
+
+data: {"type": "token", "text": " this"}
+
+data: {"type": "token", "text": " by"}
+
+data: {"type": "token", "text": " combining"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " gradients"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " unconditional"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " conditional"}
+
+data: {"type": "token", "text": " score"}
+
+data: {"type": "token", "text": " estim"}
+
+data: {"type": "token", "text": "ators"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " effectively"}
+
+data: {"type": "token", "text": " allowing"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " guide"}
+
+data: {"type": "token", "text": " itself"}
+
+data: {"type": "token", "text": " based"}
+
+data: {"type": "token", "text": " on"}
+
+data: {"type": "token", "text": " its"}
+
+data: {"type": "token", "text": " learned"}
+
+data: {"type": "token", "text": " representations"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "2"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Impro"}
+
+data: {"type": "token", "text": "vement"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " Sample"}
+
+data: {"type": "token", "text": " Quality"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " CFG"}
+
+data: {"type": "token", "text": " improves"}
+
+data: {"type": "token", "text": " sample"}
+
+data: {"type": "token", "text": " quality"}
+
+data: {"type": "token", "text": " by"}
+
+data: {"type": "token", "text": " allowing"}
+
+data: {"type": "token", "text": " for"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " more"}
+
+data: {"type": "token", "text": " flexible"}
+
+data: {"type": "token", "text": " trade"}
+
+data: {"type": "token", "text": "-off"}
+
+data: {"type": "token", "text": " between"}
+
+data: {"type": "token", "text": " fidelity"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "how"}
+
+data: {"type": "token", "text": " closely"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " generated"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " resemble"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " diversity"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "the"}
+
+data: {"type": "token", "text": " variety"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " generated"}
+
+data: {"type": "token", "text": ")."}
+
+data: {"type": "token", "text": " By"}
+
+data: {"type": "token", "text": " adjusting"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " guidance"}
+
+data: {"type": "token", "text": " scale"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " CFG"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " enhance"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " alignment"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " generated"}
+
+data: {"type": "token", "text": " samples"}
+
+data: {"type": "token", "text": " with"}
+
+data: {"type": "token", "text": " specific"}
+
+data: {"type": "token", "text": " conditions"}
+
+data: {"type": "token", "text": " ("}
+
+data: {"type": "token", "text": "like"}
+
+data: {"type": "token", "text": " text"}
+
+data: {"type": "token", "text": " prompts"}
+
+data: {"type": "token", "text": ")"}
+
+data: {"type": "token", "text": " while"}
+
+data: {"type": "token", "text": " maintaining"}
+
+data: {"type": "token", "text": " high"}
+
+data: {"type": "token", "text": " fidelity"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " This"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " particularly"}
+
+data: {"type": "token", "text": " useful"}
+
+data: {"type": "token", "text": " in"}
+
+data: {"type": "token", "text": " scenarios"}
+
+data: {"type": "token", "text": " where"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": " might"}
+
+data: {"type": "token", "text": " introduce"}
+
+data: {"type": "token", "text": " biases"}
+
+data: {"type": "token", "text": " or"}
+
+data: {"type": "token", "text": " errors"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "3"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " **"}
+
+data: {"type": "token", "text": "Training"}
+
+data: {"type": "token", "text": " Dynamics"}
+
+data: {"type": "token", "text": "**"}
+
+data: {"type": "token", "text": ":"}
+
+data: {"type": "token", "text": " The"}
+
+data: {"type": "token", "text": " method"}
+
+data: {"type": "token", "text": " lever"}
+
+data: {"type": "token", "text": "ages"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " inherent"}
+
+data: {"type": "token", "text": " structure"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " diffusion"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " which"}
+
+data: {"type": "token", "text": " is"}
+
+data: {"type": "token", "text": " trained"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " den"}
+
+data: {"type": "token", "text": "oise"}
+
+data: {"type": "token", "text": " data"}
+
+data: {"type": "token", "text": " progressively"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": " By"}
+
+data: {"type": "token", "text": " manipulating"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " guidance"}
+
+data: {"type": "token", "text": " scale"}
+
+data: {"type": "token", "text": " during"}
+
+data: {"type": "token", "text": " sampling"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " CFG"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " effectively"}
+
+data: {"type": "token", "text": " control"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " influence"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " conditioning"}
+
+data: {"type": "token", "text": " information"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " leading"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " better"}
+
+data: {"type": "token", "text": " sample"}
+
+data: {"type": "token", "text": " quality"}
+
+data: {"type": "token", "text": " without"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " complications"}
+
+data: {"type": "token", "text": " of"}
+
+data: {"type": "token", "text": " training"}
+
+data: {"type": "token", "text": " and"}
+
+data: {"type": "token", "text": " maintaining"}
+
+data: {"type": "token", "text": " a"}
+
+data: {"type": "token", "text": " separate"}
+
+data: {"type": "token", "text": " classifier"}
+
+data: {"type": "token", "text": ".\n\n"}
+
+data: {"type": "token", "text": "For"}
+
+data: {"type": "token", "text": " more"}
+
+data: {"type": "token", "text": " detailed"}
+
+data: {"type": "token", "text": " insights"}
+
+data: {"type": "token", "text": ","}
+
+data: {"type": "token", "text": " you"}
+
+data: {"type": "token", "text": " can"}
+
+data: {"type": "token", "text": " refer"}
+
+data: {"type": "token", "text": " to"}
+
+data: {"type": "token", "text": " the"}
+
+data: {"type": "token", "text": " following"}
+
+data: {"type": "token", "text": " sources"}
+
+data: {"type": "token", "text": ":\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Classifier"}
+
+data: {"type": "token", "text": "-Free"}
+
+data: {"type": "token", "text": " Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " Guidance"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "ar"}
+
+data: {"type": "token", "text": "xiv"}
+
+data: {"type": "token", "text": ".org"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "abs"}
+
+data: {"type": "token", "text": "/"}
+
+data: {"type": "token", "text": "220"}
+
+data: {"type": "token", "text": "7"}
+
+data: {"type": "token", "text": "."}
+
+data: {"type": "token", "text": "125"}
+
+data: {"type": "token", "text": "98"}
+
+data: {"type": "token", "text": ")\n"}
+
+data: {"type": "token", "text": "-"}
+
+data: {"type": "token", "text": " ["}
+
+data: {"type": "token", "text": "Diff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": " model"}
+
+data: {"type": "token", "text": " -"}
+
+data: {"type": "token", "text": " Wikipedia"}
+
+data: {"type": "token", "text": "]("}
+
+data: {"type": "token", "text": "https"}
+
+data: {"type": "token", "text": "://"}
+
+data: {"type": "token", "text": "en"}
+
+data: {"type": "token", "text": ".wikipedia"}
+
+data: {"type": "token", "text": ".org"}
+
+data: {"type": "token", "text": "/wiki"}
+
+data: {"type": "token", "text": "/D"}
+
+data: {"type": "token", "text": "iff"}
+
+data: {"type": "token", "text": "usion"}
+
+data: {"type": "token", "text": "_model"}
+
+data: {"type": "token", "text": "_("}
+
+data: {"type": "token", "text": "machine"}
+
+data: {"type": "token", "text": "_learning"}
+
+data: {"type": "token", "text": "))"}
+
+data: {"type": "complete", "sources": ["https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/", "https://arxiv.org/abs/2207.12598"], "sources_detail": [{"url": "https://arxiv.org/abs/2207.12598", "page_id": 12915, "node_id": "classifier_free_diffusion_guidance"}, {"url": "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/", "page_id": 12917, "node_id": "what_are_diffusion_models"}, {"url": "https://en.wikipedia.org/wiki/Diffusion_model_(machine_learning)", "page_id": 12916, "node_id": "diffusion_model"}], "cluster_ids": ["diffusion_models"], "images": [], "iterations": 3, "model": "gpt-4o-mini"}
+
