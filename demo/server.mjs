@@ -274,8 +274,13 @@ function buildFallbackFrames(chatEntries) {
 }
 
 // ---------------------------------------------------------------------------
-// Preview/asset serving (Task 7) -- path sanitization for GET
-// /captured-assets/<path>. Mirrors demo/tools/capture-fixtures.mjs's
+// Preview/asset serving (Task 7) -- shared path containment for the two
+// routes that turn request input into a filesystem read: GET
+// /captured-assets/<path> and GET /api/pages/{pid}/preview. Both call this
+// AFTER their decodeURIComponent, which is the only ordering that works --
+// a route pattern matches the still-encoded pathname and therefore cannot
+// see a "/" or ".." that is hiding behind %2f/%2e.
+// Mirrors demo/tools/capture-fixtures.mjs's
 // resolveAssetWritePath (same double layer: reject a literal ".." path
 // segment outright, THEN re-verify the resolved absolute path is still
 // contained under rootDir as defense in depth -- the second check is what
@@ -507,19 +512,19 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs }) {
     },
 
     // GET /api/pages/{pid}/preview -- pid is a page_content.id (endpoints.md),
-    // NOT a pages.id; archived HTML files are named previews/<pid>.html. No
-    // separate traversal guard needed beyond the route pattern itself: `pid`
-    // is captured by `[^/]+` (no slash allowed) and used only as a single
-    // path SEGMENT (`${pid}.html`), so it can never escape previewsDir --
-    // there's nothing analogous to /captured-assets' nested, arbitrary-depth
-    // sub-path here.
+    // NOT a pages.id; archived HTML files are named previews/<pid>.html.
+    // The route pattern is NOT a containment guard: dispatch matches against
+    // url.pathname, which keeps %2f encoded, so `[^/]+` happily captures a
+    // segment whose decoded form carries real "/" and ".." parts. Containment
+    // therefore has to be checked AFTER the decode, via the same
+    // resolveAssetPath helper the asset route below uses.
     {
       method: "GET",
       pattern: /^\/api\/pages\/([^/]+)\/preview$/,
       handler: (req, res, m) => {
         const pid = decodeURIComponent(m[1]);
-        const file = path.join(fixtures.previewsDir, `${pid}.html`);
-        if (!existsSync(file)) return sendJson(res, 404, { detail: "preview not found" });
+        const file = resolveAssetPath(fixtures.previewsDir, `${pid}.html`);
+        if (!file || !existsSync(file)) return sendJson(res, 404, { detail: "preview not found" });
         res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
         res.end(readFileSync(file));
       },

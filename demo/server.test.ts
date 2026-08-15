@@ -1030,6 +1030,26 @@ describe("GET /api/pages/{pid}/preview", () => {
     const res = await get("/api/pages/999999999/preview");
     expect(res.status).toBe(404);
   });
+
+  it("rejects encoded-slash traversal in pid (resolved path must stay inside the previews dir)", async () => {
+    await withServer(async (base) => {
+      // The route pattern's `[^/]+` sees the STILL-ENCODED pathname (new URL()
+      // leaves %2f alone), so the escape only appears after the handler's
+      // decodeURIComponent -- which is why the pattern alone is not a guard.
+      // Each target is a real .html file that exists OUTSIDE previewsDir, so a
+      // 404 proves the containment check rejected the path rather than the
+      // file merely being absent.
+      const attempts = [
+        "/api/pages/..%2fraw%2fpreviews%2f5435/preview", // up and across into the pre-hygiene capture dir
+        "/api/pages/%2e%2e%2fraw%2fpreviews%2f5435/preview", // fully-encoded ".." segment
+        "/api/pages/..%2f..%2fdemo%2ffixtures%2fpreviews%2f5343/preview", // deeper escape, back in by absolute-ish route
+      ];
+      for (const rawPath of attempts) {
+        const { status } = await rawGet(base, rawPath);
+        expect(status).toBe(404);
+      }
+    });
+  });
 });
 
 describe("GET /captured-assets/<path> (top-level, not under /api)", () => {
