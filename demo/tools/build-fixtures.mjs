@@ -428,31 +428,58 @@ console.log(`[build-fixtures] diary-filtered: ${filteredNodesDone} nodes x 3 gra
 
 // ---------------------------------------------------------------------------
 // Step 5: rewrite graph.json + window variants (excise + respread dates)
+//
+// Controller ruling R7: raw's window-7/30/90 files held raw's ORIGINAL
+// (pre-respread) membership -- after the respread every kept node sits
+// within 1-33 days of the anchor, so those stale files would show 0 nodes
+// while the diary shows browsing "yesterday". Window membership is instead
+// regenerated at build time straight from each node's respread offset:
+// window-N = every kept node whose (anchor - first_visited_at) <= N days.
+// Interior nodes (children_ids non-empty) already resolve to min-of-children
+// via graphNodeDate, so they follow their children into a window for free --
+// no separate handling needed here.
 // ---------------------------------------------------------------------------
 
-function excludeAndRewriteGraph(raw) {
-  const nodes = raw.nodes
-    .filter((n) => !EXCLUDE_GRAPH_IDS.has(n.id))
-    .map((n) => ({ ...n, first_visited_at: rewriteTimestamp(n.id, n.first_visited_at) }));
-  const clusters = raw.clusters
-    .filter((c) => !droppedClusterIds.has(c.id))
-    .map((c) => ({ ...c, page_ids: c.page_ids.filter((id) => !EXCLUDE_GRAPH_IDS.has(id)) }));
-  // Links reference cluster ids and are NOT window-scoped by the raw backend
-  // (every graph-window-N.json carries the same full link set) -- filter
-  // only against globally-dropped clusters, never against a window's local
-  // surviving-cluster set (that would wrongly wipe links in the sparser
-  // window files, which legitimately carry links for clusters absent from
-  // their own local node/cluster subset).
-  const links = raw.links.filter((l) => !droppedClusterIds.has(l.source) && !droppedClusterIds.has(l.target));
-  return { nodes, links, clusters, super_clusters: raw.super_clusters, groups: raw.groups };
+function offsetDaysFromAnchor(nodeId) {
+  const d = graphNodeDate.get(nodeId);
+  if (!d) fatal(`no synthetic date for node ${nodeId} (offset lookup)`);
+  return Math.round((anchor.getTime() - d.getTime()) / DAY_MS);
 }
 
-const GRAPH_FILES = ['graph.json', 'graph-window-7.json', 'graph-window-30.json', 'graph-window-90.json', 'graph-window-365.json'];
-for (const f of GRAPH_FILES) {
-  const raw = f === 'graph.json' ? rawGraph : readJson(f);
-  const out = excludeAndRewriteGraph(raw);
-  writeJson(f, out);
-  console.log(`[build-fixtures] ${f}: ${out.nodes.length} nodes, ${out.links.length} links, ${out.clusters.length} clusters`);
+// windowDays === null means "no window filter" (graph.json, window=all).
+function buildGraphSnapshot(windowDays) {
+  const nodesInWindow = windowDays == null
+    ? keptNodes
+    : keptNodes.filter((n) => offsetDaysFromAnchor(n.id) <= windowDays);
+  const nodeIdSet = new Set(nodesInWindow.map((n) => n.id));
+  const nodes = nodesInWindow.map((n) => ({ ...n, first_visited_at: rewriteTimestamp(n.id, n.first_visited_at) }));
+  // Same excision machinery as the contamination pass: drop a cluster
+  // outright once none of its page_ids survive in this window (covers both
+  // the 2 globally-excised contaminated ids -- never in nodeIdSet -- and
+  // now also every node outside this window's day-count cutoff).
+  const clusters = rawGraph.clusters
+    .filter((c) => !droppedClusterIds.has(c.id))
+    .map((c) => ({ ...c, page_ids: c.page_ids.filter((id) => nodeIdSet.has(id)) }))
+    .filter((c) => c.page_ids.length > 0);
+  const survivingClusterIds = new Set(clusters.map((c) => c.id));
+  const links = rawGraph.links.filter((l) => survivingClusterIds.has(l.source) && survivingClusterIds.has(l.target));
+  // super_clusters/groups carry no page/node membership (verified: neither
+  // schema has an id-referencing array), so there is nothing to filter --
+  // both are always the full, static set, matching raw's own behavior.
+  return { nodes, links, clusters, super_clusters: rawGraph.super_clusters, groups: rawGraph.groups };
+}
+
+const GRAPH_WINDOW_SPECS = [
+  { file: 'graph.json', windowDays: null },
+  { file: 'graph-window-7.json', windowDays: 7 },
+  { file: 'graph-window-30.json', windowDays: 30 },
+  { file: 'graph-window-90.json', windowDays: 90 },
+  { file: 'graph-window-365.json', windowDays: 365 },
+];
+for (const { file, windowDays } of GRAPH_WINDOW_SPECS) {
+  const out = buildGraphSnapshot(windowDays);
+  writeJson(file, out);
+  console.log(`[build-fixtures] ${file} (window=${windowDays ?? 'all'}): ${out.nodes.length} nodes, ${out.links.length} links, ${out.clusters.length} clusters`);
 }
 
 // ---------------------------------------------------------------------------
@@ -542,11 +569,19 @@ const DEFAULT_PREFERENCES = {
 };
 writeJson('preferences.json', DEFAULT_PREFERENCES);
 
+// id/created_at/api_key_prefix are real operational detail from the private
+// capture instance (a real internal account id, a real account-creation
+// timestamp, a real key prefix) -- born-public repo cleanliness (review
+// Minor 2): synthesize obviously-fake placeholders instead of spreading
+// them through from raw.
 const rawMe = readJson('me.json');
 writeJson('me.json', {
   ...rawMe,
+  id: 1,
   email: 'admin@demo.local',
   name: 'Demo Admin',
+  api_key_prefix: 'demo_0000',
+  created_at: '2026-01-01T00:00:00+00:00',
   role: 'admin',
   acting_as_demo: false,
   preferences: { ...DEFAULT_PREFERENCES },
