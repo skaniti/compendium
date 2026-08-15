@@ -11,9 +11,19 @@
 // for the stub's own port default) so the "try :8001, fall back to an
 // OS-assigned ephemeral port when something else already holds it" behavior
 // has test coverage without needing to actually boot the stub or Next.
+//
+// `isDirectEntry` is likewise exported and unit-tested (demo/server.test.ts's
+// "isDirectEntry" describe block) -- it replaces the naive
+// `import.meta.url === \`file://${process.argv[1]}\`` string comparison,
+// which never matches on win32 (drive letters/backslashes) and breaks on
+// POSIX paths that percent-encode in a file URL (e.g. spaces). server.mjs
+// duplicates the one-liner locally instead of importing this export, so the
+// dependency-free stub backend doesn't pick up this file's child_process/net
+// spawn-management code as a module dependency.
 
 import net from "node:net";
 import { execFileSync, spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 // Mirrors server.mjs's own standalone-entrypoint default (`PORT` env var,
 // falling back to 8001) -- see that file's bottom `if (import.meta.url ...)`
@@ -48,6 +58,21 @@ export function pickPort(preferred) {
     });
     probe.listen(preferred);
   });
+}
+
+// True when this module was invoked directly as `node <this file>` (as
+// opposed to being imported). Compares via `pathToFileURL` rather than the
+// naive `import.meta.url === \`file://${argv1}\`` string concatenation --
+// that naive form mismatches whenever the absolute path percent-encodes in
+// a file URL (e.g. spaces) and never matches on win32 (drive letters use
+// `file:///C:/...`, and backslash path separators aren't URL separators at
+// all). `argv1` is undefined in contexts with no invoked script (e.g. a
+// REPL); guard that case explicitly rather than passing `undefined` to
+// `pathToFileURL`. Exported for the launcher entrypoint-guard test in
+// demo/server.test.ts.
+export function isDirectEntry(metaUrl, argv1) {
+  if (!argv1) return false;
+  return pathToFileURL(argv1).href === metaUrl;
 }
 
 // Polls GET <url> until it responds 2xx (the stub's `/docs` health-probe
@@ -146,10 +171,15 @@ async function main() {
 
   log(`starting next dev (BACKEND_URL=${backendUrl})...`);
   const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  // win32 requires `shell: true` for a `.cmd` target -- Node >= 20.12
+  // hardened shell-less spawns of Windows batch/cmd files (CVE-2024-27980)
+  // and throws instead of executing them. POSIX is unaffected and keeps
+  // spawning the plain `npm` binary directly (no shell).
   const next = spawn(npmCmd, ["run", "dev"], {
     env: { ...process.env, BACKEND_URL: backendUrl },
     stdio: "inherit",
     detached: process.platform !== "win32",
+    shell: process.platform === "win32",
   });
   children.push(next);
   next.on("exit", (code) => {
@@ -161,7 +191,7 @@ async function main() {
 }
 
 // Standalone entrypoint: `node demo/launcher.mjs` (wired to `npm run demo`).
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectEntry(import.meta.url, process.argv[1])) {
   main().catch((err) => {
     console.error("[demo] failed to start:", err);
     process.exit(1);

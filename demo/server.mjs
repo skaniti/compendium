@@ -1,37 +1,37 @@
 #!/usr/bin/env node
-// demo/server.mjs -- dependency-free node:http stub backend replaying Task
-// 3's committed demo fixtures, so the Next frontend can run end-to-end
-// against BACKEND_URL without a real backend. Task 4 implemented read-only
-// GET endpoints; Task 5 added the auth suite (login/logout/refresh/view-as/
-// return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs).
-// Task 6 added in-memory mutations (topics CRUD, exclusions, preferences
-// PATCH, recluster) -- see createMutableState/the `gated` write gate below.
-// Task 7 added SSE chat replay (POST /api/agent/query-stream, keyword-matched
-// against demo/fixtures/chat/*.sse -- see parseSseFrames/pickChatEntry below)
-// plus preview/asset streaming (GET /api/pages/{pid}/preview, GET
-// /captured-assets/<path>) and gated GET /api/agent/internals. NOTE for
-// later tasks: /captured-assets is a TOP-LEVEL path (not under /api) because
-// that's the exact URL pattern captured preview HTML references (see
-// demo/tools/capture-fixtures.mjs's module header) -- the Next app's /api
-// catch-all proxy does not forward it, so previews will render text but
-// miss images/styles when driven through the full app until something
-// (next.config.js rewrite or a dedicated route file) forwards
-// /captured-assets/* to BACKEND_URL. Later tasks append to the SAME ordered
-// `routes` array below rather than building a second router.
+// demo/server.mjs -- dependency-free node:http stub backend replaying the
+// committed demo fixtures (demo/fixtures/*), so the Next frontend can run
+// end-to-end against BACKEND_URL without a real backend. Serves read-only
+// GET endpoints, the auth suite (login/logout/refresh/view-as/
+// return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs),
+// in-memory mutations gated behind the plain-demo write gate (topics CRUD,
+// exclusions, preferences PATCH, recluster -- see createMutableState/the
+// `gated` write gate below), SSE chat replay (POST /api/agent/query-stream,
+// keyword-matched against demo/fixtures/chat/*.sse -- see
+// parseSseFrames/pickChatEntry below), and preview/asset streaming (GET
+// /api/pages/{pid}/preview, GET /captured-assets/<path>) plus gated GET
+// /api/agent/internals. NOTE: /captured-assets is a TOP-LEVEL path (not
+// under /api) because that's the exact URL pattern captured preview HTML
+// references (see demo/tools/capture-fixtures.mjs's module header) -- the
+// Next app's /api catch-all proxy does not forward it, so previews will
+// render text but miss images/styles when driven through the full app
+// unless something (next.config.js rewrite or a dedicated route file)
+// forwards /captured-assets/* to BACKEND_URL. Append new routes to the SAME
+// ordered `routes` array below rather than building a second router.
 //
 // Route-table discipline (read before adding a route): entries are checked
 // in array order, first match wins. Static/exact-path routes are listed
 // before parameterized (regex-capturing) ones for the same path prefix --
 // e.g. `/api/topics/exclusions` sits above `/api/topics/{keyword}/members`
-// (and, as of Task 6, above the generic DELETE `/api/topics/{keyword}`) so a
-// literal "exclusions" path can never be mistaken for a topic keyword by a
-// looser pattern (the routing trap documented in endpoints.md). Keep that
-// ordering invariant when appending new routes.
+// (and above the generic DELETE `/api/topics/{keyword}`) so a literal
+// "exclusions" path can never be mistaken for a topic keyword by a looser
+// pattern (the routing trap documented in endpoints.md). Keep that ordering
+// invariant when appending new routes.
 
 import http from "node:http";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { computeDeltaDays, shiftDiaryWindow, shiftIsoDateTime } from "./lib/dates.mjs";
 import { bearerFromRequest, decodeToken, mintToken } from "./lib/tokens.mjs";
 
@@ -988,8 +988,24 @@ export function startServer({
   });
 }
 
+// True when this module was invoked directly as `node demo/server.mjs` (as
+// opposed to being imported, e.g. by demo/server.test.ts). Compares via
+// `pathToFileURL` rather than the naive `import.meta.url === \`file://${
+// process.argv[1]}\`` string concatenation, which mismatches on POSIX paths
+// that percent-encode in a file URL (e.g. spaces) and never matches on
+// win32 (drive letters, backslash separators). `argv1` is undefined in
+// contexts with no invoked script (e.g. a REPL); guard that case explicitly.
+// Duplicated from launcher.mjs's identically-behaved exported `isDirectEntry`
+// rather than imported, so this stub stays dependency-free of that file's
+// child_process/net spawn-management code -- see launcher.mjs's module
+// header for the full rationale.
+function isDirectEntry(metaUrl, argv1) {
+  if (!argv1) return false;
+  return pathToFileURL(argv1).href === metaUrl;
+}
+
 // Standalone entrypoint: `node demo/server.mjs`.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectEntry(import.meta.url, process.argv[1])) {
   const port = process.env.PORT ? Number(process.env.PORT) : 8001;
   const fixturesDir = process.env.FIXTURES || "demo/fixtures";
   startServer({ port, fixturesDir })

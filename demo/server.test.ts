@@ -8,7 +8,8 @@ import net from "node:net";
 import { readFileSync } from "node:fs";
 import { isPlainDemo, startServer } from "./server.mjs";
 import { mintToken } from "./lib/tokens.mjs";
-import { pickPort } from "./launcher.mjs";
+import { isDirectEntry, pickPort } from "./launcher.mjs";
+import { pathToFileURL } from "node:url";
 
 let baseUrl: string;
 let close: () => Promise<void>;
@@ -1113,4 +1114,39 @@ describe("pickPort (Task 8 launcher port logic)", () => {
       await new Promise<void>((resolve) => holder.close(() => resolve()));
     }
   });
+});
+
+describe("isDirectEntry (Task 8 launcher/server entrypoint guard)", () => {
+  it("matches when argv1 is the same path as the module URL", () => {
+    const p = "/home/user/project/demo/launcher.mjs";
+    expect(isDirectEntry(pathToFileURL(p).href, p)).toBe(true);
+  });
+
+  it("matches a POSIX path containing spaces (regression case)", () => {
+    // The old `import.meta.url === \`file://${argv1}\`` string-concat guard
+    // never matched here, since spaces percent-encode (%20) in a file URL
+    // but not in the raw argv1 string -- so `node "demo/launcher.mjs"` run
+    // from a space-containing directory would silently no-op as an
+    // entrypoint.
+    const p = "/home/user/has space/project/demo/server.mjs";
+    expect(isDirectEntry(pathToFileURL(p).href, p)).toBe(true);
+    // Demonstrates the old idiom's failure mode directly, for contrast.
+    expect(`file://${p}`).not.toBe(pathToFileURL(p).href);
+  });
+
+  it("does not match a different path", () => {
+    const p = "/home/user/project/demo/launcher.mjs";
+    const other = "/home/user/project/demo/server.mjs";
+    expect(isDirectEntry(pathToFileURL(p).href, other)).toBe(false);
+  });
+
+  it("returns false (not throw) when argv1 is undefined, e.g. a REPL", () => {
+    const p = "/home/user/project/demo/launcher.mjs";
+    expect(isDirectEntry(pathToFileURL(p).href, undefined)).toBe(false);
+  });
+
+  // No win32 drive-letter/backslash case here: `pathToFileURL` dispatches on
+  // `process.platform` internally, so a test run on this (POSIX) machine
+  // cannot exercise its win32 code path -- see this repo's fix report for
+  // the manually-unverifiable-on-this-machine note.
 });
