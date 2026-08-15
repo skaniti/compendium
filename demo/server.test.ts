@@ -3,6 +3,8 @@
 // no mocking, since the whole point is to prove the router + fixture loader
 // + date shift work together against Task 3's actual committed fixtures.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import http from "node:http";
+import { readFileSync } from "node:fs";
 import { isPlainDemo, startServer } from "./server.mjs";
 import { mintToken } from "./lib/tokens.mjs";
 
@@ -53,17 +55,58 @@ function req(base: string, method: string, pathAndQuery: string, body?: unknown,
   });
 }
 
-// Spins up a fresh, isolated server (near-zero recluster delay so mutation
-// tests stay fast) for the duration of `fn`, closing it afterward even on
-// failure.
-async function withServer<T>(fn: (base: string) => Promise<T>): Promise<T> {
-  const server = await startServer({ port: 0, fixturesDir: "demo/fixtures", reclusterDelayMs: 0 });
+// Spins up a fresh, isolated server (near-zero recluster/chat-token delay so
+// mutation and chat-stream tests stay fast) for the duration of `fn`,
+// closing it afterward even on failure. `overrides` lets a caller opt back
+// into a nonzero chatTokenDelayMs (the abort test needs enough real pacing
+// to reliably abort mid-stream).
+async function withServer<T>(
+  fn: (base: string) => Promise<T>,
+  overrides: { reclusterDelayMs?: number; chatTokenDelayMs?: number } = {}
+): Promise<T> {
+  const server = await startServer({
+    port: 0,
+    fixturesDir: "demo/fixtures",
+    reclusterDelayMs: 0,
+    chatTokenDelayMs: 0,
+    ...overrides,
+  });
   const base = `http://localhost:${server.port}`;
   try {
     return await fn(base);
   } finally {
     await server.close();
   }
+}
+
+// Parses a raw SSE response body into its frame objects -- splits on lines
+// starting "data:" (agnostic to single/double blank-line framing, mirroring
+// the server's own parseSseFrames), JSON-parsing each payload.
+async function readSseFrames(res: Response): Promise<Array<Record<string, unknown>>> {
+  const text = await res.text();
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => JSON.parse(line.slice("data:".length).trim()));
+}
+
+// Sends a request with an EXACT, unnormalized request-line path -- unlike
+// fetch()/the WHATWG URL constructor (which both collapse literal ".."
+// path segments client-side before a request ever goes out, per RFC 3986
+// path normalization), node:http's `path` option is sent verbatim. Used
+// only for the traversal-rejection tests below, so the assertion exercises
+// the SERVER's own sanitization (resolveAssetPath) rather than incidentally
+// passing because the client already neutralized the payload.
+function rawGet(base: string, rawPath: string): Promise<{ status: number }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(base);
+    const req = http.request({ hostname: u.hostname, port: u.port, path: rawPath, method: "GET" }, (res) => {
+      res.resume();
+      res.on("end", () => resolve({ status: res.statusCode! }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 const adminToken = () => mintToken({ id: 1, email: "admin@demo.local", role: "admin" });
@@ -286,6 +329,27 @@ describe("GET /api/agent/internals", () => {
     const body = await res.json();
     expect(typeof body.system_prompt).toBe("string");
     expect(Array.isArray(body.tools)).toBe(true);
+  });
+
+  it("200s for a plain admin token", async () => {
+    const res = await get("/api/agent/internals", adminToken());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.system_prompt).toBe("string");
+  });
+
+  it("200s for an acting-as-demo token (admin viewing as demo)", async () => {
+    const res = await get("/api/agent/internals", actingDemoToken());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.system_prompt).toBe("string");
+  });
+
+  it('403s a plain-demo token with {detail: "..."}', async () => {
+    const res = await get("/api/agent/internals", plainDemoToken());
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(typeof body.detail).toBe("string");
   });
 });
 
@@ -800,5 +864,204 @@ describe("unmatched routes", () => {
   it("404s a completely unknown path", async () => {
     const res = await get("/api/not-a-real-endpoint");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/agent/query-stream", () => {
+  it("streams status -> tokens -> complete for a matching query, preserving the recorded complete frame's fields", async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/agent/query-stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "How does classifier-free guidance improve image quality?" }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+      const frames = await readSseFrames(res);
+      // chat/01.sse actually opens with 3 status frames (tool-use
+      // narration) before the first token -- assert the SHAPE (one-or-more
+      // status, then one-or-more token, then exactly one complete, in that
+      // order) rather than assuming a single leading status frame.
+      const typeSequence = frames.map((f) => f.type).join(",");
+      expect(typeSequence).toMatch(/^status(,status)*(,token)+,complete$/);
+
+      const complete = frames.at(-1) as {
+        sources: string[];
+        cluster_ids?: string[];
+        sources_detail?: Array<{ url: string; page_id: number; node_id: string }>;
+        images?: unknown[];
+        iterations: number;
+        model: string;
+      };
+      // Confirms chat/01.sse (the classifier-free-guidance recording) was
+      // picked, not some other recorded stream or the fallback.
+      expect(complete.sources).toContain("https://arxiv.org/abs/2207.12598");
+      expect(typeof complete.iterations).toBe("number");
+      expect(typeof complete.model).toBe("string");
+      // Frame fidelity: unrecognized/optional fields on the recorded
+      // `complete` frame must survive the parse -> re-stringify round trip
+      // untouched, not just the three required fields.
+      expect(Array.isArray(complete.cluster_ids)).toBe(true);
+      expect(complete.cluster_ids!.every((id) => typeof id === "string")).toBe(true);
+      expect(Array.isArray(complete.sources_detail)).toBe(true);
+      for (const detail of complete.sources_detail!) {
+        expect(typeof detail.url).toBe("string");
+        expect(typeof detail.page_id).toBe("number");
+        expect(typeof detail.node_id).toBe("string");
+      }
+      expect(Array.isArray(complete.images)).toBe(true);
+    });
+  });
+
+  it("falls back to the demo-help answer for an unrelated query, listing every recorded question as a suggestion", async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/agent/query-stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "What's your favorite pizza topping?" }),
+      });
+      expect(res.status).toBe(200);
+      const frames = await readSseFrames(res);
+      expect(frames[0]).toEqual({ type: "status", text: "Demo mode" });
+      expect(frames.at(-1)).toEqual({ type: "complete", sources: [], iterations: 1, model: "demo-stub" });
+
+      const answerText = frames
+        .slice(1, -1)
+        .map((f) => (f as { text: string }).text)
+        .join("");
+      const index = JSON.parse(readFileSync("demo/fixtures/chat/index.json", "utf8")) as Array<{ question: string }>;
+      expect(index.length).toBeGreaterThan(0);
+      for (const { question } of index) {
+        expect(answerText).toContain(question);
+      }
+    });
+  });
+
+  it("a single shared keyword (below the 2-keyword-overlap threshold) still falls back", async () => {
+    await withServer(async (base) => {
+      // "cephalopod" (singular) is a different token than the recorded
+      // questions' "cephalopods" (plural, no stemming) -- overlap is 1, not
+      // 0, but 1 is still below the 2-keyword threshold.
+      const res = await fetch(`${base}/api/agent/query-stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "cephalopod cephalopods" }),
+      });
+      const frames = await readSseFrames(res);
+      expect(frames[0]).toEqual({ type: "status", text: "Demo mode" });
+    });
+  });
+
+  it("ties resolve to the first entry in chat/index.json order", async () => {
+    await withServer(async (base) => {
+      // chat/05.sse ("Trojan War... Greek... Roman...") and chat/06.sse
+      // ("Hesiod's Theogony... Roman mythology...") both share exactly 2
+      // keywords with this query; 05 comes first in index order.
+      const res = await fetch(`${base}/api/agent/query-stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "Greek Roman mythology" }),
+      });
+      const frames = await readSseFrames(res);
+      const complete = frames.at(-1) as { sources: string[] };
+      expect(complete.sources).toContain("https://en.wikipedia.org/wiki/Trojan_War");
+      expect(complete.sources).not.toContain("https://en.wikipedia.org/wiki/Theogony");
+    });
+  });
+
+  it("keyword matching is deterministic across repeated identical queries", async () => {
+    await withServer(async (base) => {
+      const run = async () => {
+        const res = await fetch(`${base}/api/agent/query-stream`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: "How do cephalopods change color?" }),
+        });
+        const frames = await readSseFrames(res);
+        return frames.at(-1) as { type: string; sources: string[] } | undefined;
+      };
+      const first = await run();
+      const second = await run();
+      expect(first?.type).toBe("complete");
+      expect(first?.sources).toContain("https://en.wikipedia.org/wiki/Chromatophore");
+      expect(second).toEqual(first);
+    });
+  });
+
+  it("client abort stops the token timer chain (no crash, no post-abort writes)", async () => {
+    await withServer(
+      async (base) => {
+        const controller = new AbortController();
+        const res = await fetch(`${base}/api/agent/query-stream`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: "How does classifier-free guidance improve image quality?" }),
+          signal: controller.signal,
+        });
+        const reader = res.body!.getReader();
+        await reader.read(); // consume the first chunk (status frame)
+        controller.abort();
+        await reader.cancel().catch(() => {});
+        // Give the server a moment to process the abort. If a post-abort
+        // write ever threw an unhandled exception, it would crash this
+        // whole test process, not just fail an assertion -- so the
+        // meaningful check is that the server is still alive afterward.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const followUp = await fetch(`${base}/docs`);
+        expect(followUp.status).toBe(200);
+      },
+      { chatTokenDelayMs: 30 } // slow enough that abort lands mid-stream, not after completion
+    );
+  });
+});
+
+describe("GET /api/pages/{pid}/preview", () => {
+  it("200s a known pid with the archived HTML document", async () => {
+    const res = await get("/api/pages/5343/preview");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("/captured-assets/");
+  });
+
+  it("404s an unknown pid", async () => {
+    const res = await get("/api/pages/999999999/preview");
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /captured-assets/<path> (top-level, not under /api)", () => {
+  // Referenced by demo/fixtures/previews/5343.html as
+  // href="/captured-assets/b1/b1bc02...css".
+  const knownAsset = "/captured-assets/b1/b1bc02fbde98738352a8863e07f26b46134734111a2bfb153e111de99bb99104.css";
+
+  it("200s a known asset with a sensible Content-Type by extension", async () => {
+    const res = await get(knownAsset);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/css");
+    const body = await res.text();
+    expect(body.length).toBeGreaterThan(0);
+  });
+
+  it("404s an absent asset", async () => {
+    const res = await get("/captured-assets/aa/not-a-real-hash.jpg");
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects path traversal / absolute-escape attempts (resolved path must stay inside the assets dir)", async () => {
+    await withServer(async (base) => {
+      const attempts = [
+        "/captured-assets/../../../../../../etc/passwd", // literal ".." segments
+        "/captured-assets/28/../../../../etc/passwd", // ".." mixed with a real prefix segment
+        "/captured-assets/..%2f..%2f..%2f..%2fetc%2fpasswd", // percent-encoded slash hides ".." from naive splitting
+        "/captured-assets//etc/passwd", // leading-slash absolute-escape (path.resolve would otherwise ignore rootDir)
+      ];
+      for (const rawPath of attempts) {
+        const { status } = await rawGet(base, rawPath);
+        expect(status).toBe(404);
+      }
+    });
   });
 });

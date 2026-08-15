@@ -10,6 +10,12 @@ export interface StartServerOptions {
   // so the suite doesn't pay the real delay -- see server.mjs's `gated`
   // POST /api/recluster handler.
   reclusterDelayMs?: number;
+  // Task 7: injectable pacing (ms) between re-emitted token events for
+  // POST /api/agent/query-stream (default 15, matching the brief's "~15ms
+  // pacing" contract). status/complete frames are never delayed. Tests pass
+  // a small/zero value so reading a whole fixture's stream (hundreds of
+  // token events) doesn't blow the test budget.
+  chatTokenDelayMs?: number;
 }
 
 export interface StartedServer {

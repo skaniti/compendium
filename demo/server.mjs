@@ -6,8 +6,18 @@
 // return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs).
 // Task 6 added in-memory mutations (topics CRUD, exclusions, preferences
 // PATCH, recluster) -- see createMutableState/the `gated` write gate below.
-// Later tasks append to the SAME ordered `routes` array below rather than
-// building a second router: SSE chat + preview/asset streaming (Task 7).
+// Task 7 added SSE chat replay (POST /api/agent/query-stream, keyword-matched
+// against demo/fixtures/chat/*.sse -- see parseSseFrames/pickChatEntry below)
+// plus preview/asset streaming (GET /api/pages/{pid}/preview, GET
+// /captured-assets/<path>) and gated GET /api/agent/internals. NOTE for
+// later tasks: /captured-assets is a TOP-LEVEL path (not under /api) because
+// that's the exact URL pattern captured preview HTML references (see
+// demo/tools/capture-fixtures.mjs's module header) -- the Next app's /api
+// catch-all proxy does not forward it, so previews will render text but
+// miss images/styles when driven through the full app until something
+// (next.config.js rewrite or a dedicated route file) forwards
+// /captured-assets/* to BACKEND_URL. Later tasks append to the SAME ordered
+// `routes` array below rather than building a second router.
 //
 // Route-table discipline (read before adding a route): entries are checked
 // in array order, first match wins. Static/exact-path routes are listed
@@ -100,6 +110,25 @@ function loadFixtures(fixturesDir) {
 
   const membersDir = path.join(fixturesDir, "members");
 
+  // chat/index.json -> chat/<NN>.sse (Task 7). Each fixture is parsed ONCE
+  // here into an ordered frame list (see parseSseFrames below) and its
+  // question keyword-tokenized (see keywordSet below), so a request-time
+  // match is a cheap in-memory set-intersection rather than re-reading/
+  // re-parsing a file per request. Array order == chat/index.json order,
+  // which the keyword matcher's tie-break ("first in index order") depends
+  // on.
+  const chatEntries = readJson("chat/index.json").map((entry) => ({
+    question: entry.question,
+    keywords: keywordSet(entry.question),
+    frames: parseSseFrames(readFileSync(path.join(fixturesDir, entry.file), "utf8")),
+  }));
+
+  // previews/<pid>.html + assets/captured-assets/<hash-prefix>/<hash>.<ext>
+  // (Task 7) -- left as on-disk paths per the module-header comment (large/
+  // binary families are streamed per-request, not loaded eagerly).
+  const previewsDir = path.join(fixturesDir, "previews");
+  const capturedAssetsDir = path.join(fixturesDir, "assets", "captured-assets");
+
   return {
     meta,
     deltaDays,
@@ -110,6 +139,9 @@ function loadFixtures(fixturesDir) {
     pagesIndex,
     pagesDir,
     membersDir,
+    chatEntries,
+    previewsDir,
+    capturedAssetsDir,
     clusteringStatus: readJson("clustering-status.json"),
     topics: readJson("topics.json"),
     exclusions: readJson("exclusions.json"),
@@ -136,6 +168,143 @@ function createMutableState(fixtures) {
     clusteringStatus: { ...fixtures.clusteringStatus },
   };
 }
+
+// ---------------------------------------------------------------------------
+// SSE chat replay (Task 7) -- fixture parsing + keyword matching.
+// ---------------------------------------------------------------------------
+
+// Recorded fixtures are raw byte streams (`data: {json}\n\n` per frame, as
+// actually captured off the real agent -- see demo/fixtures/chat/*.sse).
+// Parses into an ordered array of the ALREADY-DECODED frame objects rather
+// than re-splitting on blank lines: any line that isn't a `data: ` line
+// (blank separators, stray whitespace) is simply not a match and is
+// skipped, so this is agnostic to single- vs double-newline framing and to
+// a trailing newline (or lack of one) at EOF.
+function parseSseFrames(raw) {
+  const frames = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trimEnd();
+    if (!trimmed.startsWith("data:")) continue;
+    const jsonText = trimmed.slice("data:".length).trim();
+    if (!jsonText) continue;
+    frames.push(JSON.parse(jsonText));
+  }
+  return frames;
+}
+
+// Compact standard English stopword list (function words only -- articles,
+// auxiliaries, pronouns, prepositions, conjunctions -- plus common
+// contraction remnants left over after splitting on non-alphanumerics, e.g.
+// "doesn't" -> "doesn"/"t"). Deliberately does NOT stem/lemmatize (brief:
+// "lowercase + stopword-strip" only) -- "cephalopod" and "cephalopods" are
+// distinct tokens, matching the documented contract.
+const STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
+  "can", "could", "did", "do", "does", "doesn", "doing", "don", "down", "during",
+  "each", "few", "for", "from", "further",
+  "had", "has", "have", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how",
+  "i", "if", "in", "into", "is", "isn", "it", "its", "itself",
+  "just",
+  "ll", "me", "more", "most", "my", "myself",
+  "no", "nor", "not", "now",
+  "of", "off", "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own",
+  "re", "same", "she", "should", "so", "some", "such",
+  "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too",
+  "under", "until", "up",
+  "ve", "very",
+  "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "won", "would",
+  "you", "your", "yours", "yourself", "yourselves",
+]);
+
+// Lowercase, split on runs of non-alphanumerics (so hyphens/punctuation/
+// apostrophes all act as separators), drop stopwords and single-character
+// fragments (the latter mops up contraction remnants like the "s"/"t"/"d"
+// left behind by STOPWORDS' 2+ char entries above).
+function keywordSet(text) {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length > 1 && !STOPWORDS.has(word))
+  );
+}
+
+// Picks the recorded chat entry whose question shares the most keywords
+// with the query. Strict `>` (not `>=`) when updating `best` means the
+// FIRST entry reaching a given overlap count wins any tie, matching the
+// contract ("ties -> first in index order") since chatEntries is iterated
+// in chat/index.json order. Returns null (caller falls back to the
+// built-in demo-mode stream) when nothing clears the 2-keyword threshold --
+// including when the query itself has no keywords left after stripping.
+function pickChatEntry(query, chatEntries) {
+  const queryKeywords = keywordSet(query);
+  let best = null;
+  let bestOverlap = -1;
+  for (const entry of chatEntries) {
+    let overlap = 0;
+    for (const keyword of entry.keywords) {
+      if (queryKeywords.has(keyword)) overlap += 1;
+    }
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      best = entry;
+    }
+  }
+  return bestOverlap >= 2 ? best : null;
+}
+
+// Built-in fallback stream (authored inline, not read from a fixture) for
+// queries that don't clear the keyword-overlap threshold against any
+// recorded question. Shaped exactly like a parsed .sse fixture (status ->
+// tokens -> complete) so the SAME re-emit/pacing code in the route handler
+// below serves it with no special-casing.
+function buildFallbackFrames(chatEntries) {
+  const suggestions = chatEntries.map((entry, i) => `${i + 1}. ${entry.question}`).join("\n");
+  const paragraph =
+    "This is a demo instance: it replays a fixed set of prerecorded questions and " +
+    "answers instead of calling a live agent, so I don't have a recorded response " +
+    "for that one. Here are the questions I *can* answer -- try one of these:\n\n" +
+    suggestions;
+  const words = paragraph.split(" ");
+  return [
+    { type: "status", text: "Demo mode" },
+    ...words.map((word, i) => ({ type: "token", text: i === 0 ? word : ` ${word}` })),
+    { type: "complete", sources: [], iterations: 1, model: "demo-stub" },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Preview/asset serving (Task 7) -- path sanitization for GET
+// /captured-assets/<path>. Mirrors demo/tools/capture-fixtures.mjs's
+// resolveAssetWritePath (same double layer: reject a literal ".." path
+// segment outright, THEN re-verify the resolved absolute path is still
+// contained under rootDir as defense in depth -- the second check is what
+// actually catches an absolute-path escape, e.g. a requested path
+// containing a leading "/" that would make path.resolve ignore rootDir
+// entirely and jump straight to filesystem root).
+function resolveAssetPath(rootDir, relPath) {
+  if (relPath.split("/").includes("..")) return null;
+  const full = path.resolve(rootDir, relPath);
+  const relToRoot = path.relative(rootDir, full);
+  if (relToRoot.startsWith("..") || path.isAbsolute(relToRoot)) return null;
+  return full;
+}
+
+// Extension -> Content-Type for archived assets. ".php" is a deliberate
+// extra beyond the brief's jpg/png/svg/gif/css set: the one captured
+// example (a Wikipedia load.php stylesheet bundle, referenced by ~125
+// preview `<link rel="stylesheet">` tags across the fixture set) is plain
+// CSS text on disk despite the extension -- mapping it keeps those previews
+// actually styled. Anything else falls back to application/octet-stream.
+const ASSET_CONTENT_TYPES = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".gif": "image/gif",
+  ".css": "text/css; charset=utf-8",
+  ".php": "text/css; charset=utf-8",
+};
 
 // Lowercase/underscore slug for a cluster name -- matches the shape
 // (`cluster_slug`) the real backend derives for exclusion entries; not
@@ -249,18 +418,27 @@ function buildMeVariants(fixtures, accounts) {
   return { meDemo, meActing };
 }
 
-function buildRoutes(fixtures, state, { reclusterDelayMs }) {
+function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs }) {
   const accounts = buildAccounts(fixtures);
   const { meDemo, meActing } = buildMeVariants(fixtures, accounts);
 
   // Task 6 write gate: every mutation handler gets wrapped with this so the
   // 403-for-plain-demo check is applied uniformly and can't be forgotten on
   // a newly-added route. isPlainDemo (Task 5) never throws, so this never
-  // needs its own try/catch.
+  // needs its own try/catch. Task 7 reuses it for GET /api/agent/internals
+  // too -- despite the name, `gated` is really "isPlainDemo -> 403, else
+  // run the handler," which is exactly the role gate the real backend
+  // applies to internals (a READ, not a mutation) as well: plain demo gets
+  // 403, an acting-as-demo token (isPlainDemo is false for it) and a plain
+  // admin token both pass through untouched.
   const gated = (handler) => (req, res, m, url) => {
     if (isPlainDemo(req)) return sendJson(res, 403, { detail: "forbidden" });
     return handler(req, res, m, url);
   };
+
+  // Task 7: fallback SSE stream, built once per buildRoutes call (cheap --
+  // just string/array work over the already-parsed chatEntries).
+  const fallbackFrames = buildFallbackFrames(fixtures.chatEntries);
 
   return [
     // Health-probe target (scripts/dev.sh) -- any 2xx is sufficient.
@@ -325,6 +503,108 @@ function buildRoutes(fixtures, state, { reclusterDelayMs }) {
         if (!entry || entry.status !== "ok") return sendJson(res, 404, { detail: "page not found" });
         const content = JSON.parse(readFileSync(path.join(fixtures.pagesDir, `${entry.sha1}.json`), "utf8"));
         sendJson(res, 200, content);
+      },
+    },
+
+    // GET /api/pages/{pid}/preview -- pid is a page_content.id (endpoints.md),
+    // NOT a pages.id; archived HTML files are named previews/<pid>.html. No
+    // separate traversal guard needed beyond the route pattern itself: `pid`
+    // is captured by `[^/]+` (no slash allowed) and used only as a single
+    // path SEGMENT (`${pid}.html`), so it can never escape previewsDir --
+    // there's nothing analogous to /captured-assets' nested, arbitrary-depth
+    // sub-path here.
+    {
+      method: "GET",
+      pattern: /^\/api\/pages\/([^/]+)\/preview$/,
+      handler: (req, res, m) => {
+        const pid = decodeURIComponent(m[1]);
+        const file = path.join(fixtures.previewsDir, `${pid}.html`);
+        if (!existsSync(file)) return sendJson(res, 404, { detail: "preview not found" });
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        res.end(readFileSync(file));
+      },
+    },
+
+    // GET /captured-assets/<path> -- TOP-LEVEL path (not under /api); see
+    // the module-header note on why. `<path>` is untrusted input lifted
+    // straight out of archived third-party HTML (module header, and
+    // demo/tools/capture-fixtures.mjs's matching write-side comment) --
+    // resolveAssetPath rejects any ".." segment and re-verifies containment
+    // on the resolved absolute path before it ever reaches readFileSync.
+    {
+      method: "GET",
+      pattern: /^\/captured-assets\/(.+)$/,
+      handler: (req, res, m) => {
+        const requested = decodeURIComponent(m[1]);
+        const full = resolveAssetPath(fixtures.capturedAssetsDir, requested);
+        if (!full || !existsSync(full)) return sendJson(res, 404, { detail: "asset not found" });
+        const contentType = ASSET_CONTENT_TYPES[path.extname(full).toLowerCase()] ?? "application/octet-stream";
+        res.writeHead(200, { "content-type": contentType, "cache-control": "no-store" });
+        res.end(readFileSync(full));
+      },
+    },
+
+    // POST /api/agent/query-stream {query} -> text/event-stream. Picks the
+    // recorded chat entry whose question shares the most keywords with the
+    // query (pickChatEntry; below the 2-keyword threshold -> the built-in
+    // fallback stream), then re-emits its ALREADY-PARSED frames verbatim as
+    // `data: {json}\n\n`, pacing token events chatTokenDelayMs apart
+    // (status/complete get no artificial delay). Re-serializing parsed JSON
+    // objects (rather than replaying raw fixture bytes) never drops/
+    // reorders fields -- JSON.parse/JSON.stringify round-trips every key a
+    // recorded `complete` frame carries (sources, sources_detail, images,
+    // cluster_ids, iterations, model, and any future field) untouched.
+    {
+      method: "POST",
+      pattern: /^\/api\/agent\/query-stream$/,
+      handler: async (req, res) => {
+        const body = await readJsonBody(req);
+        const query = typeof body.query === "string" ? body.query : "";
+        const entry = pickChatEntry(query, fixtures.chatEntries);
+        const frames = entry ? entry.frames : fallbackFrames;
+
+        res.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-store",
+          connection: "keep-alive",
+          "x-accel-buffering": "no",
+        });
+        res.socket?.setNoDelay?.(true);
+
+        let index = 0;
+        let timer = null;
+        let stopped = false;
+        // Client abort (req 'aborted', or the underlying connection closing
+        // for any reason before we're done -- res 'close') must stop the
+        // timer chain immediately: no further writes, no leaked timer. A
+        // listener on res 'error' keeps a write racing an already-closing
+        // socket from surfacing as an unhandled error event.
+        const stop = () => {
+          if (stopped) return;
+          stopped = true;
+          if (timer) clearTimeout(timer);
+        };
+        req.on("aborted", stop);
+        res.on("close", stop);
+        res.on("error", stop);
+
+        const pump = () => {
+          if (stopped) return;
+          if (index >= frames.length) {
+            stopped = true;
+            res.end();
+            return;
+          }
+          const frame = frames[index];
+          index += 1;
+          const delay = frame.type === "token" ? chatTokenDelayMs : 0;
+          timer = setTimeout(() => {
+            if (stopped) return;
+            res.write(`data: ${JSON.stringify(frame)}\n\n`);
+            pump();
+          }, delay);
+        };
+        pump();
       },
     },
 
@@ -495,11 +775,14 @@ function buildRoutes(fixtures, state, { reclusterDelayMs }) {
       },
     },
 
-    // GET /api/agent/internals
+    // GET /api/agent/internals -- 403 for plain-demo (Task 7); acting-as-
+    // demo and plain admin both get the fixture verbatim. See the `gated`
+    // definition above for why reusing it here is correct even though this
+    // is a read, not a mutation.
     {
       method: "GET",
       pattern: /^\/api\/agent\/internals$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.internals),
+      handler: gated((req, res) => sendJson(res, 200, fixtures.internals)),
     },
 
     // GET /api/auth/me -- NEVER 401s (a 401 from any endpoint bounces the
@@ -643,11 +926,21 @@ export function isPlainDemo(req) {
 // Server
 // ---------------------------------------------------------------------------
 
-export function startServer({ port = 0, fixturesDir = "demo/fixtures", reclusterDelayMs = 2000 } = {}) {
+export function startServer({
+  port = 0,
+  fixturesDir = "demo/fixtures",
+  reclusterDelayMs = 2000,
+  // Task 7: pacing between re-emitted SSE token events for POST
+  // /api/agent/query-stream (default 15ms, matching the brief's "~15ms
+  // pacing" contract). Tests pass a small/zero value so reading a whole
+  // fixture's stream (hundreds of token events) doesn't blow the test
+  // budget -- see server.d.mts's StartServerOptions.
+  chatTokenDelayMs = 15,
+} = {}) {
   const resolvedFixturesDir = path.resolve(process.cwd(), fixturesDir);
   const fixtures = loadFixtures(resolvedFixturesDir);
   const state = createMutableState(fixtures);
-  const routes = buildRoutes(fixtures, state, { reclusterDelayMs });
+  const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs });
 
   const onHandlerError = (req, res, url, err) => {
     console.error(`[demo-server] handler error for ${req.method} ${url.pathname}:`, err);
