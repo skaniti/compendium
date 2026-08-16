@@ -22,15 +22,39 @@
 // spawn-management code as a module dependency.
 
 import net from "node:net";
+import path from "node:path";
 import { execFileSync, spawn } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Mirrors server.mjs's own standalone-entrypoint default (`PORT` env var,
-// falling back to 8001) -- see that file's bottom `if (import.meta.url ...)`
-// block.
+// falling back to 8001) -- see that file's bottom
+// `if (isDirectEntry(import.meta.url, process.argv[1]))` block.
 const STUB_PREFERRED_PORT = 8001;
 const STUB_READY_TIMEOUT_MS = 10_000;
 const STUB_READY_POLL_MS = 200;
+
+// Resolved relative to THIS file's own location (import.meta.url), not
+// process.cwd() -- the stub must be spawn-able regardless of the directory
+// `node demo/launcher.mjs` (or a future non-`npm run demo` invocation) was
+// started from. REPO_ROOT is passed as the spawned stub's `cwd` for the same
+// reason: server.mjs's own default `fixturesDir` ("demo/fixtures") is
+// itself cwd-relative, so pinning the child's cwd to the repo root is what
+// actually makes the whole spawn cwd-independent end to end, not just the
+// path handed to `spawn`.
+//
+// Deliberately fileURLToPath(import.meta.url) + path.join, NOT
+// `new URL("./server.mjs", import.meta.url)` -- this repo's test
+// environment (vitest.config.ts's `environment: "jsdom"`, needed for the
+// component tests elsewhere in the suite) shadows the global `URL` with
+// jsdom's, which mishandles a `file:` string as a relative-resolution base
+// and silently falls back to jsdom's own default origin instead (observed
+// while implementing this: resolved to "http://localhost:3000/server.mjs").
+// A bare fileURLToPath call on import.meta.url's own value sidesteps that
+// entirely -- it never performs relative-URL resolution, just a straight
+// file-URL-to-path conversion via Node's own internal parser.
+const THIS_FILE_PATH = fileURLToPath(import.meta.url);
+const STUB_SERVER_PATH = path.join(path.dirname(THIS_FILE_PATH), "server.mjs");
+const REPO_ROOT = path.dirname(path.dirname(STUB_SERVER_PATH));
 
 function log(...args) {
   console.log("[demo]", ...args);
@@ -77,20 +101,57 @@ export function isDirectEntry(metaUrl, argv1) {
 
 // Polls GET <url> until it responds 2xx (the stub's `/docs` health-probe
 // target -- see server.mjs's module-header comment) or `timeoutMs` elapses.
-async function waitForUp(url, timeoutMs) {
+// `isCancelled` (default: never) is checked each iteration so a caller that
+// has already given up for some OTHER reason (e.g. raceStartup below,
+// reacting to the stub process exiting) can stop this loop within one poll
+// tick instead of leaving it running in the background for the rest of
+// `timeoutMs`.
+async function waitForUp(url, timeoutMs, isCancelled = () => false) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
+    if (isCancelled()) throw new Error("readiness poll cancelled");
     try {
       const res = await fetch(url);
       if (res.ok) return;
     } catch {
       // Not listening yet -- keep polling.
     }
+    if (isCancelled()) throw new Error("readiness poll cancelled");
     if (Date.now() >= deadline) {
       throw new Error(`timed out after ${timeoutMs}ms waiting for ${url}`);
     }
     await new Promise((resolve) => setTimeout(resolve, STUB_READY_POLL_MS));
   }
+}
+
+// Races the readiness poll above against the stub child itself exiting or
+// failing to spawn -- so a stub that crashes (or never starts) during the
+// wait fails immediately with a clear reason, instead of the caller running
+// out the full `timeoutMs` deadline only to then report a generic timeout.
+// Listeners are removed as soon as ANY branch settles, which also bounds how
+// long the now-abandoned `waitForUp` loop keeps polling in the background
+// (at most one more `STUB_READY_POLL_MS` tick, via `isCancelled` above).
+function raceStartup(stub, url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    let cancelled = false;
+    const finish = (fn, arg) => {
+      if (done) return;
+      done = true;
+      cancelled = true;
+      stub.removeListener("error", onError);
+      stub.removeListener("exit", onExit);
+      fn(arg);
+    };
+    const onError = (err) => finish(reject, new Error(`failed to spawn stub backend: ${err.message}`));
+    const onExit = (code) =>
+      finish(reject, new Error(`stub backend exited before becoming ready (code ${code ?? "unknown"})`));
+    stub.once("error", onError);
+    stub.once("exit", onExit);
+    waitForUp(url, timeoutMs, () => cancelled)
+      .then(() => finish(resolve, undefined))
+      .catch((err) => finish(reject, err));
+  });
 }
 
 // Tears a spawned child (and anything IT spawned) down. Both children below
@@ -120,6 +181,44 @@ function killChild(child) {
   }
 }
 
+// Boots the stub backend end to end: picks a port (falling back off
+// `preferredPort` when something else already holds it -- pickPort above),
+// spawns demo/server.mjs (STUB_SERVER_PATH/REPO_ROOT, cwd-independent), and
+// waits for it to report ready via raceStartup -- which rejects immediately
+// (not after the full readiness deadline) if the stub exits or fails to
+// spawn first. On any failure the partially-started child is killed before
+// rethrowing, so a caller never has to know killChild's POSIX/win32 details
+// just to clean up a failed boot attempt.
+//
+// Exported (and `log` left as an injectable no-op-by-default rather than the
+// module's own console-writing `log`) so the port-fallback + readiness
+// wiring has direct test coverage without also needing to boot `next dev` --
+// see demo/server.test.ts's "bootStub" describe block. `main()` below is the
+// only real caller and always passes the module's own `log`.
+export async function bootStub({ preferredPort = STUB_PREFERRED_PORT, log = () => {} } = {}) {
+  const port = await pickPort(preferredPort);
+  const heldNote = port === preferredPort ? "" : ` (:${preferredPort} was already taken)`;
+  log(`starting stub backend on :${port}${heldNote}`);
+
+  const stub = spawn(process.execPath, [STUB_SERVER_PATH], {
+    cwd: REPO_ROOT,
+    env: { ...process.env, PORT: String(port) },
+    stdio: "inherit",
+    detached: process.platform !== "win32",
+  });
+
+  const backendUrl = `http://localhost:${port}`;
+  log(`waiting for stub backend at ${backendUrl}/docs (10s cap)...`);
+  try {
+    await raceStartup(stub, `${backendUrl}/docs`, STUB_READY_TIMEOUT_MS);
+  } catch (err) {
+    killChild(stub);
+    throw err;
+  }
+  log(`stub backend up: ${backendUrl}`);
+  return { port, backendUrl, child: stub };
+}
+
 async function main() {
   const children = [];
   let shuttingDown = false;
@@ -140,34 +239,31 @@ async function main() {
   });
   process.once("exit", teardown);
 
-  const port = await pickPort(STUB_PREFERRED_PORT);
-  const heldNote = port === STUB_PREFERRED_PORT ? "" : ` (:${STUB_PREFERRED_PORT} was already taken)`;
-  log(`starting stub backend on :${port}${heldNote}`);
-
-  const stub = spawn(process.execPath, ["demo/server.mjs"], {
-    env: { ...process.env, PORT: String(port) },
-    stdio: "inherit",
-    detached: process.platform !== "win32",
-  });
+  let stub, backendUrl;
+  try {
+    ({ child: stub, backendUrl } = await bootStub({ log }));
+  } catch (err) {
+    log(`ERROR: ${err.message}`);
+    process.exitCode = 1;
+    return;
+  }
   children.push(stub);
+  // Post-ready failure modes -- bootStub's own raceStartup already owns the
+  // pre-ready spawn-error/early-exit path (and removes its own listeners
+  // once settled), so these only fire for a stub that dies/errors AFTER
+  // successfully coming up.
+  stub.on("error", (err) => {
+    if (shuttingDown) return;
+    log(`ERROR: stub backend error: ${err.message}`);
+    teardown();
+    process.exitCode = 1;
+  });
   stub.on("exit", (code) => {
     if (shuttingDown) return;
     log(`stub backend exited unexpectedly (code ${code})`);
     teardown();
     process.exitCode = 1;
   });
-
-  const backendUrl = `http://localhost:${port}`;
-  log(`waiting for stub backend at ${backendUrl}/docs (10s cap)...`);
-  try {
-    await waitForUp(`${backendUrl}/docs`, STUB_READY_TIMEOUT_MS);
-  } catch (err) {
-    log(`ERROR: ${err.message}`);
-    teardown();
-    process.exitCode = 1;
-    return;
-  }
-  log(`stub backend up: ${backendUrl}`);
 
   log(`starting next dev (BACKEND_URL=${backendUrl})...`);
   const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -182,6 +278,12 @@ async function main() {
     shell: process.platform === "win32",
   });
   children.push(next);
+  next.on("error", (err) => {
+    if (shuttingDown) return;
+    log(`ERROR: failed to start next dev: ${err.message}`);
+    teardown();
+    process.exitCode = 1;
+  });
   next.on("exit", (code) => {
     if (shuttingDown) return;
     log(`next dev exited (code ${code})`);
