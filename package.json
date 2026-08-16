@@ -9,7 +9,7 @@
     "demo": "node demo/launcher.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -39,6 +39,8 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.1",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
