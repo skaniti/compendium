@@ -13,11 +13,12 @@
 // /api/agent/internals. NOTE: /captured-assets is a TOP-LEVEL path (not
 // under /api) because that's the exact URL pattern captured preview HTML
 // references (see demo/tools/capture-fixtures.mjs's module header) -- the
-// Next app's /api catch-all proxy does not forward it, so previews will
-// render text but miss images/styles when driven through the full app
-// unless something (next.config.js rewrite or a dedicated route file)
-// forwards /captured-assets/* to BACKEND_URL. Append new routes to the SAME
-// ordered `routes` array below rather than building a second router.
+// Next app's /api catch-all proxy does not forward it, so this is served
+// through a separate route instead: next.config.ts's `rewrites()` forwards
+// /captured-assets/* straight to BACKEND_URL, which is what actually gets
+// previews their images/styles when driven through the full app. Append new
+// routes to the SAME ordered `routes` array below rather than building a
+// second router.
 //
 // Route-table discipline (read before adding a route): entries are checked
 // in array order, first match wins. Static/exact-path routes are listed
@@ -337,13 +338,31 @@ function sendJson(res, status, body) {
   res.end(data);
 }
 
-// Reads + JSON-parses a request body. Never rejects -- an empty body or
-// invalid JSON resolves to {} rather than throwing, since every route that
-// calls this is a stub auth endpoint that degrades gracefully on a
-// malformed request rather than 500ing (matches the "never 401 outside
-// login" posture: a bad body just falls back to defaults downstream).
+// Thrown by readJsonBody when the request body is present but not valid
+// JSON. A distinct class (rather than a plain Error) so the dispatcher below
+// can tell "caller sent garbage" apart from a genuine handler bug and answer
+// 400 instead of 500 -- while every other thrown/rejected error still gets
+// the 500 path unchanged.
+class MalformedJsonBodyError extends Error {
+  constructor() {
+    super("malformed JSON body");
+    this.name = "MalformedJsonBodyError";
+  }
+}
+
+// Reads + JSON-parses a request body. An EMPTY body still resolves to {}
+// (never rejects) -- most routes that call this tolerate "no body" and fall
+// back to defaults downstream, matching the never-401-outside-login posture.
+// A NON-EMPTY body that fails to parse, though, rejects with
+// MalformedJsonBodyError rather than silently degrading to {} -- silently
+// treating "the caller sent garbage" the same as "the caller sent nothing"
+// made a malformed request indistinguishable from an honest empty one (e.g.
+// POST /api/auth/login with unparseable JSON used to fall through to the
+// SAME 401 an honest wrong-password attempt gets, which is misleading: it
+// isn't wrong credentials, the request itself never parsed). The dispatcher
+// below (onHandlerError) turns this rejection into 400, never 401/500.
 function readJsonBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (chunk) => {
       data += chunk;
@@ -353,7 +372,7 @@ function readJsonBody(req) {
       try {
         resolve(JSON.parse(data));
       } catch {
-        resolve({});
+        reject(new MalformedJsonBodyError());
       }
     });
     req.on("error", () => resolve({}));
@@ -661,12 +680,25 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
     // POST /api/topics {keyword} -> {topic, topics} (only `topics` is
     // consumed downstream; `topic` is returned per contract regardless).
     // New topics get icon_id null and a plausible (0) cluster_count.
+    //
+    // Validation (400, never 401): rejects an empty/whitespace-only keyword,
+    // and a keyword that already exists (case-insensitively). The frontend's
+    // own add form (components/ScPopover.tsx's handleAdd) already guards
+    // both cases client-side before ever calling this endpoint, so this
+    // doesn't change any reachable frontend behavior -- it just stops the
+    // stub from silently accepting input the real backend (and the
+    // frontend's own contract) would never produce, e.g. a direct/scripted
+    // POST bypassing the form.
     {
       method: "POST",
       pattern: /^\/api\/topics$/,
       handler: gated(async (req, res) => {
         const body = await readJsonBody(req);
-        const topic = { keyword: typeof body.keyword === "string" ? body.keyword : "", icon_id: null, cluster_count: 0 };
+        const keyword = typeof body.keyword === "string" ? body.keyword.trim() : "";
+        if (!keyword) return sendJson(res, 400, { detail: "keyword must not be empty" });
+        const isDuplicate = state.topics.some((t) => t.keyword.toLowerCase() === keyword.toLowerCase());
+        if (isDuplicate) return sendJson(res, 400, { detail: "a topic with this keyword already exists" });
+        const topic = { keyword, icon_id: null, cluster_count: 0 };
         state.topics.push(topic);
         sendJson(res, 200, { topic, topics: state.topics });
       }),
@@ -769,20 +801,24 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
 
     // GET /api/topics/{keyword}/members[?limit=5|50] -- files on disk are
     // percent-encoded keyword names: members/<encodeURIComponent(keyword)>-<limit>.json.
-    // A keyword that exists in current state but has no fixture file (added
-    // at runtime via POST, or renamed away from one of the original 4) gets
-    // {members: []} rather than 404 -- fixture member files only exist for
-    // the original 4 topics.
+    // Current STATE (not fixture-file existence) decides 404 first: a
+    // keyword that is no longer a live topic -- deleted this session, or the
+    // OLD name of a topic that was renamed -- 404s even though its original
+    // fixture file is still sitting on disk (renaming/deleting never
+    // touches/removes those files). Only once the keyword is confirmed live
+    // does fixture-file presence decide the body: the original 4 topics'
+    // files serve verbatim; anything else current (added at runtime via
+    // POST, or a topic's NEW post-rename keyword) gets {members: []}.
     {
       method: "GET",
       pattern: /^\/api\/topics\/([^/]+)\/members$/,
       handler: (req, res, m, url) => {
         const keyword = decodeURIComponent(m[1]);
+        if (!state.topics.some((t) => t.keyword === keyword)) return sendJson(res, 404, { detail: "unknown topic" });
         const limit = url.searchParams.get("limit") === "5" ? 5 : 50;
         const file = path.join(fixtures.membersDir, `${encodeURIComponent(keyword)}-${limit}.json`);
         if (existsSync(file)) return sendJson(res, 200, JSON.parse(readFileSync(file, "utf8")));
-        if (state.topics.some((t) => t.keyword === keyword)) return sendJson(res, 200, { members: [] });
-        sendJson(res, 404, { detail: "unknown topic" });
+        sendJson(res, 200, { members: [] });
       },
     },
 
@@ -978,6 +1014,13 @@ export function startServer({
   const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled });
 
   const onHandlerError = (req, res, url, err) => {
+    // Malformed request body -- a caller mistake, not a handler bug -- gets
+    // its own short 400 (readJsonBody's doc comment) instead of the generic
+    // 500 below, and is never logged as a server-side error.
+    if (err instanceof MalformedJsonBodyError) {
+      if (!res.headersSent) return sendJson(res, 400, { detail: "malformed json body" });
+      return res.end();
+    }
     console.error(`[demo-server] handler error for ${req.method} ${url.pathname}:`, err);
     if (!res.headersSent) sendJson(res, 500, { detail: "internal error" });
     else res.end();
@@ -1034,6 +1077,16 @@ function isDirectEntry(metaUrl, argv1) {
   return pathToFileURL(argv1).href === metaUrl;
 }
 
+// Parses an opt-in boolean env flag: "1" or "true" is ON, anything else
+// (unset, "0", "false", garbage) is OFF. Shared accepted-value CONTRACT with
+// components/GraphCanvas.tsx's isRoleToolingVisible (NEXT_PUBLIC_DEMO_ROLE_TOOLING)
+// -- kept as two independent implementations, one per process, per that
+// function's own doc comment. Exported for direct test coverage without
+// spawning this module as a subprocess.
+export function isEnvFlagOn(value) {
+  return value === "1" || value === "true";
+}
+
 // Standalone entrypoint: `node demo/server.mjs`.
 if (isDirectEntry(import.meta.url, process.argv[1])) {
   const port = process.env.PORT ? Number(process.env.PORT) : 8001;
@@ -1042,8 +1095,8 @@ if (isDirectEntry(import.meta.url, process.argv[1])) {
   // comment. `npm run demo` (demo/launcher.mjs) spawns this process with
   // `...process.env` untouched, so it stays unset (default off) there;
   // scripts/dev.sh exports DEMO_ROLE_TOOLING=1 for the maintainer's own
-  // dev stack.
-  const roleToolingEnabled = process.env.DEMO_ROLE_TOOLING === "1";
+  // dev stack (accepts "true" too, via isEnvFlagOn -- see that function).
+  const roleToolingEnabled = isEnvFlagOn(process.env.DEMO_ROLE_TOOLING);
   startServer({ port, fixturesDir, roleToolingEnabled })
     .then(({ port: boundPort }) => {
       console.log(`[demo-server] listening on :${boundPort} (fixtures: ${fixturesDir})`);

@@ -40,3 +40,7 @@ export interface BearerCarrier {
   headers: { authorization?: string };
 }
 export function isPlainDemo(req: BearerCarrier): boolean;
+
+// Env-flag parsing shared contract ("1" or "true" is ON) -- see server.mjs's
+// own doc comment on this export.
+export function isEnvFlagOn(value: string | undefined): boolean;
