@@ -51,6 +51,10 @@ export async function apiFetch(...args: Parameters<typeof fetch>): Promise<Respo
 export function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   if (window.location.pathname === "/login") return;
+  // Full reload (not router navigation) is deliberate: an expired/invalid
+  // session must invalidate every client-side cache/context, same as the
+  // explicit sign-out/login flows (components/Header.tsx, app/login/page.tsx).
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after session invalidation
   window.location.assign("/login");
 }
 

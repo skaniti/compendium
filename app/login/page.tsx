@@ -56,6 +56,10 @@ function LoginForm() {
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) {
+      // Full reload (not router navigation) is deliberate: login must
+      // invalidate every client-side cache/context left over from the
+      // previous (signed-out or different-user) session.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after login
       window.location.href = "/";
       return;
     }

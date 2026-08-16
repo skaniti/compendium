@@ -62,6 +62,10 @@ interface SessionKeeperProps {
 }
 
 export default function SessionKeeper({ suspended = false }: SessionKeeperProps) {
+  // useRef's initializer only runs on the FIRST render (React's own
+  // contract), so Date.now() here just seeds the mount timestamp -- it is
+  // not re-evaluated on later renders.
+  // eslint-disable-next-line react-hooks/purity -- useRef init-only read, not a per-render impure call
   const lastActivityRef = useRef<number>(Date.now());
   const refreshInFlightRef = useRef(false);
 

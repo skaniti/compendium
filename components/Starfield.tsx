@@ -33,6 +33,7 @@ export default function Starfield() {
   // context) has already moved on to a different variant -- read the
   // latest value via the ref, not the `variant` closed over at mount time.
   const variantRef = useRef(variant);
+  // eslint-disable-next-line react-hooks/refs -- always-current ref updated every render by design (see comment above)
   variantRef.current = variant;
 
   // Mount <starry-sky> exactly once.
@@ -52,8 +53,8 @@ export default function Starfield() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally
-    // mount-once; variant changes after mount are handled by the effect below.
+    // Intentionally mount-once; variant changes after mount are handled by
+    // the effect below.
   }, []);
 
   // Sync variant changes onto the already-mounted element. Mirrors the

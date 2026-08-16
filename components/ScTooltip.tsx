@@ -39,6 +39,7 @@ export function useScTooltipData(topics: TopicInterest[]): Record<string, TopicM
     let cancelled = false;
     const allocated = topics.filter((t) => t.cluster_count > 0);
     if (allocated.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale member data, not derivable during render
       setCache({});
       return;
     }

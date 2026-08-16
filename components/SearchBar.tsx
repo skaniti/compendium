@@ -213,6 +213,7 @@ export default function SearchBar() {
   // "view demo" link stayed visible). Force-close on any transition out
   // of admin-context so the two states can never disagree.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- force-close only on the admin-context transition (see comment above), not derivable during render
     if (!adminContext) setInternalsOpen(false);
   }, [adminContext]);
 

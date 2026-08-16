@@ -50,7 +50,6 @@ function runBootstrapScript(): void {
   // test is pinning that literal string), rather than reimplementing its
   // logic here, which would test the reimplementation instead of the
   // shipped script.
-  // eslint-disable-next-line no-eval
   eval(buildThemeBootstrapScript());
 }
 

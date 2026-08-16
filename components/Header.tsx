@@ -87,6 +87,9 @@ export default function Header() {
 
   async function handleSignOut(): Promise<void> {
     await fetch("/api/auth/logout", { method: "POST" });
+    // Full reload (not router navigation) is deliberate: sign-out must
+    // invalidate every client-side cache/context tied to the ended session.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after sign-out
     window.location.href = "/login";
   }
 

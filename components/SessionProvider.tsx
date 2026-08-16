@@ -150,6 +150,11 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
       if (retryTimeoutRef.current !== null) return; // already scheduled
       retryTimeoutRef.current = setTimeout(() => {
         retryTimeoutRef.current = null;
+        // The `const refresh = ...` assignment below completes
+        // synchronously on this render, well before this deferred
+        // setTimeout callback can ever fire -- safe self-referencing retry,
+        // not a real temporal-dead-zone access.
+        // eslint-disable-next-line react-hooks/immutability -- deferred callback, refresh is bound by the time this runs
         void refresh();
       }, HYDRATION_RETRY_MS);
     }

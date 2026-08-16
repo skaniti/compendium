@@ -224,6 +224,7 @@ function PageView({ node, allNodes, clusterNames, dispatch }: PageViewProps) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale content so a new node/url never shows the previous one's content
     setPageContent(null);
 
     async function run() {
@@ -573,6 +574,7 @@ function WindowSummaryView({ filterWindowKey, nodeById, dispatch }: WindowSummar
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the stale window before the fresh fetch below resolves (same pattern as pageContent above)
     setWin(undefined);
     fetchDiaryWindows(granularity, undefined)
       .then((windows) => {
