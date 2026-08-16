@@ -10,7 +10,7 @@ back onto the graph. On top of the automatically-clustered layer, users can
 manually select "superclusters" (clusters of clusters) representing topics
 they are interested in to highlight in the graph.
 
-![Compendium app shell -- diary panel, constellation graph, topic detail](docs/readme/app-shell.png)
+![Compendium app shell — diary panel, constellation graph, topic detail](docs/readme/app-shell.png)
 
 ## Quickstart
 
@@ -34,20 +34,20 @@ collectors, which arrive as the migration continues.
 
 ## Demo notes
 
-**Data.** The demo compendium is curated from real, publicly licensed web
+**Data:** The demo compendium is curated from real, publicly licensed web
 pages (Wikipedia, arXiv, GitHub, Stack Exchange, and a few others) spanning
-four topics -- diffusion models, Greek/Roman mythology, electronics/Arduino,
-and cephalopods -- respread across a plausible browsing timeline that stays
+four topics — diffusion models, Greek/Roman mythology, electronics/Arduino,
+and cephalopods — respread across a plausible browsing timeline that stays
 "recent" no matter when the repo is cloned. Full source list and licensing
 notes: `demo/fixtures/ATTRIBUTION.md`.
 
-**Chat.** 12 question/answer runs from the live agent are recorded in
+**Chat:** 12 question/answer runs from the live agent are recorded in
 `demo/fixtures/chat/index.json`. The search bar at the bottom of the graph
 replays them token-by-token over SSE, complete with source pills that frame
 the cited nodes back on the graph. Anything else typed in falls back to a
 response that explains demo mode and suggests a question from the list.
 
-**Mutations.** Topic edits, exclusions, and preference writes persist for
+**Mutations:** Topic edits, exclusions, and preference writes persist for
 the life of the stub process and reset on restart. Clicking `Recluster`
 waits a couple of seconds and bumps the run number but does not actually
 recluster the data in demo mode.
@@ -67,7 +67,7 @@ headlessly via jsdom.
 
 ## Architecture
 
-- **Frontend:** Next.js (App Router) -- the UI seen above: graph canvas,
+- **Frontend:** Next.js (App Router) — the UI seen above: graph canvas,
   diary/history panel, topic detail, header widgets, and the chat search
   bar.
 - **API proxy:** `app/api/[...path]/route.ts` forwards every `/api/*` call
@@ -80,7 +80,7 @@ headlessly via jsdom.
   that answers the same endpoint contract from static fixtures under
   `demo/fixtures/`. `npm run demo` (`demo/launcher.mjs`) boots it and
   points `BACKEND_URL` at it automatically.
-- **Real backend:** a FastAPI service that isn't in this repo yet -- it
+- **Real backend:** a FastAPI service that isn't in this repo yet — it
   arrives with a one-time monorepo extraction (`apps/api`, alongside this
   frontend as `apps/web`). Until then, `BACKEND_URL` is the entire contract
   between this frontend and whatever serves it.
@@ -91,7 +91,7 @@ This repo is mid-migration from an earlier Dash + FastAPI prototype into
 this Next.js frontend. Currently ported and working: the graph's
 surrounding chrome (diary/history, topic detail, header widgets) and the
 first slice of the streaming chat experience. The constellation graph
-itself (rendering, clustering, camera framing) is mid-port -- functional,
+itself (rendering, clustering, camera framing) is mid-port — functional,
 as the screenshots above show, but not yet feature-complete against the
 original.
 
@@ -112,7 +112,7 @@ both flags for development with the role machinery enabled.
 
 ## Conventions
 
-- **Commit format:** `docs/references/COMMIT-FORMAT.md` -- parens-free
+- **Commit format:** `docs/references/COMMIT-FORMAT.md` — parens-free
   `type: subject`, lowercase, no AI attribution, enforced by a husky
   `commit-msg` hook.
 - **Pushes are gated:** the `pre-push` hook refuses to push unless
@@ -121,4 +121,4 @@ both flags for development with the role machinery enabled.
 
 ## License
 
-MIT -- see `LICENSE`.
+MIT — see `LICENSE`.
