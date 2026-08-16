@@ -13,7 +13,11 @@ export function isDirectEntry(metaUrl: string, argv1: string | undefined): boole
 
 // Boots the stub backend only (not `next dev`) -- see launcher.mjs's own
 // doc comment on the export. `log` defaults to a no-op so tests can omit it.
+// `onSpawn` fires synchronously right after the child is spawned, before
+// the (up to 10s) readiness wait -- see launcher.mjs's doc comment on why
+// that ordering is load-bearing for signal-safe teardown.
 export function bootStub(options?: {
   preferredPort?: number;
   log?: (...args: unknown[]) => void;
+  onSpawn?: (child: import("node:child_process").ChildProcess) => void;
 }): Promise<{ port: number; backendUrl: string; child: import("node:child_process").ChildProcess }>;

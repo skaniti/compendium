@@ -1400,6 +1400,53 @@ describe("bootStub (Task 8 launcher: readiness/fallback/error wiring)", () => {
   );
 
   it(
+    "onSpawn fires with a live, killable child BEFORE the readiness wait resolves (registration-before-wait -- fix report follow-up)",
+    async () => {
+      // Regression this pins: an earlier bootStub only returned the child
+      // reference at the very end (after the readiness race resolved), so
+      // main() only pushed it into its own teardown registry post-ready --
+      // a SIGINT/SIGTERM arriving DURING the (up to 10s) readiness wait ran
+      // teardown over an empty registry and orphaned the detached stub.
+      // onSpawn must fire synchronously right after spawn, with no `await`
+      // in between, so main() can register the child before that window
+      // opens. This test proves the OBSERVABLE contract onSpawn gives
+      // main(): a live, kill-able child handle available strictly BEFORE
+      // bootStub's own promise settles -- not just "eventually called".
+      let capturedChild: Awaited<ReturnType<typeof bootStub>>["child"] | undefined;
+      const bootPromise = bootStub({
+        preferredPort: 0,
+        onSpawn: (child) => {
+          capturedChild = child;
+        },
+      });
+
+      // Poll (well under the 10s readiness deadline) until onSpawn has
+      // fired. If this resolves at all, onSpawn ran BEFORE bootPromise
+      // settled -- we're racing a captured-variable check against the very
+      // promise onSpawn must precede.
+      const start = Date.now();
+      while (!capturedChild && Date.now() - start < 5_000) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      expect(capturedChild).toBeDefined();
+      expect(capturedChild!.pid).toBeGreaterThan(0);
+      // A real, currently-live process at this moment (not a stale/dead
+      // reference) -- simulates exactly what main()'s teardown() would
+      // check/kill if a signal landed here, mid-wait.
+      expect(capturedChild!.exitCode).toBeNull();
+      expect(capturedChild!.killed).toBe(false);
+
+      // Killing it here (while bootPromise is still pending) proves it's
+      // the actual live subprocess under bootStub's control, not a copy --
+      // bootStub's own raceStartup detects the exit and rejects the SAME
+      // way the "stub exits during the poll" test above already covers.
+      capturedChild!.kill();
+      await expect(bootPromise).rejects.toThrow(/exited before becoming ready/);
+    },
+    15_000
+  );
+
+  it(
     "fails fast (well under the 10s readiness deadline) when the stub process exits during the poll",
     async () => {
       // FIXTURES pointed at a nonexistent directory makes loadFixtures throw

@@ -190,12 +190,23 @@ function killChild(child) {
 // rethrowing, so a caller never has to know killChild's POSIX/win32 details
 // just to clean up a failed boot attempt.
 //
+// `onSpawn(child)` fires SYNCHRONOUSLY right after `spawn()` returns --
+// before the readiness wait (up to 10s) starts, and with no `await` in
+// between spawning and calling it. This is load-bearing, not decorative:
+// `main()` uses it to push the child into its own teardown registry BEFORE
+// awaiting readiness, so a SIGINT/SIGTERM arriving DURING that wait still
+// finds the child registered and kills it. An earlier version of this
+// function only returned the child at the very end (after the readiness
+// await resolved), which meant a signal arriving mid-wait ran teardown over
+// an empty registry and orphaned the (detached, own-process-group) stub --
+// caught in review; see demo/server.test.ts's onSpawn-timing test.
+//
 // Exported (and `log` left as an injectable no-op-by-default rather than the
 // module's own console-writing `log`) so the port-fallback + readiness
 // wiring has direct test coverage without also needing to boot `next dev` --
 // see demo/server.test.ts's "bootStub" describe block. `main()` below is the
-// only real caller and always passes the module's own `log`.
-export async function bootStub({ preferredPort = STUB_PREFERRED_PORT, log = () => {} } = {}) {
+// only real caller and always passes the module's own `log` and `onSpawn`.
+export async function bootStub({ preferredPort = STUB_PREFERRED_PORT, log = () => {}, onSpawn = () => {} } = {}) {
   const port = await pickPort(preferredPort);
   const heldNote = port === preferredPort ? "" : ` (:${preferredPort} was already taken)`;
   log(`starting stub backend on :${port}${heldNote}`);
@@ -206,6 +217,7 @@ export async function bootStub({ preferredPort = STUB_PREFERRED_PORT, log = () =
     stdio: "inherit",
     detached: process.platform !== "win32",
   });
+  onSpawn(stub);
 
   const backendUrl = `http://localhost:${port}`;
   log(`waiting for stub backend at ${backendUrl}/docs (10s cap)...`);
@@ -241,13 +253,24 @@ async function main() {
 
   let stub, backendUrl;
   try {
-    ({ child: stub, backendUrl } = await bootStub({ log }));
+    ({ child: stub, backendUrl } = await bootStub({
+      log,
+      // Registers the child BEFORE bootStub awaits the (up to 10s)
+      // readiness race -- see bootStub's own doc comment on why this
+      // ordering matters. `stub` (the outer `let`) is also assigned here so
+      // it's non-null the instant a SIGINT/SIGTERM handler above might run,
+      // not just after this whole `try` completes.
+      onSpawn: (child) => {
+        stub = child;
+        children.push(child);
+      },
+    }));
   } catch (err) {
     log(`ERROR: ${err.message}`);
+    teardown();
     process.exitCode = 1;
     return;
   }
-  children.push(stub);
   // Post-ready failure modes -- bootStub's own raceStartup already owns the
   // pre-ready spawn-error/early-exit path (and removes its own listeners
   // once settled), so these only fire for a stub that dies/errors AFTER
