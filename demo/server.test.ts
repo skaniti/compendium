@@ -1,15 +1,20 @@
-// Task 4: stub server core (static reads). Exercises the real node:http
-// server end-to-end (real fetch, real port, real fixture files on disk) --
-// no mocking, since the whole point is to prove the router + fixture loader
-// + date shift work together against Task 3's actual committed fixtures.
+// Stub server core (static reads, mutations, auth, SSE chat replay, preview/
+// asset serving) plus the launcher's port/entrypoint/boot helpers. Exercises
+// the real node:http server end-to-end (real fetch, real port, real fixture
+// files on disk) -- no mocking, since the whole point is to prove the router
+// + fixture loader + date shift work together against the actual committed
+// fixtures.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import http from "node:http";
 import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { isPlainDemo, startServer } from "./server.mjs";
+import { isEnvFlagOn, isPlainDemo, startServer } from "./server.mjs";
 import { mintToken } from "./lib/tokens.mjs";
-import { isDirectEntry, pickPort } from "./launcher.mjs";
-import { pathToFileURL } from "node:url";
+import { bootStub, isDirectEntry, pickPort } from "./launcher.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 let baseUrl: string;
 let close: () => Promise<void>;
@@ -174,6 +179,14 @@ describe("GET /api/graph", () => {
     expect(body90.nodes.length).toBe(157);
   });
 
+  it("?window=365 serves graph-window-365.json's node set", async () => {
+    const res = await get("/api/graph?window=365");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.nodes)).toBe(true);
+    expect(body.nodes.length).toBe(157);
+  });
+
   it("shifts first_visited_at forward so the graph's dates stay recent", async () => {
     const res = await get("/api/graph");
     const body = await res.json();
@@ -251,6 +264,18 @@ describe("GET /api/diary/windows", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual([]);
+  });
+
+  it("an invalid granularity value -> 400 with a descriptive detail", async () => {
+    const res = await get("/api/diary/windows?granularity=year");
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(typeof body.detail).toBe("string");
+  });
+
+  it("missing granularity entirely -> 400 (same validation as an invalid value)", async () => {
+    const res = await get("/api/diary/windows");
+    expect(res.status).toBe(400);
   });
 });
 
@@ -568,7 +593,6 @@ describe("role-tooling opt-in (DEMO_ROLE_TOOLING, default off)", () => {
     await withServer(async (base) => {
       const res = await req(base, "POST", "/api/auth/view-as", { profile: "demo" });
       expect(res.status).toBe(404);
-      expect(res.status).not.toBe(401);
     });
   });
 
@@ -576,7 +600,6 @@ describe("role-tooling opt-in (DEMO_ROLE_TOOLING, default off)", () => {
     await withServer(async (base) => {
       const res = await req(base, "POST", "/api/auth/return-to-admin");
       expect(res.status).toBe(404);
-      expect(res.status).not.toBe(401);
     });
   });
 
@@ -722,6 +745,79 @@ describe("mutation endpoints (Task 6): topics CRUD", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ members: [] });
+    });
+  });
+
+  it("rejects an empty/whitespace-only keyword with 400, never 401, and adds nothing", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const res = await req(base, "POST", "/api/topics", { keyword: "   " }, admin);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.detail).toBe("string");
+
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+    });
+  });
+
+  it("rejects a keyword with no `keyword` field at all (missing body) the same way as empty", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const res = await req(base, "POST", "/api/topics", {}, admin);
+      expect(res.status).toBe(400);
+    });
+  });
+
+  it("rejects a duplicate keyword case-insensitively with 400, and adds nothing", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      // "Cephalopods" is one of the 4 fixture-seeded topics.
+      const res = await req(base, "POST", "/api/topics", { keyword: "cephalopods" }, admin);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.detail).toBe("string");
+
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+    });
+  });
+});
+
+describe("GET /api/topics/{keyword}/members: reflects the topic's live-state lifecycle", () => {
+  it("a topic deleted in-session -> 404 (not a stale 200 replayed from its still-on-disk fixture file)", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const before = await req(base, "GET", `/api/topics/${encodeURIComponent("Cephalopods")}/members`);
+      expect(before.status).toBe(200);
+
+      const deleteRes = await req(base, "DELETE", `/api/topics/${encodeURIComponent("Cephalopods")}`, undefined, admin);
+      expect(deleteRes.status).toBe(200);
+
+      const after = await req(base, "GET", `/api/topics/${encodeURIComponent("Cephalopods")}/members`);
+      expect(after.status).toBe(404);
+    });
+  });
+
+  it("a renamed topic: the OLD keyword 404s, the NEW keyword serves {members: []} (its fixture file is named after the old keyword)", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const renameRes = await req(
+        base,
+        "PATCH",
+        `/api/topics/${encodeURIComponent("Cephalopods")}`,
+        { keyword: "Renamed Cephalopods" },
+        admin
+      );
+      expect(renameRes.status).toBe(200);
+
+      const oldRes = await req(base, "GET", `/api/topics/${encodeURIComponent("Cephalopods")}/members`);
+      expect(oldRes.status).toBe(404);
+
+      const newRes = await req(base, "GET", `/api/topics/${encodeURIComponent("Renamed Cephalopods")}/members`);
+      expect(newRes.status).toBe(200);
+      const newBody = await newRes.json();
+      expect(newBody).toEqual({ members: [] });
     });
   });
 });
@@ -951,6 +1047,40 @@ describe("unmatched routes", () => {
   it("404s a completely unknown path", async () => {
     const res = await get("/api/not-a-real-endpoint");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("readJsonBody: malformed request bodies", () => {
+  it("malformed JSON to a mutation endpoint -> 400 with a short error payload, never 401/500", async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/topics`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminToken()}` },
+        body: "{not valid json",
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.detail).toBe("string");
+    });
+  });
+
+  it("malformed JSON to POST /api/auth/login -> 400, distinct from the wrong-credentials 401", async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{bad json, not parseable",
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  it("a fully empty body still resolves to {} for an endpoint that tolerates it (logout, no body at all)", async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/api/auth/logout`, { method: "POST" });
+      expect(res.status).toBeGreaterThanOrEqual(200);
+      expect(res.status).toBeLessThan(300);
+    });
   });
 });
 
@@ -1233,4 +1363,137 @@ describe("isDirectEntry (Task 8 launcher/server entrypoint guard)", () => {
   // `process.platform` internally, so a test run on this (POSIX) machine
   // cannot exercise its win32 code path -- see this repo's fix report for
   // the manually-unverifiable-on-this-machine note.
+});
+
+// bootStub (Task 8 launcher, robustness pass): covers the port-fallback +
+// readiness wiring end to end -- a REAL `node demo/server.mjs` subprocess is
+// spawned each time (not startServer() in-process like the rest of this
+// file), since the whole point is to exercise bootStub's own spawn/race
+// logic, not just the stub server it boots. Deliberately stops short of also
+// booting `next dev` (main()'s other half): a full `npm run demo` process
+// tree is heavy and prone to CI flakiness (a real Next dev-server cold
+// start), and bootStub already isolates the launcher-owned logic (port pick,
+// spawn, readiness race) from that half -- see this repo's fix report for
+// this documented boundary.
+describe("bootStub (Task 8 launcher: readiness/fallback/error wiring)", () => {
+  it(
+    "falls back to a different port when the preferred one is already held, and the resolved stub is really reachable there",
+    async () => {
+      const holder = net.createServer();
+      await new Promise<void>((resolve) => holder.listen(0, () => resolve()));
+      const heldPort = (holder.address() as net.AddressInfo).port;
+      let result: Awaited<ReturnType<typeof bootStub>> | undefined;
+      try {
+        result = await bootStub({ preferredPort: heldPort });
+        expect(result.port).not.toBe(heldPort);
+        expect(result.port).toBeGreaterThan(0);
+        // Not just pickPort's in-isolation port math -- the actual spawned
+        // stub process answers its health-probe target on that port.
+        const res = await fetch(`${result.backendUrl}/docs`);
+        expect(res.status).toBe(200);
+      } finally {
+        result?.child.kill();
+        await new Promise<void>((resolve) => holder.close(() => resolve()));
+      }
+    },
+    15_000
+  );
+
+  it(
+    "fails fast (well under the 10s readiness deadline) when the stub process exits during the poll",
+    async () => {
+      // FIXTURES pointed at a nonexistent directory makes loadFixtures throw
+      // synchronously inside server.mjs's (non-async) startServer(), which
+      // is uncaught at that standalone-entrypoint call site -- Node prints a
+      // stack trace and exits 1 before ever binding a port, i.e. exactly the
+      // "exits before becoming ready" case this test targets.
+      const originalFixtures = process.env.FIXTURES;
+      process.env.FIXTURES = "/definitely/does/not/exist/for/this/test";
+      try {
+        const probe = net.createServer();
+        await new Promise<void>((resolve) => probe.listen(0, () => resolve()));
+        const freePort = (probe.address() as net.AddressInfo).port;
+        await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+        const start = Date.now();
+        await expect(bootStub({ preferredPort: freePort })).rejects.toThrow(/exited before becoming ready/);
+        const elapsedMs = Date.now() - start;
+        expect(elapsedMs).toBeLessThan(5_000); // real deadline is 10s -- this must not run it out
+      } finally {
+        if (originalFixtures === undefined) delete process.env.FIXTURES;
+        else process.env.FIXTURES = originalFixtures;
+      }
+    },
+    15_000
+  );
+
+  // NOT covered here (documented boundary -- see this repo's fix report):
+  // the spawn-'error' branch of raceStartup/main()'s persistent "error"
+  // listeners (item 2, spawn failure e.g. ENOENT on the executable itself).
+  // bootStub always spawns `process.execPath` (a real, always-valid path),
+  // so there's no parameter to inject a genuinely-unspawnable executable
+  // through the public bootStub/main() API without adding a test-only
+  // override that doesn't otherwise belong on that surface. Verified instead
+  // by code review (raceStartup's `stub.once("error", onError)` and main()'s
+  // `stub.on("error", ...)` / `next.on("error", ...)` are symmetric with the
+  // already-tested "exit" handling) and by the functional `npm run demo`
+  // sanity check.
+});
+
+describe("bootStub's stub-spawn path is cwd-independent (Task T2A)", () => {
+  it(
+    "bootStub still finds and boots demo/server.mjs when invoked from a subprocess whose cwd is nowhere near this repo",
+    () => {
+      const demoDir = path.dirname(fileURLToPath(import.meta.url)); // this test file also lives in demo/
+      const launcherUrl = pathToFileURL(path.join(demoDir, "launcher.mjs")).href;
+      // Runs bootStub itself, from a REAL subprocess whose cwd is os.tmpdir()
+      // (guaranteed to hold no demo/server.mjs) -- a regression to the old
+      // `spawn(process.execPath, ["demo/server.mjs"], ...)` relative-path
+      // form would make the inner spawn ENOENT here (raceStartup's onError
+      // branch), throwing before the fetch below ever runs, which surfaces
+      // as this whole execFileSync call throwing (non-zero exit).
+      // The subprocess's stdout also carries the grandchild stub's own
+      // "[demo-server] listening on ..." line (bootStub spawns it with
+      // `stdio: "inherit"`, by design -- so a real `npm run demo` still
+      // shows the stub's own logging) -- a distinct marker line, matched by
+      // regex, avoids depending on exact interleaving/ordering of that
+      // inherited output.
+      const script = [
+        `import { bootStub } from ${JSON.stringify(launcherUrl)};`,
+        "const result = await bootStub({ preferredPort: 0 });",
+        "const res = await fetch(`${result.backendUrl}/docs`);",
+        "console.log(`RESULT_STATUS:${res.status}`);",
+        "result.child.kill();",
+      ].join("\n");
+
+      const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+        cwd: os.tmpdir(),
+        encoding: "utf8",
+        timeout: 15_000,
+      });
+      expect(out).toMatch(/RESULT_STATUS:200/);
+    },
+    20_000
+  );
+});
+
+describe("isEnvFlagOn (env-flag parsing: DEMO_ROLE_TOOLING / NEXT_PUBLIC_DEMO_ROLE_TOOLING accept \"1\" or \"true\")", () => {
+  it('true for "1"', () => {
+    expect(isEnvFlagOn("1")).toBe(true);
+  });
+
+  it('true for "true"', () => {
+    expect(isEnvFlagOn("true")).toBe(true);
+  });
+
+  it('false for "0", "false", "yes", and empty string', () => {
+    expect(isEnvFlagOn("0")).toBe(false);
+    expect(isEnvFlagOn("false")).toBe(false);
+    expect(isEnvFlagOn("yes")).toBe(false);
+    expect(isEnvFlagOn("")).toBe(false);
+  });
+
+  it("false for undefined (unset)", () => {
+    expect(isEnvFlagOn(undefined)).toBe(false);
+  });
 });

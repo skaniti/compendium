@@ -11,6 +11,7 @@ function decodeSegment(b64u: string): unknown {
 
 describe("mintToken", () => {
   it("mints a 3-part jwt with numeric exp seconds", () => {
+    const beforeSec = Math.floor(Date.now() / 1000);
     const token = mintToken({ id: 1, email: "admin@demo.local", role: "admin" });
     const parts = token.split(".");
     expect(parts.length).toBe(3);
@@ -20,9 +21,16 @@ describe("mintToken", () => {
     const payload = decodeSegment(parts[1]) as { exp: number; iat: number };
     expect(typeof payload.exp).toBe("number");
     expect(Number.isFinite(payload.exp)).toBe(true);
-    // Seconds, not milliseconds -- roughly "now" plus the default ttl, not a
-    // 13-digit epoch-ms value.
-    expect(payload.exp).toBeLessThan(2_000_000_000);
+    // Seconds, not milliseconds -- bounded relative to "now" (captured just
+    // before minting) plus the default 3600s ttl, with a few seconds' test-
+    // execution slack. A hardcoded future cutoff (the previous
+    // `< 2_000_000_000` bound) itself goes stale: it false-fails once the
+    // wall clock passes 2033-05-18, since a legitimate ms-free exp would
+    // then also exceed it. A 13-digit epoch-ms value would blow this much
+    // tighter window by many orders of magnitude, so the "seconds, not ms"
+    // property is still exactly what's being asserted.
+    expect(payload.exp).toBeGreaterThanOrEqual(beforeSec);
+    expect(payload.exp).toBeLessThan(beforeSec + 3600 + 5);
     expect(parts[2]).toBe("demosig");
   });
 

@@ -45,7 +45,13 @@ describe("PUT /api/[...path]", () => {
     expect(res.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
-    expect(url).toBe("http://localhost:8001/api/topics/demo/icon");
+    // Asserts the PATH/QUERY the proxy built, not the host -- route.ts's
+    // BACKEND const is read once at module-import time from
+    // process.env.BACKEND_URL (falling back to localhost:8001), so a literal
+    // full-URL assertion here would depend on whatever BACKEND_URL happened
+    // to be set to in the ambient environment this test runs under, rather
+    // than the proxying logic under test.
+    expect(new URL(url).pathname).toBe("/api/topics/demo/icon");
     expect(init.method).toBe("PUT");
     expect(init.headers.get("authorization")).toBe("Bearer test-token");
     expect(Buffer.from(init.body as ArrayBuffer).toString()).toBe(JSON.stringify(payload));

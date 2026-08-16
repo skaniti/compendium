@@ -1369,14 +1369,28 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
   });
 });
 
-// Default-off contract: NEXT_PUBLIC_DEMO_ROLE_TOOLING left UNSET (this
-// describe block deliberately has no beforeEach/afterEach touching it,
-// unlike the describe block above) -- the out-of-the-box `npm run demo` /
-// `npm run dev` experience. The view-as control must not render even for a
-// session whose role/actingAsDemo WOULD otherwise satisfy the old
-// unconditional gate (i.e. even if a real or stub backend somehow reflects
-// role: "admin" or acting_as_demo: true).
+// Default-off contract: NEXT_PUBLIC_DEMO_ROLE_TOOLING left UNSET -- the
+// out-of-the-box `npm run demo` / `npm run dev` experience. The view-as
+// control must not render even for a session whose role/actingAsDemo WOULD
+// otherwise satisfy the old unconditional gate (i.e. even if a real or stub
+// backend somehow reflects role: "admin" or acting_as_demo: true). The
+// beforeEach explicitly DELETES the var (rather than relying on it merely
+// happening to be unset in whatever ambient environment the suite runs
+// under) so this block's "default off" premise holds regardless of the
+// wider test run's env state -- same save/restore idiom as the describe
+// block above, just deleting instead of setting.
 describe("GraphCanvas graph-debug-overlay role-gated triggers: default off (NEXT_PUBLIC_DEMO_ROLE_TOOLING unset)", () => {
+  const originalRoleTooling = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
+
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
+  });
+
+  afterEach(() => {
+    if (originalRoleTooling === undefined) delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
+    else process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = originalRoleTooling;
+  });
+
   it("admin role: view-demo trigger is absent by default", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
@@ -1400,6 +1414,30 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers: default off (NEXT
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
     expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
     expect(screen.queryByText("view demo")).not.toBeInTheDocument();
+  });
+});
+
+// NEXT_PUBLIC_DEMO_ROLE_TOOLING="true" is accepted the same as "1"
+// (isRoleToolingVisible's widened parse) -- a single representative
+// assertion, not a full re-run of every case the "1" describe block above
+// already covers.
+describe('GraphCanvas graph-debug-overlay role-gated triggers: NEXT_PUBLIC_DEMO_ROLE_TOOLING="true" is also accepted', () => {
+  const originalRoleTooling = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = "true";
+  });
+
+  afterEach(() => {
+    if (originalRoleTooling === undefined) delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
+    else process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = originalRoleTooling;
+  });
+
+  it('admin: sees the view-demo trigger with the flag set to "true" (not just "1")', async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(screen.getByText("view demo")).toBeInTheDocument());
   });
 });
 
