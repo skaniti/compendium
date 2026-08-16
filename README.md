@@ -2,10 +2,10 @@
 
 ![CI](https://github.com/skaniti/compendium/actions/workflows/ci.yml/badge.svg)
 
-Turn curiosity-driven browsing into a topic-based knowledge compendium: every
-page you read gets clustered into topics, laid out as an explorable
-constellation graph, and made queryable through a RAG chat agent that cites
-its sources back onto the graph.
+I built Compendium to turn curiosity-driven browsing into a topic-based
+knowledge compendium: every page you read gets clustered into topics, laid
+out as an explorable constellation graph, and made queryable through a RAG
+chat agent that cites its sources back onto the graph.
 
 ![Compendium app shell -- diary panel, constellation graph, topic detail](docs/readme/app-shell.png)
 
@@ -34,35 +34,27 @@ topic detail, and chat are all live from the first paint.
 
 ## Demo notes
 
-**Accounts.** The stub implements a full login/logout/refresh flow against
-two fixed accounts:
+**Identity.** `npm run demo` gives you one identity with full control over a
+local, synthetic compendium -- nothing to log into, nothing to configure. The
+source also contains a demo/admin/view-as role system that backs my hosted
+deployment; it's off by default here, gated behind `DEMO_ROLE_TOOLING` (stub
+side) and `NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend side), so a stranger
+running the demo never sees it. The app still has a `/login` page -- I'm not
+documenting credentials for it, since the default demo flow never needs it.
 
-| Email               | Password | Role  |
-| ------------------- | -------- | ----- |
-| `admin@demo.local`  | `admin`  | admin |
-| `demo@demo.local`   | `demo`   | demo  |
+**Data.** I curated the demo compendium from real, publicly licensed web
+pages (Wikipedia, arXiv, GitHub, Stack Exchange, and a few others) spanning
+four topics -- diffusion models, Greek/Roman mythology, electronics/Arduino,
+and cephalopods -- respread across a plausible browsing timeline that stays
+"recent" no matter when you clone the repo. Full source list and licensing
+notes: `demo/fixtures/ATTRIBUTION.md`.
 
-You can log in as either. Logging in directly as the demo account is
-write-gated: mutations (topic edits, exclusions, preference writes, etc.) get
-rejected. Logging in as admin unlocks a "view as demo" control (in the
-graph's debug overlay, top-left of the canvas) that lets an admin browse the
-demo account's view while retaining full write access, plus a "return to
-admin" control to switch back -- the same admin/demo/view-as loop the hosted
-deployment uses.
-
-**Data.** The demo compendium is a curated snapshot of real, publicly
-licensed web pages (Wikipedia, arXiv, GitHub, Stack Exchange, and a few
-others) spanning four topics -- diffusion models, Greek/Roman mythology,
-electronics/Arduino, and cephalopods -- respread across a plausible browsing
-timeline that stays "recent" no matter when you clone the repo. Full source
-list and licensing notes: `demo/fixtures/ATTRIBUTION.md`.
-
-**Chat.** The search bar at the bottom of the graph replays 12 recorded
-question/answer runs from the real agent (`demo/fixtures/chat/index.json`
-lists the exact questions) token-by-token over SSE, complete with source
-pills that frame the cited nodes back on the graph. Anything else typed in
-falls back to a response that explains demo mode and suggests a question
-from the list.
+**Chat.** I recorded 12 real question/answer runs from the live agent
+(`demo/fixtures/chat/index.json` lists the exact questions); the search bar
+at the bottom of the graph replays them token-by-token over SSE, complete
+with source pills that frame the cited nodes back on the graph. Anything else
+typed in falls back to a response that explains demo mode and suggests a
+question from the list.
 
 **Mutations.** Topic edits, exclusions, and preference writes persist for the
 life of the stub process and reset on restart; `Recluster` waits a couple of
@@ -83,7 +75,7 @@ headlessly via jsdom.
 
 ## Architecture
 
-- **Frontend:** Next.js (App Router), the whole UI you see above -- graph
+- **Frontend:** Next.js (App Router) -- the whole UI you see above: graph
   canvas, diary/history panel, topic detail, header widgets, and the chat
   search bar.
 - **API proxy:** `app/api/[...path]/route.ts` forwards every `/api/*` call
@@ -116,12 +108,14 @@ project and will land here as the migration continues.
 
 ## Known limitations
 
-Graph rendering currently depends on noise proportion, and eliminating the
-dependency is tracked as follow-up work. Relatedly: this OSS build has no
-dev/admin split on the noise toggle or the admin-only graph controls --
-gating hides nothing in source you can read yourself. The role mechanics
-(admin/demo/view-as) stay in place because they serve the hosted deployment,
-not because anything here is locked down from you.
+Graph rendering currently depends on noise proportion; eliminating that
+dependency is tracked as follow-up work. The noise toggle and the admin-only
+graph controls aren't gated in this build -- the source is right there if you
+want to see them. The demo-account and view-as machinery is different: it
+exists for my hosted deployment, and I gate it off by default here
+(`DEMO_ROLE_TOOLING` / `NEXT_PUBLIC_DEMO_ROLE_TOOLING`) so a stranger's first
+run stays a single, uncomplicated identity. `scripts/dev.sh` sets both flags
+if you want that machinery running locally.
 
 ## Conventions
 
@@ -129,8 +123,7 @@ not because anything here is locked down from you.
   `type: subject`, lowercase, no AI attribution, enforced by a husky
   `commit-msg` hook.
 - **Pushes are gated:** the `pre-push` hook refuses to push unless
-  `ALLOW_PUSH=1` is set. Deliberate friction -- pushing is a conscious act in
-  this repo.
+  `ALLOW_PUSH=1` is set. I want pushing to be a conscious act in this repo.
 - **Line endings:** LF repo-wide, enforced via `.gitattributes`.
 
 ## License
