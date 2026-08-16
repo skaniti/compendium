@@ -215,6 +215,21 @@ const ERROR_STYLE: CSSProperties = {
 // will-change rule that would trap it).
 const NODE_TOOLTIP_STYLE: CSSProperties = { display: "none" };
 
+// Role-tooling opt-in (frontend half; stub-side sibling is
+// DEMO_ROLE_TOOLING in demo/server.mjs's startServer): OFF by default, so a
+// stranger running `npm run demo` (or plain `npm run dev`) never sees the
+// view-demo/return-to-admin controls below, regardless of what `role`/
+// `actingAsDemo` useSession() happens to report. The maintainer's own dev
+// stack (scripts/dev.sh) sets NEXT_PUBLIC_DEMO_ROLE_TOOLING=1;
+// demo/launcher.mjs (`npm run demo`) deliberately does not. Read live
+// (not cached at module scope) via a literal `process.env.NEXT_PUBLIC_...`
+// reference -- same convention as SessionKeeper.tsx's readIdleMinutes --
+// so Next's client build can still statically inline it per the
+// NEXT_PUBLIC_* convention while a test can still override it per-case.
+function isRoleToolingVisible(): boolean {
+  return process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING === "1";
+}
+
 // Task group B (batch 03, spec decision C): resolves whatever saved tuner
 // profile should apply BEFORE first paint -- Next-native, no boot latch, no
 // timeout. A DEDICATED GET /api/auth/me call (not SessionProvider's own --
@@ -830,7 +845,7 @@ export default function GraphCanvas() {
           </p>
         )}
         <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
-          {role === "admin" && !actingAsDemo && (
+          {isRoleToolingVisible() && role === "admin" && !actingAsDemo && (
             <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
               <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
                 view demo
@@ -838,7 +853,7 @@ export default function GraphCanvas() {
               <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
             </span>
           )}
-          {actingAsDemo && (
+          {isRoleToolingVisible() && actingAsDemo && (
             <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
               <button
                 type="button"

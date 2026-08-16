@@ -13,6 +13,17 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
+# Role-tooling opt-in: this is the maintainer's own dev stack, so keep the
+# demo account + view-as/return-to-admin machinery available with zero
+# extra steps (hosted-parity development). `npm run demo` (demo/launcher.mjs)
+# deliberately leaves both unset -- a stranger's out-of-the-box run gets a
+# single full-control identity and never sees this. Stub-side
+# (DEMO_ROLE_TOOLING) only matters if something in this stack ends up
+# running demo/server.mjs; exported here regardless, for the same
+# zero-extra-steps reason. See demo/server.mjs's startServer doc comment
+# and components/GraphCanvas.tsx's isRoleToolingVisible for the two readers.
+export DEMO_ROLE_TOOLING="${DEMO_ROLE_TOOLING:-1}"
+export NEXT_PUBLIC_DEMO_ROLE_TOOLING="${NEXT_PUBLIC_DEMO_ROLE_TOOLING:-1}"
 # Backend repo location: an explicit env var wins; otherwise read BACKEND_DIR from
 # the gitignored .env.local so this committed script carries no machine-local path.
 if [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/.env.local" ]; then
