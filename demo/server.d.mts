@@ -16,6 +16,14 @@ export interface StartServerOptions {
   // a small/zero value so reading a whole fixture's stream (hundreds of
   // token events) doesn't blow the test budget.
   chatTokenDelayMs?: number;
+  // Role-tooling opt-in (default false -- see server.mjs's startServer doc
+  // comment): when true, the demo@demo.local account can log in and the
+  // two acting-session endpoints (POST /api/auth/view-as, POST
+  // /api/auth/return-to-admin) exist. When false/omitted, the stub serves
+  // only the default admin identity, the demo account's login attempt
+  // falls through to the standard invalid-credentials 401, and the two
+  // acting-session endpoints are absent (404, not 401).
+  roleToolingEnabled?: boolean;
 }
 
 export interface StartedServer {

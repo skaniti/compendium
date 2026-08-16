@@ -374,17 +374,23 @@ const REFRESH_TTL_SEC = 60 * 60 * 24 * 7; // 7 days
 // admin. Admin identity (id/email/name) is derived from the me.json fixture
 // -- the single source of truth for "who the admin is" -- rather than
 // hand-duplicated here.
-function buildAccounts(fixtures) {
+//
+// Role-tooling opt-in (out-of-the-box hiding, see startServer's
+// `roleToolingEnabled` doc comment): when disabled, the demo account is
+// simply omitted from `byEmail` -- POST /api/auth/login for
+// demo@demo.local then falls through the SAME "account not found" branch
+// unknown-email already takes, landing on the ONE permitted 401 rather than
+// a bespoke rejection path. `demoUser` itself is still built either way
+// (cheap, and buildMeVariants/view-as's minting need the shape); it just
+// never becomes reachable through login when disabled.
+function buildAccounts(fixtures, roleToolingEnabled) {
   const adminUser = { id: fixtures.me.id, email: fixtures.me.email, name: fixtures.me.name, role: "admin" };
   const demoUser = { id: 2, email: "demo@demo.local", name: "Demo User", role: "demo" };
-  return {
-    adminUser,
-    demoUser,
-    byEmail: {
-      [adminUser.email]: { password: "admin", user: adminUser },
-      [demoUser.email]: { password: "demo", user: demoUser },
-    },
-  };
+  const byEmail = { [adminUser.email]: { password: "admin", user: adminUser } };
+  if (roleToolingEnabled) {
+    byEmail[demoUser.email] = { password: "demo", user: demoUser };
+  }
+  return { adminUser, demoUser, byEmail };
 }
 
 // Reconstructs a mintToken-shaped {id, email, role} user plus the acting
@@ -423,8 +429,8 @@ function buildMeVariants(fixtures, accounts) {
   return { meDemo, meActing };
 }
 
-function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs }) {
-  const accounts = buildAccounts(fixtures);
+function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled }) {
+  const accounts = buildAccounts(fixtures, roleToolingEnabled);
   const { meDemo, meActing } = buildMeVariants(fixtures, accounts);
 
   // Task 6 write gate: every mutation handler gets wrapped with this so the
@@ -883,37 +889,48 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs }) {
       },
     },
 
-    // POST /api/auth/view-as -- Bearer (if present) + {profile:"demo"} ->
-    // {access_token, token_type, user} with NO refresh_token key
-    // (deliberately -- rotating a refresh token for an acting session would
-    // let it outlive the demo view past its own TTL; the frontend leaves
-    // the admin's existing refresh_token cookie untouched instead).
-    {
-      method: "POST",
-      pattern: /^\/api\/auth\/view-as$/,
-      handler: async (req, res) => {
-        await readJsonBody(req); // drain; only shape supported is {profile:"demo"}
-        sendJson(res, 200, {
-          access_token: mintToken(accounts.demoUser, { actingAsDemo: true }),
-          token_type: "bearer",
-          user: { id: accounts.demoUser.id, email: accounts.demoUser.email, name: accounts.demoUser.name },
-        });
-      },
-    },
+    // POST /api/auth/view-as and POST /api/auth/return-to-admin -- the two
+    // acting-session endpoints, spread in ONLY when roleToolingEnabled
+    // (both omitted entirely otherwise). Omitting them from the table
+    // rather than adding an inline gate check means an unrecognized path
+    // falls through to the SAME "not found" 404 every other unmatched
+    // route already gets -- inert, never a 401 -- with no special-casing
+    // in the request dispatcher.
+    ...(roleToolingEnabled
+      ? [
+          // POST /api/auth/view-as -- Bearer (if present) + {profile:"demo"} ->
+          // {access_token, token_type, user} with NO refresh_token key
+          // (deliberately -- rotating a refresh token for an acting session would
+          // let it outlive the demo view past its own TTL; the frontend leaves
+          // the admin's existing refresh_token cookie untouched instead).
+          {
+            method: "POST",
+            pattern: /^\/api\/auth\/view-as$/,
+            handler: async (req, res) => {
+              await readJsonBody(req); // drain; only shape supported is {profile:"demo"}
+              sendJson(res, 200, {
+                access_token: mintToken(accounts.demoUser, { actingAsDemo: true }),
+                token_type: "bearer",
+                user: { id: accounts.demoUser.id, email: accounts.demoUser.email, name: accounts.demoUser.name },
+              });
+            },
+          },
 
-    // POST /api/auth/return-to-admin -- Bearer (acting token), no body ->
-    // same no-refresh-token shape as view-as, admin token restored.
-    {
-      method: "POST",
-      pattern: /^\/api\/auth\/return-to-admin$/,
-      handler: (req, res) => {
-        sendJson(res, 200, {
-          access_token: mintToken(accounts.adminUser),
-          token_type: "bearer",
-          user: { id: accounts.adminUser.id, email: accounts.adminUser.email, name: accounts.adminUser.name },
-        });
-      },
-    },
+          // POST /api/auth/return-to-admin -- Bearer (acting token), no body ->
+          // same no-refresh-token shape as view-as, admin token restored.
+          {
+            method: "POST",
+            pattern: /^\/api\/auth\/return-to-admin$/,
+            handler: (req, res) => {
+              sendJson(res, 200, {
+                access_token: mintToken(accounts.adminUser),
+                token_type: "bearer",
+                user: { id: accounts.adminUser.id, email: accounts.adminUser.email, name: accounts.adminUser.name },
+              });
+            },
+          },
+        ]
+      : []),
   ];
 }
 
@@ -941,11 +958,24 @@ export function startServer({
   // fixture's stream (hundreds of token events) doesn't blow the test
   // budget -- see server.d.mts's StartServerOptions.
   chatTokenDelayMs = 15,
+  // Role-tooling opt-in -- OFF by default, matching the out-of-the-box
+  // `npm run demo` experience: a stranger gets a single full-control
+  // (admin) identity and never sees the demo account or acting-session
+  // machinery (buildAccounts/buildRoutes above). The maintainer's own dev
+  // stack opts in by setting the DEMO_ROLE_TOOLING=1 env var, read ONLY at
+  // this module's standalone-entrypoint boundary below (mirrors the
+  // existing PORT/FIXTURES env-read pattern) and threaded through as this
+  // explicit option -- so importers (tests, a future embedder) opt in via
+  // the option directly rather than mutating process.env. NEXT_PUBLIC_
+  // DEMO_ROLE_TOOLING is this flag's frontend-side sibling (gates
+  // rendering the view-as control in components/GraphCanvas.tsx); the two
+  // are set together but read independently, one per process.
+  roleToolingEnabled = false,
 } = {}) {
   const resolvedFixturesDir = path.resolve(process.cwd(), fixturesDir);
   const fixtures = loadFixtures(resolvedFixturesDir);
   const state = createMutableState(fixtures);
-  const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs });
+  const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled });
 
   const onHandlerError = (req, res, url, err) => {
     console.error(`[demo-server] handler error for ${req.method} ${url.pathname}:`, err);
@@ -1008,7 +1038,13 @@ function isDirectEntry(metaUrl, argv1) {
 if (isDirectEntry(import.meta.url, process.argv[1])) {
   const port = process.env.PORT ? Number(process.env.PORT) : 8001;
   const fixturesDir = process.env.FIXTURES || "demo/fixtures";
-  startServer({ port, fixturesDir })
+  // Role-tooling opt-in -- see startServer's `roleToolingEnabled` doc
+  // comment. `npm run demo` (demo/launcher.mjs) spawns this process with
+  // `...process.env` untouched, so it stays unset (default off) there;
+  // scripts/dev.sh exports DEMO_ROLE_TOOLING=1 for the maintainer's own
+  // dev stack.
+  const roleToolingEnabled = process.env.DEMO_ROLE_TOOLING === "1";
+  startServer({ port, fixturesDir, roleToolingEnabled })
     .then(({ port: boundPort }) => {
       console.log(`[demo-server] listening on :${boundPort} (fixtures: ${fixturesDir})`);
     })

@@ -15,7 +15,14 @@ let baseUrl: string;
 let close: () => Promise<void>;
 
 beforeAll(async () => {
-  const server = await startServer({ port: 0, fixturesDir: "demo/fixtures" });
+  // roleToolingEnabled: true -- this shared server backs every describe
+  // block below that logs in as demo@demo.local or exercises
+  // POST /api/auth/view-as / return-to-admin (the role machinery this
+  // suite has always covered). The default-OFF contract itself is tested
+  // separately, against isolated withServer() instances that leave the
+  // option at its real default -- see the "role-tooling opt-in" describe
+  // block near the end of this file.
+  const server = await startServer({ port: 0, fixturesDir: "demo/fixtures", roleToolingEnabled: true });
   baseUrl = `http://localhost:${server.port}`;
   close = server.close;
 });
@@ -65,7 +72,7 @@ function req(base: string, method: string, pathAndQuery: string, body?: unknown,
 // to reliably abort mid-stream).
 async function withServer<T>(
   fn: (base: string) => Promise<T>,
-  overrides: { reclusterDelayMs?: number; chatTokenDelayMs?: number } = {}
+  overrides: { reclusterDelayMs?: number; chatTokenDelayMs?: number; roleToolingEnabled?: boolean } = {}
 ): Promise<T> {
   const server = await startServer({
     port: 0,
@@ -529,6 +536,83 @@ describe("POST /api/auth/view-as and /api/auth/return-to-admin", () => {
     const returnRes = await post("/api/auth/return-to-admin", undefined, viewAs.access_token);
     const back = await returnRes.json();
     expect(back).not.toHaveProperty("refresh_token");
+  });
+});
+
+// Role-tooling opt-in: `roleToolingEnabled` defaults to false (server.mjs's
+// startServer doc comment) so a stranger running `npm run demo` gets a
+// single full-control identity and never sees the demo account or
+// acting-session machinery. Every test in this block uses withServer() with
+// NO override, so it exercises the real out-of-the-box default -- not the
+// roleToolingEnabled:true server the rest of this file shares.
+describe("role-tooling opt-in (DEMO_ROLE_TOOLING, default off)", () => {
+  it("demo login is rejected via the SAME invalid-credentials 401 as a wrong password, not a bespoke path", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/auth/login", { email: "demo@demo.local", password: "demo" });
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body).toEqual({ detail: "invalid credentials" });
+    });
+  });
+
+  it("admin login is unaffected -- still works with role tooling off", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/auth/login", { email: "admin@demo.local", password: "admin" });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(decodeJwtPayload(body.access_token).role).toBe("admin");
+    });
+  });
+
+  it("POST /api/auth/view-as is inert (404), never 401", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/auth/view-as", { profile: "demo" });
+      expect(res.status).toBe(404);
+      expect(res.status).not.toBe(401);
+    });
+  });
+
+  it("POST /api/auth/return-to-admin is inert (404), never 401", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/auth/return-to-admin");
+      expect(res.status).toBe(404);
+      expect(res.status).not.toBe(401);
+    });
+  });
+
+  it("unauthenticated GET /api/auth/me still serves the default admin identity", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "GET", "/api/auth/me");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.role).toBe("admin");
+      expect(body.acting_as_demo).toBe(false);
+    });
+  });
+
+  it("the default identity keeps full write access (a mutation succeeds with no token)", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/topics", { keyword: "unattended-write" });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  it("roleToolingEnabled:true restores demo login and the acting-session endpoints", async () => {
+    await withServer(
+      async (base) => {
+        const loginRes = await req(base, "POST", "/api/auth/login", { email: "demo@demo.local", password: "demo" });
+        expect(loginRes.status).toBe(200);
+
+        const adminLoginRes = await req(base, "POST", "/api/auth/login", {
+          email: "admin@demo.local",
+          password: "admin",
+        });
+        const adminLogin = await adminLoginRes.json();
+        const viewAsRes = await req(base, "POST", "/api/auth/view-as", { profile: "demo" }, adminLogin.access_token);
+        expect(viewAsRes.status).toBe(200);
+      },
+      { roleToolingEnabled: true }
+    );
   });
 });
 
