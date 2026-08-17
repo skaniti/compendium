@@ -56,6 +56,28 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // W3; lib/vendor/vendor.d.ts's Window augmentation documents the flag
     // itself).
     onFirstPaint?: () => void;
+    // Batch 03 graph fix wave V4, item 2 (vendor header comment delta #31):
+    // fired SYNCHRONOUSLY at the top of every REAL render() cycle -- mount,
+    // graphVersion-bump re-render, and vendor-internal re-renders alike
+    // (noise toggle, tuner change, knot expand) -- before the worker sim
+    // even starts. components/GraphCanvas.tsx's settle veil raises on this
+    // signal. Carried through an opts-omitting OR opts-sparse re-render
+    // exactly like onFirstPaint is (see that field's own comment and the
+    // vendor's delta #28/#31 for the full carry-forward mechanism) -- a
+    // caller does not need to re-specify this on every render() call.
+    onRenderCycleStart?: () => void;
+    // Fired once finishRenderAfterSettle's chunk 3 completes -- after its
+    // fitToContent call and after INITIATING (not waiting out) a
+    // knot-expand's 500ms frame transition, which deliberately keeps
+    // animating past this signal. components/GraphCanvas.tsx's settle veil
+    // drops on this signal, and (batch 03 V4 item 3b) so does
+    // CompendiumLoader.tsx's cold-load dismiss trigger -- moved here from
+    // onFirstPaint so the loader holds until the canvas is actually fully
+    // painted, not just started. Same carry-through contract as
+    // onRenderCycleStart above -- never fires for the empty/error domains
+    // (GraphCanvas.tsx never calls render() for those; see its own
+    // comments for the equivalent wrapper-visible resolution).
+    onSettleEnd?: () => void;
   }
 
   // A1-1 promotion (vendor header comment delta #11): returns a dispose()

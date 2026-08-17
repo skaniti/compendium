@@ -758,6 +758,150 @@ describe("d3-graph-vendor render() interim zoom clamp (header comment delta #30)
   });
 });
 
+// Batch 03 graph fix wave V4, item 2 (header comment delta #31): the
+// settle lifecycle callbacks onRenderCycleStart/onSettleEnd, and the
+// generalized carry-forward that keeps both alive across an opts-omitted
+// OR opts-sparse re-render (delta #31 generalizes delta #28's mechanism,
+// which only ever covered onFirstPaint on an entirely-omitted opts).
+describe("d3-graph-vendor render() settle lifecycle callbacks (header comment delta #31)", () => {
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+  });
+
+  afterEach(() => {
+    flushSettleChunks();
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  it("fires onRenderCycleStart synchronously at render() entry, and onSettleEnd once chunk 3 completes", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onRenderCycleStart = vi.fn();
+    const onSettleEnd = vi.fn();
+    render(container, ONE_NODE_PAYLOAD, { onRenderCycleStart, onSettleEnd });
+
+    // Synchronous: already fired by the time render() returns.
+    expect(onRenderCycleStart).toHaveBeenCalledTimes(1);
+    // NOT yet fired -- settle (the worker's async tick->end plus the
+    // rAF-chunked finishRenderAfterSettle tail) hasn't completed.
+    expect(onSettleEnd).not.toHaveBeenCalled();
+
+    flushSettleChunks();
+    expect(onSettleEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fire either callback for a zero-node payload (render()'s own empty-payload guard runs first)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onRenderCycleStart = vi.fn();
+    const onSettleEnd = vi.fn();
+
+    render(
+      container,
+      { nodes: [], links: [], clusters: [], super_clusters: [], groups: [] },
+      { onRenderCycleStart, onSettleEnd },
+    );
+
+    expect(onRenderCycleStart).not.toHaveBeenCalled();
+    expect(onSettleEnd).not.toHaveBeenCalled();
+  });
+
+  it("carries both callbacks through an opts-OMITTED re-render (toggleNoise's render(rawData) tail)", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onRenderCycleStart = vi.fn();
+    const onSettleEnd = vi.fn();
+    toggleNoise(true);
+    render(container, NOISE_PAYLOAD, { onRenderCycleStart, onSettleEnd });
+    flushSettleChunks();
+    expect(onRenderCycleStart).toHaveBeenCalledTimes(1);
+    expect(onSettleEnd).toHaveBeenCalledTimes(1);
+
+    toggleNoise(false); // internally: render(rawData) -- opts omitted entirely
+    // Discriminating: pre-fix, this second cycle's callbacks would never
+    // fire at all (opts silently dropped, same class of bug delta #28
+    // originally fixed for onFirstPaint alone).
+    expect(onRenderCycleStart).toHaveBeenCalledTimes(2);
+    flushSettleChunks();
+    expect(onSettleEnd).toHaveBeenCalledTimes(2);
+
+    toggleNoise(true); // restore for any test ordering after this one
+    flushSettleChunks();
+  });
+
+  // toggleGroupExpansion's knot-expand render(rawData, {preserveView,
+  // frameGroupId}) call passes a REAL but SPARSE opts object -- neither
+  // key is omitted-opts in the literal sense delta #28 originally handled,
+  // which is exactly why item 2's brief calls this site out by name as
+  // needing the generalized carry-forward (delta #31), not just delta #28's
+  // original opts-omitted-entirely fallback.
+  it("carries both callbacks through an opts-SPARSE re-render (toggleGroupExpansion's knot-expand render call)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const GROUP_ID = 90210;
+    function member(id: string, parent: string): GraphPayload["nodes"][number] {
+      return {
+        id,
+        label: id,
+        level: 0,
+        kind: "cluster",
+        visit_count: 1,
+        parent_id: parent,
+        children_ids: [],
+        capture_ids: [],
+        page_urls: ["https://example.com/" + id],
+        first_visited_at: null,
+      };
+    }
+    const payload: GraphPayload = {
+      nodes: [member("page-1", "solo"), member("page-2", "grp"), member("page-3", "grp")],
+      links: [],
+      clusters: [
+        { id: "solo", name: "Solo Cluster", page_ids: ["page-1"] },
+        {
+          id: "grp",
+          name: "Group Cluster",
+          page_ids: ["page-2", "page-3"],
+          group_id: GROUP_ID,
+          group_tier: "casual",
+          group_label: "Delta 31 Test Group",
+        },
+      ],
+      super_clusters: [],
+      groups: [],
+    };
+
+    const onRenderCycleStart = vi.fn();
+    const onSettleEnd = vi.fn();
+    render(container, payload, { onRenderCycleStart, onSettleEnd });
+    flushSettleChunks();
+    expect(onRenderCycleStart).toHaveBeenCalledTimes(1);
+    expect(onSettleEnd).toHaveBeenCalledTimes(1);
+
+    const groups = Array.from(container.querySelectorAll("g.group-label-group"));
+    const target = groups.find((g) => g.querySelector("text")?.textContent?.includes("Delta 31 Test Group"));
+    expect(target).toBeTruthy();
+    target!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); // expand
+
+    expect(onRenderCycleStart).toHaveBeenCalledTimes(2);
+    flushSettleChunks();
+    expect(onSettleEnd).toHaveBeenCalledTimes(2);
+  });
+});
+
 // Task A1-3 Step 4 (header comment delta #14): the DOM-mirror seam
 // (#noise-toggle-json) is gone -- these exercise the REAL toggleNoise(show)
 // setter against the real module, since GraphCanvas.test.tsx's mocked
