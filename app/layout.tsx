@@ -121,6 +121,48 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: buildThemeBootstrapScript() }} />
       </head>
       <body>
+        {/* Scriptless-load fallback: CompendiumLoader's full-screen overlay
+            (#compendium-loader.loader, app/styles/compendium-loader.css --
+            position:fixed, inset:0, z-index:99999, background:var(--bg)) is
+            plain SSR'd CSS, not JS-gated -- it paints regardless of
+            scripting -- but its content and dismissal are entirely
+            injected/driven by lib/vendor/compendium-loader.js, which never
+            runs without JS. Without this, a scriptless visitor gets an
+            opaque, permanent, textless curtain: a silent black page.
+            <noscript> is the right primitive here rather than a JS-toggled
+            element: the browser's own HTML parser only renders its contents
+            as real markup when scripting is disabled, so this notice exists
+            precisely for the visitors who need it and is otherwise inert --
+            no client-side check required, and no interaction with the raw
+            theme-bootstrap <script> above or React's own hydration.
+            Inline styles only (no CSS-file dependency): the notice must
+            stay legible even if every stylesheet above also failed to
+            load, so this deliberately uses literal colors instead of the
+            var(--bg)/var(--text) theme tokens the rest of the app relies
+            on. z-index is set higher than the loader's 99999 so this wins
+            the stacking comparison unconditionally, regardless of DOM
+            order relative to wherever CompendiumLoader ends up mounted. */}
+        <noscript>
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2147483647,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: "24px",
+              boxSizing: "border-box",
+              background: "#000",
+              color: "#fff",
+              fontFamily: "Georgia, serif",
+              fontSize: "1.1rem",
+            }}
+          >
+            compendium requires JavaScript to run. Please enable JavaScript in your browser and reload the page.
+          </div>
+        </noscript>
         {/* SessionProvider (D4/D5, batch 04) hydrates {role, account,
             actingAsDemo, ...} from GET /api/auth/me and mounts
             SessionKeeper (D2, activity-scoped sliding refresh) internally

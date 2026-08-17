@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { buildThemeBootstrapScript } from "./layout";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { cookies } from "next/headers";
+import RootLayout, { buildThemeBootstrapScript } from "./layout";
 import { DEFAULT_VARIANT, generateCssText, getTokens, normalizeVariant } from "@/lib/theme";
 
 const STORAGE_KEY = "compendium-theme";
@@ -127,5 +129,77 @@ describe("buildThemeBootstrapScript stays in sync with lib/theme.ts", () => {
     const expectedCss = generateCssText(getTokens(normalizeVariant(stored)));
     expect(first.textContent).toBe(expectedCss);
     expect(second.textContent).toBe(expectedCss);
+  });
+});
+
+// A scriptless load renders as a silent black page: CompendiumLoader's
+// full-screen overlay (#compendium-loader.loader, app/styles/
+// compendium-loader.css -- position:fixed, inset:0, z-index:99999,
+// background:var(--bg)) is plain SSR'd CSS, not JS-gated, so it paints
+// regardless of scripting -- but its content and dismissal are ENTIRELY
+// injected/driven by lib/vendor/compendium-loader.js, which never runs
+// without JS. Without a fallback, a scriptless visitor gets an opaque,
+// permanent, textless curtain. <noscript> is the right tool here (not a
+// JS-toggled element): the browser's own HTML parser renders its contents
+// as real markup only when scripting is disabled, so this notice exists in
+// the DOM precisely for the visitors who need it and is otherwise inert --
+// no client-side check required.
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(),
+}));
+
+function makeFakeCookieJar() {
+  return { get: () => undefined };
+}
+
+describe("noscript fallback (scriptless-load notice)", () => {
+  beforeEach(() => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    // Belt-and-suspenders: RootLayout's own preferences readers already
+    // short-circuit without a cookie (no fetch expected here), but stub
+    // fetch anyway so this test can never reach the real network -- for
+    // instance if a later change widens what those readers attempt without
+    // a cookie present (see lib/preferences.server.ts's V3 fix pattern).
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("renders a legible noscript notice naming the app and requiring JavaScript", async () => {
+    const element = await RootLayout({ children: <div>page content</div> });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain("<noscript>");
+    expect(html).toMatch(/compendium/i);
+    expect(html).toMatch(/requires javascript/i);
+  });
+
+  it("styles the notice to outrank CompendiumLoader's full-screen overlay (z-index 99999) regardless of DOM order", async () => {
+    const element = await RootLayout({ children: <div>page content</div> });
+    const html = renderToStaticMarkup(element);
+
+    const noscriptMatch = html.match(/<noscript>(.*?)<\/noscript>/s);
+    expect(noscriptMatch).not.toBeNull();
+    const inner = noscriptMatch![1];
+
+    // fixed + a z-index higher than the loader's 99999 wins the stacking
+    // comparison unconditionally, without depending on where in <body>
+    // this element happens to sit relative to the loader's own markup.
+    expect(inner).toMatch(/position:\s*fixed/);
+    const zIndexMatch = inner.match(/z-index:\s*(\d+)/);
+    expect(zIndexMatch).not.toBeNull();
+    expect(Number(zIndexMatch![1])).toBeGreaterThan(99999);
+  });
+
+  it("does not depend on an external stylesheet for legibility (literal colors, not theme CSS vars)", async () => {
+    const element = await RootLayout({ children: <div>page content</div> });
+    const html = renderToStaticMarkup(element);
+
+    const noscriptMatch = html.match(/<noscript>(.*?)<\/noscript>/s);
+    const inner = noscriptMatch![1];
+    expect(inner).not.toMatch(/var\(--/);
   });
 });
