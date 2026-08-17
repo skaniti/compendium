@@ -48,11 +48,17 @@ async function waitForVendorReady(): Promise<void> {
 }
 
 // Task A1-4: stands in for GraphCanvas.tsx's own render-complete write
-// (`window.__compendiumGraphRendered = true` once vendor.render() returns
-// for the first time) -- tests below drive it directly rather than
-// mounting a real GraphCanvas, mirroring how this file already drives
-// window.__compendiumLoader.dismiss()/.replay() directly instead of
-// mounting Header.tsx.
+// (`window.__compendiumGraphRendered = true`) -- tests below drive it
+// directly rather than mounting a real GraphCanvas, mirroring how this
+// file already drives window.__compendiumLoader.dismiss()/.replay()
+// directly instead of mounting Header.tsx. This loader component's own
+// contract with the flag is unchanged by batch 03 graph fix wave V4 item
+// 3b: tryDismiss() still just polls the flag, regardless of which
+// GraphCanvas.tsx write site sets it or when. Only WHO writes it and WHEN
+// moved (from vendor.render()'s `onFirstPaint` -- "something painted" --
+// to its `onSettleEnd` -- "fully settled" -- see GraphCanvas.tsx's own
+// comments and its "render-complete signal" describe block in
+// GraphCanvas.test.tsx for the retimed contract itself).
 function markGraphRendered(): void {
   window.__compendiumGraphRendered = true;
 }

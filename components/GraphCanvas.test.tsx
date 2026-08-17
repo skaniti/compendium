@@ -22,20 +22,31 @@ import type { GraphPayload } from "@/lib/types";
 // jsdom doesn't implement; lib/graph/d3-graph-vendor.remount.test.ts
 // covers the real, unmocked module separately).
 const disposeMock = vi.fn();
-// Task group W, W3 step: mirrors the real vendor's contract -- render()
-// itself is synchronous, but `onFirstPaint` (the render-complete signal
-// GraphCanvas.tsx now wires window.__compendiumGraphRendered to) fires
-// from a LATER worker `tick` message, never synchronously within render().
-// Deferred a microtask here (not called inline) so tests can tell "not on
-// start" apart from "eventually true" -- see the render-complete signal
-// describe block below. This is renderMock's OWN default implementation
-// (not a wrapper AROUND renderMock) specifically so a test's
-// `renderMock.mockImplementationOnce(...)` genuinely overrides it -- the
-// mock factory below just forwards to renderMock verbatim, no separate
-// hardcoded behavior sitting outside its reach.
+// Task group W, W3 step; extended by batch 03 graph fix wave V4 item 3:
+// mirrors the real vendor's contract for all three settle-lifecycle
+// callbacks (lib/graph/d3-graph-vendor.js header comment delta #31).
+// `onRenderCycleStart` fires SYNCHRONOUSLY at render()-call time, exactly
+// like the real vendor. `onFirstPaint` and `onSettleEnd` both fire
+// asynchronously ("eventually" -- render() itself is synchronous, but
+// neither callback is), deferred a microtask each and CHAINED so
+// `onSettleEnd` always fires STRICTLY AFTER `onFirstPaint` -- matching the
+// real vendor's own ordering (settle-end is the worker reaching `end`,
+// strictly after its first `tick`) and letting a test tell "onFirstPaint
+// fired" apart from "onSettleEnd (also) fired" via sequential awaits. This
+// is renderMock's OWN default implementation (not a wrapper AROUND
+// renderMock) specifically so a test's `renderMock.mockImplementationOnce
+// (...)` genuinely overrides it -- the mock factory below just forwards to
+// renderMock verbatim, no separate hardcoded behavior sitting outside its
+// reach.
 const renderMock = vi.fn((...args: unknown[]) => {
-  const opts = args[2] as { onFirstPaint?: () => void } | undefined;
-  queueMicrotask(() => opts?.onFirstPaint?.());
+  const opts = args[2] as
+    | { onRenderCycleStart?: () => void; onFirstPaint?: () => void; onSettleEnd?: () => void }
+    | undefined;
+  opts?.onRenderCycleStart?.();
+  queueMicrotask(() => {
+    opts?.onFirstPaint?.();
+    queueMicrotask(() => opts?.onSettleEnd?.());
+  });
   return disposeMock;
 });
 const setSelectionMock = vi.fn();
@@ -628,8 +639,8 @@ function spyOnGraphRenderedFlag(): { values: unknown[] } {
   return { values };
 }
 
-describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's real dismiss trigger)", () => {
-  it("sets window.__compendiumGraphRendered once the vendor's onFirstPaint callback fires", async () => {
+describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's real dismiss trigger; retimed by batch 03 graph fix wave V4 item 3b)", () => {
+  it("sets window.__compendiumGraphRendered once the vendor's onSettleEnd callback fires", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     renderCanvas();
 
@@ -639,50 +650,62 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
   });
 
   // Task group W, W3 step: the signal moved from "render() returned" to
-  // "the worker's first tick painted" -- render() itself stays
-  // synchronous (starting a worker and returning immediately), so this
-  // pins the actual contract change: reaching/returning from render() is
-  // NOT sufficient on its own, only the onFirstPaint callback firing is.
-  it("does NOT set the signal merely from render() being called -- only from its onFirstPaint callback firing", async () => {
+  // "the worker's first tick painted" (onFirstPaint). Batch 03 V4 item 3b
+  // moved it AGAIN, from onFirstPaint to onSettleEnd -- "painted something"
+  // is no longer sufficient either, only "fully settled" is (this also
+  // removes the user-reported cold-load empty-canvas flash: the loader
+  // used to dismiss while dots were still mid-settle). This pins BOTH
+  // contract changes: reaching/returning from render() is not sufficient,
+  // and onFirstPaint firing alone is no longer sufficient either.
+  it("does NOT set the signal from render() being called, nor from onFirstPaint alone -- only from onSettleEnd firing", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     let capturedOnFirstPaint: (() => void) | undefined;
+    let capturedOnSettleEnd: (() => void) | undefined;
     renderMock.mockImplementationOnce((...args: unknown[]) => {
-      const opts = args[2] as { onFirstPaint?: () => void } | undefined;
+      const opts = args[2] as { onFirstPaint?: () => void; onSettleEnd?: () => void } | undefined;
       capturedOnFirstPaint = opts?.onFirstPaint;
-      // Deliberately do not invoke it here -- this test controls exactly
-      // when "first paint" happens, unlike the shared mock's default
-      // (queueMicrotask-deferred, see the vi.mock factory above) which
-      // every other test in this file relies on for a plain eventual
-      // `waitFor`.
+      capturedOnSettleEnd = opts?.onSettleEnd;
+      // Deliberately do not invoke either here -- this test controls
+      // exactly when "first paint" and "settle end" each happen, unlike
+      // the shared mock's default (queueMicrotask-chained, see the
+      // vi.mock factory above) which every other test in this file relies
+      // on for a plain eventual `waitFor`.
       return disposeMock;
     });
     renderCanvas();
 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     expect(typeof capturedOnFirstPaint).toBe("function");
+    expect(typeof capturedOnSettleEnd).toBe("function");
     // render() has already been called (and, per its own synchronous
     // contract, already returned) -- the signal must still be unset.
     expect(window.__compendiumGraphRendered).toBeUndefined();
 
+    // The discriminating step (item 3b): onFirstPaint firing alone is NO
+    // LONGER sufficient -- pre-item-3b, this line would have already set
+    // the flag.
     capturedOnFirstPaint?.();
+    expect(window.__compendiumGraphRendered).toBeUndefined();
+
+    capturedOnSettleEnd?.();
     expect(window.__compendiumGraphRendered).toBe(true);
   });
 
-  it("is exactly-once even if the vendor's onFirstPaint callback fires more than once (idempotent write)", async () => {
+  it("is exactly-once even if the vendor's onSettleEnd callback fires more than once (idempotent write)", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     const flag = spyOnGraphRenderedFlag();
-    let capturedOnFirstPaint: (() => void) | undefined;
+    let capturedOnSettleEnd: (() => void) | undefined;
     renderMock.mockImplementationOnce((...args: unknown[]) => {
-      const opts = args[2] as { onFirstPaint?: () => void } | undefined;
-      capturedOnFirstPaint = opts?.onFirstPaint;
+      const opts = args[2] as { onSettleEnd?: () => void } | undefined;
+      capturedOnSettleEnd = opts?.onSettleEnd;
       return disposeMock;
     });
     renderCanvas();
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
 
-    capturedOnFirstPaint?.();
-    capturedOnFirstPaint?.();
-    capturedOnFirstPaint?.();
+    capturedOnSettleEnd?.();
+    capturedOnSettleEnd?.();
+    capturedOnSettleEnd?.();
 
     expect(window.__compendiumGraphRendered).toBe(true);
     expect(flag.values.every((v) => v === true)).toBe(true);
@@ -804,6 +827,185 @@ describe("GraphCanvas render-complete signal (Task A1-4: CompendiumLoader.tsx's 
 
     expect(flag.values.length).toBeGreaterThan(0);
     expect(flag.values.every((v) => v === true)).toBe(true);
+  });
+});
+
+// Batch 03 graph fix wave V4, item 3: the wrapper-level settle veil.
+// Raised at the vendor's onRenderCycleStart, dropped at its onSettleEnd
+// (lib/graph/d3-graph-vendor.js header comment delta #31) -- covers every
+// render cycle EXCEPT the first (CompendiumLoader.tsx's own full-screen
+// curtain already covers cold load; item 3b's own suppression design,
+// documented at handleSettleVeilRaise's own comment in GraphCanvas.tsx).
+describe("GraphCanvas settle veil (batch 03 graph fix wave V4, item 3)", () => {
+  it("renders no veil element before any render cycle starts", async () => {
+    vi.spyOn(api, "fetchGraph").mockImplementation(() => new Promise(() => {})); // never resolves
+    renderCanvas();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
+  });
+
+  it("does NOT raise the veil on the FIRST render cycle (item 3b: the loader owns cold load)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    let capturedOnRenderCycleStart: (() => void) | undefined;
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      capturedOnRenderCycleStart = opts?.onRenderCycleStart;
+      opts?.onRenderCycleStart?.(); // synchronous, matches the real vendor's own contract
+      return disposeMock;
+    });
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(typeof capturedOnRenderCycleStart).toBe("function");
+    // The veil must stay hidden even though onRenderCycleStart already fired.
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
+  });
+
+  it("raises the veil on a LATER render cycle's onRenderCycleStart, and drops it on that cycle's onSettleEnd", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+    // Let the FIRST cycle complete fully (default mock auto-resolves) so
+    // hasSettledOnceRef flips true -- the veil is now eligible to raise.
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
+
+    let capturedOnSettleEnd: (() => void) | undefined;
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void; onSettleEnd?: () => void } | undefined;
+      capturedOnSettleEnd = opts?.onSettleEnd;
+      opts?.onRenderCycleStart?.(); // synchronous, matches the real vendor's own contract
+      // onSettleEnd deliberately NOT fired here -- this test controls it.
+      return disposeMock;
+    });
+
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+
+    // Raised: this is a LATER cycle, not the first.
+    expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
+
+    act(() => capturedOnSettleEnd?.());
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
+  });
+
+  it("renders as a pointer-events: auto overlay (not pointer-events: none) while raised -- item 3a's interaction lockout", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      return disposeMock;
+    });
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+
+    const veil = document.querySelector("#graph-settle-veil") as HTMLElement | null;
+    expect(veil).not.toBeNull();
+    expect(veil).toHaveStyle({ pointerEvents: "auto" });
+  });
+
+  // Item 3c: a veil that never drops bricks the app.
+  it("failsafe: force-drops the veil ~15s after it was raised if onSettleEnd never fires, with a console.warn", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    // First cycle uses REAL timers + waitFor, same as every other test in
+    // this describe block -- fake timers are switched on ONLY for the
+    // second cycle + the 15s advance below. RTL's `waitFor` polls via a
+    // real setTimeout/setInterval internally (@testing-library/dom), which
+    // never progresses under fake timers unless the fake clock is advanced
+    // WHILE the wait is in flight -- this repo's own established fake-timer
+    // convention (components/SessionKeeper.test.tsx) avoids mixing the two
+    // by keeping `waitFor` scoped to real-timer stretches only.
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      // onSettleEnd never fires for this cycle -- simulates a stuck or
+      // superseded run the veil would otherwise wait on forever.
+      return disposeMock;
+    });
+
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        screen.getByText("trigger-refresh").click();
+        // Flushes the click's async refresh()/fetchGraph() microtask chain
+        // (advanceTimersByTimeAsync(0) also drains microtasks, unlike the
+        // sync advanceTimersByTime -- SessionKeeper.test.tsx's own
+        // convention for exactly this "let a mocked async fetch resolve
+        // under fake timers" need).
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(renderMock).toHaveBeenCalledTimes(2);
+      expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+
+      expect(document.querySelector("#graph-settle-veil")).toBeNull();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/settle veil force-dropped/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Item 2's empty-domain requirement: the vendor itself never fires
+  // onSettleEnd for the empty domain (its own render() bails at the
+  // empty-payload guard before reaching any real cycle) -- this is the
+  // "equivalent wrapper-visible resolution" that keeps a still-raised veil
+  // from being stranded if a real cycle was mid-settle when a later
+  // refetch raced the canvas into empty.
+  it("drops the veil if a later refetch settles into the EMPTY domain while a cycle was still raised", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph")
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(EMPTY_PAYLOAD);
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    // Cycle 2: raises the veil, never settles (simulates a real cycle
+    // still mid-settle when the next refetch below races in).
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      return disposeMock;
+    });
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
+
+    // Cycle 3: the real vendor's render() would bail at its own
+    // empty-payload guard before firing ANY callback -- mirrored here by
+    // not firing anything from this mocked call either.
+    renderMock.mockImplementationOnce(() => disposeMock);
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+
+    // The wrapper-visible resolution: showEmptyState's own effect
+    // force-drops the still-raised veil, independent of the (never-fired)
+    // onSettleEnd.
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
   });
 });
 

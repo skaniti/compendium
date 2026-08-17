@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -89,6 +90,40 @@ const D3_GRAPH_CONTAINER_STYLE: CSSProperties = {
   overflow: "hidden",
   position: "relative",
   zIndex: 1,
+};
+
+// Batch 03 graph fix wave V4, item 3: settle veil -- raised at the
+// vendor's onRenderCycleStart, dropped at its onSettleEnd (both fire for
+// every render cycle, including vendor-internal knot-expand re-renders --
+// see lib/graph/d3-graph-vendor.js header comment delta #31 and
+// lib/graph/vendor.d.ts's own field comments). `background:
+// var(--container-bg)` matches #d3-graph-container's own transparent body
+// (it shows .panel-center's `--container-bg` through -- app/styles/
+// theme.css), so this reads as a plain, momentary pause rather than a
+// visible flash. `zIndex: 20` sits above every other layer this
+// container ever stacks (the vendor's own zoom indicator at z-index 10,
+// its edge-chip layer at z-index 5, the debug overlay at z-index 3, the
+// empty-state div at z-index 2, the bare <svg> itself unindexed) so
+// nothing shows through during settle. `pointerEvents: "auto"` (NOT
+// "none") is load-bearing: this is a plain sibling <div>, not a wrapper
+// AROUND the <svg> -- a wheel/pointer/click event fired anywhere in this
+// screen region targets the TOPMOST element in normal DOM hit-testing
+// (this veil), and since d3-zoom's own listeners are registered directly
+// on the <svg> node (a sibling, never an ancestor of this div), the event
+// simply never reaches them. No onWheel/onClick/onPointerDown handlers of
+// its own are needed to "swallow" anything -- z-index stacking + a
+// non-"none" pointer-events value already fully intercepts every canvas
+// gesture (wheel, drag, click, dblclick, touch/pinch) before it can reach
+// the graph underneath.
+const SETTLE_VEIL_STYLE: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  zIndex: 20,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--container-bg)",
+  pointerEvents: "auto",
 };
 
 const EMPTY_STATE_STYLE: CSSProperties = {
@@ -288,6 +323,63 @@ export default function GraphCanvas() {
   // double-firing in the same commit as the mount effect (see that effect's
   // own comment for the exact race it closes).
   const lastRenderedVersionRef = useRef<number | null>(null);
+
+  // Batch 03 graph fix wave V4, item 3: settle veil state. Covers the
+  // bare-dots settle window (vendor onRenderCycleStart -> onSettleEnd,
+  // lib/graph/d3-graph-vendor.js header comment delta #31) for every
+  // render cycle -- mount, graphVersion-bump re-render, and vendor-
+  // internal re-renders (noise toggle, tuner change, knot expand) this
+  // component never calls render() for directly, which inherit the SAME
+  // callbacks via the vendor's own opts carry-forward (delta #31's
+  // generalization of delta #28's mechanism) with no extra wiring here.
+  const [settleVeilVisible, setSettleVeilVisible] = useState(false);
+  // Suppresses the veil for the FIRST cycle only -- CompendiumLoader.tsx's
+  // full-screen curtain already covers cold load (item 3b: its own
+  // dismiss signal now waits on this same onSettleEnd, see the mount
+  // effect's onSettleEnd below), so double-covering with the veil
+  // underneath would be redundant chrome-on-chrome. Design choice, not
+  // the only valid one (the item's brief offered "layer it beneath"
+  // as the alternative) -- documented here per that brief's own
+  // "your call, document it." Flips permanently true the first time ANY
+  // cycle reaches onSettleEnd; never reset, so a later graphVersion bump
+  // or vendor-internal re-render always gets the veil.
+  const hasSettledOnceRef = useRef(false);
+  // Item 3c: failsafe -- a veil that never drops bricks the app. Cleared
+  // on every onSettleEnd and on unmount (mount effect's cleanup below).
+  const settleVeilTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearSettleVeilTimeout = useCallback(() => {
+    if (settleVeilTimeoutRef.current !== null) {
+      clearTimeout(settleVeilTimeoutRef.current);
+      settleVeilTimeoutRef.current = null;
+    }
+  }, []);
+  // Wired as the vendor's onRenderCycleStart at every render() call site
+  // below (mount + graphVersion-bump re-render) -- stable identity via
+  // useCallback so passing it doesn't itself trigger extra effect churn.
+  const handleSettleVeilRaise = useCallback(() => {
+    if (!hasSettledOnceRef.current) return; // first cycle: the loader owns the cover
+    setSettleVeilVisible(true);
+    clearSettleVeilTimeout();
+    settleVeilTimeoutRef.current = setTimeout(() => {
+      console.warn(
+        "GraphCanvas: settle veil force-dropped after 15s -- onSettleEnd never fired for this render cycle",
+      );
+      setSettleVeilVisible(false);
+    }, 15000);
+  }, [clearSettleVeilTimeout]);
+  // Wired as the vendor's onSettleEnd at every render() call site below.
+  // ALSO now owns the RENDERED-domain loader-dismiss signal (item 3b,
+  // moved from onFirstPaint -- see the mount effect's own comment at its
+  // call site for why) -- unconditional/idempotent, same "apply whatever
+  // already exists" shape every other window.__compendiumGraphRendered
+  // write site in this component already uses.
+  const handleSettleVeilDrop = useCallback(() => {
+    hasSettledOnceRef.current = true;
+    window.__compendiumGraphRendered = true;
+    clearSettleVeilTimeout();
+    setSettleVeilVisible(false);
+  }, [clearSettleVeilTimeout]);
+
   const { role, actingAsDemo, showNoise: sessionShowNoise } = useSession();
   const { state, dispatch, selectFromCanvas } = useNav();
   const { variant } = useTheme();
@@ -483,6 +575,13 @@ export default function GraphCanvas() {
         // to `{}` (see resolveTunerSnapshotFromMe's swallow-and-fall-back
         // contract), so this merge is then just GRAPH_DEFAULTS verbatim.
         tunerSnapshot: { ...GRAPH_DEFAULTS, ...tunerSnapshot },
+        // Batch 03 graph fix wave V4, item 3: settle veil raise/drop
+        // signals (lib/graph/d3-graph-vendor.js header comment delta #31).
+        // handleSettleVeilRaise no-ops on this FIRST cycle (the loader
+        // already covers it, see item 3b) -- see that handler's own
+        // comment for the suppression design.
+        onRenderCycleStart: handleSettleVeilRaise,
+        onSettleEnd: handleSettleVeilDrop,
         // Task group W (batch 03 Web Worker force sim), W3 step: render()
         // itself is synchronous (it starts the worker and returns), but
         // "started" no longer means "painted" now that the force layout
@@ -516,7 +615,16 @@ export default function GraphCanvas() {
         // signal (fires exactly once per render() call) -- the correct
         // place for a synchronous updateHighlighting()-driven reapply.
         onFirstPaint: () => {
-          window.__compendiumGraphRendered = true;
+          // Batch 03 graph fix wave V4, item 3b: the RENDERED-domain
+          // window.__compendiumGraphRendered write moved OFF this callback
+          // to handleSettleVeilDrop (wired as onSettleEnd above) -- the
+          // loader now holds until the canvas is FULLY painted (settle-end),
+          // not merely started (first paint), which also removes the
+          // user-reported cold-load empty-canvas flash (the loader used to
+          // dismiss while dots were still mid-settle). This callback still
+          // owns the selection/filter reapply below, UNCHANGED (item 3d:
+          // this V1-fix wiring and preserveView semantics stay untouched).
+          //
           // Apply whatever selection NavProvider already holds by the time
           // the import resolves (see selectedNodeIdRef's own comment above
           // for why this reads the ref, not the closed-over `state` -- the
@@ -534,24 +642,26 @@ export default function GraphCanvas() {
       // not the closed-over `graphVersion` param -- the LATEST version by
       // resolution time, not whatever it was when this effect started.
       lastRenderedVersionRef.current = graphVersionRef.current;
-      // Task group W, W3 step (batch 03 Web Worker force sim):
-      // render-complete signal for components/CompendiumLoader.tsx's
-      // dismiss trigger now fires from the `onFirstPaint` callback passed
-      // into vendor.render() above, not from reaching this line --
-      // render() itself is synchronous (it starts the worker sim and
-      // returns), but that no longer implies anything painted (the force
-      // layout runs off-thread; first paint is the worker's first `tick`
-      // message, lib/vendor/vendor.d.ts's Window augmentation documents
-      // the flag itself; CompendiumLoader.tsx's tryDismiss polls it
-      // alongside window.__compendiumLoader). Idempotent regardless of
-      // how many times `onFirstPaint` fires (it fires at most once per
-      // render() call by the vendor's own contract) -- the loader-side
-      // latch, not this flag, is what makes a later re-signal a no-op.
-      // This is one of THREE write sites for this flag (the other two --
-      // the empty-state settle, and the error settle -- are their own
-      // effects further down this component, fix round 1/2 of
-      // task-A1-4-report.md, UNCHANGED by task group W: they're settle
-      // states with no sim to wait on).
+      // Task group W, W3 step (batch 03 Web Worker force sim); RETIMED by
+      // batch 03 V4 item 3b: render-complete signal for
+      // components/CompendiumLoader.tsx's dismiss trigger now fires from
+      // the `onSettleEnd` callback (handleSettleVeilDrop) passed into
+      // vendor.render() above, not from reaching this line, and no longer
+      // from `onFirstPaint` either -- render() itself is synchronous (it
+      // starts the worker sim and returns), but that no longer implies
+      // anything painted (the force layout runs off-thread), and "first
+      // paint" (the worker's first `tick`) no longer implies FULLY painted
+      // either (bare dots, pre-settle) -- lib/vendor/vendor.d.ts's Window
+      // augmentation documents the flag itself; CompendiumLoader.tsx's
+      // tryDismiss polls it alongside window.__compendiumLoader.
+      // Idempotent regardless of how many times `onSettleEnd` fires (at
+      // most once per render() call by the vendor's own contract, same as
+      // onFirstPaint) -- the loader-side latch, not this flag, is what
+      // makes a later re-signal a no-op. This is one of THREE write sites
+      // for this flag (the other two -- the empty-state settle, and the
+      // error settle -- are their own effects further down this component,
+      // fix round 1/2 of task-A1-4-report.md, UNCHANGED by task group W:
+      // they're settle states with no sim to wait on).
     });
     return () => {
       cancelled = true;
@@ -562,6 +672,12 @@ export default function GraphCanvas() {
       recolorRef.current = null;
       toggleNoiseRef.current = null;
       setFilterDimRef.current = null;
+      // Item 3c: a disposed mount can never reach a later onSettleEnd for
+      // whatever cycle was in flight -- drop the veil and its failsafe
+      // timeout here too, rather than leaving either stranded until the
+      // 15s timeout would otherwise fire against an already-torn-down mount.
+      clearSettleVeilTimeout();
+      setSettleVeilVisible(false);
     };
     // Mount-once against the first non-empty payload by design (see above);
     // selection is read via selectedNodeIdRef (always current, see its own
@@ -593,14 +709,26 @@ export default function GraphCanvas() {
   // empty state has no sim to wait on (the mount effect above never even
   // starts one for a zero-node payload), so "settled" still just means
   // "showEmptyState became true," same as before. Only the mount effect's
-  // OWN write site moved (to vendor.render()'s new `onFirstPaint`
-  // callback, see that effect's comment) -- this one and the error-settle
-  // effect below are settle states with no sim, and stay exactly as they
-  // were.
+  // OWN write site moved (to vendor.render()'s new `onSettleEnd`
+  // callback, batch 03 V4 item 3b -- see that effect's comment) -- this
+  // one and the error-settle effect below are settle states with no sim,
+  // and stay exactly as they were.
+  //
+  // Batch 03 V4 item 2/3: also drops the settle veil (idempotent no-op if
+  // it was never raised) -- the vendor itself never fires onSettleEnd for
+  // this domain (render() bails at its own empty-payload guard before
+  // reaching any real cycle, see lib/graph/d3-graph-vendor.js header
+  // comment delta #31's own note on this), so this is the "equivalent
+  // wrapper-visible resolution" that keeps the veil from being stranded up
+  // if a real cycle happened to still be mid-settle when a later refetch
+  // (e.g. a window filter with no results) raced the canvas into empty.
   useEffect(() => {
     if (!showEmptyState) return;
     window.__compendiumGraphRendered = true;
-  }, [showEmptyState]);
+    clearSettleVeilTimeout();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (the vendor's own settle-lifecycle signal), not derivable at render
+    setSettleVeilVisible(false);
+  }, [showEmptyState, clearSettleVeilTimeout]);
 
   // Task A1-4 fix round 2 (review Finding 1, task-A1-4-report.md's second
   // "fix" section): a REJECTED fetchGraph is ALSO a settled canvas -- the
@@ -616,10 +744,16 @@ export default function GraphCanvas() {
   // error state, including a LATER one (a refresh() that fails again after
   // a prior success), and a later recovery into a real render (retry
   // succeeds) is just another same-value write, not a toggle.
+  //
+  // Batch 03 V4 item 2/3: also drops the settle veil, same reasoning as
+  // the showEmptyState effect just above.
   useEffect(() => {
     if (!error) return;
     window.__compendiumGraphRendered = true;
-  }, [error]);
+    clearSettleVeilTimeout();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (the vendor's own settle-lifecycle signal), not derivable at render
+    setSettleVeilVisible(false);
+  }, [error, clearSettleVeilTimeout]);
 
   // Task A1-3 (Step 1a/2): re-render the already-mounted vendor with fresh
   // graph data whenever graphVersion bumps (a refresh()-initiated flight
@@ -650,6 +784,12 @@ export default function GraphCanvas() {
     disposeRef.current = renderRef.current(containerRef.current, payload, {
       icons: iconData.icons,
       onSelect: (kind, id) => selectFromCanvas(kind as "node" | "cluster" | null, id ?? undefined),
+      // Batch 03 graph fix wave V4, item 3: same settle veil raise/drop
+      // wiring as the mount effect above (a graphVersion bump -- a window
+      // switch, a recluster elsewhere -- is exactly the kind of "re-render
+      // an already-mounted canvas" cycle the veil exists to cover).
+      onRenderCycleStart: handleSettleVeilRaise,
+      onSettleEnd: handleSettleVeilDrop,
       // Task V1 fix (vision-review fix loop, F1): re-apply selection AND
       // filter dim from onFirstPaint, NOT synchronously right after this
       // renderRef.current() call returns (the previous site, and the
@@ -683,7 +823,7 @@ export default function GraphCanvas() {
       },
     });
     lastRenderedVersionRef.current = graphVersion;
-  }, [graphVersion, payload, selectFromCanvas]);
+  }, [graphVersion, payload, selectFromCanvas, handleSettleVeilRaise, handleSettleVeilDrop]);
 
   // Step 4b / Step 6: canvas Esc is a BUBBLE-phase (no `true` capture
   // flag) document listener dispatching the nav layer's reserved
@@ -850,6 +990,23 @@ export default function GraphCanvas() {
   return (
     <>
       <div id="d3-graph-container" ref={containerRef} style={D3_GRAPH_CONTAINER_STYLE}>
+        {settleVeilVisible && (
+          // Batch 03 graph fix wave V4, item 3a: settle veil -- see
+          // SETTLE_VEIL_STYLE's own comment for the full stacking/
+          // interaction-lockout writeup. .topic-spinner (app/styles/
+          // search-bar.css) is the app's existing minimal loading
+          // indicator (already used for topic-panel/popover loads) --
+          // reused as-is, no new CSS/dependency for this "no new
+          // dependencies" requirement.
+          <div id="graph-settle-veil" style={SETTLE_VEIL_STYLE} aria-hidden="true">
+            {/* .topic-spinner's own margin-right (search-bar.css) assumes
+                inline layout next to trailing text -- zeroed here since
+                this veil centers the spinner alone (inline style wins
+                over the class rule for the same property regardless of
+                stylesheet specificity). */}
+            <span className="topic-spinner" style={{ marginRight: 0 }} />
+          </div>
+        )}
         {showEmptyState && (
           <div id="compendium-empty-state" style={EMPTY_STATE_STYLE}>
             <div style={EMPTY_STATE_LEAD_STYLE}>{EMPTY_STATE_BODY}</div>
