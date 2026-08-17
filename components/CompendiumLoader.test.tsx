@@ -183,6 +183,78 @@ describe("CompendiumLoader dismiss trigger (Task A1-4: graph render-complete, re
     expect(dismissSpy).not.toHaveBeenCalled();
     expect(getRoot()).toHaveClass("loader-dismiss");
   });
+
+  // Fix round 1 (F2, reviewer finding): pre-fix, exhausting the poll
+  // budget gave up SILENTLY -- window.__compendiumGraphRendered never
+  // turning true (a load that never settles, or one still genuinely
+  // settling when the ceiling arrives) left the loader's full-screen,
+  // pointer-events-active curtain stuck up forever over an app that may
+  // have gone on to render fine. Same failsafe philosophy as
+  // GraphCanvas.tsx's own settle-veil 15s force-drop: degrade to a
+  // visible app, never a stuck curtain.
+  //
+  // Timer strategy (deliberately NOT this repo's usual fake-timer
+  // convention, and NOT fake-from-mount either -- both were tried and
+  // rejected, see below):
+  //  - Vendor readiness (window.__compendiumLoader appearing) is awaited
+  //    with REAL timers via waitForVendorReady(), same as every other test
+  //    in this file. Installing fake timers BEFORE mount and advancing
+  //    past this step instead is flaky: the dynamic import()'s own
+  //    resolution can depend on genuine, uncached transform/compile work
+  //    the FIRST time this module loads in an isolated test run (no prior
+  //    test having warmed that cache) -- real wall-clock time that a
+  //    LOGICAL fake-clock advance does not actually wait out, so a fixed
+  //    "advance by 500ms" budget passes when run after other tests
+  //    (transform already cached) but fails when run in isolation.
+  //  - Fake timers are installed only AFTER vendor-readiness, for the
+  //    LONG budget-exhaustion stretch, which has no such real-I/O
+  //    dependency (pure setTimeout(tryDismiss, 50) self-rescheduling).
+  //    BUT: by the time `waitForVendorReady()` resolves, tryDismiss() has
+  //      already run once synchronously and scheduled its OWN next tick
+  //      via the REAL (not-yet-faked) setTimeout -- a timer already
+  //      scheduled under real timers keeps firing on the real clock even
+  //      after `vi.useFakeTimers()` swaps the global over, so advancing
+  //      the FAKE clock alone would never actually tick this pending
+  //      callback. The short real-time bridge wait below (via a captured
+  //      REAL setTimeout reference, taken before the swap) lets that one
+  //      already-pending real tick fire naturally; every tick AFTER that
+  //      one reads the (by-then-faked) global `setTimeout` when it
+  //      reschedules itself, so the chain lands entirely on the fake
+  //      clock from there on and the rest of the budget can be
+  //      fast-forwarded deterministically.
+  it("F2: force-dismisses (with a console.warn) once the poll budget is exhausted, instead of latching a stuck curtain", async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    render(<CompendiumLoader initialHasSeen={true} canPersist={false} />);
+    await waitForVendorReady();
+    // window.__compendiumGraphRendered deliberately never set -- simulates
+    // a load that never signals settled.
+    expect(getRoot()).not.toHaveClass("loader-dismiss");
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers();
+    try {
+      // Bridges the one poll tick already scheduled under real timers
+      // (see this test's own header comment) -- 200ms of genuine real
+      // wait comfortably clears its 50ms interval.
+      await act(async () => {
+        await new Promise((resolve) => realSetTimeout(resolve, 200));
+      });
+
+      await act(async () => {
+        // MAX_TRIES (300) * the 50ms poll interval -- CompendiumLoader.tsx's
+        // own comment explains why this ceiling is aligned with
+        // GraphCanvas.tsx's settle-veil failsafe (both 15s). A little
+        // extra margin covers the bridge wait's own already-elapsed ticks.
+        await vi.advanceTimersByTimeAsync(15_500);
+      });
+
+      expect(getRoot()).toHaveClass("loader-dismiss");
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]?.[0]).toMatch(/force-dismissing after the poll budget/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("CompendiumLoader vendor init guard (remount)", () => {

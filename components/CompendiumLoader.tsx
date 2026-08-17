@@ -232,14 +232,16 @@ export default function CompendiumLoader({
       // exist", see that callback's comment for why the distinction
       // matters for an empty-but-loaded compendium). This port's analogue:
       // window.__compendiumGraphRendered, set `true` by
-      // components/GraphCanvas.tsx from vendor.render()'s `onFirstPaint`
-      // callback -- the first Web Worker `tick` message's positions
-      // painted (Task group W, W3 step; before that task, render() was
-      // itself synchronous and this fired right after it returned --
-      // see that component's own comment; lib/vendor/vendor.d.ts
-      // documents the flag itself). tryDismiss below now polls BOTH
-      // window.__compendiumLoader
-      // (vendor ready) AND this flag (graph painted) before calling
+      // components/GraphCanvas.tsx from vendor.render()'s `onSettleEnd`
+      // callback -- finishRenderAfterSettle's final chunk completing, i.e.
+      // the canvas fully settled, not merely started (Task group W, W3
+      // step introduced the async split; batch 03 graph fix wave V4 item
+      // 3b RETIMED the write from `onFirstPaint` -- "something painted" --
+      // to `onSettleEnd` -- "fully settled" -- to remove a cold-load
+      // empty-canvas flash; see that component's own comment;
+      // lib/vendor/vendor.d.ts documents the flag itself). tryDismiss
+      // below now polls BOTH window.__compendiumLoader
+      // (vendor ready) AND this flag (graph settled) before calling
       // dismiss() -- order-independent (whichever condition becomes true
       // last is what this poll is waiting on; a flag already true when
       // this poll starts is picked up on the very next tick, same as
@@ -261,20 +263,29 @@ export default function CompendiumLoader({
       // immediately.
       //
       let tries = 0;
-      // ~10s at 50ms, matching the vendor module's own poll ceiling. Now
-      // also the give-up ceiling for "graph never painted" -- but A1-4
-      // (see the mount effect's own comment further up, and the
-      // showEmptyState/error effects right after it in GraphCanvas.tsx)
-      // means a zero-node compendium and a rejected fetch BOTH signal
-      // window.__compendiumGraphRendered promptly now, well under this
-      // ceiling; neither is the case this MAX_TRIES fallback actually
-      // exists for anymore. The one case left un-signaled is a fetch
-      // that never settles at all -- payload stays null forever, so
-      // none of the three write sites (mount/showEmptyState/error) ever
-      // fires -- see task-A1-4-report.md for why that case is knowingly
-      // left to this same fallback rather than special-cased in this
-      // slice.
-      const MAX_TRIES = 200;
+      // Fix round 1 (F2, reviewer finding): 15s at 50ms -- widened from the
+      // original ~10s (200 tries) to match components/GraphCanvas.tsx's own
+      // settle-veil failsafe (settleVeilTimeoutRef's 15000ms force-drop) so
+      // the two constants tell one coherent story about how long this app
+      // is willing to wait for a cycle to settle before giving up on it.
+      // Batch 03 graph fix wave V4 item 3b's onSettleEnd retiming (see this
+      // callback's own comment above) means a cold load now spends a much
+      // larger share of this budget waiting on the FULL settle (fetch +
+      // worker layout + the rAF-chunked finishRenderAfterSettle tail)
+      // rather than just the first paint -- a slow real dataset can
+      // plausibly still be mid-settle well past the OLD 10s ceiling, which
+      // is exactly why the budget grew alongside the retiming rather than
+      // staying put. A1-4 (see the mount effect's own comment further up,
+      // and the showEmptyState/error effects right after it in
+      // GraphCanvas.tsx) means a zero-node compendium and a rejected fetch
+      // BOTH signal window.__compendiumGraphRendered promptly, well under
+      // this ceiling; this budget now exists for two remaining cases: a
+      // real cycle that is still genuinely settling when the ceiling
+      // arrives, and a fetch that never settles at all (payload stays null
+      // forever, so none of the three write sites ever fires -- see
+      // task-A1-4-report.md for why that case was knowingly left to this
+      // fallback rather than special-cased).
+      const MAX_TRIES = 300;
       const tryDismiss = () => {
         if (cancelled) return;
         if (window.__compendiumLoader && window.__compendiumGraphRendered) {
@@ -283,10 +294,36 @@ export default function CompendiumLoader({
           return;
         }
         if (++tries > MAX_TRIES) {
-          // give up silently -- terminal state either way, the latch stays
-          // permanent rather than retrying on a future remount. See the
-          // MAX_TRIES comment above for the (now more reachable) case this
-          // covers.
+          // Fix round 1 (F2, reviewer finding): budget exhaustion used to
+          // give up SILENTLY here, leaving window.__compendiumLoader's
+          // full-screen, pointer-events-active curtain stuck up forever
+          // over a graph that may well have gone on to settle a moment
+          // later -- the retiming above shrank the margin between "still
+          // genuinely settling" and "hit the ceiling," making that stuck
+          // curtain more reachable than it used to be. Same failsafe
+          // philosophy as the settle veil's own 15s force-drop
+          // (components/GraphCanvas.tsx's settleVeilTimeoutRef): degrade to
+          // a visible app, never a stuck curtain -- force-dismiss with a
+          // console.warn rather than silently latching a broken UI.
+          // window.__compendiumLoader is virtually always defined by this
+          // point (the vendor module's own init poll is far faster than a
+          // graph settle -- this ceiling exists for the GRAPH side of the
+          // race, not the vendor side), but the guard below covers the
+          // pathological case where the vendor's own dynamic import
+          // somehow never resolved either -- nothing to call dismiss() on,
+          // so there is genuinely nothing left to do but warn and give up.
+          if (window.__compendiumLoader) {
+            console.warn(
+              "CompendiumLoader: force-dismissing after the poll budget was exhausted -- window.__compendiumGraphRendered never became true for this load",
+            );
+            window.__compendiumLoader.dismiss();
+          } else {
+            console.warn(
+              "CompendiumLoader: giving up after the poll budget was exhausted -- window.__compendiumLoader never initialized",
+            );
+          }
+          // Terminal state either way -- the latch stays permanent rather
+          // than retrying on a future remount.
           completed = true;
           return;
         }

@@ -722,9 +722,24 @@ export default function GraphCanvas() {
   // wrapper-visible resolution" that keeps the veil from being stranded up
   // if a real cycle happened to still be mid-settle when a later refetch
   // (e.g. a window filter with no results) raced the canvas into empty.
+  //
+  // Fix round 1 (F1, reviewer finding): this is ALSO the sole resolution
+  // point for hasSettledOnceRef when the canvas's FIRST-EVER outcome is
+  // empty, not a real render -- handleSettleVeilDrop (the only OTHER
+  // writer of that ref) never runs for this domain, since the vendor's
+  // render() bails before onSettleEnd can fire. Without flipping it here
+  // too, a cold load that starts empty and LATER gets real nodes (a
+  // window filter, a first capture landing) would have the loader already
+  // dismissed (the write above) but hasSettledOnceRef still false --
+  // handleSettleVeilRaise would then suppress the veil on that first REAL
+  // cycle as if it were still the loader-covered initial one, leaving a
+  // bare, unveiled settle window with nothing covering it. Same
+  // idempotent-write shape as the flag above (redundant once a real cycle
+  // has already flipped it, harmless either way).
   useEffect(() => {
     if (!showEmptyState) return;
     window.__compendiumGraphRendered = true;
+    hasSettledOnceRef.current = true;
     clearSettleVeilTimeout();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (the vendor's own settle-lifecycle signal), not derivable at render
     setSettleVeilVisible(false);
@@ -746,10 +761,15 @@ export default function GraphCanvas() {
   // succeeds) is just another same-value write, not a toggle.
   //
   // Batch 03 V4 item 2/3: also drops the settle veil, same reasoning as
-  // the showEmptyState effect just above.
+  // the showEmptyState effect just above -- including F1's
+  // hasSettledOnceRef flip (same rationale: this is the sole resolution
+  // point when the canvas's FIRST-EVER outcome is an error, not a real
+  // render, and a later successful retry must not have its veil
+  // suppressed as if it were still the loader-covered initial cycle).
   useEffect(() => {
     if (!error) return;
     window.__compendiumGraphRendered = true;
+    hasSettledOnceRef.current = true;
     clearSettleVeilTimeout();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from an external source (the vendor's own settle-lifecycle signal), not derivable at render
     setSettleVeilVisible(false);

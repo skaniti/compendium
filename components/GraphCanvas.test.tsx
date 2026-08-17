@@ -995,17 +995,129 @@ describe("GraphCanvas settle veil (batch 03 graph fix wave V4, item 3)", () => {
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
     expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
 
-    // Cycle 3: the real vendor's render() would bail at its own
-    // empty-payload guard before firing ANY callback -- mirrored here by
-    // not firing anything from this mocked call either.
-    renderMock.mockImplementationOnce(() => disposeMock);
+    // Cycle 3: the hasNodes true -> false transition (2 nodes -> 0) runs
+    // the MOUNT effect's own cleanup first (its `[hasNodes]` dependency
+    // changed) -- that cleanup nulls renderRef.current BEFORE the
+    // graphVersion-bump re-render effect gets a chance to act in the SAME
+    // commit, so renderMock is never invoked a third time at all (no
+    // mockImplementationOnce needed/queued here -- one left queued but
+    // unconsumed would silently leak into whichever test runs next and
+    // hijack ITS first render() call). Same behavior the sibling test
+    // "does not double-fire or resurrect when a later refetch goes
+    // RENDERED -> EMPTY" already documents via its own
+    // `toHaveBeenCalledTimes(1)` assertion -- this is that same mechanic,
+    // confirmed again here with the veil in play.
     act(() => screen.getByText("trigger-refresh").click());
     await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    expect(renderMock).toHaveBeenCalledTimes(2); // unchanged from cycle 2 -- confirms the queue above is clean
 
     // The wrapper-visible resolution: showEmptyState's own effect
     // force-drops the still-raised veil, independent of the (never-fired)
     // onSettleEnd.
     expect(document.querySelector("#graph-settle-veil")).toBeNull();
+  });
+
+  // Fix round 1 (F2 reviewer minor 5): the error-domain twin of the EMPTY
+  // test just above -- that test covers showEmptyState's own veil-drop
+  // line, but the error effect's identical line (GraphCanvas.tsx) had no
+  // discriminating test of its own.
+  it("drops the veil if a later refetch settles into the ERROR domain while a cycle was still raised", async () => {
+    const first = ONE_NODE_PAYLOAD;
+    const second: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph")
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second)
+      .mockRejectedValueOnce(new Error("boom"));
+    renderCanvas();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+
+    // Cycle 2: raises the veil, never settles.
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      return disposeMock;
+    });
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
+
+    // Cycle 3: the refetch itself rejects -- useGraph.ts's own catch branch
+    // never touches `graph`/`graphVersion` on a rejection, so BOTH re-render
+    // effect dependencies stay referentially unchanged (still cycle 2's
+    // `second` payload/version) and the effect doesn't even re-run -- the
+    // vendor's render() is never invoked a third time (renderMock stays at
+    // 2 calls; no mockImplementationOnce queued for this click, matching
+    // the sibling EMPTY-domain test's own "don't leave an unconsumed
+    // override for the next test to trip over" discipline).
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
+    expect(renderMock).toHaveBeenCalledTimes(2); // unchanged from cycle 2
+
+    // The wrapper-visible resolution: the error effect's own force-drop,
+    // independent of the (never-fired) onSettleEnd.
+    expect(document.querySelector("#graph-settle-veil")).toBeNull();
+  });
+
+  // Fix round 1 (F1, reviewer finding): hasSettledOnceRef -- the ref that
+  // suppresses the veil on "the first cycle" -- only used to flip from
+  // handleSettleVeilDrop (wired to the vendor's onSettleEnd). A cold load
+  // whose FIRST-EVER outcome is empty or error never reaches that callback
+  // at all (render() bails at its own empty-payload guard, or is never
+  // even called for a rejected fetch) -- pre-fix, the ref stayed false
+  // forever, so a SUBSEQUENT real cycle's onRenderCycleStart would still
+  // treat itself as "the first cycle" and suppress the veil, leaving a
+  // bare, unveiled settle window with nothing covering it (the loader was
+  // already dismissed by the empty/error write, so nothing else covers it
+  // either). The two tests below are the discriminating regression guard.
+  it("F1: an EMPTY-first cold load does not suppress the veil forever -- a LATER real cycle still raises it", async () => {
+    const real: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockResolvedValueOnce(EMPTY_PAYLOAD).mockResolvedValueOnce(real);
+    renderCanvas();
+
+    // First-ever outcome: empty. The vendor's render() is never called at
+    // all for this flight (mount effect requires hasNodes) -- the loader
+    // dismisses via this effect's own signal, not any vendor callback.
+    await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+    expect(renderMock).not.toHaveBeenCalled();
+
+    // A LATER refetch brings real nodes -- the mount effect's own
+    // dynamic-import path (hasNodes flips true -> the mount effect,
+    // gated on [hasNodes], runs for the FIRST time here) calls the vendor.
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      return disposeMock;
+    });
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    // The discriminating assertion: pre-fix, hasSettledOnceRef was still
+    // false here (nothing had ever flipped it), so handleSettleVeilRaise
+    // would have suppressed this cycle as "the first one." Post-fix, the
+    // showEmptyState effect already flipped it -- the veil raises.
+    expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
+  });
+
+  it("F1: an ERROR-first cold load does not suppress the veil forever -- a LATER real cycle still raises it", async () => {
+    const real: GraphPayload = { ...ONE_NODE_PAYLOAD, nodes: [node("page-1"), node("page-2")] };
+    vi.spyOn(api, "fetchGraph").mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(real);
+    renderCanvas();
+
+    await waitFor(() => expect(screen.getByText(/couldn't load graph: boom/i)).toBeInTheDocument());
+    await waitFor(() => expect(window.__compendiumGraphRendered).toBe(true));
+    expect(renderMock).not.toHaveBeenCalled();
+
+    renderMock.mockImplementationOnce((...args: unknown[]) => {
+      const opts = args[2] as { onRenderCycleStart?: () => void } | undefined;
+      opts?.onRenderCycleStart?.();
+      return disposeMock;
+    });
+    act(() => screen.getByText("trigger-refresh").click());
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    expect(document.querySelector("#graph-settle-veil")).not.toBeNull();
   });
 });
 
