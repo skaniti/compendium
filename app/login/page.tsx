@@ -1,197 +1,66 @@
-"use client";
+import { redirect } from "next/navigation";
+import LoginPageClient from "./LoginPageClient";
 
-import { useState, type CSSProperties, type FormEvent } from "react";
-import Starfield from "@/components/Starfield";
-import StarfieldProvider, { DEFAULT_STARFIELD_VARIANT } from "@/components/StarfieldProvider";
-import { getTokens } from "@/lib/theme";
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
+// Short enough that a genuinely unreachable backend can't hang the /login
+// render -- fails open to the credential form well before a user would
+// notice a stall.
+const PROBE_TIMEOUT_MS = 2000;
 
-// Ported from explorer frontend/dash/app.py:_build_login_layout (app.py:2149-2309).
-// The Dash login view forces the Teal palette on every visitor regardless of
-// their saved theme (app.py:2164-2175: "Teal's mint highlight pairs with the
-// favicon") -- we mirror that by overriding the CSS custom properties inline
-// on the page's own wrapper rather than touching the global theme-root style
-// tag ThemeProvider owns (app/layout.tsx), same isolation Dash gets from
-// building a standalone layout tree for the pre-auth view.
-const LOGIN_PALETTE = "Teal";
-
-function buildDarkVars(): CSSProperties {
-  const tokens = getTokens(LOGIN_PALETTE);
-  const vars: Record<string, string> = {};
-  for (const [key, value] of Object.entries(tokens)) {
-    vars[`--${key.replace(/_/g, "-")}`] = value;
-  }
-  // app.py:2175 -- "fill gap (no var(--subtle) is derived)"; text_muted
-  // stands in, same as Dash's _dark_vars["--subtle"] assignment.
-  vars["--subtle"] = tokens.text_muted;
-  return vars as CSSProperties;
-}
-
-const fieldStyle: CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  fontSize: "0.95rem",
-  background: "var(--surface)",
-  color: "var(--text)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  boxSizing: "border-box",
-};
-
-const labelStyle: CSSProperties = {
-  fontSize: "0.78rem",
-  color: "var(--subtle, #777)",
-};
-
-function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+// Dev-login recovery: an idle-session lapse (or any 401) bounces the app to
+// /login via lib/api.ts's redirectToLogin, but in dev/stub auth modes no
+// real credentials exist to type into that form -- the backend resolves
+// EVERY request, even one with no Authorization header at all, to a default
+// anonymous identity (the same dev-mode bypass lib/preferences.server.ts's
+// cookie-less readers rely on -- see getInitialPanelWidths's own comment).
+// Presenting a form that can never succeed there is a dead end; this probes
+// that identity BEFORE deciding whether to render the form at all.
+//
+// Deliberately its own fetch, not lib/preferences.server.ts's fetchMeRow --
+// that helper always sends a Bearer token off the visitor's own
+// access_token cookie and has no timeout; this probe is the opposite on
+// both counts. It must resolve identity from a COOKIE-LESS, anonymous
+// request (a signed-in visitor's cookie is never what this rides on -- the
+// point is resolving identity for a browser holding none), and it needs a
+// short timeout so a genuinely unreachable backend fails open to the form
+// (property (d) below) instead of hanging the render.
+//
+// Mode-agnostic by construction -- no NEXT_PUBLIC_* env gate here. The
+// probe result IS the signal: a hosted/prod backend 401s an anonymous
+// GET /api/auth/me (no dev bypass), so this always falls through to the
+// real form there; a dev/stub backend resolves it, so this always redirects
+// there. Same reasoning covers a deliberate sign-out on the dev stack: dev
+// mode has no real signed-out state to return to (the backend still
+// resolves the same default identity), so /login bounces straight back
+// into the app afterward -- accepted by design, not a bug.
+//
+// Can't introduce a redirect loop with apiFetch's own 401 interceptor
+// (lib/api.ts's redirectToLogin): that only fires client-side on a REAL 401
+// from an authenticated call, and that can't happen once redirect("/")
+// below only ever fires when the anonymous probe already confirmed a
+// usable identity.
+async function probeAnonymousIdentity(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/me`, {
+      cache: "no-store",
+      signal: controller.signal,
     });
-    if (res.ok) {
-      // Full reload (not router navigation) is deliberate: login must
-      // invalidate every client-side cache/context left over from the
-      // previous (signed-out or different-user) session.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after login
-      window.location.href = "/";
-      return;
-    }
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    setError(data.error || "Invalid credentials");
+    return res.ok;
+  } catch {
+    // Network error, timeout/abort, backend down -- fail OPEN to the form
+    // rather than crash or hang the /login render.
+    return false;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return (
-    <div
-      style={{
-        ...buildDarkVars(),
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bg)",
-        padding: 20,
-        boxSizing: "border-box",
-        colorScheme: "dark",
-      }}
-    >
-      {/* Full-viewport background (position:fixed by default -- see
-          lib/vendor/starry-sky.js) -- Dash's #starry-sky-mount sits outside
-          .panel-center on this view so it never gets the canvas-scoped
-          position:absolute override from starry-selector.css, unlike the
-          logged-in app's center panel. */}
-      <Starfield />
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 360,
-          padding: "40px 36px",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        <h1
-          style={{
-            fontFamily: "Georgia, serif",
-            fontSize: "2.4rem",
-            margin: "0 0 4px 0",
-            letterSpacing: "0.04em",
-            color: "var(--text)",
-          }}
-        >
-          compendium
-        </h1>
-        <p
-          style={{
-            color: "var(--subtle, #777)",
-            fontSize: "0.85rem",
-            margin: "0 0 28px 0",
-          }}
-        >
-          Knowledge graph from your browsing rabbit-holes
-        </p>
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="login-email" style={labelStyle}>
-            Email or username
-          </label>
-          {/* type="text" (not "email"): an email-typed input makes the
-              browser reject a bare username before submit. name="email"
-              stays -- the API route reads that field and resolves
-              email-or-username server-side (get_user_by_login). */}
-          <input
-            type="text"
-            name="email"
-            id="login-email"
-            placeholder="you@example.com or username"
-            required
-            autoFocus
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
-          />
-          <label htmlFor="login-password" style={labelStyle}>
-            Password
-          </label>
-          <input
-            type="password"
-            name="password"
-            id="login-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
-          />
-          <div
-            role={error ? "alert" : undefined}
-            style={{
-              color: "#c0392b",
-              fontSize: "0.8rem",
-              minHeight: 20,
-              marginBottom: 14,
-            }}
-          >
-            {error}
-          </div>
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "11px 12px",
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "var(--text)",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
-            Sign in
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 }
 
-// The login page renders pre-auth and lives outside AppShell (no header,
-// no panels) -- it composes its own StarfieldProvider instead of inheriting
-// one, seeded to the same default a logged-out visitor gets in Dash
-// (STARRY_SKY_VARIANT default "twinkle", app.py:2198 / graph_canvas.py:75).
-export default function LoginPage() {
-  return (
-    <StarfieldProvider initialVariant={DEFAULT_STARFIELD_VARIANT}>
-      <LoginForm />
-    </StarfieldProvider>
-  );
+export default async function LoginPage() {
+  const identityResolved = await probeAnonymousIdentity();
+  if (identityResolved) {
+    redirect("/");
+  }
+  return <LoginPageClient />;
 }

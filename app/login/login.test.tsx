@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import LoginPage from "./page";
+import LoginPage from "./LoginPageClient";
 
-// LoginPage composes its own StarfieldProvider (it sits outside AppShell,
-// pre-auth), which mounts the vendored <starry-sky> web component via a
-// dynamic import -- same async-mount shape Starfield.test.tsx already
-// exercises. No preferences.patchPreferences mock is needed here because
-// the login page never calls setVariant (no starfield switcher on this
-// page, only the passive background render).
+// Targets the extracted client half (dev-login recovery fix moved the
+// credential form out of app/login/page.tsx, now a server component that
+// probes identity before deciding whether this form is even reachable --
+// see app/login/page.test.tsx for that behavior). LoginPage here composes
+// its own StarfieldProvider (it sits outside AppShell, pre-auth), which
+// mounts the vendored <starry-sky> web component via a dynamic import --
+// same async-mount shape Starfield.test.tsx already exercises. No
+// preferences.patchPreferences mock is needed here because the login page
+// never calls setVariant (no starfield switcher on this page, only the
+// passive background render).
 
 function mockFetch(response: { ok: boolean; status?: number; json: () => Promise<unknown> }) {
   const fn = vi.fn().mockResolvedValue(response);
