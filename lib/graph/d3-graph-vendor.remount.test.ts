@@ -662,6 +662,102 @@ describe("d3-graph-vendor render() container-changed guard", () => {
   });
 });
 
+// Batch 03 graph fix wave V4, item 1 (header comment delta #30): the
+// interim zoom clamp. window.__d3GetZoomScaleExtent is a dev/test-only
+// escape hatch (same class as window.__d3FlushSettleChunk) exposing the
+// CURRENT render cycle's live zoom behavior's scaleExtent -- reading it
+// directly is far simpler and more deterministic than driving a real
+// d3-zoom wheel gesture/transition through jsdom.
+describe("d3-graph-vendor render() interim zoom clamp (header comment delta #30)", () => {
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+  });
+
+  afterEach(() => {
+    flushSettleChunks();
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  function zoomScaleExtent(): [number, number] | null {
+    const w = window as unknown as { __d3GetZoomScaleExtent?: () => [number, number] | null };
+    return w.__d3GetZoomScaleExtent?.() ?? null;
+  }
+
+  it("seeds the interim scaleExtent from the PRIOR cycle's already-settled fitZoom instead of the wide-open absolute default", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    // Let chunk 3's fitToContent run -- this sets the real, settled fitZoom
+    // and the fit-relative scaleExtent (fitZoom*MIN_ZOOM_RATIO..fitZoom*4).
+    flushSettleChunks();
+    const settledExtent = zoomScaleExtent();
+    expect(settledExtent).toBeTruthy();
+    // Sanity: for a real (non-degenerate) fit, this is never the absolute
+    // default -- if it were, the rest of this test couldn't discriminate.
+    expect(settledExtent).not.toEqual([0.05, 6]);
+
+    // Second render() cycle on the SAME mount (e.g. a noise toggle / tuner
+    // change / knot-expand re-render) -- read the scaleExtent SYNCHRONOUSLY,
+    // right after render() returns and BEFORE this cycle's own settle (and
+    // therefore its own fitToContent) has had any chance to run. This is
+    // exactly the interim window the fix targets.
+    render(container, ONE_NODE_PAYLOAD, {});
+    const interimExtent = zoomScaleExtent();
+
+    // Fix: seeded from the prior cycle's already-settled fitZoom, so the
+    // interim extent is IDENTICAL to the settled one above -- not the
+    // wide-open [0.05, 6] absolute default. Pre-fix, this would read
+    // [0.05, 6] here regardless of settledExtent.
+    expect(interimExtent).toEqual(settledExtent);
+    expect(interimExtent).not.toEqual([0.05, 6]);
+
+    flushSettleChunks();
+  });
+
+  it("keeps the wide-open absolute default on the VERY FIRST render (no prior fitZoom for this mount)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    // Read SYNCHRONOUSLY, before this first cycle's own settle/fitToContent
+    // has run -- there is no prior mount for this container to seed from.
+    expect(zoomScaleExtent()).toEqual([0.05, 6]);
+
+    flushSettleChunks();
+  });
+
+  it("keeps the wide-open absolute default on the first render after a container swap (no prior fit for the NEW mount)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const containerA = document.createElement("div");
+    document.body.appendChild(containerA);
+    render(containerA, ONE_NODE_PAYLOAD, {});
+    flushSettleChunks();
+    // Sanity: containerA really did settle to a real (non-default) fit.
+    expect(zoomScaleExtent()).not.toEqual([0.05, 6]);
+
+    // A container swap (S2 fix round 1 / A1-1, header comment delta #10/#11)
+    // nulls `svg` -- the NEW mount has no prior fit of its own to seed
+    // from, even though the module-level `fitZoom` var still holds
+    // containerA's stale value.
+    containerA.remove();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+    render(containerB, ONE_NODE_PAYLOAD, {});
+    expect(zoomScaleExtent()).toEqual([0.05, 6]);
+
+    flushSettleChunks();
+  });
+});
+
 // Task A1-3 Step 4 (header comment delta #14): the DOM-mirror seam
 // (#noise-toggle-json) is gone -- these exercise the REAL toggleNoise(show)
 // setter against the real module, since GraphCanvas.test.tsx's mocked
