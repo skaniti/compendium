@@ -132,8 +132,19 @@ export async function getInitialStarfieldVariant(): Promise<string> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
   const token = (await cookies()).get("access_token")?.value;
-  if (!token) return DEFAULT_STARFIELD_VARIANT;
 
+  // Sibling fix to getInitialPanelWidths (V3 item 5) and
+  // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
+  // to DEFAULT_STARFIELD_VARIANT when `token` is absent -- attempts
+  // fetchPreferencesRow() regardless (which only conditionally adds the
+  // Authorization header, see that function's own comment). Same root
+  // cause: a cookie-less dev session (AUTH_REQUIRED unset, no forced
+  // /login) still has a real, persisted starfield variant on the backend
+  // row; discarding it here meant every such session saw the default
+  // variant instead of its own choice on every load. Production outcome is
+  // unchanged: no header -> the backend's real verify_api_key check 401s ->
+  // fetched.ok is false -> falls through to the SAME
+  // DEFAULT_STARFIELD_VARIANT fallback as before.
   const fetched = await fetchPreferencesRow(token);
   if (!fetched.ok) return DEFAULT_STARFIELD_VARIANT;
 
@@ -233,8 +244,19 @@ export async function getInitialThemeVariant(): Promise<string | null> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
   const token = (await cookies()).get("access_token")?.value;
-  if (!token) return null;
 
+  // Sibling fix to getInitialPanelWidths (V3 item 5) and
+  // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
+  // to null when `token` is absent -- attempts fetchPreferencesRow()
+  // regardless (which only conditionally adds the Authorization header, see
+  // that function's own comment). Same root cause: a cookie-less dev
+  // session still has a real, persisted theme on the backend row;
+  // discarding it here meant such a session's server render always used
+  // ThemeProvider's localStorage-derived init (or DEFAULT_VARIANT before
+  // that) instead of the actually-persisted palette. Production outcome is
+  // unchanged: no header -> the backend's real verify_api_key check 401s ->
+  // fetched.ok is false -> falls through to the SAME null fallback as
+  // before.
   const fetched = await fetchPreferencesRow(token);
   if (!fetched.ok) return null;
 
@@ -294,10 +316,16 @@ export interface InitialSessionRole {
 // risk one endpoint's response masquerading as the other's).
 type MeFetchResult = { ok: true; body: unknown } | { ok: false };
 
-const fetchMeRow = cache(async (token: string): Promise<MeFetchResult> => {
+// `token` is optional -- mirrors fetchPreferencesRow's own "widen what's
+// ACCEPTED, not what callers send" comment above: getInitialSessionRole is
+// now the one caller that invokes this WITHOUT a token, deliberately (see
+// its own comment for the fix this backs).
+const fetchMeRow = cache(async (token: string | undefined): Promise<MeFetchResult> => {
   try {
+    const headers: Record<string, string> = {};
+    if (token) headers.authorization = `Bearer ${token}`;
     const res = await fetch(`${BACKEND}/api/auth/me`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers,
       cache: "no-store",
     });
     if (!res.ok) return { ok: false };
@@ -324,8 +352,22 @@ export async function getInitialSessionRole(): Promise<InitialSessionRole> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
   const token = (await cookies()).get("access_token")?.value;
-  if (!token) return { role: null, actingAsDemo: false };
 
+  // Sibling fix to getInitialPanelWidths (V3 item 5) and
+  // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
+  // to {role: null, actingAsDemo: false} when `token` is absent -- attempts
+  // fetchMeRow() regardless (which only conditionally adds the
+  // Authorization header, see that function's own comment, same idiom as
+  // fetchPreferencesRow). Same root cause: a cookie-less dev session
+  // (AUTH_REQUIRED unset, no forced /login) still resolves a real role off
+  // GET /api/auth/me; discarding it here meant AppShell's demo-role force
+  // and app/login/page.tsx's own anonymous-identity probe (a SEPARATE,
+  // dedicated fetch -- that page can't rely on this reader existing yet at
+  // request time it was written) both had to work around a role read that
+  // silently gave up before ever asking the backend. Production outcome is
+  // unchanged: no header -> the backend's real verify_api_key check 401s ->
+  // fetched.ok is false -> falls through to the SAME
+  // {role: null, actingAsDemo: false} fallback as before.
   const fetched = await fetchMeRow(token);
   if (!fetched.ok) return { role: null, actingAsDemo: false };
 

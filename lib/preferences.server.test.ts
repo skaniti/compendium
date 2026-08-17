@@ -68,12 +68,28 @@ describe("getInitialSessionRole", () => {
     vi.mocked(cookies).mockReset();
   });
 
-  it("returns {role: null, actingAsDemo: false} without calling the backend when there is no access_token cookie", async () => {
+  // Sibling fix to the getInitialPanelWidths/getInitialCompendiumLoaderSeen
+  // cookie-gate fixes above: this used to short-circuit to
+  // {role: null, actingAsDemo: false} whenever `token` was absent, so a
+  // cookie-less dev session (AUTH_REQUIRED unset, no forced /login) never
+  // even attempted the read that would have resolved its real role --
+  // same root cause and same fix shape (fetchMeRow now only conditionally
+  // adds the Authorization header, mirroring fetchPreferencesRow's
+  // "inject if present" idiom, instead of requiring a token up front).
+  it("attempts the backend WITHOUT an Authorization header when there is no access_token cookie, and returns the resolved identity if the backend allows it (dev-mode auth bypass)", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
-    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ id: 1, role: "user", acting_as_demo: false }),
+    });
 
-    await expect(getInitialSessionRole()).resolves.toEqual({ role: null, actingAsDemo: false });
-    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(getInitialSessionRole()).resolves.toEqual({ role: "user", actingAsDemo: false });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/me"),
+      expect.objectContaining({
+        headers: expect.not.objectContaining({ authorization: expect.anything() }),
+      })
+    );
   });
 
   it("forwards the access token as Bearer auth to GET /api/auth/me", async () => {
@@ -209,13 +225,16 @@ describe("getInitialThemeVariant", () => {
     vi.mocked(cookies).mockReset();
   });
 
-  it("returns null without calling the backend when there is no access_token cookie", async () => {
-    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
-    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
-
-    await expect(getInitialThemeVariant()).resolves.toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  // Sibling fix to getInitialPanelWidths/getInitialCompendiumLoaderSeen: this
+  // used to short-circuit to null whenever `token` was absent instead of
+  // attempting the read (same root cause, same fix shape -- see those two
+  // readers' own comments in lib/preferences.server.ts). The no-cookie
+  // discriminating test lives in the "getInitialPanelWidths" describe block
+  // below, NOT here -- fetchPreferencesRow's mocked cache (this file's own
+  // top comment) is keyed by token, and a bare no-cookie call here would
+  // collide with (and be shadowed by) that block's own no-cookie test
+  // (same token=undefined key, same shared cache) rather than exercising an
+  // independent fetch.
 
   it("returns the normalized, validated theme name from the preferences row", async () => {
     // Unique token per test below -- fetchPreferencesRow is memoized by
@@ -283,16 +302,24 @@ describe("getInitialPanelWidths", () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({
       ok: true,
-      // V3 fix-round (coordinator review after item 3): also carries
-      // compendium_loader_seen so this SAME shared, no-cookie fetch can
-      // double as getInitialCompendiumLoaderSeen's own no-cookie
-      // discriminating test below -- fetchPreferencesRow's mocked cache
-      // (this file's own top comment) is keyed by token, and token is
-      // undefined for every no-cookie call regardless of which reader
-      // makes it, so a SEPARATE no-cookie test for getInitialCompendiumLoaderSeen
-      // would silently collide with (and be shadowed by) THIS test's own
-      // cached entry rather than exercising an independent fetch.
-      json: async () => ({ panel_left_width: "32%", panel_right_width: "20%", compendium_loader_seen: true }),
+      // V3 fix-round (coordinator review after item 3), extended by the
+      // starfield/theme sibling fix: also carries compendium_loader_seen,
+      // starfield, and theme so this SAME shared, no-cookie fetch can
+      // double as getInitialCompendiumLoaderSeen/getInitialStarfieldVariant/
+      // getInitialThemeVariant's own no-cookie discriminating tests below --
+      // fetchPreferencesRow's mocked cache (this file's own top comment) is
+      // keyed by token, and token is undefined for every no-cookie call
+      // regardless of which reader makes it, so a SEPARATE no-cookie test
+      // for any of those readers would silently collide with (and be
+      // shadowed by) THIS test's own cached entry rather than exercising an
+      // independent fetch.
+      json: async () => ({
+        panel_left_width: "32%",
+        panel_right_width: "20%",
+        compendium_loader_seen: true,
+        starfield: "pan",
+        theme: "Purple",
+      }),
     });
 
     await expect(getInitialPanelWidths()).resolves.toEqual({
@@ -306,6 +333,13 @@ describe("getInitialPanelWidths", () => {
       hasSeen: true,
       canPersist: true,
     });
+    // Sibling fix: getInitialStarfieldVariant/getInitialThemeVariant used to
+    // short-circuit to their own defaults (DEFAULT_STARFIELD_VARIANT / null)
+    // whenever `token` was absent, discarding a cookie-less dev session's
+    // real persisted values on every load, same class of bug as the two
+    // reads above.
+    await expect(getInitialStarfieldVariant()).resolves.toBe("pan");
+    await expect(getInitialThemeVariant()).resolves.toBe("Purple");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/preferences"),
