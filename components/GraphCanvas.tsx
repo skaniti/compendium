@@ -44,18 +44,23 @@ type GraphVendorModule = typeof import("@/lib/graph/d3-graph-vendor.js");
 //  2. The dev-note placeholder text ("graph arrives in a later slice") is
 //     deleted; the #graph-debug-overlay WRAPPER it lived in is NOT --
 //     Dash's own wrapper persists indefinitely as the home for the
-//     view-demo/return-to-admin triggers (graph_canvas.py:643-747), so it
-//     survives past this port unconditionally-rendered exactly as
-//     GraphPlaceholder already had it (that file's own comment: this port
-//     deliberately does not replicate Dash's admin-context-only OUTER
-//     gate, only the two trigger links are individually role-gated).
-//     Dash's third overlay child -- a noise-toggle text control
-//     (graph_canvas.py:724-733; each trigger's own " | " separator span
-//     leads into it) -- landed at Task A1-3 Step 4 (#noise-toggle-btn
-//     below), un-individually-gated same as Dash's own markup (only the
-//     outer wrapper was ever admin-context-gated there, and this port's
-//     outer wrapper is unconditional per the deviation just above).
+//     view-demo/return-to-admin triggers (graph_canvas.py:643-747), and a
+//     noise-toggle text control (graph_canvas.py:724-733; each trigger's
+//     own " | " separator span leads into it), the latter landing at Task
+//     A1-3 Step 4 (#noise-toggle-btn below).
 //
+//     2026-08-24 (prod-mode sweep item 1): this port originally rendered
+//     the outer wrapper unconditionally, deliberately NOT replicating
+//     Dash's admin-context-only OUTER gate -- Dash's own 2026-07-13 roles
+//     rework hides the WHOLE #graph-debug-overlay wrapper (including the
+//     noise toggle) unless `role === 'admin' || admin_launched_demo`
+//     (app.py:2785-2799's clientside callback), a change this port had not
+//     yet mirrored; every role, including plain demo, could see it. That
+//     gap is now closed: the whole wrapper below is gated on
+//     `adminContext` (role === "admin" || actingAsDemo -- same predicate
+//     as SearchBar.tsx's own admin-context gate), matching Dash exactly.
+//
+
 // `id="d3-graph-container"` matches the selector app/styles/theme.css
 // already ported (batch 01) for the graph canvas mask + watermark/group-
 // label/edge-chip rules, and is also GraphPlaceholder's former root id --
@@ -393,6 +398,16 @@ export default function GraphCanvas() {
   // role/actingAsDemo from useSession() for the view-demo/return-to-admin
   // triggers above and isn't threaded any props from a server component.
   const isPlainDemo = role === "demo" && !actingAsDemo;
+
+  // 2026-08-24 (prod-mode sweep item 1): admin-context gate for the whole
+  // #graph-debug-overlay wrapper below -- same predicate/comment precedent
+  // as SearchBar.tsx's own adminContext (app.py's clientside callback
+  // predicate, :2807-2830 for the search bar's gear/trace, :2785-2799 for
+  // this overlay specifically): real admin role OR an admin currently
+  // viewing as demo. Mirrors Dash's 2026-07-13 roles rework, which hides
+  // the ENTIRE wrapper -- including the noise toggle -- for every other
+  // role (plain "user", and plain/non-acting "demo").
+  const adminContext = role === "admin" || actingAsDemo;
 
   // Task A1-3 (Step 4): noise toggle. Local state is the single source of
   // truth for BOTH the displayed label and what gets applied to the
@@ -979,14 +994,20 @@ export default function GraphCanvas() {
 
   // Task A1-3 (Step 4): port of Dash's noise-toggle click handler
   // (callbacks/graph.py:129-154's toggle_noise). Flips the local/vendor
-  // state unconditionally (the effect above pushes it to the vendor) --
-  // the control itself is NEVER hidden or disabled for plain demo, only
-  // the persistence write is skipped (spec.md's "Preference writes &
-  // plain-demo" section: "mutation UI never hidden for the noise toggle").
-  // Dash's own handler swallows a persistence failure silently (`except
-  // Exception: pass`) and still flips client-side either way; the 403
-  // backstop this skip is paired with is the SAME shape patchPreferences
-  // itself already logs-and-swallows (lib/preferences.ts), so no extra
+  // state unconditionally (the effect above pushes it to the vendor).
+  // The `!isPlainDemo` persistence-write guard below predates the
+  // 2026-08-24 adminContext gate added around the JSX (item 1 of that
+  // sweep): isPlainDemo (role === "demo" && !actingAsDemo) and
+  // adminContext (role === "admin" || actingAsDemo) are mutually
+  // exclusive, so a plain-demo session can no longer even reach this
+  // control now that the whole #graph-debug-overlay wrapper is
+  // admin-context-gated -- kept as a defensive backstop (matches Dash's
+  // own belt-and-suspenders 403 backstop) rather than deleted as dead
+  // code. Dash's own handler swallows a persistence failure silently
+  // (`except Exception: pass`) and still flips client-side either way;
+  // the 403 backstop this skip is paired with is the SAME shape
+  // patchPreferences itself already logs-and-swallows (lib/preferences.ts),
+  // so no extra
   // try/catch belongs here.
   function handleToggleNoise(): void {
     const next = !showNoise;
@@ -1036,47 +1057,57 @@ export default function GraphCanvas() {
             Couldn&apos;t load graph: {error}
           </p>
         )}
-        <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
-          {isRoleToolingVisible() && role === "admin" && !actingAsDemo && (
-            <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
-              <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
-                view demo
-              </button>
-              <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+        {/* 2026-08-24 (prod-mode sweep item 1): the whole wrapper -- view
+            demo/return-to-admin triggers AND the noise toggle -- is gated
+            on adminContext, mirroring Dash's 2026-07-13 roles rework
+            (app.py:2785-2799's clientside callback hides the entire
+            #graph-debug-overlay div for every role except admin-context).
+            Previously only the two trigger spans were individually
+            role-gated below; the noise toggle had no gate of its own and
+            the outer div rendered unconditionally, so plain demo (and any
+            other non-admin-context role) could see it -- ledgered known
+            limitation since batch-03 (task-A1-5), closed here. */}
+        {adminContext && (
+          <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
+            {isRoleToolingVisible() && role === "admin" && !actingAsDemo && (
+              <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
+                <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
+                  view demo
+                </button>
+                <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+              </span>
+            )}
+            {isRoleToolingVisible() && actingAsDemo && (
+              <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
+                <button
+                  type="button"
+                  style={DEBUG_LINK_BUTTON_STYLE}
+                  onClick={() => void handleReturnToAdmin()}
+                >
+                  return to admin
+                </button>
+                <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
+              </span>
+            )}
+            {/* Task A1-3 (Step 4): port of graph_canvas.py's noise-toggle
+                html.Span (:724-733). Dash gives it no gate of its own
+                beyond the outer #graph-debug-overlay wrapper's own
+                admin-context gate -- now mirrored one level up by the
+                adminContext check wrapping this whole div, so this span
+                itself stays un-individually-gated same as Dash's own
+                markup. */}
+            <span
+              id="noise-toggle-btn"
+              role="button"
+              tabIndex={0}
+              style={NOISE_TOGGLE_STYLE}
+              onClick={handleToggleNoise}
+              onKeyDown={handleNoiseToggleKeyDown}
+            >
+              {showNoise ? "noise: on" : "noise: off"}
             </span>
-          )}
-          {isRoleToolingVisible() && actingAsDemo && (
-            <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
-              <button
-                type="button"
-                style={DEBUG_LINK_BUTTON_STYLE}
-                onClick={() => void handleReturnToAdmin()}
-              >
-                return to admin
-              </button>
-              <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-            </span>
-          )}
-          {/* Task A1-3 (Step 4): port of graph_canvas.py's noise-toggle
-              html.Span (:724-733) -- Dash gives it NO individual role gate
-              of its own (only the outer #graph-debug-overlay wrapper is
-              admin-context-gated there); this port's outer wrapper is
-              already unconditionally rendered (A1-1's deliberate, ratified
-              deviation from Dash's own outer gate -- see this file's
-              header comment), so this control follows the same
-              un-individually-gated shape, satisfying the brief's own
-              "toggle UI itself NEVER hidden" requirement for free. */}
-          <span
-            id="noise-toggle-btn"
-            role="button"
-            tabIndex={0}
-            style={NOISE_TOGGLE_STYLE}
-            onClick={handleToggleNoise}
-            onKeyDown={handleNoiseToggleKeyDown}
-          >
-            {showNoise ? "noise: on" : "noise: off"}
-          </span>
-        </div>
+          </div>
+        )}
       </div>
       <div id="node-tooltip" className="node-tooltip" style={NODE_TOOLTIP_STYLE} />
     </>

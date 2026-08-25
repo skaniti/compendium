@@ -1630,14 +1630,19 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
     expect(screen.queryByText("view demo")).not.toBeInTheDocument();
   });
 
-  it("plain user: sees neither trigger, and the wrapper still renders unconditionally", async () => {
+  it("plain user: sees neither trigger, and the whole overlay wrapper is absent (2026-08-24: admin-context gate)", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
 
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
     expect(screen.queryByText("view demo")).not.toBeInTheDocument();
     expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
-    expect(document.querySelector("#graph-debug-overlay")).not.toBeNull();
+    // Was: `.not.toBeNull()` -- the wrapper rendered unconditionally before
+    // the 2026-08-24 admin-context gate (prod-mode sweep item 1). Role
+    // "user" is not admin-context (role !== "admin" && !actingAsDemo), so
+    // the whole #graph-debug-overlay div -- including the un-individually-
+    // gated noise toggle -- must not render at all now.
+    expect(document.querySelector("#graph-debug-overlay")).toBeNull();
   });
 
   it("the dev-note placeholder text is gone now that the graph has landed (TODO(mig-03) obligation 2)", async () => {
@@ -1675,7 +1680,12 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
 
   it("regression (Task V3 item 2): clicking inside #compendium-empty-state does not throw and leaves #graph-debug-overlay intact", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
-    renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+    // Session role changed from "user" to "admin" (2026-08-24, prod-mode
+    // sweep item 1): #graph-debug-overlay is now admin-context-gated, so a
+    // plain "user" session would never render it at all -- this test's own
+    // point (a click inside the empty state must not disturb the overlay)
+    // needs a session where the overlay actually renders.
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
 
     await waitFor(() => expect(document.querySelector("#compendium-empty-state")).not.toBeNull());
     expect(() => (document.getElementById("compendium-empty-state") as HTMLElement).click()).not.toThrow();
@@ -1713,8 +1723,10 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers: default off (NEXT
     expect(screen.queryByText("view demo")).not.toBeInTheDocument();
     expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
     // The overlay itself (and the un-individually-gated noise toggle inside
-    // it) still renders unconditionally -- only the role-tooling controls
-    // are hidden.
+    // it) still renders for this admin session -- NEXT_PUBLIC_DEMO_ROLE_
+    // TOOLING being unset only hides the two role-tooling trigger controls,
+    // not the admin-context gate (role === "admin" || actingAsDemo) added
+    // 2026-08-24 around the whole wrapper.
     expect(document.querySelector("#graph-debug-overlay")).not.toBeNull();
   });
 
@@ -1755,10 +1767,66 @@ describe('GraphCanvas graph-debug-overlay role-gated triggers: NEXT_PUBLIC_DEMO_
   });
 });
 
+// 2026-08-24 (prod-mode sweep item 1): #graph-debug-overlay -- the WHOLE
+// wrapper, including the noise toggle, not just the two role-tooling
+// triggers -- is gated to admin-context sessions (role === "admin" ||
+// actingAsDemo), mirroring Dash's 2026-07-13 roles rework
+// (app.py:2785-2799's clientside callback). Ledgered known limitation
+// since batch-03 (task-A1-5's note); this closes it. Independent of
+// NEXT_PUBLIC_DEMO_ROLE_TOOLING, which the describe blocks above already
+// cover for the two individual triggers -- left unset here (default off)
+// since it has no bearing on whether the wrapper/noise-toggle itself
+// renders.
+describe("GraphCanvas graph-debug-overlay admin-context gate (2026-08-24: prod-mode sweep item 1)", () => {
+  it("admin: overlay wrapper and noise toggle render", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(document.querySelector("#graph-debug-overlay")).not.toBeNull());
+    expect(screen.getByText(/^noise: (on|off)$/)).toBeInTheDocument();
+  });
+
+  it("acting-as-demo (admin_launched_demo parity): overlay wrapper and noise toggle render", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas(
+      { id: 2, email: "demo@example.com", role: "demo", acting_as_demo: true, admin_origin_email: "admin@example.com" },
+      200
+    );
+
+    await waitFor(() => expect(document.querySelector("#graph-debug-overlay")).not.toBeNull());
+    expect(screen.getByText(/^noise: (on|off)$/)).toBeInTheDocument();
+  });
+
+  it("plain demo (role === demo, not acting): overlay wrapper and noise toggle are absent", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 3, email: "demo@example.com", role: "demo", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+    expect(document.querySelector("#graph-debug-overlay")).toBeNull();
+    expect(screen.queryByText(/^noise: (on|off)$/)).not.toBeInTheDocument();
+  });
+
+  it("plain user (non-elevated, non-demo): overlay wrapper and noise toggle are absent", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
+    renderCanvas({ id: 4, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
+
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+    expect(document.querySelector("#graph-debug-overlay")).toBeNull();
+    expect(screen.queryByText(/^noise: (on|off)$/)).not.toBeInTheDocument();
+  });
+});
+
 describe("GraphCanvas noise toggle (Step 4)", () => {
+  // Session role changed from "user" to "admin" across this block
+  // (2026-08-24, prod-mode sweep item 1): the noise toggle now lives
+  // inside the admin-context-gated #graph-debug-overlay wrapper (see the
+  // dedicated "admin-context gate" describe block above), so a plain
+  // "user" session no longer renders it at all -- these tests are about
+  // the toggle's own mechanics (default value, click, keyboard) and need
+  // an admin-context session merely to reach it.
   it("defaults to 'noise: off' when the session's show_noise preference is unset, and applies it to the vendor at mount", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
-    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
@@ -1768,7 +1836,7 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
   it("renders 'noise: on' and applies true to the vendor when the session's show_noise preference is true", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     renderCanvas(
-      { id: 1, email: "u@example.com", role: "user", acting_as_demo: false, preferences: { show_noise: true } },
+      { id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false, preferences: { show_noise: true } },
       200
     );
 
@@ -1780,7 +1848,7 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
   it("clicking the toggle flips the label and calls vendor.toggleNoise with the new state", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
-    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
     await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
     toggleNoiseMock.mockClear();
 
@@ -1792,7 +1860,7 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
 
   it("is keyboard-activatable via Enter/Space (app CSS already targets :focus/:focus-visible on #noise-toggle-btn)", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
-    renderCanvas({ id: 1, email: "u@example.com", role: "user", acting_as_demo: false }, 200);
+    renderCanvas({ id: 1, email: "admin@example.com", role: "admin", acting_as_demo: false }, 200);
     await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
 
     const toggle = screen.getByText("noise: off");
@@ -1816,19 +1884,26 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
     await waitFor(() => expect(patchSpy).toHaveBeenCalledWith({ show_noise: true }));
   });
 
-  it("(Step 1c) SKIPS patchPreferences for a plain-demo session (role===demo, not acting), but still flips the control", async () => {
+  // Was (Step 1c): "SKIPS patchPreferences for a plain-demo session
+  // (role===demo, not acting), but still flips the control" -- asserted
+  // the control was clickable-but-non-persisting for plain demo, per the
+  // (now superseded) 2026-07-07 spec.md assumption that the noise toggle
+  // was never hidden for plain demo. 2026-08-24 (prod-mode sweep item 1):
+  // Dash's own 2026-07-13 roles rework hides the WHOLE #graph-debug-overlay
+  // wrapper -- noise toggle included -- for plain demo, which this port now
+  // mirrors (see the "admin-context gate" describe block above). A plain-
+  // demo session can no longer reach the control via the UI at all, so
+  // that click-then-assert-skip test is superseded by this absence check;
+  // the `!isPlainDemo` persistence-skip guard in handleToggleNoise stays as
+  // a defensive backstop (GraphCanvas.tsx's own comment there) even though
+  // it's now unreachable through this path.
+  it("plain-demo session (role===demo, not acting): the control is entirely absent, not just persistence-skipped", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
     renderCanvas({ id: 2, email: "demo@example.com", role: "demo", acting_as_demo: false }, 200);
-    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
 
-    act(() => screen.getByText("noise: off").click());
-
-    expect(screen.getByText("noise: on")).toBeInTheDocument();
-    await waitFor(() => expect(toggleNoiseMock).toHaveBeenCalledWith(true));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/^noise: (on|off)$/)).not.toBeInTheDocument();
     expect(patchSpy).not.toHaveBeenCalled();
   });
 
@@ -1846,11 +1921,18 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
     await waitFor(() => expect(patchSpy).toHaveBeenCalledWith({ show_noise: true }));
   });
 
-  it("the toggle control is never hidden -- visible for a plain (non-admin, non-acting) user, even with an empty graph", async () => {
+  // Was: "the toggle control is never hidden -- visible for a plain
+  // (non-admin, non-acting) user, even with an empty graph" -- the
+  // 2026-08-24 admin-context gate (item 1) reverses this for non-admin-
+  // context roles; kept as a targeted regression that the gate holds even
+  // with an empty graph payload (no nodes to otherwise short-circuit
+  // rendering).
+  it("the toggle control IS hidden for a plain (non-admin, non-acting) user, even with an empty graph", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
 
-    await waitFor(() => expect(screen.getByText(/^noise: (on|off)$/)).toBeInTheDocument());
+    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
+    expect(screen.queryByText(/^noise: (on|off)$/)).not.toBeInTheDocument();
   });
 });
 

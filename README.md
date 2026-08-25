@@ -104,13 +104,15 @@ project and will land here as the migration continues.
 The settled graph layout is sensitive to noise proportion: showing or
 hiding noise re-runs the full force simulation, and different node counts
 can settle into visibly different arrangements. Removing that sensitivity
-is tracked as follow-up work. The noise toggle and the
-admin-only graph controls are not gated in this build. The demo-account and
-view-as machinery is different: it exists for the hosted deployment and is
-off by default, gated behind `DEMO_ROLE_TOOLING` (stub) and
-`NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend). The `/login` page belongs to
-that machinery; the default demo flow never needs it. `scripts/dev.sh` sets
-both flags for development with the role machinery enabled.
+is tracked as follow-up work. The graph's debug overlay (the noise toggle
+and the admin-only view-demo/return-to-admin controls) is gated to
+admin-context sessions — an admin, or an admin viewing as demo — and
+hidden for every other role, matching Dash's own admin-context gate. The
+demo-account and view-as machinery is different: it exists for the hosted
+deployment and is off by default, gated behind `DEMO_ROLE_TOOLING` (stub)
+and `NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend). The `/login` page belongs
+to that machinery; the default demo flow never needs it. `scripts/dev.sh`
+sets both flags for development with the role machinery enabled.
 
 ## Conventions
 
