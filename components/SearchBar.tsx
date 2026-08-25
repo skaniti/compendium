@@ -131,8 +131,12 @@ function SourcePill({ url, nodeId }: { url: string; nodeId: string | null }) {
       <button
         type="button"
         className="chat-source-locate-btn"
-        title="Locate on map"
-        aria-label="Locate on map"
+        // "Locate on graph" -- deliberate divergence from Dash's own
+        // "Locate on map" string (search_stream.js:220), user-directed
+        // 2026-08-24 prod-mode sweep item 2 (this app has no map, only
+        // the graph canvas the glyph actually frames a node in).
+        title="Locate on graph"
+        aria-label="Locate on graph"
         onClick={(e) => {
           // Port of makeLocatePillGroup's click handler (search_stream.js
           // :221-225) -- the button isn't nested inside the pill's <a>

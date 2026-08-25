@@ -127,7 +127,7 @@ describe("SearchBar", () => {
       await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
       await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
-      const glyph = await screen.findByRole("button", { name: "Locate on map" });
+      const glyph = await screen.findByRole("button", { name: "Locate on graph" });
       expect(glyph.closest(".chat-source-pill-group")).not.toBeNull();
       expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument();
 
@@ -144,7 +144,7 @@ describe("SearchBar", () => {
       await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
       await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
-      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Locate on graph" })).not.toBeInTheDocument();
       expect(hasNodeSpy).not.toHaveBeenCalled(); // no node_id to even check
     });
 
@@ -157,7 +157,7 @@ describe("SearchBar", () => {
       await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
       await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
-      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Locate on graph" })).not.toBeInTheDocument();
       expect(hasNodeSpy).not.toHaveBeenCalled();
     });
 
@@ -172,7 +172,7 @@ describe("SearchBar", () => {
 
       await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
       await waitFor(() => expect(chatInterop.hasGraphNode).toHaveBeenCalledWith("node-not-on-map"));
-      expect(screen.queryByRole("button", { name: "Locate on map" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Locate on graph" })).not.toBeInTheDocument();
       expect(frameSpy).not.toHaveBeenCalled();
     });
   });
