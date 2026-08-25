@@ -101,8 +101,10 @@ project and will land here as the migration continues.
 
 ## Known limitations
 
-Graph rendering currently depends on noise proportion. Eliminating that
-dependency is tracked as follow-up work. The noise toggle and the
+The settled graph layout is sensitive to noise proportion: showing or
+hiding noise re-runs the full force simulation, and different node counts
+can settle into visibly different arrangements. Removing that sensitivity
+is tracked as follow-up work. The noise toggle and the
 admin-only graph controls are not gated in this build. The demo-account and
 view-as machinery is different: it exists for the hosted deployment and is
 off by default, gated behind `DEMO_ROLE_TOOLING` (stub) and
