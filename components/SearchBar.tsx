@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useSearchBarResize } from "@/hooks/useSearchBarResize";
+import { useGraph } from "@/hooks/useGraph";
 import { useSession } from "@/components/SessionProvider";
 import { apiFetch } from "@/lib/api";
 import { renderMarkdown } from "@/lib/markdown";
@@ -109,13 +110,31 @@ function SourcePill({ url, nodeId }: { url: string; nodeId: string | null }) {
     };
   }, [nodeId]);
 
-  const label = (() => {
+  const hostnameLabel = (() => {
     try {
       return new URL(url).hostname.replace("www.", "");
     } catch {
       return url;
     }
   })();
+
+  // 2026-08-24 (prod-mode sweep item 4): resolves node_id to the page's
+  // real display title via useGraph()'s shared module-level graph cache
+  // (hooks/useGraph.ts) -- the SAME cache GraphCanvas/HeaderCards/etc.
+  // already share, so this adds no extra fetch and no vendor import.
+  // `nodeById` reads a useSyncExternalStore snapshot, so this is
+  // synchronous and reactive: while the graph hasn't loaded yet (or never
+  // resolves this id) `node` is undefined and `label` below falls back to
+  // hostnameLabel, then once/if the shared cache's payload includes this
+  // node this component re-renders and picks up the title automatically --
+  // same "hostname first, upgrade once resolved" shape as the `known`
+  // glyph gate above. `node.label` is the page's real title (backend
+  // graph_builder.py: `GraphNode(id=_slugify(title), label=title, ...)`),
+  // NOT a de-slugified node_id -- that substitute is lossy/ugly and
+  // deliberately not used here.
+  const { nodeById } = useGraph();
+  const node = nodeId ? nodeById(nodeId) : undefined;
+  const label = node?.label ?? hostnameLabel;
 
   const pill = (
     <a href={url} target="_blank" rel="noreferrer" className="tag-pill chat-source-pill">

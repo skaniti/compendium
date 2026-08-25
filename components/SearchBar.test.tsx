@@ -6,7 +6,9 @@ import * as stream from "@/lib/agent-stream";
 import * as SessionProviderModule from "@/components/SessionProvider";
 import * as apiModule from "@/lib/api";
 import * as chatInterop from "@/lib/graph/chat-interop";
+import { __resetGraphCacheForTest } from "@/hooks/useGraph";
 import type { SessionRole } from "@/components/SessionProvider";
+import type { GraphPayload } from "@/lib/types";
 
 // Ported from the old full-page Chat.test.tsx (Task 10: re-home into the
 // search-bar overlay -- see graph_canvas.py's _render_search_bar()). Selector
@@ -39,9 +41,32 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
+// Minimal GraphNode builder for item 4's title-resolution tests, matching
+// GraphCanvas.test.tsx's own `node()` fixture convention.
+function node(id: string, label: string): GraphPayload["nodes"][number] {
+  return {
+    id,
+    label,
+    level: 1,
+    kind: "singleton",
+    visit_count: 1,
+    parent_id: null,
+    children_ids: [],
+    capture_ids: [],
+    page_urls: [],
+    first_visited_at: null,
+  };
+}
+
 describe("SearchBar", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // useGraph()'s module-level graph cache (hooks/useGraph.ts) is a
+    // shared singleton across every test in this file -- without this
+    // reset, a payload one of item 4's title-resolution tests mocks
+    // fetchGraph() to resolve with would leak into later tests (including
+    // the pre-existing "example.com" hostname assertions above).
+    __resetGraphCacheForTest();
     mockSession();
   });
 
@@ -174,6 +199,111 @@ describe("SearchBar", () => {
       await waitFor(() => expect(chatInterop.hasGraphNode).toHaveBeenCalledWith("node-not-on-map"));
       expect(screen.queryByRole("button", { name: "Locate on graph" })).not.toBeInTheDocument();
       expect(frameSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // 2026-08-24 (prod-mode sweep item 4): the pill label resolves to the
+  // page's real display title (useGraph()'s shared graph cache,
+  // GraphNode.label) instead of staying hostname-only forever -- the bug
+  // this closes: two sources on the same host (e.g. two Wikipedia
+  // articles) rendered as two identical, indistinguishable "en.wikipedia.
+  // org" pills. hasGraphNode/frameSourceNode (the separate locate-glyph
+  // gate, covered above) are mocked the same way as the C2 block; this
+  // block additionally mocks fetchGraph (hooks/useGraph.ts's own fetcher)
+  // to control what the shared graph cache resolves with.
+  describe("source pill title resolution (item 4)", () => {
+    function sendWithSources(sourcesDetail?: Array<{ url: string; page_id: number | null; node_id: string | null }>) {
+      return vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+        h.onComplete?.({
+          type: "complete",
+          sources: sourcesDetail?.map((s) => s.url) ?? ["https://example.com/x"],
+          sources_detail: sourcesDetail,
+          cluster_ids: [],
+          images: [],
+          tool_calls_made: [],
+          total_cost_usd: 0,
+          iterations: 1,
+          model: "m",
+        });
+      });
+    }
+
+    it("upgrades the pill label to the node's real title once the graph payload resolves", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockResolvedValue(false); // locate-glyph gate irrelevant here
+      vi.spyOn(apiModule, "fetchGraph").mockResolvedValue({
+        nodes: [node("node-x", "Arduino - Wikipedia")],
+        links: [],
+        clusters: [],
+        super_clusters: [],
+        groups: [],
+      });
+      sendWithSources([{ url: "https://en.wikipedia.org/wiki/Arduino", page_id: null, node_id: "node-x" }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "Arduino - Wikipedia" })).toBeInTheDocument());
+      expect(screen.queryByRole("link", { name: "en.wikipedia.org" })).not.toBeInTheDocument();
+    });
+
+    it("two sources on the same hostname render distinct titles instead of two identical hostname pills", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockResolvedValue(false);
+      vi.spyOn(apiModule, "fetchGraph").mockResolvedValue({
+        nodes: [node("node-a", "Arduino - Wikipedia"), node("node-b", "Breadboard - Wikipedia")],
+        links: [],
+        clusters: [],
+        super_clusters: [],
+        groups: [],
+      });
+      sendWithSources([
+        { url: "https://en.wikipedia.org/wiki/Arduino", page_id: null, node_id: "node-a" },
+        { url: "https://en.wikipedia.org/wiki/Breadboard", page_id: null, node_id: "node-b" },
+      ]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "Arduino - Wikipedia" })).toBeInTheDocument());
+      expect(screen.getByRole("link", { name: "Breadboard - Wikipedia" })).toBeInTheDocument();
+      expect(screen.queryAllByRole("link", { name: "en.wikipedia.org" })).toHaveLength(0);
+    });
+
+    it("falls back to the hostname when node_id doesn't match any node in the loaded graph (unresolvable)", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockResolvedValue(false);
+      vi.spyOn(apiModule, "fetchGraph").mockResolvedValue({
+        nodes: [node("some-other-node", "Unrelated Page - Wikipedia")],
+        links: [],
+        clusters: [],
+        super_clusters: [],
+        groups: [],
+      });
+      sendWithSources([{ url: "https://example.com/x", page_id: null, node_id: "node-not-in-graph" }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      // Wait for the graph fetch to have settled (so this isn't just
+      // catching the "not loaded yet" window) before asserting the
+      // negative -- the mocked payload has no node matching this id at all.
+      await waitFor(() => expect(apiModule.fetchGraph).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
+    });
+
+    it("shows the hostname synchronously before the graph payload has loaded (render hostname first, upgrade once resolved)", async () => {
+      vi.spyOn(chatInterop, "hasGraphNode").mockResolvedValue(false);
+      // A fetchGraph promise that never resolves during this test --
+      // stands in for "graph not loaded yet" without racing a real timer.
+      vi.spyOn(apiModule, "fetchGraph").mockReturnValue(new Promise<GraphPayload>(() => {}));
+      sendWithSources([{ url: "https://example.com/x", page_id: null, node_id: "node-x" }]);
+
+      render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
     });
   });
 
