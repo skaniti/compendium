@@ -413,7 +413,6 @@ export default function GraphCanvas() {
   // state is at import-resolution time, not a value stale-closed at
   // effect-definition time.
   const showNoiseRef = useRef(showNoise);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref updated every render by design (see comment above)
   showNoiseRef.current = showNoise;
 
   // Task A1-3 (Step 2): rebind from a local one-shot fetchGraph() effect to
@@ -462,13 +461,11 @@ export default function GraphCanvas() {
   // render (not inside an effect) always reflects the LATEST value by the
   // time the async .then() below reads it.
   const selectedNodeIdRef = useRef(state.selectedNodeId);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref updated every render by design (see comment above)
   selectedNodeIdRef.current = state.selectedNodeId;
   // Task A1-3 (Step 5): same always-current-ref pattern as
   // selectedNodeIdRef above, for the SAME reason -- a filter dispatched
   // during the vendor's dynamic-import mount window must not be dropped.
   const filterHighlightIdsRef = useRef(state.filterHighlightIds);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref, same reason as selectedNodeIdRef above
   filterHighlightIdsRef.current = state.filterHighlightIds;
 
   // Task group B, Part 1 fix 2 (carried A1-3 correction, task-B-brief.md):
@@ -485,10 +482,8 @@ export default function GraphCanvas() {
   // window's data and recorded the old graphVersion, self-healing only on
   // some LATER, unrelated graphVersion bump.
   const payloadRef = useRef(payload);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref, same reason as selectedNodeIdRef above
   payloadRef.current = payload;
   const graphVersionRef = useRef(graphVersion);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref, same reason as selectedNodeIdRef above
   graphVersionRef.current = graphVersion;
 
   // Obligation 1 (see header comment): visible only once a fetch has

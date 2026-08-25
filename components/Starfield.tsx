@@ -33,7 +33,6 @@ export default function Starfield() {
   // context) has already moved on to a different variant -- read the
   // latest value via the ref, not the `variant` closed over at mount time.
   const variantRef = useRef(variant);
-  // eslint-disable-next-line react-hooks/refs -- always-current ref updated every render by design (see comment above)
   variantRef.current = variant;
 
   // Mount <starry-sky> exactly once.
