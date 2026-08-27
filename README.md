@@ -23,7 +23,7 @@ npm ci
 npm run demo
 ```
 
-`npm run demo` boots a dependency-free stub backend (`demo/server.mjs`)
+`npm run demo` boots a dependency-free stub backend (`apps/web/demo/server.mjs`)
 serving a curated demo compendium from static fixtures, plus the Next.js
 dev server pointed at it. The demo drops the user straight into the
 populated app: graph, diary, topic detail, and chat are live from the first
@@ -39,10 +39,10 @@ pages (Wikipedia, arXiv, GitHub, Stack Exchange, and a few others) spanning
 four topics — diffusion models, Greek/Roman mythology, electronics/Arduino,
 and cephalopods — respread across a plausible browsing timeline that stays
 "recent" no matter when the repo is cloned. Full source list and licensing
-notes: `demo/fixtures/ATTRIBUTION.md`.
+notes: `apps/web/demo/fixtures/ATTRIBUTION.md`.
 
 **Chat:** 12 question/answer runs from the live agent are recorded in
-`demo/fixtures/chat/index.json`. The search bar at the bottom of the graph
+`apps/web/demo/fixtures/chat/index.json`. The search bar at the bottom of the graph
 replays them token-by-token over SSE, complete with source pills that frame
 the cited nodes back on the graph. Anything else typed in falls back to a
 response that explains demo mode and suggests a question from the list.
@@ -67,22 +67,24 @@ headlessly via jsdom.
 
 ## Architecture
 
-- **Frontend:** Next.js (App Router) — the UI seen above: graph canvas,
-  diary/history panel, topic detail, header widgets, and the chat search
-  bar.
-- **API proxy:** `app/api/[...path]/route.ts` forwards every `/api/*` call
-  verbatim to whatever `BACKEND_URL` points at (injecting the auth cookie,
-  streaming SSE through unbuffered), so the frontend never talks to a
-  backend host directly. `next.config.ts` carries one additional narrow
-  rewrite for `/captured-assets/*` (page preview images/stylesheets), which
-  the backend serves outside the `/api` prefix.
-- **Demo backend:** `demo/server.mjs`, a dependency-free Node HTTP server
-  that answers the same endpoint contract from static fixtures under
-  `demo/fixtures/`. `npm run demo` (`demo/launcher.mjs`) boots it and
-  points `BACKEND_URL` at it automatically.
+- **Frontend:** Next.js (App Router), at `apps/web` — the UI seen above:
+  graph canvas, diary/history panel, topic detail, header widgets, and the
+  chat search bar. The repo is an npm-workspaces monorepo; root `npm`
+  commands (`dev`, `build`, `test`, `lint`, `demo`) delegate into this
+  workspace, so the Quickstart above works unchanged from the repo root.
+- **API proxy:** `apps/web/app/api/[...path]/route.ts` forwards every
+  `/api/*` call verbatim to whatever `BACKEND_URL` points at (injecting the
+  auth cookie, streaming SSE through unbuffered), so the frontend never
+  talks to a backend host directly. `apps/web/next.config.ts` carries one
+  additional narrow rewrite for `/captured-assets/*` (page preview
+  images/stylesheets), which the backend serves outside the `/api` prefix.
+- **Demo backend:** `apps/web/demo/server.mjs`, a dependency-free Node HTTP
+  server that answers the same endpoint contract from static fixtures under
+  `apps/web/demo/fixtures/`. `npm run demo` (`apps/web/demo/launcher.mjs`)
+  boots it and points `BACKEND_URL` at it automatically.
 - **Real backend:** a FastAPI service that isn't in this repo yet — it
-  arrives with a one-time monorepo extraction (`apps/api`, alongside this
-  frontend as `apps/web`). Until then, `BACKEND_URL` is the entire contract
+  arrives as `apps/api` in a future batch, alongside this frontend which now
+  lives at `apps/web`. Until then, `BACKEND_URL` is the entire contract
   between this frontend and whatever serves it.
 
 ## Status

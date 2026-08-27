@@ -15,19 +15,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
 # Role-tooling opt-in: this is the maintainer's own dev stack, so keep the
 # demo account + view-as/return-to-admin machinery available with zero
-# extra steps (hosted-parity development). `npm run demo` (demo/launcher.mjs)
-# deliberately leaves both unset -- a stranger's out-of-the-box run gets a
-# single full-control identity and never sees this. Stub-side
-# (DEMO_ROLE_TOOLING) only matters if something in this stack ends up
-# running demo/server.mjs; exported here regardless, for the same
-# zero-extra-steps reason. See demo/server.mjs's startServer doc comment
-# and components/GraphCanvas.tsx's isRoleToolingVisible for the two readers.
+# extra steps (hosted-parity development). `npm run demo`
+# (apps/web/demo/launcher.mjs) deliberately leaves both unset -- a
+# stranger's out-of-the-box run gets a single full-control identity and
+# never sees this. Stub-side (DEMO_ROLE_TOOLING) only matters if something
+# in this stack ends up running apps/web/demo/server.mjs; exported here
+# regardless, for the same zero-extra-steps reason. See
+# apps/web/demo/server.mjs's startServer doc comment and
+# apps/web/components/GraphCanvas.tsx's isRoleToolingVisible for the two
+# readers.
 export DEMO_ROLE_TOOLING="${DEMO_ROLE_TOOLING:-1}"
 export NEXT_PUBLIC_DEMO_ROLE_TOOLING="${NEXT_PUBLIC_DEMO_ROLE_TOOLING:-1}"
 # Backend repo location: an explicit env var wins; otherwise read BACKEND_DIR from
-# the gitignored .env.local so this committed script carries no machine-local path.
-if [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/.env.local" ]; then
-  BACKEND_DIR="$(grep -E '^BACKEND_DIR=' "$ROOT/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+# the gitignored .env.local (apps/web/ -- monorepo layout, Task 1 of batch 07)
+# so this committed script carries no machine-local path.
+if [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/apps/web/.env.local" ]; then
+  BACKEND_DIR="$(grep -E '^BACKEND_DIR=' "$ROOT/apps/web/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
 fi
 
 TS="$(date +%Y-%m-%d-%H%M%S)"
@@ -66,7 +69,7 @@ elif [ -n "${BACKEND_DIR:-}" ] && [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; th
   backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $BE_LOG)"
 else
   say "WARN: backend is down and no BACKEND_DIR with scripts/start_app.sh was found."
-  say "      add BACKEND_DIR=/path/to/compendium-explorer to .env.local, or run FRONTEND_ONLY=1."
+  say "      add BACKEND_DIR=/path/to/compendium-explorer to apps/web/.env.local, or run FRONTEND_ONLY=1."
 fi
 
 # --- frontend: Next auto-picks a free port; we parse and print it ---

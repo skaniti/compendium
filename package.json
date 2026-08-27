@@ -2,15 +2,19 @@
   "name": "compendium",
   "version": "1.0.0",
   "description": "Web frontend for Compendium -- a topic-based knowledge compendium built from curiosity-driven browsing",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
   "scripts": {
-    "test": "vitest run",
     "prepare": "husky",
-    "dev": "next dev",
-    "demo": "node demo/launcher.mjs",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "test:watch": "vitest"
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "start": "npm run start -w apps/web",
+    "lint": "npm run lint -w apps/web",
+    "test": "npm run test -w apps/web",
+    "test:watch": "npm run test:watch -w apps/web",
+    "demo": "npm run demo -w apps/web"
   },
   "keywords": [
     "compendium",
@@ -21,43 +25,7 @@
   ],
   "author": "skaniti",
   "license": "MIT",
-  "type": "module",
-  "private": true,
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/d3-delaunay": "^6.0.4",
-    "@types/d3-force": "^3.0.10",
-    "@types/d3-polygon": "^3.0.2",
-    "@types/d3-selection": "^3.0.11",
-    "@types/d3-shape": "^3.1.8",
-    "@types/d3-transition": "^3.0.9",
-    "@types/d3-zoom": "^3.0.8",
-    "@types/markdown-it": "^14.1.2",
-    "@types/node": "^26.0.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.1",
-    "husky": "^9.1.7",
-    "jsdom": "^29.1.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
-  },
-  "dependencies": {
-    "d3-delaunay": "^6.0.4",
-    "d3-force": "^3.0.0",
-    "d3-polygon": "^3.0.1",
-    "d3-selection": "^3.0.0",
-    "d3-shape": "^3.2.0",
-    "d3-transition": "^3.0.1",
-    "d3-zoom": "^3.0.0",
-    "dompurify": "^3.4.11",
-    "markdown-it": "^14.2.0",
-    "next": "^16.2.9",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "husky": "^9.1.7"
   }
 }
