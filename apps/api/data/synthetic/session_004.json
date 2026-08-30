@@ -1,0 +1,52 @@
+{
+  "sessionId": "session_004",
+  "startedAt": "2024-01-18T23:00:00Z",
+  "endedAt": "2024-01-18T23:17:30Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Octopus",
+      "title": "Octopus",
+      "timestamp": "2024-01-18T23:00:00Z",
+      "dwellTimeSeconds": 150,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Ancient_Rome",
+      "title": "Ancient Rome",
+      "timestamp": "2024-01-18T23:02:30Z",
+      "dwellTimeSeconds": 300,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Bitcoin",
+      "title": "Bitcoin",
+      "timestamp": "2024-01-18T23:07:30Z",
+      "dwellTimeSeconds": 200,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Sleep",
+      "title": "Sleep",
+      "timestamp": "2024-01-18T23:10:50Z",
+      "dwellTimeSeconds": 180,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Sourdough",
+      "title": "Sourdough",
+      "timestamp": "2024-01-18T23:13:50Z",
+      "dwellTimeSeconds": 220,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

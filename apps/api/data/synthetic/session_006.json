@@ -1,0 +1,43 @@
+{
+  "sessionId": "session_006",
+  "startedAt": "2024-01-20T15:00:00Z",
+  "endedAt": "2024-01-20T15:09:50Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+      "title": "Python (programming language)",
+      "timestamp": "2024-01-20T15:00:00Z",
+      "dwellTimeSeconds": 120,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Guido_van_Rossum",
+      "title": "Guido van Rossum",
+      "timestamp": "2024-01-20T15:02:00Z",
+      "dwellTimeSeconds": 90,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+      "title": "Python (programming language)",
+      "timestamp": "2024-01-20T15:03:30Z",
+      "dwellTimeSeconds": 180,
+      "transitionType": "link",
+      "transitionQualifiers": ["forward_back"],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Monty_Python",
+      "title": "Monty Python",
+      "timestamp": "2024-01-20T15:06:30Z",
+      "dwellTimeSeconds": 200,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

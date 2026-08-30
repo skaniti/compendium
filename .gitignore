@@ -59,7 +59,17 @@ logs/*
 
 # machine-local editor/runtime config
 /.vscode/
-.python-version
+# root-anchored: apps/api/.python-version is a real interpreter pin that
+# SHOULD be tracked (packaging-relevant; uv.lock there is a stub with only
+# a requires-python floor) -- an unanchored pattern here would have silently
+# swallowed it too.
+/.python-version
+
+# python (apps/api)
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
 
 # font design workbench (parked here; not part of the app)
 /Constellation-inspired font design/

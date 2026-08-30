@@ -14,7 +14,17 @@ fi
 # `|| true`: husky runs hooks under sh -e, and grep exits 1 when a commit has
 # no added text lines (binary-only, rename-only, mode-only) -- that is a
 # clean pass, not a failure.
-added=$(git diff --cached -U0 --no-color | grep -E '^\+' || true)
+# Two narrow carve-outs (2026-08-30, apps/api extraction):
+#  - tests/fixtures/ paths are excluded from the diff: vendored PUBLIC page
+#    content (arXiv HTML) whose dotted LaTeXML markup ids (section/table
+#    anchors with four numeric segments) match the 10.x IP pattern in bulk.
+#    Fixture dirs hold public corpus material by convention; everything
+#    else still scans.
+#  - lines carrying a `scan-ok: test-ip` comment are dropped after
+#    collection: deliberate RFC1918 literals that ARE the test subject
+#    (SSRF-guard tests). The pragma is visible at the use site and greppable.
+added=$(git diff --cached -U0 --no-color -- . ':(exclude)*tests/fixtures/*' | grep -E '^\+' || true)
+added=$(printf '%s\n' "$added" | grep -v 'scan-ok: test-ip' || true)
 hits=$(printf '%s\n' "$added" | grep -nE '(sk-[A-Za-z0-9]{16,}|sk-ant-[A-Za-z0-9_-]{16,}|hf_[A-Za-z0-9]{16,}|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|password[[:space:]]*=[[:space:]]*["'\''][^"'\'']+|\b192\.168\.[0-9]{1,3}\.[0-9]{1,3}\b)' || true)
 # Private 10.x.x.x addresses, via a separate PCRE clause with a negative
 # lookahead: a bare private IP has exactly 3 dots (10.0.0.x); a CiteSeerX

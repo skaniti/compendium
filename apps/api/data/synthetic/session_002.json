@@ -1,0 +1,61 @@
+{
+  "sessionId": "session_002",
+  "startedAt": "2024-01-16T21:00:00Z",
+  "endedAt": "2024-01-16T21:28:20Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Black_hole",
+      "title": "Black hole",
+      "timestamp": "2024-01-16T21:00:00Z",
+      "dwellTimeSeconds": 300,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Event_horizon",
+      "title": "Event horizon",
+      "timestamp": "2024-01-16T21:05:00Z",
+      "dwellTimeSeconds": 240,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Hawking_radiation",
+      "title": "Hawking radiation",
+      "timestamp": "2024-01-16T21:09:00Z",
+      "dwellTimeSeconds": 360,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Stephen_Hawking",
+      "title": "Stephen Hawking",
+      "timestamp": "2024-01-16T21:15:00Z",
+      "dwellTimeSeconds": 420,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Singularity_(physics)",
+      "title": "Singularity (physics)",
+      "timestamp": "2024-01-16T21:22:00Z",
+      "dwellTimeSeconds": 180,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Spaghettification",
+      "title": "Spaghettification",
+      "timestamp": "2024-01-16T21:25:00Z",
+      "dwellTimeSeconds": 200,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

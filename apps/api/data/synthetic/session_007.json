@@ -1,0 +1,61 @@
+{
+  "sessionId": "session_007",
+  "startedAt": "2024-01-21T22:00:00Z",
+  "endedAt": "2024-01-21T22:01:50Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Mercury_(planet)",
+      "title": "Mercury (planet)",
+      "timestamp": "2024-01-21T22:00:00Z",
+      "dwellTimeSeconds": 15,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Venus",
+      "title": "Venus",
+      "timestamp": "2024-01-21T22:00:15Z",
+      "dwellTimeSeconds": 20,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Earth",
+      "title": "Earth",
+      "timestamp": "2024-01-21T22:00:35Z",
+      "dwellTimeSeconds": 25,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Mars",
+      "title": "Mars",
+      "timestamp": "2024-01-21T22:01:00Z",
+      "dwellTimeSeconds": 18,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Jupiter",
+      "title": "Jupiter",
+      "timestamp": "2024-01-21T22:01:18Z",
+      "dwellTimeSeconds": 22,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Saturn",
+      "title": "Saturn",
+      "timestamp": "2024-01-21T22:01:40Z",
+      "dwellTimeSeconds": 10,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

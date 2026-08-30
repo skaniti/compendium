@@ -1,0 +1,16 @@
+{
+  "sessionId": "session_005",
+  "startedAt": "2024-01-19T10:00:00Z",
+  "endedAt": "2024-01-19T10:10:00Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Tardigrade",
+      "title": "Tardigrade",
+      "timestamp": "2024-01-19T10:00:00Z",
+      "dwellTimeSeconds": 600,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

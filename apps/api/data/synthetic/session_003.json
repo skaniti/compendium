@@ -1,0 +1,52 @@
+{
+  "sessionId": "session_003",
+  "startedAt": "2024-01-17T14:00:00Z",
+  "endedAt": "2024-01-17T14:20:30Z",
+  "pages": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Coffee",
+      "title": "Coffee",
+      "timestamp": "2024-01-17T14:00:00Z",
+      "dwellTimeSeconds": 200,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Ethiopia",
+      "title": "Ethiopia",
+      "timestamp": "2024-01-17T14:03:20Z",
+      "dwellTimeSeconds": 280,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Jazz",
+      "title": "Jazz",
+      "timestamp": "2024-01-17T14:08:00Z",
+      "dwellTimeSeconds": 320,
+      "transitionType": "typed",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/New_Orleans",
+      "title": "New Orleans",
+      "timestamp": "2024-01-17T14:13:20Z",
+      "dwellTimeSeconds": 250,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Mardi_Gras",
+      "title": "Mardi Gras",
+      "timestamp": "2024-01-17T14:17:30Z",
+      "dwellTimeSeconds": 180,
+      "transitionType": "link",
+      "transitionQualifiers": [],
+      "isTrackedDomain": true
+    }
+  ]
+}

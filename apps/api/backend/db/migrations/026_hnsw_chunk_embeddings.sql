@@ -1,0 +1,95 @@
+-- 026_hnsw_chunk_embeddings.sql
+-- Migrate chunk_embeddings vector index from IVFFlat to HNSW.
+--
+-- Status: PLANNED, not yet applied (as of 2026-04-29). Apply when ready
+-- with: psql "$DATABASE_URL" -f backend/db/migrations/026_hnsw_chunk_embeddings.sql
+--
+-- Why migrate
+-- -----------
+-- IVFFlat with lists=100 over ~2K chunks puts ~20 vectors per partition.
+-- pgvector's default `ivfflat.probes=1` then scans 1 partition (~1% of
+-- corpus) per query, collapsing recall to near-random. We worked around
+-- this in A9 by setting `ivfflat.probes=20` per-query in
+-- find_similar_chunks (covers ~20% of corpus, recovers recall) but the
+-- index is fundamentally over-partitioned for our scale.
+--
+-- HNSW (Hierarchical Navigable Small World) is the standard choice for
+-- vector indexes below ~100K rows:
+--   * Better recall: graph traversal finds nearest neighbours by topology,
+--     not by partition lottery
+--   * No `probes` knob to set per-query (one less foot-gun)
+--   * Comparable speed to a well-tuned IVFFlat
+--   * Build time: a few seconds for 2K rows; longer for huge datasets
+--
+-- IVFFlat shines at >100K rows where partitioning cost amortizes; HNSW
+-- shines below that. We're firmly in HNSW territory.
+--
+-- Parameters
+-- ----------
+-- m=16, ef_construction=64 are pgvector's defaults. Designed for
+-- million-row datasets, over-provisioned for our 2K rows. The marginal
+-- difference between m=8 and m=16 at our scale is negligible; defaults
+-- are well-trodden and safe.
+--
+-- Operator class: vector_cosine_ops matches the cosine distance operator
+-- (<=>) used in find_similar_chunks.
+--
+-- Rollback
+-- --------
+-- If HNSW recall surprises us, recreate the IVFFlat index:
+--   DROP INDEX idx_chunk_embeddings_hnsw;
+--   CREATE INDEX idx_chunk_embeddings_ivfflat
+--     ON chunk_embeddings USING ivfflat (embedding vector_cosine_ops)
+--     WITH (lists = 100);
+-- Then leave the `SET ivfflat.probes = 20` line in find_similar_chunks
+-- as before (it is a no-op when the active index isn't IVFFlat, but
+-- becomes the recall-fix again on rollback).
+--
+-- Post-migration verification
+-- ---------------------------
+-- Run the self-similarity recall test from A9 to confirm HNSW returns at
+-- least as many topical neighbours as probes=20 IVFFlat did:
+--
+--   PGPASSWORD=tbd_local psql -h localhost -p 5433 -U tbd -d traversal_discovery <<'EOF'
+--   WITH topic_chunk AS (
+--       SELECT ce.embedding AS query_vec
+--       FROM chunk_embeddings ce
+--       JOIN page_chunks pch ON pch.id = ce.page_chunk_id
+--       JOIN page_content pc ON pc.id = pch.page_content_id
+--       JOIN pages p ON p.page_content_id = pc.id
+--       WHERE p.url ILIKE '%toroidal_transformers%'
+--       LIMIT 1
+--   )
+--   SELECT
+--       LEFT(pages.title, 30) AS title,
+--       LEFT(pch.section_title, 25) AS section,
+--       ROUND((ce.embedding <=> (SELECT query_vec FROM topic_chunk))::numeric, 4) AS distance
+--   FROM chunk_embeddings ce
+--   JOIN page_chunks pch ON pch.id = ce.page_chunk_id
+--   JOIN page_content pc ON pc.id = pch.page_content_id
+--   JOIN pages ON pages.page_content_id = pc.id
+--   ORDER BY ce.embedding <=> (SELECT query_vec FROM topic_chunk) ASC
+--   LIMIT 12;
+--   EOF
+--
+-- Expect: 4-6 of the seed topic's 6 chunks in the top-12, plus topical
+-- neighbours (related terms, etc.). Pre-migration baseline (post-A9 fix
+-- with probes=20) was 4 of 6 in top-12. HNSW should match or exceed.
+
+-- Drop the IVFFlat index (transactional; rollback safe). Sequential scan
+-- becomes the temporary fallback during this transaction.
+DROP INDEX IF EXISTS idx_chunk_embeddings_ivfflat;
+
+-- Build the HNSW index. Same operator class so distance semantics are
+-- unchanged; downstream queries do not need code changes.
+CREATE INDEX idx_chunk_embeddings_hnsw
+    ON chunk_embeddings
+    USING hnsw (embedding vector_cosine_ops);
+
+-- Note for find_similar_chunks (backend/db/embedding_repo.py):
+-- The `SET ivfflat.probes = 20` line at the top of the cursor block
+-- becomes a silent no-op once the IVFFlat index is gone (pgvector
+-- ignores SET on parameters that don't apply to the active index type).
+-- The line can stay safely as documentation of the prior workaround OR
+-- be removed in a follow-up commit. Removing it is cleaner; keeping it
+-- preserves easy rollback semantics. Either is correct.

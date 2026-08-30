@@ -1,0 +1,790 @@
+# Icon metadata — regenerated from icons/openmoji-top-240.xlsx on 2026-04-11
+# Schema v2: adds `category` per icon and `_category_order` for picker grouping.
+#
+# The picker groups icons into sections in `_category_order` order.
+# Editing this file directly is fine, but if you re-run the extraction
+# from the XLSX, your edits will be overwritten. Prefer editing the XLSX
+# as the archival source of truth.
+#
+# Rebuild downstream manifests after editing:
+#   python scripts/build_icon_manifests.py
+
+_category_order:
+- Physics & Math
+- Astronomy & Space
+- Life Sciences & Biology
+- Chemistry & Materials
+- Hardware & Gadgets
+- Software, Internet & AI
+- Literature & Writing
+- Film & TV
+- Music
+- Games & Play
+- Painting & Illustration
+- Photography
+- Crafts & Needlework
+- Team Sports
+- Individual Sports
+- Ingredients & Produce
+- Prepared Food
+- Beverages
+- Places & Landmarks
+- Transport
+- Nature & Weather
+- Climate & Sustainability
+- Pets
+- Wildlife — Land
+- Marine Life
+- Health & Medicine
+- Finance & Business
+- Philosophy, Religion & Spirituality
+- History & Heritage
+- Politics & Society
+- Education & Learning
+- Home & Lifestyle
+- Parenting & Family
+- DIY, Crafts & Tools
+- Gardening
+- Fashion & Apparel
+- Beauty & Grooming
+- Fantasy, Myth & Supernatural
+- Relationships & Emotions
+icons:
+  atom:
+    label: Physics / Atoms / Particles
+    category: Physics & Math
+  magnet:
+    label: Magnetism / Fields
+    category: Physics & Math
+  infinity:
+    label: Mathematics / Infinity
+    category: Physics & Math
+  abacus:
+    label: Arithmetic / Math Tools
+    category: Physics & Math
+  mechanics:
+    label: Mechanics / Machines / Physics
+    category: Physics & Math
+  telescope:
+    label: Astronomy / Observation
+    category: Astronomy & Space
+  planet:
+    label: Planets / Solar System
+    category: Astronomy & Space
+  comet:
+    label: Comets / Meteors
+    category: Astronomy & Space
+  galaxy:
+    label: Galaxy / Cosmology
+    category: Astronomy & Space
+  rocket:
+    label: Rockets / Space Exploration
+    category: Astronomy & Space
+  space-shuttle:
+    label: NASA / Shuttle / Space Program
+    category: Astronomy & Space
+  satellite:
+    label: Satellites / Orbital Tech
+    category: Astronomy & Space
+  dna:
+    label: DNA / Genetics
+    category: Life Sciences & Biology
+  brain:
+    label: Neuroscience / Brain
+    category: Life Sciences & Biology
+  microbe:
+    label: Microbiology / Cells
+    category: Life Sciences & Biology
+  microscope:
+    label: Biology Lab
+    category: Life Sciences & Biology
+  petri-dish:
+    label: Culture / Microbiology
+    category: Life Sciences & Biology
+  paleontology:
+    label: Paleontology / Fossils
+    category: Life Sciences & Biology
+  lab-coat:
+    label: Laboratory / Scientist / Lab / Chemistry
+    category: Chemistry & Materials
+  test-tube:
+    label: Chemistry / Reagents / Test Tube / Lab
+    category: Chemistry & Materials
+  element:
+    label: Periodic Table / Elements / Chemistry
+    category: Chemistry & Materials
+  crystal:
+    label: Crystals / Materials / Minerals
+    category: Chemistry & Materials
+  laptop:
+    label: Laptop / Portable PC
+    category: Hardware & Gadgets
+  desktop:
+    label: Desktop / PC
+    category: Hardware & Gadgets
+  phone:
+    label: Smartphone
+    category: Hardware & Gadgets
+  tablet:
+    label: Tablet / iPad
+    category: Hardware & Gadgets
+  smartwatch:
+    label: Smartwatch / Wearable
+    category: Hardware & Gadgets
+  vr-headset:
+    label: VR / Virtual Reality
+    category: Hardware & Gadgets
+  raspberry-pi:
+    label: Hobbyist / SBC / Maker
+    category: Hardware & Gadgets
+  code:
+    label: Programming / Code
+    category: Software, Internet & AI
+  robot:
+    label: AI / Automation / Bots
+    category: Software, Internet & AI
+  wifi:
+    label: Internet / Wi-Fi
+    category: Software, Internet & AI
+  gps:
+    label: GPS / Location
+    category: Software, Internet & AI
+  qr-code:
+    label: QR Code / Scan
+    category: Software, Internet & AI
+  keyboard:
+    label: Keyboard / Typing
+    category: Software, Internet & AI
+  wireframe:
+    label: UX / Prototyping / Design
+    category: Software, Internet & AI
+  open-book:
+    label: Book / Reading
+    category: Literature & Writing
+  books:
+    label: Library / Collection
+    category: Literature & Writing
+  pencil:
+    label: Writing / Pencil
+    category: Literature & Writing
+  fountain-pen:
+    label: Calligraphy / Authorship
+    category: Literature & Writing
+  newspaper:
+    label: Journalism / News
+    category: Literature & Writing
+  notebook:
+    label: Notebook / Journal
+    category: Literature & Writing
+  scroll:
+    label: Manuscript / Ancient Text
+    category: Literature & Writing
+  clapperboard:
+    label: Film Production
+    category: Film & TV
+  movie-camera:
+    label: Cinematography
+    category: Film & TV
+  television:
+    label: TV / Streaming
+    category: Film & TV
+  projector:
+    label: Projector / Classic Film
+    category: Film & TV
+  popcorn:
+    label: Movies / Snack
+    category: Film & TV
+  tickets:
+    label: Movie Tickets / Events
+    category: Film & TV
+  music-note:
+    label: Music / Song
+    category: Music
+  guitar:
+    label: Guitar / Rock / Strings / Music
+    category: Music
+  violin:
+    label: Violin / Classical
+    category: Music
+  drum:
+    label: Drum / Percussion
+    category: Music
+  headphones:
+    label: Headphones / Listening
+    category: Music
+  microphone:
+    label: Recording / Vocals / Podcast
+    category: Music
+  saxophone:
+    label: Saxophone / Jazz
+    category: Music
+  piano:
+    label: Piano / Keys
+    category: Music
+  die:
+    label: Dice / Tabletop
+    category: Games & Play
+  game-controller:
+    label: Video Games
+    category: Games & Play
+  chess-king:
+    label: Chess / Strategy / King / Board Games
+    category: Games & Play
+  puzzle:
+    label: Jigsaw / Puzzle
+    category: Games & Play
+  joystick:
+    label: Arcade / Retro
+    category: Games & Play
+  teddy-bear:
+    label: Toys / Childhood
+    category: Games & Play
+  card-suit:
+    label: Card Games / Poker
+    category: Games & Play
+  palette:
+    label: Painting / Palette
+    category: Painting & Illustration
+  painting:
+    label: Gallery / Fine Art
+    category: Painting & Illustration
+  paintbrush:
+    label: Brush / Painting
+    category: Painting & Illustration
+  crayon:
+    label: Drawing / Crayon / Illustration
+    category: Painting & Illustration
+  camera:
+    label: Photography / DSLR
+    category: Photography
+  flash-camera:
+    label: Flash Photography
+    category: Photography
+  film-strip:
+    label: Film Photography / Analog
+    category: Photography
+  magnify:
+    label: Zoom / Inspect / Detail
+    category: Photography
+  needle:
+    label: Sewing / Needlework
+    category: Crafts & Needlework
+  thread:
+    label: Thread / Sewing
+    category: Crafts & Needlework
+  yarn:
+    label: Knitting / Crochet / Yarn
+    category: Crafts & Needlework
+  knot:
+    label: Knot / Macramé / Rope Crafts
+    category: Crafts & Needlework
+  scissors:
+    label: Scissors / Cutting / Crafts
+    category: Crafts & Needlework
+  soccer-ball:
+    label: Soccer / Football
+    category: Team Sports
+  basketball:
+    label: Basketball
+    category: Team Sports
+  football:
+    label: American Football
+    category: Team Sports
+  baseball:
+    label: Baseball
+    category: Team Sports
+  volleyball:
+    label: Volleyball
+    category: Team Sports
+  rugby:
+    label: Rugby / League
+    category: Team Sports
+  goal-net:
+    label: Goal / Net
+    category: Team Sports
+  muscle:
+    label: Strength / Fitness
+    category: Individual Sports
+  runner:
+    label: Running / Jogging / Track
+    category: Individual Sports
+  tennis:
+    label: Tennis
+    category: Individual Sports
+  skis:
+    label: Skiing / Winter
+    category: Individual Sports
+  skateboard:
+    label: Skateboarding / Street Sports
+    category: Individual Sports
+  bowling:
+    label: Bowling
+    category: Individual Sports
+  boxing:
+    label: Boxing / Martial Arts
+    category: Individual Sports
+  fishing:
+    label: Fishing / Angling
+    category: Individual Sports
+  swimming:
+    label: Swimming / Pool / Aquatic / Fitness
+    category: Individual Sports
+  apple:
+    label: Apple / Fruit
+    category: Ingredients & Produce
+  carrot:
+    label: Carrot / Vegetable
+    category: Ingredients & Produce
+  cheese:
+    label: Cheese / Dairy
+    category: Ingredients & Produce
+  herb:
+    label: Herbs / Seasoning
+    category: Ingredients & Produce
+  corn:
+    label: Corn / Maize / Grain
+    category: Ingredients & Produce
+  mushroom:
+    label: Mushroom / Fungi
+    category: Ingredients & Produce
+  dining:
+    label: Dining / Meal
+    category: Prepared Food
+  cooking:
+    label: Cooking / Kitchen
+    category: Prepared Food
+  pizza:
+    label: Pizza
+    category: Prepared Food
+  burger:
+    label: Burger / Fast Food
+    category: Prepared Food
+  bread:
+    label: Bread / Baking
+    category: Prepared Food
+  knife:
+    label: Knife / Chef
+    category: Prepared Food
+  cake:
+    label: Cake / Celebration
+    category: Prepared Food
+  sushi:
+    label: Sushi / Japanese
+    category: Prepared Food
+  ice-cream:
+    label: Ice Cream / Desserts / Sweets
+    category: Prepared Food
+  wine:
+    label: Wine
+    category: Beverages
+  beer:
+    label: Beer
+    category: Beverages
+  cocktail:
+    label: Cocktails / Mixology
+    category: Beverages
+  coffee:
+    label: Coffee / Tea
+    category: Beverages
+  teapot:
+    label: Tea / Teapot
+    category: Beverages
+  champagne:
+    label: Champagne / Celebration
+    category: Beverages
+  castle:
+    label: Castle / Medieval
+    category: Places & Landmarks
+  pyramid:
+    label: Pyramid / Egypt
+    category: Places & Landmarks
+  statue-of-liberty:
+    label: Liberty / NYC
+    category: Places & Landmarks
+  beach:
+    label: Beach / Resort
+    category: Places & Landmarks
+  mountain:
+    label: Mountain / Hiking
+    category: Places & Landmarks
+  city:
+    label: City / Skyline / Urban
+    category: Places & Landmarks
+  camping-tent:
+    label: Camping / Outdoors
+    category: Places & Landmarks
+  airplane:
+    label: Flight / Aviation
+    category: Transport
+  car:
+    label: Car / Driving
+    category: Transport
+  train:
+    label: Train / Rail
+    category: Transport
+  sailboat:
+    label: Sailing / Marine
+    category: Transport
+  bike:
+    label: Cycling / Bike
+    category: Transport
+  helicopter:
+    label: Helicopter / Chopper
+    category: Transport
+  motorboat:
+    label: Motor Boat / Speedboat
+    category: Transport
+  tree:
+    label: Tree / Forest
+    category: Nature & Weather
+  sun:
+    label: Sun / Day
+    category: Nature & Weather
+  rainbow:
+    label: Rainbow
+    category: Nature & Weather
+  wave:
+    label: Ocean / Sea
+    category: Nature & Weather
+  cloud:
+    label: Cloud / Sky
+    category: Nature & Weather
+  snowflake:
+    label: Snow / Winter
+    category: Nature & Weather
+  volcano:
+    label: Volcano / Geology
+    category: Nature & Weather
+  moon:
+    label: Moon / Night / Lunar / Celestial
+    category: Nature & Weather
+  flower:
+    label: Flower / Botany / Gardening / Flora
+    category: Nature & Weather
+  recycle:
+    label: Recycling / Sustainability
+    category: Climate & Sustainability
+  solar:
+    label: Solar / Renewable Energy
+    category: Climate & Sustainability
+  wind-turbine:
+    label: Wind Energy / Renewable
+    category: Climate & Sustainability
+  iceberg:
+    label: Iceberg / Climate Change / Arctic
+    category: Climate & Sustainability
+  reusable-bag:
+    label: Reusable / Zero Waste
+    category: Climate & Sustainability
+  dog:
+    label: Dog / Pet
+    category: Pets
+  cat:
+    label: Cat / Pet
+    category: Pets
+  rabbit:
+    label: Rabbit / Pet
+    category: Pets
+  hamster:
+    label: Hamster / Small Pet
+    category: Pets
+  goldfish:
+    label: Goldfish / Aquarium Pet
+    category: Pets
+  elephant:
+    label: Elephant
+    category: Wildlife — Land
+  lion:
+    label: Lion / Big Cats
+    category: Wildlife — Land
+  bear:
+    label: Bear
+    category: Wildlife — Land
+  wolf:
+    label: Wolf / Canid
+    category: Wildlife — Land
+  deer:
+    label: Deer / Cervid
+    category: Wildlife — Land
+  giraffe:
+    label: Giraffe
+    category: Wildlife — Land
+  owl:
+    label: Owl / Raptor
+    category: Wildlife — Land
+  butterfly:
+    label: Butterfly / Insect
+    category: Wildlife — Land
+  monkey:
+    label: Monkey / Primate / Great Apes
+    category: Wildlife — Land
+  paw-prints:
+    label: Zoology / Tracking / Wildlife / Pets
+    category: Wildlife — Land
+  whale:
+    label: Whale / Cetacean
+    category: Marine Life
+  dolphin:
+    label: Dolphin
+    category: Marine Life
+  shark:
+    label: Shark
+    category: Marine Life
+  octopus:
+    label: Octopus / Cephalopod
+    category: Marine Life
+  crab:
+    label: Crab / Crustacean
+    category: Marine Life
+  tropical-fish:
+    label: Tropical Fish / Reef
+    category: Marine Life
+  heart-organ:
+    label: Cardiovascular
+    category: Health & Medicine
+  syringe:
+    label: Vaccine / Injection
+    category: Health & Medicine
+  stethoscope:
+    label: Doctor / Exam
+    category: Health & Medicine
+  pill:
+    label: Pharmacy / Meds
+    category: Health & Medicine
+  first-aid:
+    label: First Aid / Emergency
+    category: Health & Medicine
+  x-ray:
+    label: Radiology / X-Ray
+    category: Health & Medicine
+  prosthesis:
+    label: Prosthetics / Accessibility
+    category: Health & Medicine
+  toothbrush:
+    label: Dental Hygiene / Brushing
+    category: Health & Medicine
+  growth:
+    label: Markets / Growth
+    category: Finance & Business
+  briefcase:
+    label: Business
+    category: Finance & Business
+  money:
+    label: Cash / Currency
+    category: Finance & Business
+  coin:
+    label: Coin
+    category: Finance & Business
+  bank:
+    label: Bank
+    category: Finance & Business
+  handshake:
+    label: Deal / Partnership
+    category: Finance & Business
+  credit-card:
+    label: Credit / Cards / Payment
+    category: Finance & Business
+  yin-yang:
+    label: Taoism / Balance
+    category: Philosophy, Religion & Spirituality
+  cross:
+    label: Christianity
+    category: Philosophy, Religion & Spirituality
+  om:
+    label: Hinduism / Om
+    category: Philosophy, Religion & Spirituality
+  star-of-david:
+    label: Judaism
+    category: Philosophy, Religion & Spirituality
+  dharma:
+    label: Buddhism / Dharma
+    category: Philosophy, Religion & Spirituality
+  crescent-star:
+    label: Islam
+    category: Philosophy, Religion & Spirituality
+  prayer:
+    label: Prayer / Devotion
+    category: Philosophy, Religion & Spirituality
+  khanda:
+    label: Sikhism / Khanda
+    category: Philosophy, Religion & Spirituality
+  ancient-statue:
+    label: Ancient Statue / Antiquity / Classical Heritage
+    category: History & Heritage
+  crown:
+    label: Royalty / Monarchy
+    category: History & Heritage
+  crossed-swords:
+    label: Military History / War
+    category: History & Heritage
+  moai:
+    label: Archaeology / Ancient Civilizations / Easter Island
+    category: History & Heritage
+  amphora:
+    label: Classical Antiquity / Greek Pottery
+    category: History & Heritage
+  trident:
+    label: Greek Myth / Poseidon / Classical
+    category: History & Heritage
+  vote:
+    label: Voting / Democracy
+    category: Politics & Society
+  activism:
+    label: Activism / Protest
+    category: Politics & Society
+  protest-sign:
+    label: Protest / Rally
+    category: Politics & Society
+  justice:
+    label: Law / Justice / Courts
+    category: Politics & Society
+  military-medal:
+    label: Military / Service / Veterans
+    category: Politics & Society
+  graduation:
+    label: Graduation / Degree
+    category: Education & Learning
+  school:
+    label: School / Classroom
+    category: Education & Learning
+  ruler:
+    label: Ruler / Geometry
+    category: Education & Learning
+  backpack:
+    label: Student / School Supplies
+    category: Education & Learning
+  composition-book:
+    label: Composition / Study Notes
+    category: Education & Learning
+  house:
+    label: Home / Housing
+    category: Home & Lifestyle
+  bed:
+    label: Bedroom / Sleep
+    category: Home & Lifestyle
+  lightbulb:
+    label: Lighting / Ideas
+    category: Home & Lifestyle
+  clock:
+    label: Clock / Time / Schedule
+    category: Home & Lifestyle
+  candle:
+    label: Candle / Ambiance
+    category: Home & Lifestyle
+  washing-machine:
+    label: Laundry / Appliances
+    category: Home & Lifestyle
+  baby-bottle:
+    label: Baby / Infant / Nursing
+    category: Parenting & Family
+  child:
+    label: Child / Kid / Parenting
+    category: Parenting & Family
+  family:
+    label: Family / Parenting
+    category: Parenting & Family
+  pregnancy:
+    label: Pregnancy / Expecting
+    category: Parenting & Family
+  new-life:
+    label: Newborn / New Beginnings
+    category: Parenting & Family
+  hammer:
+    label: Carpentry / Hammer
+    category: DIY, Crafts & Tools
+  wrench:
+    label: Plumbing / Wrench
+    category: DIY, Crafts & Tools
+  screwdriver:
+    label: Screwdriver / Assembly
+    category: DIY, Crafts & Tools
+  toolbox:
+    label: Tools / Handyman
+    category: DIY, Crafts & Tools
+  saw:
+    label: Saw / Woodworking
+    category: DIY, Crafts & Tools
+  nut-bolt:
+    label: Hardware / Fasteners
+    category: DIY, Crafts & Tools
+  wheelbarrow:
+    label: Gardening / Yardwork
+    category: Gardening
+  shovel:
+    label: Shovel / Digging
+    category: Gardening
+  potted-plant:
+    label: Houseplants / Gardening
+    category: Gardening
+  seedling:
+    label: Seedling / Sprout
+    category: Gardening
+  dress:
+    label: Dress / Fashion
+    category: Fashion & Apparel
+  t-shirt:
+    label: Casual Wear / T-Shirt
+    category: Fashion & Apparel
+  jeans:
+    label: Jeans / Denim
+    category: Fashion & Apparel
+  heels:
+    label: Heels
+    category: Fashion & Apparel
+  sneaker:
+    label: Sneakers
+    category: Fashion & Apparel
+  handbag:
+    label: Handbag
+    category: Fashion & Apparel
+  hat:
+    label: Top Hat / Formal
+    category: Fashion & Apparel
+  lipstick:
+    label: Makeup / Lipstick
+    category: Beauty & Grooming
+  nail-polish:
+    label: Manicure / Nail Polish
+    category: Beauty & Grooming
+  razor:
+    label: Shaving / Razor
+    category: Beauty & Grooming
+  glasses:
+    label: Eyewear / Glasses
+    category: Beauty & Grooming
+  dragon:
+    label: Dragon / Myth
+    category: Fantasy, Myth & Supernatural
+  unicorn:
+    label: Unicorn / Fantasy
+    category: Fantasy, Myth & Supernatural
+  ghost:
+    label: Ghost / Paranormal
+    category: Fantasy, Myth & Supernatural
+  alien:
+    label: Alien / UFO
+    category: Fantasy, Myth & Supernatural
+  skull:
+    label: Skull / Gothic
+    category: Fantasy, Myth & Supernatural
+  fairy:
+    label: Fairy / Fae
+    category: Fantasy, Myth & Supernatural
+  mage:
+    label: Wizard / Mage / Sorcery
+    category: Fantasy, Myth & Supernatural
+  heart:
+    label: Love / Romance
+    category: Relationships & Emotions
+  wedding:
+    label: Wedding / Marriage
+    category: Relationships & Emotions
+  ring:
+    label: Engagement / Ring
+    category: Relationships & Emotions
+  love-letter:
+    label: Love Letter
+    category: Relationships & Emotions
+  broken-heart:
+    label: Heartbreak / Loss
+    category: Relationships & Emotions

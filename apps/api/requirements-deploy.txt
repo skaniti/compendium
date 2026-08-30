@@ -1,0 +1,49 @@
+# Production dependencies (no torch/transformers/jupyter/dev tools)
+
+# Core Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+slowapi>=0.1.9
+apscheduler>=3.11.0            # Weekly dqBot scheduler (Layer 6)
+
+# Database
+psycopg2-binary>=2.9.9
+bcrypt>=4.0.0
+sqlparse>=0.5.0                # dq_bot SQL receipt validator (migration 028)
+PyJWT>=2.8.0                   # JWT access + refresh token signing (auth_service)
+# pgvector>=0.2.0                # Not currently imported — uncomment when needed
+
+# LLM APIs
+openai>=1.10.0
+anthropic>=0.18.0
+# langchain>=0.1.0               # Not currently imported — uncomment when needed
+# langchain-openai>=0.0.5        # Not currently imported — uncomment when needed
+# langchain-anthropic>=0.1.0     # Not currently imported — uncomment when needed
+# langchain-community>=0.0.20    # Not currently imported — uncomment when needed
+
+# RAG
+sentence-transformers>=2.3.0
+
+# Content Fetching
+wikipedia-api>=0.6.0
+youtube-transcript-api>=0.6.2
+beautifulsoup4>=4.12.0
+trafilatura>=1.12.0            # Main-content extraction (content_extractor.is_usable); imported unconditionally
+bleach[css]>=6.0.0             # HTML+CSS sanitizer for archived-page iframe preview
+docling>=2.0.0                 # PDF -> structured doc; arXiv PDF fallback when ar5iv has no render
+httpx>=0.26.0
+lxml>=5.1.0
+tenacity>=8.2.0
+
+# ML
+numpy>=1.26.0
+pandas>=2.1.0
+scikit-learn>=1.4.0
+umap-learn>=0.5.0        # clustering reduction knob (CLUSTERING_UMAP_DIMS, increment 2)
+
+# Monitoring
+langsmith>=0.0.87
+python-json-logger>=2.0.0

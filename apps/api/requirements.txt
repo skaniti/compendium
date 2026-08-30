@@ -1,0 +1,95 @@
+# Compendium - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# =============================================================================
+# Core Framework
+# =============================================================================
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+slowapi>=0.1.9
+apscheduler>=3.11.0           # Weekly dqBot scheduler (Layer 6)
+
+# =============================================================================
+# Database
+# =============================================================================
+psycopg2-binary>=2.9.9
+bcrypt>=4.0.0
+sqlparse>=0.5.0                  # dq_bot SQL receipt validator (migration 028)
+# pgvector>=0.2.0                # Not currently imported — uncomment when needed
+
+# =============================================================================
+# LLM APIs & Frameworks
+# =============================================================================
+openai>=1.10.0
+anthropic>=0.18.0
+# langchain>=0.1.0               # Not currently imported — uncomment when needed
+# langchain-openai>=0.0.5        # Not currently imported — uncomment when needed
+# langchain-anthropic>=0.1.0     # Not currently imported — uncomment when needed
+# langchain-community>=0.0.20    # Not currently imported — uncomment when needed
+# langgraph>=0.0.20              # Not currently imported — uncomment when needed
+
+# =============================================================================
+# RAG - Embeddings & Vector Store
+# =============================================================================
+sentence-transformers>=2.3.0
+FlagEmbedding>=1.3.0           # Cross-encoder reranker (bge-reranker-v2-m3)
+
+# =============================================================================
+# Content Fetching
+# =============================================================================
+wikipedia-api>=0.6.0
+youtube-transcript-api>=0.6.2
+beautifulsoup4>=4.12.0
+httpx>=0.26.0
+lxml>=5.1.0                    # HTML parsing
+docling>=2.0.0                 # PDF -> structured doc; arXiv PDF fallback when ar5iv has no render
+tenacity>=8.2.0                # Retry logic with exponential backoff
+trafilatura>=1.12.0            # Main-content extraction for preview archival
+
+# =============================================================================
+# Evaluation & Metrics
+# =============================================================================
+# rouge-score>=0.1.2             # Not currently imported — uncomment when needed
+numpy>=1.26.0
+pandas>=2.1.0
+scikit-learn>=1.4.0
+umap-learn>=0.5.0
+numba>=0.60                      # floor guard: without it, resolvers chasing newest numpy backtrack numba/llvmlite to ancient no-numpy-bound versions (llvmlite 0.36) that fail to build
+openpyxl>=3.1.0
+reportlab>=4.0.0
+
+# =============================================================================
+# Monitoring & Observability
+# =============================================================================
+langsmith>=0.0.87
+python-json-logger>=2.0.0
+
+# =============================================================================
+# Development & Testing
+# =============================================================================
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+jupyter>=1.0.0
+ipykernel>=6.29.0
+black>=24.1.0
+ruff>=0.1.14
+
+# =============================================================================
+# Local Model Support (HuggingFace)
+# =============================================================================
+transformers>=4.36.0
+huggingface_hub>=0.19.0
+accelerate>=0.26.0
+torch>=2.1.0
+optimum[onnxruntime]>=1.16.0
+onnxruntime>=1.17.0
+
+# =============================================================================
+# Optional: Multimodal (Week 8)
+# =============================================================================
+# Uncomment when ready for multimodal milestone
+# pillow>=10.2.0
+# yt-dlp>=2024.1.0             # YouTube video/frame extraction
