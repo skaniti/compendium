@@ -1,0 +1,37 @@
+# Root .dockerignore — applies to the `web` image's build context (repo
+# root; see apps/web/Dockerfile's header comment for why the context is the
+# root and not apps/web). Does NOT affect the `api` image, which builds from
+# its own ./apps/api context and has its own .dockerignore there.
+
+node_modules
+**/node_modules
+.git
+.next
+apps/web/.next
+
+# Machine-local env files must NEVER enter a build context: `next build`
+# loads .env.local (production included), so a dev machine's local values
+# would be baked into the image. .env.example is documentation, not needed
+# at build.
+.env*
+**/.env*
+
+# apps/api is a separate build context (its own Dockerfile + .dockerignore);
+# excluding it here just keeps the `web` build's context transfer small.
+apps/api
+
+# apps/web/demo is the `npm run demo` stub backend + its fixtures (~330MB,
+# mostly captured preview HTML/assets) — unused by `next build`/`next
+# start` (nothing under app/, components/, lib/, or hooks/ imports from it;
+# verified by grep at batch-07 Task 4). Excluding it is most of this file's
+# actual context-size win.
+apps/web/demo
+
+docs
+logs
+.specstory
+.superpowers
+.claude
+*.log
+.DS_Store
+.vscode

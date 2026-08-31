@@ -1,0 +1,20 @@
+# apps/api/.dockerignore — applies to the `api` image's build context
+# (apps/api itself; see Dockerfile's header comment).
+
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.venv
+
+# Machine-local env files must NEVER enter the build context — a real
+# apps/api/.env would be baked into the image and read by pydantic-settings.
+.env*
+**/.env*
+
+# Local-only backup/log artifacts, not needed at runtime.
+data/backups
+data/logs
+
+tests

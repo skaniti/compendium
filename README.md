@@ -56,6 +56,54 @@ recluster the data in demo mode.
 
 ![Streaming chat answer with source pills](docs/readme/chat.png)
 
+## Full-stack quickstart (Docker)
+
+The Quickstart above (`npm run demo`) is frontend-only, zero-cost, and
+already populated. This is the other path: the real stack — Postgres +
+the FastAPI backend (`apps/api`) + this frontend — via Docker Compose.
+
+```bash
+git clone https://github.com/skaniti/compendium.git
+cd compendium
+docker compose up --build
+```
+
+Postgres starts, `apps/api` waits for it, runs its migration chain, and
+bootstraps two logins, then `apps/web` builds and starts pointed at it.
+First run downloads and builds the backend's Python dependencies (a few
+minutes); after that, `docker compose up` is fast. Once `api` reports
+healthy, open **http://localhost:3000** and log in as the demo account:
+
+- **Email:** `demo@traversal.local`
+- **Password:** `demo`
+
+(Both are `backend/scripts/bootstrap_user.py`'s own intentionally-public
+local-dev defaults, not secrets. A primary/admin account is also created
+from `BOOTSTRAP_EMAIL`/`BOOTSTRAP_PASSWORD` — override either pair, or set
+`BOOTSTRAP_DEMO_EMAIL`/`BOOTSTRAP_DEMO_PASSWORD`, via a `.env` file next to
+`docker-compose.yml`.)
+
+**What you actually get:** a working login against a real backend and an
+**empty** compendium — no nodes, no captures, nothing to browse yet. That's
+a real gap, not a simplification: the curated dataset behind the `npm run
+demo` experience above was originally built by running every one of its
+59 source URLs through the live capture pipeline (fetch, LLM skip-gate,
+LLM summarization, embedding, clustering) and was never exported as a
+portable seed file, so there's currently no way to reproduce it here
+without live `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` credentials and real
+API spend. The scripts that run that pipeline live at
+`apps/api/scripts/demo/` if you want to attempt it by hand (`ingest_demo_v1.py`
+also needs a small fix first — it imports a calibration helper module that
+wasn't carried into this repo's extraction). Until a portable seed exists,
+`npm run demo` is the fully-populated, zero-cost way to see the app; this
+compose stack is for exercising the real backend against a database you
+control.
+
+Ports: web on `:3000`, API on `:8001` (`:8001/docs` for the OpenAPI UI,
+`:8001/health` for a liveness check). Postgres is not published to the
+host — only reachable from `api` inside the compose network. Stop with
+`docker compose down`; add `-v` to also drop the Postgres volume.
+
 ## Tests
 
 ```bash
@@ -82,10 +130,11 @@ headlessly via jsdom.
   server that answers the same endpoint contract from static fixtures under
   `apps/web/demo/fixtures/`. `npm run demo` (`apps/web/demo/launcher.mjs`)
   boots it and points `BACKEND_URL` at it automatically.
-- **Real backend:** a FastAPI service that isn't in this repo yet — it
-  arrives as `apps/api` in a future batch, alongside this frontend which now
-  lives at `apps/web`. Until then, `BACKEND_URL` is the entire contract
-  between this frontend and whatever serves it.
+- **Real backend:** `apps/api`, a FastAPI service extracted born-clean from
+  the predecessor project (see "Full-stack quickstart (Docker)" above).
+  `BACKEND_URL` is the entire contract between this frontend and whatever
+  serves it — the Next dev server, `npm run demo`'s stub, or `apps/api`
+  itself all satisfy the same contract.
 
 ## Status
 
@@ -97,9 +146,11 @@ itself (rendering, clustering, camera framing) is mid-port — functional,
 as the screenshots above show, but not yet feature-complete against the
 original.
 
-Not yet migrated into this repo: the real FastAPI backend, the browser
-extension, and the Android collector. All three exist in the predecessor
-project and will land here as the migration continues.
+The real FastAPI backend now lives here too, at `apps/api` (see "Full-stack
+quickstart (Docker)" above) — extracted born-clean from the predecessor
+project, with its own maintenance freeze in effect there. Not yet migrated:
+the browser extension and the Android collector, which still exist only in
+the predecessor project and will land here as the migration continues.
 
 ## Known limitations
 

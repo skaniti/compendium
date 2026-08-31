@@ -5,6 +5,12 @@ import type { NextConfig } from "next";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
 const nextConfig: NextConfig = {
+  // Docker production image (apps/web/Dockerfile): trims the runtime image
+  // to a minimal server.js + traced node_modules instead of shipping the
+  // whole workspace + devDependencies. No effect on `next dev`/`npm run
+  // demo`/Vercel (Vercel ignores this and uses its own output format).
+  output: "standalone",
+
   // Dev-only: allow browsing the dev server from another machine (e.g. a
   // laptop over LAN) without Next refusing the HMR websocket upgrade.
   // The origin stays out of this tracked file -- set DEV_LAN_ORIGIN in

@@ -1,0 +1,103 @@
+# Compose-based clone-and-run stack (batch-07 Task 4 / spec.md D4).
+#
+#   git clone <this repo> && cd compendium
+#   docker compose up --build
+#
+# Brings up postgres+pgvector -> apps/api (migrations on boot, then uvicorn)
+# -> apps/web (Next.js, proxying /api/* to apps/api). See README.md
+# "Full-stack quickstart (Docker)" for what you get and its current limits
+# — short version: this gives you a working, login-able demo account with
+# an EMPTY compendium (no LLM API keys involved). A fully POPULATED demo
+# with zero backend and zero cost already exists via `npm run demo`
+# (apps/web/demo) — see README for why the two aren't the same thing yet.
+#
+# Credentials below are the documented, intentionally-public local-dev
+# values (same convention as apps/api/docker/docker-compose.dev.yml and
+# apps/api/.env.example) — never used outside localhost, safe to publish.
+# Override anything via a sibling `.env` file (docker compose reads it
+# automatically) rather than editing this file.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tbd
+      POSTGRES_PASSWORD: tbd_local
+      POSTGRES_DB: traversal_discovery
+    volumes:
+      - compendium_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tbd -d traversal_discovery"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # (api service below caches its lazily-downloaded embedding/reranker
+  # model weights in a named volume so `down && up` doesn't re-fetch them.)
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DATABASE_URL: postgresql://tbd:tbd_local@db:5432/traversal_discovery
+      FRONTEND_URL: http://localhost:3000
+      # Dev-only wildcard — Settings hard-fails at startup if this is "*"
+      # AND environment != development, so ENVIRONMENT above must stay in
+      # lockstep with this.
+      CORS_ORIGINS: "*"
+      JWT_SECRET_KEY: local-dev-only-not-a-secret
+      # Fresh DB every time this stack is stood up from scratch: run
+      # migrations on boot, and create the primary + demo logins.
+      RUN_MIGRATIONS: "1"
+      SEED_DEMO: "${SEED_DEMO:-1}"
+      BOOTSTRAP_EMAIL: "${BOOTSTRAP_EMAIL:-you@example.com}"
+      BOOTSTRAP_PASSWORD: "${BOOTSTRAP_PASSWORD:-local-dev-only-not-a-secret}"
+      DEV_DEFAULT_USER_EMAIL: "${BOOTSTRAP_EMAIL:-you@example.com}"
+      BOOTSTRAP_DEMO_EMAIL: "${BOOTSTRAP_DEMO_EMAIL:-demo@traversal.local}"
+      BOOTSTRAP_DEMO_PASSWORD: "${BOOTSTRAP_DEMO_PASSWORD:-demo}"
+      # Optional — unset means the stack boots and the demo login works,
+      # but the demo compendium is EMPTY (see README). Set these in a
+      # sibling .env to enable the live-pipeline ingest scripts by hand
+      # (apps/api/scripts/demo/) after the stack is up; that path is not
+      # wired into this compose file (see README for why).
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - compendium_hf_cache:/root/.cache/huggingface
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the /captured-assets/* rewrite at `next build` time —
+        # must match the runtime BACKEND_URL below (see apps/web/Dockerfile).
+        BACKEND_URL: http://api:8000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://api:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  compendium_pg_data:
+  compendium_hf_cache:
