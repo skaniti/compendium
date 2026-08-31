@@ -530,14 +530,11 @@ def test_main_dry_run_with_manifest_file_writes_nothing(ctx, tmp_path, monkeypat
     assert status == "pending"
 
 
-def test_manifest_loads_from_default_path():
-    """The real committed manifest parses and has the expected shape."""
-    manifest = dq_rec_sweep._load_manifest()
-    assert "recommendations" in manifest
-    assert "handoffs" in manifest
-    assert len(manifest["recommendations"]) > 0
-    first = manifest["recommendations"][0]
-    assert {"rec_id", "expected_prior_status", "disposition", "user_note"} <= set(first.keys())
+def test_manifest_absent_fails_loudly_from_default_path():
+    """No manifest ships (they are per-deployment operational data); the
+    loader must fail LOUDLY with FileNotFoundError, never silently no-op."""
+    with pytest.raises(FileNotFoundError):
+        dq_rec_sweep._load_manifest()
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────

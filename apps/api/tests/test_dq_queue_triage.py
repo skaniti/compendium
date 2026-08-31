@@ -302,13 +302,8 @@ def test_main_end_to_end_with_manifest_file(ctx, tmp_path, monkeypatch):
     assert _fetch_obs_handoff(obs_handoff["id"]) == "dismissed"
 
 
-def test_manifest_loads_from_default_path():
-    """The real committed manifest parses and has the expected shape."""
-    manifest = dq_queue_triage._load_manifest()
-    assert "recommendations" in manifest
-    assert "handoffs" in manifest
-    assert len(manifest["recommendations"]) > 0
-    first = manifest["recommendations"][0]
-    assert {"rec_id", "obs_id", "expected_prior_status", "status", "bucket", "user_note"} <= set(
-        first.keys()
-    )
+def test_manifest_absent_fails_loudly_from_default_path():
+    """No manifest ships (they are per-deployment operational data); the
+    loader must fail LOUDLY with FileNotFoundError, never silently no-op."""
+    with pytest.raises(FileNotFoundError):
+        dq_queue_triage._load_manifest()

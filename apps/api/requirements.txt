@@ -18,6 +18,7 @@ apscheduler>=3.11.0           # Weekly dqBot scheduler (Layer 6)
 psycopg2-binary>=2.9.9
 bcrypt>=4.0.0
 sqlparse>=0.5.0                  # dq_bot SQL receipt validator (migration 028)
+PyJWT>=2.8.0                     # JWT access + refresh token signing (auth_service)
 # pgvector>=0.2.0                # Not currently imported — uncomment when needed
 
 # =============================================================================

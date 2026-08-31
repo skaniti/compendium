@@ -1,25 +1,19 @@
-# Local dev mirror database (desktop-era, 2026-07-02).
+# Disposable local dev database for apps/api.
 #
-# Runs the disposable replica of compendium-server's Postgres that the dev
-# app + refresh scripts expect on localhost:5433. The pgvector image matches
-# the server (docker/server/docker-compose.yml uses the same one), so dumps
-# restore without extension gymnastics.
+# Postgres + pgvector on localhost:5433, matching the major version the
+# app targets. The DB is throwaway by contract: drop the volume and the
+# migration chain (backend/db/migrate.py) rebuilds the schema from scratch.
 #
 #   docker compose -f docker/docker-compose.dev.yml up -d
 #
-# Data lives in a named volume; the DB is still disposable by contract
-# (scripts/dev/refresh_local_db.sh --restore drops and rebuilds it from the
-# newest synced server dump). Container name matches what project docs have
-# always called the local mirror.
-#
-# History: the local mirror ran as native Windows PostgreSQL 16 on the Yoga
-# laptop until the 2026-07-02 dev flip moved canonical dev to the desktop
-# (docs/project-plans/2026-07-02-234659-compendium-dev-stack-desktop-port/).
+# Credentials are the documented generic local-dev values (matching
+# .env.example and docker/init-test-db.sh) — never used outside localhost.
+# If port 5433 is taken on your machine, override with a compose override
+# file rather than editing this one.
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: compendium-explorer-postgres-1
     restart: unless-stopped
     ports:
       - "127.0.0.1:5433:5432"
@@ -28,7 +22,7 @@ services:
       POSTGRES_PASSWORD: tbd_local
       POSTGRES_DB: traversal_discovery
     volumes:
-      - compendium_pg16_data:/var/lib/postgresql/data
+      - compendium_api_pg16_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tbd -d traversal_discovery"]
       interval: 10s
@@ -36,4 +30,4 @@ services:
       retries: 5
 
 volumes:
-  compendium_pg16_data:
+  compendium_api_pg16_data:

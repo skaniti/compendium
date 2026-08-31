@@ -338,19 +338,8 @@ def test_safety_check_empty_after_full_apply(tmp_path, monkeypatch):
 # ── real frozen manifest sanity check ──────────────────────────────────
 
 
-def test_manifest_loads_from_default_path():
-    """The real committed manifest parses and has the expected shape."""
-    manifest = dq_vocab_canonicalize._load_manifest()
-    assert {"canonicalize", "create_and_canonicalize", "alias", "reject"} <= set(manifest.keys())
-    assert len(manifest["canonicalize"]) == 9
-    assert len(manifest["create_and_canonicalize"]) == 1
-    assert len(manifest["alias"]) == 38
-    assert len(manifest["reject"]) == 5
-
-    first = manifest["canonicalize"][0]
-    assert {"issue_type", "description"} <= set(first.keys())
-
-    first_alias = manifest["alias"][0]
-    assert {"issue_type", "target"} <= set(first_alias.keys())
-
-    assert all(isinstance(x, str) for x in manifest["reject"])
+def test_manifest_absent_fails_loudly_from_default_path():
+    """No manifest ships (they are per-deployment operational data); the
+    loader must fail LOUDLY with FileNotFoundError, never silently no-op."""
+    with pytest.raises(FileNotFoundError):
+        dq_vocab_canonicalize._load_manifest()

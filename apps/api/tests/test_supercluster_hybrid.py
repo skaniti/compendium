@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import os
 
 import numpy as np
 import pytest
@@ -384,6 +385,9 @@ def test_fallback_group_label_picks_biggest_member():
     ) == "Big Topic"
 
 
+@pytest.mark.skipif(
+    not os.environ.get("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set"
+)
 def test_verifier_demotes_rejected_match(monkeypatch):
     """C4: a verifier rejection turns a keyword group into a suggested one
     (suggested label + recomputed tier), without touching approved matches."""

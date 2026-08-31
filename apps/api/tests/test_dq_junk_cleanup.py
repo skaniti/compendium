@@ -183,12 +183,13 @@ def test_dedupe_list_applies_only_active_rows(ctx, monkeypatch):
 
 
 def test_dedupe_fold_ids_derived_from_groups_no_overlap():
-    """Sanity check on the real hardcoded manifest: 17 ids, no duplicates."""
+    """The shipped default is empty (fold groups are per-deployment data —
+    see the module comment); whatever a deployment populates, the derived
+    id lookup must stay duplicate-free and in exact sync with the groups."""
     all_archive_ids = [
         aid for g in dq_junk_cleanup.DEDUPE_FOLD_GROUPS for aid in g["archive_ids"]
     ]
-    assert len(all_archive_ids) == 17
-    assert len(set(all_archive_ids)) == 17
+    assert len(all_archive_ids) == len(set(all_archive_ids))
     assert set(dq_junk_cleanup.DEDUPE_FOLD_IDS.keys()) == set(all_archive_ids)
 
 
