@@ -1,0 +1,159 @@
+# Server-side compose for apps/api ONLY (batch-07 Task 6 cutover).
+#
+# Brings up the FastAPI backend against the REAL, already-provisioned
+# production database. Nothing else: no `db` service (postgres is owned by
+# the Dash-side stack that stays on compendium-server — see the cutover
+# runbook), no `web` service (Vercel or a local process serves apps/web;
+# out of scope for this batch).
+#
+#   docker compose -f apps/api/docker/docker-compose.server.yml up -d --build
+#
+# This is deliberately NOT docker/server/docker-compose.yml's shape (the
+# pre-extraction explorer repo's 3-service postgres+backend+frontend
+# compose, honcho-driven, single image). That file split at extraction:
+# this compose owns the backend half; the Dash half + postgres stay on a
+# modified copy of the OLD compose, still explorer-hosted, documented in
+# the private cutover runbook (docs/project-plans -- never copied here).
+#
+# ── Required before `docker compose up` (see the runbook for exact values) ──
+#   Host shell env (sourced from ~/.secrets + a non-secret deploy .env,
+#   same two-file convention the pre-extraction server tooling used):
+#     POSTGRES_PASSWORD   -- same value the postgres/Dash stack was given
+#     API_CORS_ORIGINS    -- explicit comma-separated origin list (Settings
+#                            hard-fails on "*" once ENVIRONMENT != development)
+#     JWT_SECRET_KEY      -- same value the pre-cutover single-image
+#                            deployment used (rotating it invalidates every
+#                            live session's token)
+#     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets
+#                            directory (mounted the same way the old `app`
+#                            service mounted it; Dash still serves preview
+#                            images from the same files, so this must be the
+#                            SAME host directory, not a fresh one)
+#   File: ~/.secrets readable at the path this compose mounts below --
+#     Settings loads OPENAI_API_KEY / ANTHROPIC_API_KEY / JWT_SECRET_KEY /
+#     HF_TOKEN / YOUTUBE_API_KEY / LANGCHAIN_API_KEY / BOOTSTRAP_* directly
+#     from the mounted file (pydantic-settings' env_file tuple), same as
+#     the pre-extraction deployment -- nothing new to provision.
+#   Network: the external `compendium-net` network (see runbook precheck)
+#     must already exist and the Dash/postgres stack must be attached to it
+#     under the container names this file assumes (compendium-postgres,
+#     and this service publishes itself as compendium-api for Dash to reach).
+#
+# ── SEED_DEMO is hardcoded to "0" below, not parameterized ──────────────
+# This connects to the REAL database. apps/api/data/demo-seed/ was exported
+# FROM this exact deployment's demo account (user_id 153). The real hazard
+# is the BOOTSTRAP half: `backend/scripts/bootstrap_user.py` unconditionally
+# overwrites the primary/demo user's password hash on every boot when it
+# finds BOOTSTRAP_EMAIL already registered -- no idempotency gate protects
+# that path. (The loader half is safer than it looks:
+# `scripts/demo/load_demo_seed.py::_already_seeded` checks whether the demo
+# user already has pages and exits 0 without inserting if so -- which it
+# always would here, since this IS the account the seed was exported from --
+# so a stray SEED_DEMO=1 would not actually re-insert or collide rows. The
+# password-reset risk is what matters and is not similarly gated.)
+# Deliberately NOT wired to an env var so a stray `SEED_DEMO=1` in someone's
+# shell for unrelated
+# local-dev reasons can't leak in here. RUN_MIGRATIONS is left ON (default
+# "1") because it is a PROVEN no-op against this database (schema_migrations
+# tracks every applied version; see the runbook's schema-diff precheck) --
+# safe to leave on so a future migration ships correctly on the next deploy.
+
+services:
+  api:
+    build:
+      context: ..
+    image: compendium-api:server
+    container_name: compendium-api
+    restart: unless-stopped
+    networks:
+      - compendium-net
+    ports:
+      # Same host port the pre-extraction stack published for the backend
+      # (docker/server/docker-compose.yml: 127.0.0.1:8001:8000) -- any
+      # existing host-side tooling/habits that curl 127.0.0.1:8001 keep
+      # working unchanged.
+      - "127.0.0.1:${API_HOST_PORT:-8001}:8000"
+    environment:
+      ENVIRONMENT: production
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      DATABASE_URL: "postgresql://tbd:${POSTGRES_PASSWORD:?missing POSTGRES_PASSWORD in env}@${DB_HOST:-compendium-postgres}:5432/traversal_discovery"
+      CORS_ORIGINS: "${API_CORS_ORIGINS:?missing API_CORS_ORIGINS in env -- explicit comma-separated origin list, no wildcard}"
+      # No new-user signups on the production deploy -- matches the
+      # pre-extraction `app` service's setting.
+      DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-1}"
+      # dqBot stays available at the app level; per-role gating is
+      # verify_not_plain_demo at the router. This is the deployment-wide
+      # kill switch, unaffected by the split -- see the runbook's wrinkle
+      # (b) note: /api/dq/run-now only enqueues a row here, the Claude CLI
+      # subprocess runs on the SEPARATE dq-worker container, which stays on
+      # the unmodified pre-extraction image (this container never shells
+      # out to `claude`).
+      DQ_BOT_DISABLED: "${DQ_BOT_DISABLED:-false}"
+      # Nightly maintenance orchestrator (summarise, cluster, prune) --
+      # matches the pre-extraction default (was "1").
+      ENABLE_NIGHTLY_MAINT: "${ENABLE_NIGHTLY_MAINT:-1}"
+      # Hourly stranded-pending-capture sweep -- matches the pre-extraction
+      # default (was "3600").
+      PENDING_SWEEP_INTERVAL_SECONDS: "${PENDING_SWEEP_INTERVAL_SECONDS:-3600}"
+      # Clustering-rethink gates -- forwarded the same 4 the pre-extraction
+      # compose forwarded; every other clustering/supercluster knob stays at
+      # its code default (identical to pre-extraction, since neither compose
+      # set them explicitly).
+      CLUSTERING_EMBEDDING_MODEL: "${CLUSTERING_EMBEDDING_MODEL:-all-MiniLM-L6-v2}"
+      CLUSTERING_UMAP_DIMS: "${CLUSTERING_UMAP_DIMS:-0}"
+      HDBSCAN_SELECTION_METHOD: "${HDBSCAN_SELECTION_METHOD:-eom}"
+      CLUSTER_IDENTITY_ENABLED: "${CLUSTER_IDENTITY_ENABLED:-false}"
+      SUPERCLUSTER_MODE: "${SUPERCLUSTER_MODE:-keywords}"
+      # Fresh-DB switches -- see the big comment block above for why these
+      # are literals, not `${VAR}` passthroughs.
+      RUN_MIGRATIONS: "1"
+      SEED_DEMO: "0"
+    volumes:
+      # Secrets via ~/.secrets, matching the pre-extraction convention
+      # (settings.py reads it directly; no .env file is mounted in
+      # production -- see backend/config/settings.py's env_file tuple).
+      - ~/.secrets:/root/.secrets:ro
+      # SAME host directory the pre-extraction `app` service mounted at this
+      # exact container path (backend/services/asset_archiver.py resolves
+      # its base dir to <project-root>/data/captures/assets, which is /app
+      # here). Must be the existing directory, not a fresh one -- Dash
+      # reads newly captured assets from the same host files after cutover.
+      - "${CAPTURES_ASSETS_HOST_DIR:?missing CAPTURES_ASSETS_HOST_DIR in env}:/app/data/captures/assets"
+      # Lazily-downloaded embedding/reranker model weights, so a container
+      # recreate doesn't re-fetch them. Separate volume name from the local
+      # clone-and-run stack's (compendium_hf_cache) so the two never collide
+      # if ever run on the same host.
+      - compendium_hf_cache_server:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+networks:
+  # External: created once by the runbook precheck (`docker network create
+  # compendium-net`), shared with the Dash/postgres stack so container-name
+  # DNS resolves both directions (this container as `compendium-api`,
+  # postgres as `compendium-postgres`). Not created here so `docker compose
+  # down` on this file never deletes a network the other stack still needs.
+  compendium-net:
+    external: true
+
+volumes:
+  compendium_hf_cache_server:
+
+# ── dq-worker: NOT defined here, deliberately ────────────────────────────
+# apps/api's image has no Node/Claude CLI (see apps/api/Dockerfile's header
+# comment) -- backend/services/dq_agent.py's `claude -p` subprocess is only
+# imported by backend/services/dq_run_executor.py, which is only invoked by
+# the STANDALONE dq-worker process (backend/services/dq_worker.py), never by
+# anything under backend/api/. `POST /api/dq/run-now` (served by THIS
+# container) only calls `dq_runs_repo.enqueue(...)` -- a DB insert -- so the
+# split does not touch it. The runbook's cutover step therefore leaves the
+# pre-extraction `dq-worker` container running unchanged, still built from
+# the explorer root Dockerfile/Procfile-era image, still with Node + the
+# Claude CLI, still pointed at the same real database. See the runbook's
+# "dq-CLI decision point" for the two alternative options (build an overlay
+# image here, or accept run-now as broken) if that ever needs to change.
