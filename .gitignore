@@ -91,3 +91,14 @@ apps/api/tests/test_summary.txt
 # demo fixture capture: raw snapshots are machine-local; only Task 3's
 # processed output under demo/fixtures/ (not raw/) is meant to be committed
 apps/web/demo/fixtures/raw/
+
+# apps/android: gradle/IDE build output and machine-local SDK path (never
+# product; root's unanchored build/ already catches the build dirs, and the
+# copied apps/android/.gitignore covers the rest — these are explicit for
+# clarity)
+apps/android/app/build/
+apps/android/build/
+apps/android/.gradle/
+apps/android/.idea/
+apps/android/.kotlin/
+apps/android/local.properties

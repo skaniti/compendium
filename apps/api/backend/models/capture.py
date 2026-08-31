@@ -80,6 +80,10 @@ class PassiveCaptureInput(BaseModel):
 
     Uses camelCase aliases to match the extension's JSON format directly.
     More permissive than CaptureInput — pages are raw dicts, timestamps are strings.
+
+    Capture payload shape is a three-way twin: this model, the export payload
+    built in apps/extension/modules/export.js, and SessionData in
+    apps/android/app/src/main/java/dev/skaniti/compendium/model/SessionData.kt.
     """
 
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel, extra="ignore")

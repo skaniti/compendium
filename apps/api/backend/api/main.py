@@ -202,6 +202,10 @@ async def verify_api_key(
     In production, tries JWT first (Authorization: Bearer <token>),
     then falls back to API key (X-API-Key header).
     Sets user_id for row-level security via set_current_user_id().
+
+    X-API-Key contract is a three-way twin: this dependency, the header set
+    in apps/extension/modules/config.js::buildHeaders, and the request in
+    apps/android/.../SessionExporter.kt.
     """
     # Try JWT Bearer token first (all modes)
     if authorization and authorization.startswith("Bearer "):

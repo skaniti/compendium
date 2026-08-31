@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bespoke brand fallback (used when Material You dynamic color is
+         unavailable < Android 12). Teal-forward, deliberately not the
+         baseline Material3 purple. -->
+    <color name="brand_primary">#00696E</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#6FF6FC</color>
+    <color name="brand_on_primary_container">#00201F</color>
+    <color name="brand_secondary">#4A6363</color>
+    <color name="brand_secondary_container">#CCE8E7</color>
+    <color name="brand_surface">#FAFDFC</color>
+    <color name="brand_surface_dark">#0E1514</color>
+    <color name="badge_red">#D32F2F</color>
+</resources>

@@ -1,9 +1,9 @@
 """Canonical URL normalization for dedup comparison.
 
 This module is the authoritative normalizer for the backend. It must produce
-output that matches ``extension/modules/utils.js::normalizeUrlForDedup`` on
-any URL both normalizers accept — see ``tests/test_url_normalize.py`` for the
-parity fixture list. This parity requirement covers both the global rules
+output that matches ``apps/extension/modules/utils.js::normalizeUrlForDedup``
+on any URL both normalizers accept — see ``apps/api/tests/test_url_normalize.py``
+for the parity fixture list. This parity requirement covers both the global rules
 below AND the per-domain DOMAIN_RULES table — any row added to one side must
 be added to the other, verbatim, in the same conversation/commit.
 
@@ -46,7 +46,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-# Keep in sync with extension/modules/utils.js::TRACKING_PARAMS.
+# Keep in sync with apps/extension/modules/utils.js::TRACKING_PARAMS.
 # Order does not matter (membership is checked against a set).
 TRACKING_PARAMS: frozenset[str] = frozenset(
     {
@@ -104,7 +104,7 @@ class DomainRule:
 #   numbers) that address the same underlying page as their parent path,
 #   collapsed onto that parent.
 #
-# Keep in parity with extension/modules/utils.js::DOMAIN_RULES — same
+# Keep in parity with apps/extension/modules/utils.js::DOMAIN_RULES — same
 # domains, same params, same fold semantics (regex capture group 1
 # survives, everything else in the match is dropped). NOTE (2026-08-30
 # extraction): per-deployment rules naming specific small-community hosts

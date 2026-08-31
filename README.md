@@ -155,6 +155,15 @@ headlessly via jsdom.
   `BACKEND_URL` is the entire contract between this frontend and whatever
   serves it — the Next dev server, `npm run demo`'s stub, or `apps/api`
   itself all satisfy the same contract.
+- **Browser extension:** `apps/extension`, a Manifest V3 collector that
+  passively tracks browsing and POSTs captures to `apps/api`. No build step
+  — load it unpacked (`chrome://extensions` → "Load unpacked", or Firefox's
+  equivalent) pointed at the `apps/extension` directory.
+- **Android collector:** `apps/android`, a GeckoView-based browser that
+  captures sessions and POSTs them to `apps/api`, same as the extension.
+  Builds via the Gradle wrapper (`./gradlew assembleRelease`, producing an
+  unsigned APK); release signing happens out-of-band — no keystore or
+  signing config is committed.
 
 ## Status
 
@@ -168,9 +177,13 @@ original.
 
 The real FastAPI backend now lives here too, at `apps/api` (see "Full-stack
 quickstart (Docker)" above) — extracted born-clean from the predecessor
-project, with its own maintenance freeze in effect there. Not yet migrated:
-the browser extension and the Android collector, which still exist only in
-the predecessor project and will land here as the migration continues.
+project, with its own maintenance freeze in effect there. The browser
+extension (`apps/extension`) and Android collector (`apps/android`) have
+also landed here, born-clean from the predecessor project. Still to come:
+the internal dev/observability views (pipeline, data browser, prompts,
+logs, traces — ported in follow-up batches after the backend cutover),
+plus the operational tail — retiring the predecessor's Dash surface and
+standing up a deploy target for this repo.
 
 ## Known limitations
 

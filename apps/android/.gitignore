@@ -1,0 +1,14 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+
+# Locally pulled dev-notes (screenshots + notes.json) via scripts/pull-notes.sh
+/dev-notes
