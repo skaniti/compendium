@@ -72,7 +72,9 @@ Postgres starts, `apps/api` waits for it, runs its migration chain, and
 bootstraps two logins, then `apps/web` builds and starts pointed at it.
 First run downloads and builds the backend's Python dependencies (a few
 minutes); after that, `docker compose up` is fast. Once `api` reports
-healthy, open **http://localhost:3000** and log in as the demo account:
+healthy (`docker compose ps` in a second terminal shows it — or just retry
+the URL; it loads once ready), open **http://localhost:3000** and log in as
+the demo account:
 
 - **Email:** `demo@traversal.local`
 - **Password:** `demo`
@@ -100,9 +102,9 @@ Two things stay honest gaps:
   but the chat agent calls out to an LLM live — set `OPENAI_API_KEY` (a
   sibling `.env` file next to `docker-compose.yml`, or export it before
   `docker compose up`) to use it. Without a key, chat doesn't error or
-  crash: it responds in-band with "OpenAI API key not configured. Cannot
-  run agent." (streamed as a normal chat answer, zero cost/sources) — the
-  rest of the app is unaffected.
+  crash: it responds in-band with "OpenAI API key not configured."
+  (streamed as a normal chat answer, zero cost/sources) — the rest of the
+  app is unaffected.
 - **Page-preview images 404.** The seed's `captured_assets` rows (image
   metadata) ship, but the underlying binary files and the route that would
   serve them don't yet — see `apps/api/data/demo-seed/README.md` for the
