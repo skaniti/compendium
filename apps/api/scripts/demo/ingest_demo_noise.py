@@ -42,7 +42,9 @@ from backend.api.main import _save_capture_to_db, process_capture  # noqa: E402
 from backend.db.connection import get_conn  # noqa: E402
 from backend.models.capture import CaptureInput, PageVisit  # noqa: E402
 from backend.process_captures import update_pages_from_response  # noqa: E402
-from scripts.calibration.run_demo_skip_gate_dry import parse_v1_urls  # noqa: E402
+# parse_v1_urls originally lived in scripts/calibration/ (not extracted into
+# this repo); its inlined home is now the sibling ingest script.
+from scripts.demo.ingest_demo_v1 import parse_v1_urls  # noqa: E402
 
 
 logger = logging.getLogger(__name__)

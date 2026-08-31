@@ -83,21 +83,39 @@ from `BOOTSTRAP_EMAIL`/`BOOTSTRAP_PASSWORD` — override either pair, or set
 `BOOTSTRAP_DEMO_EMAIL`/`BOOTSTRAP_DEMO_PASSWORD`, via a `.env` file next to
 `docker-compose.yml`.)
 
-**What you actually get:** a working login against a real backend and an
-**empty** compendium — no nodes, no captures, nothing to browse yet. That's
-a real gap, not a simplification: the curated dataset behind the `npm run
-demo` experience above was originally built by running every one of its
-59 source URLs through the live capture pipeline (fetch, LLM skip-gate,
-LLM summarization, embedding, clustering) and was never exported as a
-portable seed file, so there's currently no way to reproduce it here
-without live `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` credentials and real
-API spend. The scripts that run that pipeline live at
-`apps/api/scripts/demo/` if you want to attempt it by hand (`ingest_demo_v1.py`
-also needs a small fix first — it imports a calibration helper module that
-wasn't carried into this repo's extraction). Until a portable seed exists,
-`npm run demo` is the fully-populated, zero-cost way to see the app; this
-compose stack is for exercising the real backend against a database you
-control.
+**What you actually get:** a working login against a real backend, with a
+**populated** compendium — graph, diary, and topic detail all have real
+data from the first `docker compose up`, no LLM API keys or capture-pipeline
+run required. `SEED_DEMO=1` (the default) bootstraps the demo login and then
+loads a reviewed, portable export of the same 158-page corpus documented in
+`apps/web/demo/fixtures/ATTRIBUTION.md` — already processed (summaries,
+chunk/page/clustering embeddings, clusters, superclusters) — into it. See
+`apps/api/data/demo-seed/README.md` for exactly what's in the seed and its
+provenance. The loader is idempotent (a second `up` logs "already seeded"
+and leaves the data alone).
+
+Two things stay honest gaps:
+
+- **Chat needs your own key.** Every other surface reads from the database,
+  but the chat agent calls out to an LLM live — set `OPENAI_API_KEY` (a
+  sibling `.env` file next to `docker-compose.yml`, or export it before
+  `docker compose up`) to use it. Without a key, chat doesn't error or
+  crash: it responds in-band with "OpenAI API key not configured. Cannot
+  run agent." (streamed as a normal chat answer, zero cost/sources) — the
+  rest of the app is unaffected.
+- **Page-preview images 404.** The seed's `captured_assets` rows (image
+  metadata) ship, but the underlying binary files and the route that would
+  serve them don't yet — see `apps/api/data/demo-seed/README.md` for the
+  detail. Harmless; nothing else depends on it.
+
+Want to rebuild the corpus yourself from scratch instead of using the
+shipped seed (e.g. to add new pages, or verify the pipeline end-to-end)?
+`apps/api/scripts/demo/ingest_demo_v1.py` runs the original 59-URL v1
+subset through the live capture pipeline by hand (fetch, LLM skip-gate,
+LLM summarization, embedding, clustering) — real `OPENAI_API_KEY` /
+`ANTHROPIC_API_KEY` spend, and it needs the private predecessor repo's
+`docs/project-plans` checked out alongside this one (see the script's own
+docstring) — not part of the compose stack.
 
 Ports: web on `:3000`, API on `:8001` (`:8001/docs` for the OpenAPI UI,
 `:8001/health` for a liveness check). Postgres is not published to the

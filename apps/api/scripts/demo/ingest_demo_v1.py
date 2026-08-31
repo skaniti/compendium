@@ -1,6 +1,7 @@
 """Materialize the v1 demo dataset by ingesting the 59 curated URLs.
 
-Reads URLs from `docs/project-plans/2026-05-03-160117-demo-curation-url-list-v1.md`,
+Reads URLs from
+`docs/project-plans/_completed/2026-05-03-160117-demo-curation-v1/spec.md`,
 groups them by supercluster (4 captures), and runs each through the full
 production capture pipeline (Stage 0 fetch + RAG indexing + skip gate +
 content + cluster) under user_id 153 (`demo@traversal.local`).
@@ -33,6 +34,7 @@ os.environ["DEV_DEFAULT_USER_EMAIL"] = "demo@traversal.local"
 import asyncio
 import json
 import logging
+import re
 import sys
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -40,6 +42,11 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Repo root (PROJECT_ROOT is apps/api, needed on sys.path for the `backend`
+# imports below) — only used to locate the v1 URL-list doc, which lives
+# outside apps/api under the repo-root `docs/project-plans` symlink.
+REPO_ROOT = PROJECT_ROOT.parent
 
 
 # Quiet noisy loggers; keep our own at INFO
@@ -54,16 +61,78 @@ from backend.api.main import (  # noqa: E402
 )
 from backend.models.capture import CaptureInput, PageVisit  # noqa: E402
 from backend.process_captures import update_pages_from_response  # noqa: E402
-from scripts.calibration.run_demo_skip_gate_dry import (  # noqa: E402
-    V1_DOC_PATH,
-    parse_v1_urls,
-)
 
 
 logger = logging.getLogger(__name__)
 
 DEMO_USER_ID = 153
 DEMO_USER_EMAIL = "demo@traversal.local"
+
+# The doc lives in the private predecessor repo, reachable here only via
+# the gitignored `docs/project-plans` symlink (see repo-root CLAUDE.md) —
+# it moved to `_completed/` after the curation work finished; the path
+# below is stale-fixed to match (was missing that segment).
+V1_DOC_PATH = (
+    REPO_ROOT / "docs" / "project-plans" / "_completed"
+    / "2026-05-03-160117-demo-curation-v1" / "spec.md"
+)
+
+# Markdown-table URL extractor: stops at whitespace / asterisk (markdown
+# bold) / pipe (table cell separator) / closing bracket. Parens are kept
+# inside the URL so Wikipedia titles like
+# `Diffusion_model_(machine_learning)` survive.
+_URL_RE = re.compile(r"https?://[^\s*|\]]+")
+# Header-row detection for the supercluster URL tables.
+_SUPERCLUSTER_HEADER_RE = re.compile(
+    r"^###\s+Supercluster\s+\d+\s+--\s+(.+?)\s+\(", re.IGNORECASE
+)
+
+
+def parse_v1_urls(doc_path: Path) -> list[tuple[int, str, str]]:
+    """Parse the v1 doc's URL tables; return (index, supercluster, url) tuples.
+
+    Inlined from the private predecessor repo's
+    scripts/calibration/run_demo_skip_gate_dry.py, which this repo's
+    extraction did not carry over (that module also pulls in LLMService +
+    the skip-gate prompt machinery just to do a dry-run scoring pass this
+    script has no use for) — parse_v1_urls itself has no such dependency,
+    so it's copied here directly rather than dragging the rest of that
+    module in. Walks the doc, tracks the current supercluster from headers
+    like `### Supercluster 1 -- Diffusion models (n=12)`, and extracts
+    every URL inside the URL table rows that follow.
+    """
+    text = doc_path.read_text(encoding="utf-8")
+    out: list[tuple[int, str, str]] = []
+    current_super: str | None = None
+    in_url_table = False
+    row_index = 0
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        m = _SUPERCLUSTER_HEADER_RE.match(line)
+        if m:
+            current_super = m.group(1).strip()
+            in_url_table = False
+            row_index = 0
+            continue
+
+        if current_super is None:
+            continue
+
+        if line.startswith("|---") or line.startswith("|----"):
+            in_url_table = True
+            continue
+        if in_url_table:
+            if not line.startswith("|"):
+                in_url_table = False
+                continue
+            url_match = _URL_RE.search(line)
+            if url_match:
+                row_index += 1
+                url = url_match.group(0).rstrip(",;")
+                out.append((row_index, current_super, url))
+
+    return out
 
 # Map raw supercluster names from the v1 doc to short capture-id slugs.
 _CLUSTER_SLUG: dict[str, str] = {

@@ -3,13 +3,16 @@
 #   git clone <this repo> && cd compendium
 #   docker compose up --build
 #
-# Brings up postgres+pgvector -> apps/api (migrations on boot, then uvicorn)
-# -> apps/web (Next.js, proxying /api/* to apps/api). See README.md
-# "Full-stack quickstart (Docker)" for what you get and its current limits
-# — short version: this gives you a working, login-able demo account with
-# an EMPTY compendium (no LLM API keys involved). A fully POPULATED demo
-# with zero backend and zero cost already exists via `npm run demo`
-# (apps/web/demo) — see README for why the two aren't the same thing yet.
+# Brings up postgres+pgvector -> apps/api (migrations on boot, then bootstraps
+# the demo login + loads the reviewed demo seed, then uvicorn) -> apps/web
+# (Next.js, proxying /api/* to apps/api). See README.md "Full-stack
+# quickstart (Docker)" for what you get and its current limits — short
+# version: a working, login-able demo account with a POPULATED compendium
+# (graph, diary, topic detail), no LLM API keys involved. Chat is the one
+# surface that still needs your own OPENAI_API_KEY (see README). A separate,
+# frontend-only zero-cost demo also exists via `npm run demo` (apps/web/demo)
+# — same corpus, no backend at all; useful when you don't want Docker/Postgres
+# in the loop.
 #
 # Credentials below are the documented, intentionally-public local-dev
 # values (same convention as apps/api/docker/docker-compose.dev.yml and
@@ -63,11 +66,13 @@ services:
       DEV_DEFAULT_USER_EMAIL: "${BOOTSTRAP_EMAIL:-you@example.com}"
       BOOTSTRAP_DEMO_EMAIL: "${BOOTSTRAP_DEMO_EMAIL:-demo@traversal.local}"
       BOOTSTRAP_DEMO_PASSWORD: "${BOOTSTRAP_DEMO_PASSWORD:-demo}"
-      # Optional — unset means the stack boots and the demo login works,
-      # but the demo compendium is EMPTY (see README). Set these in a
-      # sibling .env to enable the live-pipeline ingest scripts by hand
-      # (apps/api/scripts/demo/) after the stack is up; that path is not
-      # wired into this compose file (see README for why).
+      # Optional — unset means the stack boots with a POPULATED demo
+      # compendium (loaded from the reviewed seed, see README) but chat
+      # answers "OpenAI API key not configured" instead of running the
+      # agent. Set OPENAI_API_KEY in a sibling .env to enable chat.
+      # ANTHROPIC_API_KEY is unused by the compose stack today; kept for
+      # parity with apps/api/.env.example and any by-hand pipeline scripts
+      # (apps/api/scripts/demo/) run manually against this stack.
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:

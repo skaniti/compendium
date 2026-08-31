@@ -12,17 +12,18 @@
 #                       EXISTING raw_html rows; a fresh DB has none, so the
 #                       hooks would spawn detached background processes that
 #                       find nothing to do.
-#   SEED_DEMO=1         run `python -m backend.scripts.bootstrap_user`, which
-#                       idempotently creates the primary user (BOOTSTRAP_EMAIL/
-#                       BOOTSTRAP_PASSWORD) and the demo user (role 'demo').
-#                       This is KEYLESS and always safe to run — it does not
-#                       populate the demo account with any captures/pages, it
-#                       only creates the login. See README "Demo notes" for
-#                       why: the actual curated demo dataset is materialized
-#                       by running the live capture pipeline (LLM calls), and
-#                       that pipeline was never exported as a portable seed
-#                       here — see apps/api/scripts/demo/README (if present)
-#                       or the batch-07 Task 4 results for the full story.
+#   SEED_DEMO=1         run `python -m backend.scripts.bootstrap_user` (creates
+#                       the primary user from BOOTSTRAP_EMAIL/BOOTSTRAP_PASSWORD
+#                       and the demo user, role 'demo'), then
+#                       `scripts/demo/load_demo_seed.py`, which loads the
+#                       reviewed demo corpus (apps/api/data/demo-seed/) into
+#                       the demo user's account — graph, diary, and topic
+#                       detail are populated from first boot, no LLM API keys
+#                       involved. Both steps are KEYLESS and idempotent (the
+#                       loader logs "already seeded" and exits 0 on repeat
+#                       boots) — safe to leave on for every compose `up`.
+#                       See apps/api/data/demo-seed/README.md for what the
+#                       seed contains and its one known gap (preview images).
 set -euo pipefail
 
 echo "[entrypoint] waiting for database..."
@@ -55,10 +56,12 @@ else
 fi
 
 if [ "${SEED_DEMO:-0}" = "1" ]; then
-  echo "[entrypoint] SEED_DEMO=1 — bootstrapping primary + demo user logins (keyless; no content)..."
+  echo "[entrypoint] SEED_DEMO=1 — bootstrapping primary + demo user logins (keyless)..."
   python -m backend.scripts.bootstrap_user || echo "[entrypoint] bootstrap_user failed (non-fatal, continuing)"
+  echo "[entrypoint] loading demo seed data into the demo account (idempotent)..."
+  python scripts/demo/load_demo_seed.py || echo "[entrypoint] load_demo_seed failed (non-fatal, continuing — demo account may be empty)"
 else
-  echo "[entrypoint] SEED_DEMO=0 — skipping user bootstrap"
+  echo "[entrypoint] SEED_DEMO=0 — skipping user bootstrap + demo seed load"
 fi
 
 echo "[entrypoint] starting uvicorn on ${API_HOST:-0.0.0.0}:${API_PORT:-8000}..."

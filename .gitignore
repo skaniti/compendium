@@ -71,6 +71,14 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# apps/api test-run byproducts: the backup hook writes dump files, conftest
+# rewrites the summary on every run, local runs may write logs. None belong
+# in a public-bound history (an empty failed-dump .sql.gz slipped into
+# 4e25b6b via git add -A before these rules existed; removed since).
+apps/api/data/backups/
+apps/api/data/logs/
+apps/api/tests/test_summary.txt
+
 # font design workbench (parked here; not part of the app)
 /Constellation-inspired font design/
 
