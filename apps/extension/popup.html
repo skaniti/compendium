@@ -107,6 +107,7 @@
           <input id="settingsApiKey" type="password" class="settings-input"
                  placeholder="cmp_...">
         </label>
+        <div id="settingsError" class="settings-error hidden" role="alert"></div>
         <label class="settings-label">
           Device label
           <input id="settingsDeviceLabel" type="text" class="settings-input"
@@ -118,6 +119,6 @@
     </details>
   </div>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

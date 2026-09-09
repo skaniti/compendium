@@ -255,7 +255,15 @@ async function retryExport(captureId, btn) {
     const resp = await chrome.runtime.sendMessage({ action: 'retryPendingExport', captureId });
     const status = document.createElement('span');
     status.className = `retry-status ${resp.success ? 'success' : 'error'}`;
-    status.textContent = resp.success ? 'Delivered!' : `Failed: ${resp.delivery}`;
+    let failText;
+    if (typeof resp.status === 'number') {
+      failText = `Failed: HTTP ${resp.status}`;
+    } else if (typeof resp.error === 'string') {
+      failText = `Failed: ${resp.error}`;
+    } else {
+      failText = `Failed: ${resp.delivery}`;
+    }
+    status.textContent = resp.success ? 'Delivered!' : failText;
     btn.after(status);
 
     if (resp.success) {

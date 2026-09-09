@@ -5,6 +5,9 @@
  * regardless of which tab is visible — this is purely a UI concern.
  */
 
+import { validateApiKey, saveConfig } from './modules/config.js';
+import { composeExportResult } from './modules/export-status.js';
+
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 
 // Tabs
@@ -163,22 +166,20 @@ stopBtn.addEventListener('click', async () => {
 
 // ── Force export ─────────────────────────────────────────────────────────────
 
-const STATUS_MESSAGES = {
-  delivered: 'Capture delivered to backend',
-  buffered: 'Capture buffered — will retry on next delivery',
-  no_capture: 'No active capture to export',
-  failed: 'Export failed'
-};
+// Text/class composition lives in modules/export-status.js (DOM-free, unit
+// tested); this is just the DOM side -- render the composed result and run
+// the show/hide timer.
+function showExportResult(result) {
+  const { text, cls } = composeExportResult(result);
 
-function showExportStatus(delivery) {
-  exportStatusEl.textContent = STATUS_MESSAGES[delivery] || STATUS_MESSAGES.failed;
-  exportStatusEl.className = `export-status export-${delivery}`;
+  exportStatusEl.textContent = text;
+  exportStatusEl.className = `export-status ${cls}`;
   exportStatusEl.classList.remove('hidden');
 
-  clearTimeout(showExportStatus._timer);
-  showExportStatus._timer = setTimeout(() => {
+  clearTimeout(showExportResult._timer);
+  showExportResult._timer = setTimeout(() => {
     exportStatusEl.classList.add('hidden');
-  }, 5000);
+  }, 8000);
 }
 
 forceExportBtn.addEventListener('click', async () => {
@@ -187,10 +188,10 @@ forceExportBtn.addEventListener('click', async () => {
 
   try {
     const response = await chrome.runtime.sendMessage({ action: 'forceFinalize' });
-    showExportStatus(response.delivery);
+    showExportResult(response ?? { success: false, delivery: 'failed', flush: null });
     await updateStatus();
   } catch {
-    showExportStatus('failed');
+    showExportResult({ success: false, delivery: 'failed', flush: null });
   } finally {
     forceExportBtn.disabled = false;
     forceExportBtn.textContent = 'Force Export';
@@ -224,19 +225,52 @@ const settingsKeyEl = document.getElementById('settingsApiKey');
 const settingsDeviceLabelEl = document.getElementById('settingsDeviceLabel');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const settingsSavedEl = document.getElementById('settingsSaved');
+const settingsErrorEl = document.getElementById('settingsError');
+
+function showSettingsError(message) {
+  settingsErrorEl.textContent = message;
+  settingsErrorEl.classList.remove('hidden');
+}
+
+function hideSettingsError() {
+  settingsErrorEl.classList.add('hidden');
+}
 
 // Load current settings
 chrome.storage.local.get(['backendUrl', 'apiKey', 'deviceLabel'], (data) => {
   settingsUrlEl.value = data.backendUrl || 'http://localhost:8001';
   settingsKeyEl.value = data.apiKey || '';
   settingsDeviceLabelEl.value = data.deviceLabel || '';
+
+  // A pre-existing bad key (e.g. saved before this validator existed) is
+  // surfaced here too, so it's visible without re-saving (spec D1).
+  const err = validateApiKey(data.apiKey || '');
+  if (err) {
+    showSettingsError(err);
+    settingsErrorEl.closest('details').open = true;
+  } else {
+    hideSettingsError();
+  }
 });
 
 saveSettingsBtn.addEventListener('click', async () => {
   const backendUrl = settingsUrlEl.value.trim().replace(/\/+$/, '');
   const apiKey = settingsKeyEl.value.trim();
   const deviceLabel = settingsDeviceLabelEl.value.trim();
-  await chrome.storage.local.set({ backendUrl, apiKey, deviceLabel });
+
+  const err = validateApiKey(apiKey);
+  if (err) {
+    showSettingsError(err);
+    return;
+  }
+  hideSettingsError();
+
+  try {
+    await saveConfig({ backendUrl, apiKey, deviceLabel });
+  } catch (err) {
+    showSettingsError(err.message);
+    return;
+  }
 
   settingsSavedEl.classList.remove('hidden');
   setTimeout(() => settingsSavedEl.classList.add('hidden'), 2000);
