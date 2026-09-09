@@ -20,14 +20,31 @@ function mockFetch(response: { ok: boolean; status?: number; json: () => Promise
   return fn;
 }
 
+// D4 mount-time resume check (session-expiry-tuning) reads document.cookie
+// via lib/session-policy-client.ts -- every test needs these cleared, not
+// just the ones that deliberately set them, or a resumable policy written
+// by one test would leak into the next and change its mount-effect outcome.
+function clearSessionCookies() {
+  document.cookie = "session_policy=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  document.cookie = "session_last_active=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+}
+
 describe("LoginPage", () => {
   beforeEach(() => {
-    vi.stubGlobal("location", { ...window.location, href: "" });
+    clearSessionCookies();
+    // `assign` is stubbed alongside `href` from the start (not just in the
+    // mount-resume describe block below) -- the D4 mount effect calls
+    // sessionMayResume() unconditionally on every render, and while it's
+    // false with no policy cookie (the common case in this describe), a
+    // real, un-stubbed window.location.assign would still be reachable if
+    // that ever changed; every test gets a safe mock either way.
+    vi.stubGlobal("location", { ...window.location, href: "", assign: vi.fn() });
   });
 
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    clearSessionCookies();
   });
 
   it("renders a single identity field named 'email' accepting username or email", () => {
@@ -54,7 +71,7 @@ describe("LoginPage", () => {
     expect(screen.getByRole("heading", { name: "compendium" })).toBeInTheDocument();
   });
 
-  it("submits {email, password} JSON to /api/auth/login on submit", async () => {
+  it("submits {email, password, remember: false} JSON to /api/auth/login on submit (checkbox left unchecked)", async () => {
     const fetchMock = mockFetch({ ok: true, json: async () => ({ user: { id: 1 } }) });
     render(<LoginPage />);
 
@@ -68,7 +85,37 @@ describe("LoginPage", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ email: "alice", password: "hunter2" }),
+        body: JSON.stringify({ email: "alice", password: "hunter2", remember: false }),
+      })
+    );
+  });
+
+  // D4 (session-expiry-tuning): "Keep me signed in on this device".
+  it("renders the remember-me checkbox unchecked by default, with the demo-account note", () => {
+    mockFetch({ ok: true, json: async () => ({}) });
+    render(<LoginPage />);
+
+    const checkbox = screen.getByRole("checkbox", { name: /keep me signed in on this device/i }) as HTMLInputElement;
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox.checked).toBe(false);
+    expect(checkbox.name).toBe("remember");
+    expect(screen.getByText(/not available for the demo account/i)).toBeInTheDocument();
+  });
+
+  it("submits remember: true when the checkbox is checked", async () => {
+    const fetchMock = mockFetch({ ok: true, json: async () => ({ user: { id: 1 } }) });
+    render(<LoginPage />);
+
+    await userEvent.type(screen.getByLabelText(/email or username/i), "alice");
+    await userEvent.type(screen.getByLabelText(/password/i), "hunter2");
+    await userEvent.click(screen.getByRole("checkbox", { name: /keep me signed in on this device/i }));
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/login",
+      expect.objectContaining({
+        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
       })
     );
   });
@@ -102,5 +149,70 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+// D4 (session-expiry-tuning): on mount, a visitor whose session_policy
+// cookie says they may still resume gets a silent recoverSession() attempt
+// and, on success, a full-reload redirect to / instead of ever seeing the
+// form -- separated into its own describe so the cookie-setup noise doesn't
+// clutter the plain-form tests above.
+describe("LoginPage mount: session resume (D4)", () => {
+  function setResumablePolicyCookie() {
+    document.cookie = `session_policy=${encodeURIComponent(
+      JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
+    )}; path=/`;
+  }
+
+  beforeEach(() => {
+    clearSessionCookies();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    clearSessionCookies();
+  });
+
+  it("navigates to / when sessionMayResume is true and recoverSession succeeds", async () => {
+    setResumablePolicyCookie();
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, href: "", assign: assignMock });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })));
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith("/"));
+  });
+
+  it("does not navigate when recoverSession fails, even with a resumable-looking policy", async () => {
+    setResumablePolicyCookie();
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, href: "", assign: assignMock });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("refresh failed", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<LoginPage />);
+    // Wait for the mount-time recoverSession() attempt to actually fire
+    // (a bare Promise.resolve() flush doesn't reliably drain the effect's
+    // own async chain) before asserting the negative -- otherwise this
+    // could pass vacuously before the effect has even run.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt recovery (and does not navigate) with no policy cookie", async () => {
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, href: "", assign: assignMock });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<LoginPage />);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(assignMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

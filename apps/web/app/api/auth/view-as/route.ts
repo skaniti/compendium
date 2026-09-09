@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { ACCESS_TOKEN_COOKIE, applySessionCookies } from "@/lib/session-cookies";
+import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
 
 export const runtime = "nodejs";
 
@@ -71,6 +71,7 @@ export async function POST(): Promise<Response> {
     access_token: string;
     token_type: string;
     user: { id: number; email: string; name: string };
+    session_policy?: unknown;
   };
 
   // No refresh_token in this response, deliberately (backend: refresh
@@ -79,6 +80,14 @@ export async function POST(): Promise<Response> {
   // cookie untouched -- it stays live through the acting session and is
   // usable again the moment /api/auth/return restores the admin's own
   // access token.
-  applySessionCookies(cookieStore, { accessToken: data.access_token });
+  //
+  // D1 (session-expiry-tuning): the acting policy's resume is false (spec
+  // D1's view-as-demo row) -- this is what stops SessionKeeper from ever
+  // resuming an expired acting token by rotating the admin's own, still-live
+  // refresh_token cookie mid-view-as.
+  applySessionCookies(cookieStore, {
+    accessToken: data.access_token,
+    policy: parseSessionPolicy(data.session_policy) ?? undefined,
+  });
   return Response.json({ user: data.user });
 }

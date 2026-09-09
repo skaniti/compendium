@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import SessionKeeper from "./SessionKeeper";
+import { __resetThrottleForTests } from "../lib/session-policy-client";
 
 // D2 (batch 04 auth/session parity): activity-scoped sliding refresh.
 // Deliberately FIXES the Dash quirk where background polling/visibility
@@ -14,13 +15,33 @@ import SessionKeeper from "./SessionKeeper";
 
 const CHECK_INTERVAL_MS = 60_000;
 const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";
+const SESSION_POLICY_COOKIE = "session_policy";
+const SESSION_LAST_ACTIVE_COOKIE = "session_last_active";
 
 function setSessionExpiresAtCookie(epochMs: number) {
   document.cookie = `${SESSION_EXPIRES_AT_COOKIE}=${epochMs}; path=/`;
 }
 
+// D1/D2 (session-expiry-tuning): the backend's per-role policy, camelCase
+// (matches lib/session-cookies.ts's SessionPolicy -- this is what
+// applySessionCookies actually writes into the cookie, not the backend's
+// raw snake_case body).
+function setSessionPolicyCookie(policy: { idleMinutes: number; resume: boolean; remembered: boolean }) {
+  document.cookie = `${SESSION_POLICY_COOKIE}=${encodeURIComponent(JSON.stringify(policy))}; path=/`;
+}
+
+function setLastActiveCookie(epochMs: number) {
+  document.cookie = `${SESSION_LAST_ACTIVE_COOKIE}=${epochMs}; path=/`;
+}
+
+// All three session cookies SessionKeeper reads (and, since D2, itself
+// writes via markActive/writeLastActiveMs) -- must be cleared between every
+// test, not just session_expires_at, or a refresh triggered by one test's
+// activity would leak session_last_active into the next.
 function clearAllCookies() {
-  document.cookie = `${SESSION_EXPIRES_AT_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  for (const name of [SESSION_EXPIRES_AT_COOKIE, SESSION_POLICY_COOKIE, SESSION_LAST_ACTIVE_COOKIE]) {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  }
 }
 
 function mockFetch() {
@@ -257,5 +278,171 @@ describe("SessionKeeper", () => {
       resolveFetch(new Response(JSON.stringify({ ok: true }), { status: 200 }));
       await Promise.resolve();
     });
+  });
+});
+
+// D1/D2 (session-expiry-tuning): the session_policy cookie turns the old
+// hard latch (above) into a backend-decided check, and idle is now read
+// from the persisted session_last_active cookie instead of only the
+// per-mount lastActivityRef. These tests exercise the new decision table;
+// the suite above (no policy cookie set) is the regression guard that the
+// no-policy fallback stays byte-identical to the pre-D1 behaviour.
+describe("SessionKeeper -- session_policy-driven resume (D2/D3)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    clearAllCookies();
+    // Item 2 (session-expiry-tuning review fixes): writeLastActiveMs's
+    // throttle (lib/session-policy-client.ts) is module-level state that
+    // otherwise survives across tests in this file -- without resetting it,
+    // the "D2 finality" test below can pass vacuously because the throttle
+    // silently drops the pointerdown-triggered cookie write before the
+    // sessionLapsed guard it's meant to exercise ever runs.
+    __resetThrottleForTests();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    clearAllCookies();
+  });
+
+  it("resumes an already-expired token when policy.resume is true and the user is within the idle window", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: true, remembered: false });
+    setLastActiveCookie(now - 5_000); // active 5s ago -- well within 60min
+    setSessionExpiresAtCookie(now - 1_000); // already expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("refuses to resume an expired token once idle time exceeds the policy's idleMinutes", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 5, resume: true, remembered: false });
+    setLastActiveCookie(now - 10 * 60_000); // idle 10min > 5min policy window
+    setSessionExpiresAtCookie(now - 1_000); // already expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never lapses on idle when policy.idleMinutes is 0 (remembered device), even long-idle and expired", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 0, resume: true, remembered: true });
+    setLastActiveCookie(now - 30 * 24 * 60 * 60_000); // idle 30 days
+    setSessionExpiresAtCookie(now - 1_000); // already expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("refuses to resume an expired token when policy.resume is false (e.g. an acting-as-demo session), even within the idle window", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: false, remembered: false });
+    setLastActiveCookie(now - 5_000);
+    setSessionExpiresAtCookie(now - 1_000); // already expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still refreshes a NOT-YET-expired, near-expiry token under a policy (sliding refresh unchanged)", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: true, remembered: false });
+    setLastActiveCookie(now - 5_000);
+    setSessionExpiresAtCookie(now + 2 * 60_000); // near expiry, not yet expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("never refreshes when suspended=true, even with a resumable policy and an expired token", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: true, remembered: false });
+    setLastActiveCookie(now - 5_000);
+    setSessionExpiresAtCookie(now - 1_000);
+
+    render(<SessionKeeper suspended />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Item 1 (session-expiry-tuning review fixes): the policy-cookie analog
+  // of the plain-cookie "latches an idle lapse permanently" test above.
+  // Before this fix, markActive's writeLastActiveMs(now) call on the
+  // returning pointerdown would silently overwrite the stale, already-past-
+  // idleMinutes session_last_active cookie with "now" -- making the NEXT
+  // check read a fresh timestamp and (with policy.resume true and an
+  // already-expired token) resurrect the lapsed session via the still-live
+  // refresh token. The fix refuses that cookie write outright once the
+  // session has already lapsed, independent of any activity that follows.
+  it("D2 finality under a policy cookie: pointerdown after the stored last-active is already stale does not revive an idle-lapsed session", async () => {
+    const fetchMock = mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: true, remembered: false });
+    setLastActiveCookie(now - 2 * 60 * 60_000); // stored last-active: 2h ago, already outside the 60min window
+    setSessionExpiresAtCookie(now - 1_000); // already expired
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled(); // sanity: matches the plain "refuses to resume" test above
+
+    // The user returns and starts interacting again -- exactly the
+    // condition that resurrected the lapsed session pre-fix.
+    await act(async () => {
+      window.dispatchEvent(new Event("pointerdown"));
+      await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS * 3);
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("after a successful policy-driven refresh, force-writes session_last_active (extends the resume window)", async () => {
+    mockFetch();
+    const now = Date.now();
+    setSessionPolicyCookie({ idleMinutes: 60, resume: true, remembered: false });
+    setLastActiveCookie(now - 5_000);
+    setSessionExpiresAtCookie(now - 1_000);
+
+    render(<SessionKeeper />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const match = document.cookie.match(/session_last_active=([^;]*)/);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeGreaterThanOrEqual(now);
   });
 });

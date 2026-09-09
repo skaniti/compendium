@@ -163,4 +163,31 @@ describe("POST /api/auth/view-as", () => {
     expect(jar.get("access_token")?.value).toBe("admin-access");
     expect(jar.get("refresh_token")?.value).toBe("admins-refresh");
   });
+
+  // D1 (session-expiry-tuning): the acting policy (resume: false) is what
+  // stops SessionKeeper from ever resuming an expired acting token by
+  // rotating the admin's own still-live refresh_token cookie mid-view-as.
+  it("on backend success, sets the session_policy cookie from the backend's acting-as-demo policy", async () => {
+    const jar = makeFakeCookieJar({ access_token: "admin-access", refresh_token: "admins-refresh" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 3600;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const demoAccessToken = `${header}.${payload}.sig`;
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: demoAccessToken,
+        token_type: "bearer",
+        user: { id: 2, email: "demo@example.com", name: "demo" },
+        session_policy: { idle_minutes: 60, resume: false, remembered: false },
+      }),
+    });
+
+    await POST();
+
+    expect(jar.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 60, resume: false, remembered: false })
+    );
+  });
 });

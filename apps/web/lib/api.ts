@@ -10,6 +10,48 @@ import type {
   TopicInterest,
   TopicMember,
 } from "./types";
+import { sessionMayResume } from "./session-policy-client";
+
+// D3 (session-expiry-tuning): module-level single-flight refresh, shared by
+// every concurrent 401 handler below (and app/login/LoginPageClient.tsx's
+// mount-time resume attempt). Without this, three panels 401ing on the same
+// stale page load would each rotate the refresh token, and the backend's
+// reuse-detection would treat the 2nd/3rd rotation as a stolen-token replay
+// and revoke every token for the user -- exactly the failure mode spec D3
+// calls out. Deliberately plain `fetch`, NOT apiFetch: apiFetch calling
+// recoverSession on ITS OWN 401 would recurse.
+let inFlightRecovery: Promise<boolean> | null = null;
+
+export function recoverSession(): Promise<boolean> {
+  if (inFlightRecovery) return inFlightRecovery;
+  // Item 6 (session-expiry-tuning review fixes): the `finally` that clears
+  // inFlightRecovery lives on the OUTER promise (chained after the async
+  // IIFE settles), not inside the IIFE's own try/finally -- a synchronous
+  // throw from anything added to this function in the future (before or
+  // outside the inner try) would otherwise leave inFlightRecovery pointing
+  // at an already-settled (rejected) promise forever, wedging every future
+  // caller onto a dead cached promise instead of retrying.
+  inFlightRecovery = (async () => {
+    try {
+      const res = await fetch("/api/auth/refresh", { method: "POST" });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  })().finally(() => {
+    inFlightRecovery = null;
+  });
+  return inFlightRecovery;
+}
+
+// A request whose body is an already-partially-consumed (or one-shot)
+// ReadableStream can't be safely re-issued a second time -- retrying it
+// would either throw ("body stream already read") or send an empty body.
+// Every other body shape (string, FormData, URLSearchParams, undefined,
+// ...) round-trips fine through a second `fetch(...args)` call.
+function hasStreamBody(init: RequestInit | undefined): boolean {
+  return typeof ReadableStream !== "undefined" && init?.body instanceof ReadableStream;
+}
 
 // Thin fetch wrapper: closes the client-side UX loop when the HttpOnly
 // access_token cookie is gone/expired. D1 (batch 04 auth/session parity) --
@@ -18,6 +60,13 @@ import type {
 // here just means "bounce to /login" instead of leaving callers to render a
 // blank/broken state against data that will never arrive.
 //
+// D3 (session-expiry-tuning): before bouncing, a 401 gets ONE silent
+// recovery attempt when the session_policy cookie says it's worth trying
+// (sessionMayResume -- policy.resume and still within its idle window) and
+// the request is safely retryable. This is what lets a page load with an
+// already-expired access token hydrate normally instead of always bouncing
+// to /login -- the common case once idle tracking survives reloads (D2).
+//
 // Kept args as a passthrough tuple (not a fixed (input, init) signature) so
 // call sites that omit `init` still hit `fetch` with exactly the arguments
 // they gave -- callers/tests that assert `fetch` was called with a single
@@ -25,6 +74,17 @@ import type {
 export async function apiFetch(...args: Parameters<typeof fetch>): Promise<Response> {
   const res = await fetch(...args);
   if (res.status === 401) {
+    const init = args[1];
+    if (!hasStreamBody(init) && sessionMayResume(Date.now())) {
+      const recovered = await recoverSession();
+      if (recovered) {
+        const retryRes = await fetch(...args);
+        if (retryRes.status === 401) {
+          redirectToLogin();
+        }
+        return retryRes;
+      }
+    }
     redirectToLogin();
   }
   return res;

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import Starfield from "@/components/Starfield";
 import StarfieldProvider, { DEFAULT_STARFIELD_VARIANT } from "@/components/StarfieldProvider";
 import { getTokens } from "@/lib/theme";
+import { recoverSession } from "@/lib/api";
+import { sessionMayResume } from "@/lib/session-policy-client";
 
 // Ported from explorer frontend/dash/app.py:_build_login_layout (app.py:2149-2309).
 // The Dash login view forces the Teal palette on every visitor regardless of
@@ -45,7 +47,32 @@ const labelStyle: CSSProperties = {
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
+
+  // D4 (session-expiry-tuning): a remembered (or otherwise still-resumable)
+  // visitor landing on /login -- e.g. a stale bookmark, or redirectToLogin
+  // firing just before an idle-window-eligible refresh would have succeeded
+  // -- gets sent straight back in instead of being shown a form they don't
+  // need. sessionMayResume reads the session_policy/session_last_active
+  // cookies client-side (no network call); recoverSession is the same
+  // single-flight refresh apiFetch's own 401 path shares.
+  useEffect(() => {
+    if (!sessionMayResume(Date.now())) return;
+    let cancelled = false;
+    void recoverSession().then((recovered) => {
+      if (recovered && !cancelled) {
+        // Full reload (not router navigation), same idiom as the
+        // post-login redirect below -- a resumed session must hydrate
+        // every client-side cache/context fresh, same as a normal login.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after session resume
+        window.location.assign("/");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,7 +80,7 @@ function LoginForm() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember }),
     });
     if (res.ok) {
       // Full reload (not router navigation) is deliberate: login must
@@ -151,6 +178,26 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
           />
+          <label
+            style={{
+              ...labelStyle,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 10,
+              marginBottom: 2,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              name="remember"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            Keep me signed in on this device
+          </label>
+          <p style={{ ...labelStyle, margin: "0 0 14px 0" }}>Not available for the demo account.</p>
           <div
             role={error ? "alert" : undefined}
             style={{

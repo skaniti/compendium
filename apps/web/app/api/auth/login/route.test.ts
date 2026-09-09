@@ -98,4 +98,126 @@ describe("POST /api/auth/login", () => {
     expect(body.error).toBe("Invalid credentials.");
     expect(jar.get("access_token")).toBeUndefined();
   });
+
+  // D4 (session-expiry-tuning): the login form's "Keep me signed in on this
+  // device" checkbox.
+  it("forwards remember: false to the backend when the request body omits it", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+      }),
+    });
+
+    await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/login"),
+      expect.objectContaining({
+        body: JSON.stringify({ email: "alice", password: "hunter2", remember: false }),
+      })
+    );
+  });
+
+  it("forwards remember: true to the backend when the checkbox was checked", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+      }),
+    });
+
+    await POST(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
+      })
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/login"),
+      expect.objectContaining({
+        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
+      })
+    );
+  });
+
+  it("sets the session_policy cookie from the backend's session_policy on success", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+        session_policy: { idle_minutes: 720, resume: true, remembered: false },
+      }),
+    });
+
+    await POST(makeLoginRequest({ email: "demo", password: "demo" }));
+
+    expect(jar.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 720, resume: true, remembered: false })
+    );
+  });
+
+  // Item 3 (session-expiry-tuning review fixes): login is genuine activity
+  // -- a stale session_last_active from a PREVIOUS session in this browser
+  // (e.g. one that idled out hours ago) must not carry over, but the fix is
+  // to STAMP it to "now" rather than delete it: a session with zero
+  // recorded activity must not read as "always active" against the
+  // permissive no-last-active fallbacks in session-policy-client.ts.
+  it("stamps session_last_active to a recent timestamp (not deleted) on successful login", async () => {
+    const jar = makeFakeCookieJar();
+    jar._store.set("session_last_active", { value: String(Date.now() - 999_999_999) });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+      }),
+    });
+
+    const before = Date.now();
+    await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const after = Date.now();
+
+    const stamped = Number(jar.get("session_last_active")?.value);
+    expect(stamped).toBeGreaterThanOrEqual(before);
+    expect(stamped).toBeLessThanOrEqual(after);
+    expect(jar._store.get("session_last_active")?.options).toMatchObject({ httpOnly: false });
+  });
+
+  it("does not set a session_policy cookie when the backend response has no session_policy", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+      }),
+    });
+
+    await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+
+    expect(jar.get("session_policy")).toBeUndefined();
+  });
 });

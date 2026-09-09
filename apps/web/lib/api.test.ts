@@ -12,11 +12,22 @@ import {
   fetchTopicMembers,
   fetchTopics,
   postRecluster,
+  recoverSession,
   removeMemberExclusion,
   removeTopic,
   renameTopic,
   setTopicIcon,
 } from "./api";
+
+function clearSessionCookiesForTest() {
+  document.cookie = "session_policy=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  document.cookie = "session_last_active=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+}
+
+function setResumablePolicyCookie(overrides?: Partial<{ idleMinutes: number; resume: boolean; remembered: boolean }>) {
+  const policy = { idleMinutes: 60, resume: true, remembered: false, ...overrides };
+  document.cookie = `session_policy=${encodeURIComponent(JSON.stringify(policy))}; path=/`;
+}
 
 // D1 (batch 04 auth/session parity): apiFetch is a thin fetch wrapper, not a
 // second enforcement layer -- the backend's verify_api_key is what actually
@@ -129,6 +140,163 @@ describe("apiFetch", () => {
     );
 
     await expect(apiFetch("/api/foo")).rejects.toThrow("network down");
+  });
+});
+
+// D3 (session-expiry-tuning): a 401 gets one silent recovery attempt via
+// recoverSession() (single-flight POST /api/auth/refresh) when the
+// session_policy cookie says it's worth trying -- this is what lets a page
+// load with an already-expired access token hydrate normally instead of
+// always bouncing to /login. The plain "no policy cookie" case is already
+// covered by every 401 test above (none of them set a policy cookie), so
+// those act as the regression guard that recovery attempts stay gated.
+describe("apiFetch session recovery (D3)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearSessionCookiesForTest();
+  });
+
+  function routedFetchMock(handlers: { refresh?: () => Response; other?: (url: string, callCount: number) => Response }) {
+    const otherCallCounts = new Map<string, number>();
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/auth/refresh") {
+        return handlers.refresh?.() ?? new Response("unauthorized", { status: 401 });
+      }
+      const count = (otherCallCounts.get(url) ?? 0) + 1;
+      otherCallCounts.set(url, count);
+      return handlers.other?.(url, count) ?? new Response("unauthorized", { status: 401 });
+    });
+  }
+
+  it("on a 401 with a resumable policy, recovers and retries the original request once", async () => {
+    setResumablePolicyCookie();
+    const fetchMock = routedFetchMock({
+      refresh: () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      other: (_url, count) => new Response(count === 1 ? "unauthorized" : "ok", { status: count === 1 ? 401 : 200 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign: assignMock });
+
+    const res = await apiFetch("/api/foo");
+
+    expect(res.status).toBe(200);
+    expect(assignMock).not.toHaveBeenCalled();
+    // Two calls to "/api/foo" -- the original 401 plus the one retry.
+    const fooCalls = fetchMock.mock.calls.filter(([u]) => u === "/api/foo");
+    expect(fooCalls).toHaveLength(2);
+  });
+
+  it("shares ONE recoverSession refresh call across three concurrent 401s and retries each once", async () => {
+    setResumablePolicyCookie();
+    let refreshCalls = 0;
+    const fetchMock = routedFetchMock({
+      refresh: () => {
+        refreshCalls += 1;
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      },
+      other: (_url, count) => new Response(count === 1 ? "unauthorized" : "ok", { status: count === 1 ? 401 : 200 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+
+    const results = await Promise.all([apiFetch("/api/a"), apiFetch("/api/b"), apiFetch("/api/c")]);
+
+    expect(refreshCalls).toBe(1);
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+  });
+
+  it("redirects to /login (without retrying) when the shared refresh fails", async () => {
+    setResumablePolicyCookie();
+    const fetchMock = routedFetchMock({
+      refresh: () => new Response("refresh failed", { status: 401 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign: assignMock });
+
+    const res = await apiFetch("/api/foo");
+
+    expect(assignMock).toHaveBeenCalledWith("/login");
+    expect(res.status).toBe(401);
+    // Never retried the original request -- only the initial 401 plus the
+    // shared refresh attempt.
+    const fooCalls = fetchMock.mock.calls.filter(([u]) => u === "/api/foo");
+    expect(fooCalls).toHaveLength(1);
+  });
+
+  it("redirects to /login if the retried request 401s again", async () => {
+    setResumablePolicyCookie();
+    const fetchMock = routedFetchMock({
+      refresh: () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      other: () => new Response("still unauthorized", { status: 401 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign: assignMock });
+
+    const res = await apiFetch("/api/foo");
+
+    expect(assignMock).toHaveBeenCalledWith("/login");
+    expect(res.status).toBe(401);
+  });
+
+  it("does not attempt recovery (goes straight to redirect) with no policy cookie", async () => {
+    const fetchMock = routedFetchMock({});
+    vi.stubGlobal("fetch", fetchMock);
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign: assignMock });
+
+    await apiFetch("/api/foo");
+
+    expect(assignMock).toHaveBeenCalledWith("/login");
+    // Only the initial call -- recoverSession's own fetch("/api/auth/refresh")
+    // never fires.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attempt recovery when the request body is a ReadableStream (not safely retryable)", async () => {
+    setResumablePolicyCookie();
+    const fetchMock = routedFetchMock({
+      refresh: () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign: assignMock });
+
+    const stream = new ReadableStream();
+    await apiFetch("/api/upload", { method: "POST", body: stream, duplex: "half" } as RequestInit);
+
+    expect(assignMock).toHaveBeenCalledWith("/login");
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no recovery attempt, no retry
+  });
+});
+
+describe("recoverSession", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs /api/auth/refresh with plain fetch and resolves true on success", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(recoverSession()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("resolves false on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 401 })));
+    await expect(recoverSession()).resolves.toBe(false);
+  });
+
+  it("resolves false (does not throw) when fetch rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network down");
+      })
+    );
+    await expect(recoverSession()).resolves.toBe(false);
   });
 });
 

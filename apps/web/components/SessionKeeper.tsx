@@ -2,9 +2,16 @@
 
 import { useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api";
-import { SESSION_EXPIRES_AT_COOKIE } from "@/lib/session-cookies";
+import {
+  effectiveIdleMinutes,
+  readLastActiveMs,
+  readSessionExpiresAtMs,
+  readSessionPolicy,
+  writeLastActiveMs,
+} from "@/lib/session-policy-client";
 
-// D2 (batch 04 auth/session parity): activity-scoped sliding refresh.
+// D2 (batch 04 auth/session parity; re-tuned session-expiry-tuning D2/D3):
+// activity-scoped sliding refresh, policy-gated.
 //
 // Deliberately FIXES a Dash quirk -- Dash's background polling (and, in
 // some builds, tab-visibility pings) counted as "activity", so a session
@@ -14,44 +21,27 @@ import { SESSION_EXPIRES_AT_COOKIE } from "@/lib/session-cookies";
 // visible again, but never resets `lastActivity` itself. This is a real UX
 // change from Dash and is flagged to the user at the batch gate.
 //
-// Every CHECK_INTERVAL, if the access token (read via the readable
-// session_expires_at cookie -- the token itself is HttpOnly) is within
-// NEAR_EXPIRY_MS of expiring AND the user has been active within
-// IDLE_MINUTES, this POSTs /api/auth/refresh (which rotates both cookies
-// server-side). If idle time has been exceeded, this does nothing -- the
-// session lapses by omission, and the 401 interceptor (lib/api.ts
-// apiFetch) handles the eventual bounce to /login once the dead access
-// token actually gets rejected by the backend.
+// Every CHECK_INTERVAL, this reads the backend's session_policy cookie
+// (spec D1: per-role idle window + whether an already-expired token may
+// still be resumed) and decides whether to POST /api/auth/refresh
+// (rotates both cookies server-side). Idle is measured from
+// session_last_active -- a cookie this component itself writes on real
+// activity (see markActive below), NOT a per-mount useRef seed -- so a
+// user who returns after 2 idle hours reads a 2-hour-old timestamp and is
+// refused, while a user who merely closed the tab for 20 minutes is still
+// within the window and resumes, even past the access token's own exp.
+// With NO session_policy cookie (dev no-auth mode, or a cookie set before
+// this upgrade), idleMinutes falls back to NEXT_PUBLIC_IDLE_MINUTES/60 and
+// an already-expired token is never refreshed -- byte-identical to the
+// pre-policy behaviour this replaces.
 
 const CHECK_INTERVAL_MS = 60_000; // 1 minute
 const NEAR_EXPIRY_MS = 3 * 60_000; // 3 minutes
-const DEFAULT_IDLE_MINUTES = 60;
 
 // Passive, non-blocking activity signals -- deliberately excludes anything
 // that could fire from background/programmatic activity (no `focus`, no
 // `visibilitychange`; see the anti-Dash-quirk note above).
 const ACTIVITY_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel", "scroll"] as const;
-
-// Read live each check (not cached at module scope) so a test -- or a
-// runtime env change -- overriding NEXT_PUBLIC_IDLE_MINUTES takes effect
-// immediately. Written as a literal `process.env.NEXT_PUBLIC_IDLE_MINUTES`
-// reference (not an indirected lookup) so Next's client build can still
-// statically inline it per the NEXT_PUBLIC_* convention.
-function readIdleMinutes(): number {
-  const raw = process.env.NEXT_PUBLIC_IDLE_MINUTES;
-  const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IDLE_MINUTES;
-}
-
-const SESSION_EXPIRES_AT_COOKIE_PATTERN = new RegExp(`(?:^|;\\s*)${SESSION_EXPIRES_AT_COOKIE}=([^;]*)`);
-
-function readSessionExpiresAtMs(): number | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(SESSION_EXPIRES_AT_COOKIE_PATTERN);
-  if (!match) return null;
-  const value = Number(decodeURIComponent(match[1]));
-  return Number.isFinite(value) ? value : null;
-}
 
 interface SessionKeeperProps {
   // Disables refreshing entirely while true. Wired by the next task to
@@ -75,7 +65,11 @@ export default function SessionKeeper({ suspended = false }: SessionKeeperProps)
   // treated as having been idle the whole time it was suspended.
   useEffect(() => {
     function markActive() {
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      lastActivityRef.current = now;
+      // Throttled (30s) inside writeLastActiveMs itself -- safe to call on
+      // every pointermove/scroll without flooding document.cookie writes.
+      writeLastActiveMs(now);
     }
     for (const evt of ACTIVITY_EVENTS) {
       window.addEventListener(evt, markActive, { passive: true });
@@ -95,29 +89,45 @@ export default function SessionKeeper({ suspended = false }: SessionKeeperProps)
       if (expiresAtMs === null) return; // No cookie -- dev no-auth mode, inert.
 
       const nowMs = Date.now();
-      // Batch-04 fix-round bug: an ALREADY-EXPIRED token (expiresAtMs <=
-      // nowMs) also satisfies "expiresAtMs - nowMs < NEAR_EXPIRY_MS" (the
-      // gap is negative), so a user who idled PAST the window and only
-      // returns hours later -- well outside IDLE_MINUTES -- would still
-      // hit the idle check below with a huge idleMinutes... except the
-      // real bug is activity on return resets lastActivityRef BEFORE this
-      // runs, so idleMinutes reads ~0 and the lapse gets silently
-      // resurrected via the 7-day refresh token, defeating D2's
-      // idle-lapse-is-final design. The lapse must latch once the token
-      // has actually expired: refuse to refresh, full stop, and let the
-      // 401 interceptor (lib/api.ts apiFetch) handle the bounce on the
-      // next authed request. Sliding refresh for still-active users is
-      // unchanged -- near-expiry-but-not-yet-expired still refreshes.
-      if (expiresAtMs <= nowMs) return;
+      const policy = readSessionPolicy();
+      // D2 (session-expiry-tuning): idle is measured from the PERSISTED
+      // session_last_active cookie (falling back to this mount's own
+      // lastActivityRef only when that cookie has never been written --
+      // e.g. no activity yet this tab, or a policy cookie set before this
+      // upgrade), not a per-mount useRef seed -- this is what lets a user
+      // who closed the tab for 20 minutes resume past the access token's
+      // own exp, instead of every reload effectively resetting the idle
+      // clock to "just now".
+      const idleMinutes = effectiveIdleMinutes(policy);
+      const lastActive = readLastActiveMs() ?? lastActivityRef.current;
+      const active = idleMinutes === 0 || nowMs - lastActive < idleMinutes * 60_000;
+      if (!active) return; // Idle lapse: do nothing.
+
+      const expired = expiresAtMs <= nowMs;
       const nearExpiry = expiresAtMs - nowMs < NEAR_EXPIRY_MS;
       if (!nearExpiry) return;
-
-      const idleMinutes = (nowMs - lastActivityRef.current) / 60_000;
-      if (idleMinutes >= readIdleMinutes()) return; // Idle lapse: do nothing.
+      // Batch-04 fix-round bug, now a policy check instead of a hard latch:
+      // an ALREADY-EXPIRED token used to be latched shut unconditionally
+      // (refuse forever, regardless of activity) to stop a return-from-idle
+      // pointerdown from silently resurrecting a lapsed session via the
+      // still-live refresh token. That latch is now the backend's own call
+      // (spec D1's session_policy.resume -- false for an acting-as-demo
+      // session, so view-as can never rotate the admin's refresh token
+      // mid-act; true for every normal login). With NO policy cookie,
+      // `policy?.resume` is undefined -> the `?? false` fallback below
+      // reproduces the old unconditional latch exactly.
+      if (expired && !(policy?.resume ?? false)) return;
 
       refreshInFlightRef.current = true;
       try {
-        await apiFetch("/api/auth/refresh", { method: "POST" });
+        const res = await apiFetch("/api/auth/refresh", { method: "POST" });
+        // `active` gated this call (the early return above), so a
+        // successful refresh here is always backed by genuine tracked
+        // activity (or an idleMinutes===0 policy that never needed any) --
+        // extending the resume window is not fabricating activity that
+        // didn't happen, just persisting the one that already gated this
+        // very refresh.
+        if (res.ok) writeLastActiveMs(Date.now(), { force: true });
       } catch (err) {
         console.error("SessionKeeper: refresh failed:", err);
       } finally {

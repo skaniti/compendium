@@ -148,4 +148,33 @@ describe("POST /api/auth/return", () => {
     expect(jar.get("access_token")?.value).toBe("demo-acting-access");
     expect(jar.get("refresh_token")?.value).toBe("admins-refresh-still-here");
   });
+
+  // D1 (session-expiry-tuning): the backend returns the default admin
+  // policy here (it can't know from this endpoint whether the underlying
+  // refresh token was ever marked remembered -- see route.ts's own comment)
+  // -- this pins that the response's session_policy, whatever it is, still
+  // makes it into the cookie the same way every other route does.
+  it("on backend success, sets the session_policy cookie from the backend's response", async () => {
+    const jar = makeFakeCookieJar({ access_token: "demo-acting-access", refresh_token: "admins-refresh-still-here" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 3600;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const adminAccessToken = `${header}.${payload}.sig`;
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: adminAccessToken,
+        token_type: "bearer",
+        user: { id: 1, email: "admin@example.com", name: "admin" },
+        session_policy: { idle_minutes: 60, resume: true, remembered: false },
+      }),
+    });
+
+    await POST();
+
+    expect(jar.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
+    );
+  });
 });

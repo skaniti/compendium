@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { ACCESS_TOKEN_COOKIE, applySessionCookies } from "@/lib/session-cookies";
+import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
 
 export const runtime = "nodejs";
 
@@ -51,12 +51,26 @@ export async function POST(): Promise<Response> {
     access_token: string;
     token_type: string;
     user: { id: number; email: string; name: string };
+    session_policy?: unknown;
   };
 
   // Same no-refresh-token contract as view-as (see that route) -- the
   // admin's refresh_token cookie was never touched during the acting
   // session, so it's already live again now that the access token is back
   // to the admin's own.
-  applySessionCookies(cookieStore, { accessToken: data.access_token });
+  //
+  // D1 (session-expiry-tuning): per plan.md's Task 1 step 5 note, the
+  // backend can't know here whether the admin's underlying refresh token was
+  // ever marked `remembered` (that flag lives on the token row, not
+  // resolvable from this endpoint) -- it returns the DEFAULT admin policy
+  // (remembered: false, resume: true) rather than guessing. A remembered
+  // admin re-enters the default policy until the next refresh rotation
+  // restores the remembered one from the token itself; applySessionCookies
+  // here just writes whatever policy the backend decided to send, same as
+  // every other route.
+  applySessionCookies(cookieStore, {
+    accessToken: data.access_token,
+    policy: parseSessionPolicy(data.session_policy) ?? undefined,
+  });
   return Response.json({ user: data.user });
 }

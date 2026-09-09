@@ -58,6 +58,30 @@ describe("POST /api/auth/refresh", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Item 4 (session-expiry-tuning review fixes): with no refresh_token, a
+  // stale session_policy/session_last_active cookie pair (left over from a
+  // session that has since been fully lost, e.g. a browser restart that
+  // dropped a non-persistent refresh_token cookie) would otherwise keep
+  // telling apiFetch/SessionKeeper "this is resumable" forever, triggering
+  // doomed refresh attempts against a request that never even reaches the
+  // backend. Clear all five session cookies here too, same as the
+  // auth-failed branch below.
+  it("clears stale session_policy/session_last_active cookies when there is no refresh_token cookie", async () => {
+    const jar = makeFakeCookieJar({
+      session_policy: JSON.stringify({ idleMinutes: 60, resume: true, remembered: false }),
+      session_last_active: "12345",
+    });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
+
+    const res = await POST();
+
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(jar.get("session_policy")).toBeUndefined();
+    expect(jar.get("session_last_active")).toBeUndefined();
+  });
+
   it("on backend success, rotates both cookies and returns 200", async () => {
     const jar = makeFakeCookieJar({ refresh_token: "old-refresh" });
     vi.mocked(cookies).mockResolvedValue(jar as never);
@@ -90,7 +114,7 @@ describe("POST /api/auth/refresh", () => {
     expect(jar.get("session_expires_at")?.value).toBe(String(futureExpSeconds * 1000));
   });
 
-  it("on backend 401, clears all three session cookies and returns 401", async () => {
+  it("on backend 401, clears all five session cookies and returns 401", async () => {
     const jar = makeFakeCookieJar({
       access_token: "old-access",
       refresh_token: "stale-refresh",
@@ -107,7 +131,7 @@ describe("POST /api/auth/refresh", () => {
     expect(jar.get("session_expires_at")).toBeUndefined();
   });
 
-  it("on backend 403 (revoked token), also clears all three session cookies and returns 401", async () => {
+  it("on backend 403 (revoked token), also clears all five session cookies and returns 401", async () => {
     const jar = makeFakeCookieJar({
       access_token: "old-access",
       refresh_token: "revoked-refresh",
@@ -164,5 +188,128 @@ describe("POST /api/auth/refresh", () => {
     expect(jar.get("access_token")?.value).toBe("old-access");
     expect(jar.get("refresh_token")?.value).toBe("still-good-refresh");
     expect(jar.get("session_expires_at")?.value).toBe("12345");
+  });
+
+  // D1 (session-expiry-tuning): the backend's session_policy body passes
+  // through to applySessionCookies, which writes the readable session_policy
+  // cookie -- see lib/session-cookies.test.ts for that cookie's own shape
+  // assertions (camelCase, non-httpOnly, 90-day maxAge).
+  it("passes the backend's session_policy through to the policy cookie", async () => {
+    const jar = makeFakeCookieJar({ refresh_token: "old-refresh" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 900;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const newAccessToken = `${header}.${payload}.sig`;
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: newAccessToken,
+        refresh_token: "new-refresh",
+        token_type: "bearer",
+        session_policy: { idle_minutes: 60, resume: true, remembered: false },
+      }),
+    });
+
+    await POST();
+
+    expect(jar.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
+    );
+  });
+
+  it("leaves the session_policy cookie untouched when the backend response has no session_policy (rollout backward-compat)", async () => {
+    const jar = makeFakeCookieJar({ refresh_token: "old-refresh", session_policy: "pre-existing" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 900;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const newAccessToken = `${header}.${payload}.sig`;
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: newAccessToken,
+        refresh_token: "new-refresh",
+        token_type: "bearer",
+      }),
+    });
+
+    await POST();
+
+    expect(jar.get("session_policy")?.value).toBe("pre-existing");
+  });
+
+  // D3 (session-expiry-tuning): two concurrent POST()s presenting the SAME
+  // refresh_token (two tabs restored together, or apiFetch's silent
+  // recovery firing alongside SessionKeeper's own check) must share ONE
+  // backend call -- rotating the same token twice trips the backend's
+  // reuse-detection and revokes every token for the user. Each caller still
+  // gets cookies applied to its OWN jar (a real Next.js request context per
+  // call), not just the first one in.
+  it("single-flights two concurrent calls presenting the same refresh_token: one backend call, every caller's own jar gets the cookies", async () => {
+    const jarA = makeFakeCookieJar({ refresh_token: "shared-refresh" });
+    const jarB = makeFakeCookieJar({ refresh_token: "shared-refresh" });
+    vi.mocked(cookies)
+      .mockImplementationOnce(async () => jarA as never)
+      .mockImplementationOnce(async () => jarB as never);
+
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 900;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const newAccessToken = `${header}.${payload}.sig`;
+    let backendCalls = 0;
+    const fetchMock = vi.fn(async () => {
+      backendCalls += 1;
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: newAccessToken,
+          refresh_token: "new-refresh",
+          token_type: "bearer",
+          session_policy: { idle_minutes: 60, resume: true, remembered: false },
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [resA, resB] = await Promise.all([POST(), POST()]);
+
+    expect(backendCalls).toBe(1);
+    expect(resA.status).toBe(200);
+    expect(resB.status).toBe(200);
+    expect(jarA.get("access_token")?.value).toBe(newAccessToken);
+    expect(jarB.get("access_token")?.value).toBe(newAccessToken);
+    expect(jarA.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
+    );
+    expect(jarB.get("session_policy")?.value).toBe(
+      JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
+    );
+  });
+
+  it("does NOT single-flight two concurrent calls with DIFFERENT refresh tokens: one backend call each", async () => {
+    const jarA = makeFakeCookieJar({ refresh_token: "refresh-a" });
+    const jarB = makeFakeCookieJar({ refresh_token: "refresh-b" });
+    vi.mocked(cookies)
+      .mockImplementationOnce(async () => jarA as never)
+      .mockImplementationOnce(async () => jarB as never);
+
+    const futureExpSeconds = Math.floor(Date.now() / 1000) + 900;
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ exp: futureExpSeconds })).toString("base64url");
+    const accessToken = `${header}.${payload}.sig`;
+    let backendCalls = 0;
+    const fetchMock = vi.fn(async () => {
+      backendCalls += 1;
+      return {
+        ok: true,
+        json: async () => ({ access_token: accessToken, refresh_token: "new-refresh", token_type: "bearer" }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await Promise.all([POST(), POST()]);
+
+    expect(backendCalls).toBe(2);
   });
 });

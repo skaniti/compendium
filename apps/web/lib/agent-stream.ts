@@ -1,5 +1,6 @@
 import type { AgentEvent, CompleteEvent } from "./types";
-import { redirectToLogin } from "./api";
+import { recoverSession, redirectToLogin } from "./api";
+import { sessionMayResume } from "./session-policy-client";
 
 /**
  * Pure: pull complete SSE events out of an accumulated text buffer.
@@ -27,17 +28,21 @@ export interface StreamHandlers {
   onComplete?: (event: CompleteEvent) => void;
 }
 
-export async function streamAgentQuery(
-  query: string,
-  handlers: StreamHandlers,
-  signal?: AbortSignal,
-): Promise<void> {
-  const res = await fetch("/api/agent/query-stream", {
+function fetchAgentStream(query: string, signal?: AbortSignal): Promise<Response> {
+  return fetch("/api/agent/query-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
     signal,
   });
+}
+
+export async function streamAgentQuery(
+  query: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  let res = await fetchAgentStream(query, signal);
   if (!res.ok) {
     // Batch-04 fix-round bug: this talks to fetch directly (not apiFetch,
     // since it needs the raw stream body) so a post-lapse 401 here never
@@ -49,12 +54,41 @@ export async function streamAgentQuery(
     // guarded navigate lib/api.ts's apiFetch uses and return without
     // throwing, since the caller is about to navigate away and an error
     // bubble would be pointless. Any other non-ok status still throws.
+    //
+    // D3 (session-expiry-tuning): before that bounce, try the same silent
+    // single-flight recovery apiFetch attempts (recoverSession -- shared
+    // with every other 401 handler, so a chat 401 alongside a panel 401 on
+    // the same stale page load only rotates the refresh token once) and
+    // retry this request exactly once on success. A retried request that
+    // still 401s (or a failed recovery) falls through to the same
+    // redirectToLogin as before. Gated by sessionMayResume exactly like
+    // apiFetch's own 401 handling -- with no policy cookie (or one that
+    // forbids resume/is outside its idle window), skip the doomed refresh
+    // attempt entirely and bounce straight to /login.
     if (res.status === 401) {
+      if (sessionMayResume(Date.now())) {
+        const recovered = await recoverSession();
+        if (recovered) {
+          res = await fetchAgentStream(query, signal);
+          if (res.ok) return readAgentStream(res, handlers);
+          if (res.status !== 401) {
+            throw new Error(`Agent request failed: ${res.status} ${res.statusText}`);
+          }
+        }
+      }
       redirectToLogin();
       return;
     }
     throw new Error(`Agent request failed: ${res.status} ${res.statusText}`);
   }
+  return readAgentStream(res, handlers);
+}
+
+async function readAgentStream(res: Response, handlers: StreamHandlers): Promise<void> {
+  // The sole !res.body check (previously duplicated in streamAgentQuery
+  // too) -- covers both call sites into this function: the normal ok path
+  // above, and the post-recovery retry path in streamAgentQuery's 401
+  // branch.
   if (!res.body) throw new Error("Agent response had no body");
 
   const reader = res.body.getReader();
