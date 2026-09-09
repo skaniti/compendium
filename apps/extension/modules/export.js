@@ -6,9 +6,16 @@
  * Active  → POST /api/captures
  *
  * Both kinds share the same durability machinery: exportCache ring first,
- * then a pendingExports queue flushed on every background wake. Queue items
- * carry `kind: 'active'` for journeys (absent/other = passive); the field
- * also rides along in the POST body, which the backend ignores
+ * then a pendingExports queue flushed by flushPendingExports(). A flush pass
+ * self-paces (spec D4): at most CONFIG.FLUSH_BATCH_MAX requests, stopping
+ * early on 429 ('rate_limited'), 401/403 ('auth'), or a network/TypeError
+ * ('offline') so the remaining queue stays intact and in order. There is no
+ * Retry-After from the server, so draining a large backlog relies on the
+ * periodic CONFIG.FLUSH_ALARM_NAME alarm (spec D7, background.js) rather
+ * than retrying in a tight loop — ensureFlushAlarm()/clearFlushAlarm() keep
+ * that alarm present iff the queue is non-empty. Queue items carry
+ * `kind: 'active'` for journeys (absent/other = passive); the field also
+ * rides along in the POST body, which the backend ignores
  * (models use extra="ignore").
  *
  * Capture payload shape is a three-way twin: the objects built here, the
@@ -17,7 +24,7 @@
  * apps/android/app/src/main/java/dev/skaniti/compendium/model/SessionData.kt.
  */
 
-import { CONFIG, getConfig, buildHeaders } from './config.js';
+import { CONFIG, getConfig, buildHeaders, validateApiKey } from './config.js';
 
 // ── Backend Transport ───────────────────────────────────────────────────────
 
@@ -25,13 +32,51 @@ function endpointFor(item) {
   return item && item.kind === 'active' ? '/api/captures' : '/api/passive-captures';
 }
 
+/**
+ * A stored API key that fails validateApiKey (spec D1) must never reach
+ * fetch() -- that's exactly the ByteString TypeError this batch exists to
+ * fix, and it would otherwise masquerade as "backend unavailable" (offline)
+ * instead of the real "auth" problem. Checked here, before the network
+ * call, so every caller (flush pass, retry, live export) gets the same
+ * distinguishable failure. The thrown message is validateApiKey's sanitized
+ * text (names only the offending code point + position) -- never the key
+ * itself; callers must log the error object, not config.apiKey.
+ */
 async function backendPost(captureData) {
   const config = await getConfig();
+  const keyError = validateApiKey(config.apiKey);
+  if (keyError) {
+    const err = new Error(keyError);
+    err.name = 'InvalidApiKeyError';
+    throw err;
+  }
   return fetch(`${config.backendUrl}${endpointFor(captureData)}`, {
     method: 'POST',
     headers: buildHeaders(config),
     body: JSON.stringify(captureData)
   });
+}
+
+// ── Flush Alarm (spec D7) ────────────────────────────────────────────────────
+
+/**
+ * Schedule the periodic flush alarm. Idempotent -- re-creating replaces it,
+ * which restarts the 1-minute countdown from now rather than preserving
+ * the original fire time. Every flush pass or buffered export that calls
+ * this pushes the next fire out to "+1 min from now" instead of "+1 min
+ * from the first buffer" -- acceptable: the alarm's job is just to
+ * guarantee *some* periodic drain attempt while the queue is non-empty,
+ * not to hit a precise cadence.
+ */
+export function ensureFlushAlarm() {
+  chrome.alarms.create(CONFIG.FLUSH_ALARM_NAME, {
+    periodInMinutes: CONFIG.FLUSH_ALARM_PERIOD_MINUTES
+  });
+}
+
+/** Cancel the periodic flush alarm (queue is empty; nothing to drain). */
+export function clearFlushAlarm() {
+  chrome.alarms.clear(CONFIG.FLUSH_ALARM_NAME);
 }
 
 // ── Export Cache ─────────────────────────────────────────────────────────────
@@ -81,7 +126,16 @@ export async function markDelivered(captureId) {
  * "what hasn't been ack'd by the server yet" so flushes can retry it;
  * items get removed on a 2xx/409.
  *
- * @returns {Promise<{delivery: 'delivered'|'buffered', body: object|null}>}
+ * 409 counts as delivered (spec D3: capture_id already stored is an
+ * idempotent replay, not a failure). On success, runs a flushPendingExports()
+ * pass so older buffered captures ride along; that pass result is returned
+ * as `flush` so callers (background.js forceFinalize) don't need a second
+ * pass to report accurate counts. The buffered path (network throw OR
+ * non-2xx) logs the failure and ensures the flush alarm so the periodic
+ * alarm (D7) picks the item up later; it does NOT run its own flush pass
+ * here (nothing new to gain — the item that just failed is the newest one).
+ *
+ * @returns {Promise<{delivery: 'delivered'|'buffered', body: object|null, flush: object|null}>}
  */
 async function exportCapture(captureData) {
   // Provenance stamp (spec: docs/project-plans/2026-06-10-185556-capture-provenance/).
@@ -101,7 +155,7 @@ async function exportCapture(captureData) {
   let body = null;
   try {
     const resp = await backendPost(captureData);
-    if (resp.ok) {
+    if (resp.ok || resp.status === 409) {
       deliveredOk = true;
       try {
         body = await resp.json();
@@ -109,9 +163,11 @@ async function exportCapture(captureData) {
         // Non-JSON 2xx body — delivery still counts
       }
       console.log(`[Export] Delivered to backend: ${captureData.captureId}`);
+    } else {
+      console.warn(`[Export] Backend rejected capture: ${captureData.captureId}`, resp.status);
     }
-  } catch {
-    console.warn('[Export] Backend unavailable');
+  } catch (err) {
+    console.warn(`[Export] Backend unavailable: ${captureData.captureId}`, err);
   }
 
   // Remove from pending on success, flush older buffered captures too
@@ -122,14 +178,18 @@ async function exportCapture(captureData) {
     );
     await chrome.storage.local.set({ pendingExports: updated });
     await markDelivered(captureData.captureId);
-    await flushPendingExports();
-    return { delivery: 'delivered', body };
+    const flush = await flushPendingExports();
+    return { delivery: 'delivered', body, flush };
   }
 
   console.log(`[Export] Buffered capture for later: ${captureData.captureId}`);
-  return { delivery: 'buffered', body: null };
+  ensureFlushAlarm();
+  return { delivery: 'buffered', body: null, flush: null };
 }
 
+/**
+ * @returns {Promise<{delivery: 'delivered'|'buffered', body: object|null, flush: object|null}>}
+ */
 export async function exportPassiveCapture(captureData) {
   // Track in completedCaptures for popup display
   const stored = await chrome.storage.local.get('completedCaptures');
@@ -143,14 +203,15 @@ export async function exportPassiveCapture(captureData) {
   });
   await chrome.storage.local.set({ completedCaptures });
 
-  const { delivery } = await exportCapture(captureData);
-  return delivery;
+  return exportCapture(captureData);
 }
 
 /**
  * Journey export — same ring + queue + flush durability as passive.
- * Returns the delivery verdict plus the parsed response body (the backend
- * returns journeyUrl on success).
+ * Returns the delivery verdict, the parsed response body (the backend
+ * returns journeyUrl on success), and the post-delivery flush result.
+ *
+ * @returns {Promise<{delivery: 'delivered'|'buffered', body: object|null, flush: object|null}>}
  */
 export async function exportActiveCapture(captureData) {
   return exportCapture({ ...captureData, kind: 'active' });
@@ -158,32 +219,122 @@ export async function exportActiveCapture(captureData) {
 
 // ── Flush Buffered Exports ───────────────────────────────────────────────────
 
-export async function flushPendingExports() {
+// Guards against overlapping passes: the periodic alarm, a live export's
+// post-delivery flush, and a user-triggered Force Export can all call
+// flushPendingExports() within the same tick. Without this, two passes
+// would both read the same pre-pass queue snapshot and race to write
+// pendingExports, and the backend would see up to 2x the intended
+// requests-per-pass. A single in-flight pass is shared by every caller;
+// they all resolve to the same result object.
+let flushInFlight = null;
+
+/**
+ * Attempt delivery of buffered captures, oldest first, up to
+ * CONFIG.FLUSH_BATCH_MAX requests per pass (spec D4 -- self-pacing since the
+ * server sends no Retry-After). Stops the pass early -- preserving the
+ * current item and every un-iterated item, in order -- on:
+ *   - 429                     -> stop:'rate_limited'
+ *   - 401/403                 -> stop:'auth' (retrying others is pointless with a bad key)
+ *   - stored key invalid (InvalidApiKeyError) -> stop:'auth' (never reaches fetch)
+ *   - network/TypeError throw -> stop:'offline'
+ * Any other non-2xx keeps just that item and continues. 409 counts as
+ * delivered (spec D3). ensures/clears CONFIG.FLUSH_ALARM_NAME by whether
+ * anything remains after the pass. Concurrent callers share one in-flight
+ * pass (see flushInFlight above) and get the same result object back.
+ *
+ * @returns {Promise<{attempted: number, delivered: number, remaining: number, stop: string|null, lastError: string|null}>}
+ */
+export function flushPendingExports() {
+  if (flushInFlight) return flushInFlight;
+  flushInFlight = runFlushPass().finally(() => {
+    flushInFlight = null;
+  });
+  return flushInFlight;
+}
+
+async function runFlushPass() {
   const pending = await chrome.storage.local.get('pendingExports');
   const pendingExports = pending.pendingExports || [];
-  if (pendingExports.length === 0) return;
+  if (pendingExports.length === 0) {
+    clearFlushAlarm();
+    return { attempted: 0, delivered: 0, remaining: 0, stop: null, lastError: null };
+  }
 
-  const remaining = [];
+  let attempted = 0;
+  let delivered = 0;
+  let stop = null;
+  let lastError = null;
+  // captureIds delivered this pass. The pass does NOT write pendingExports
+  // as it goes -- it only tracks who succeeded, then reconciles against a
+  // fresh read of storage at the end (mirrors exportCapture's own
+  // success-path pattern below). That fresh read picks up anything a
+  // concurrent exportCapture() buffered mid-pass, so a capture that lands
+  // while this pass is running is never clobbered by writing back a stale
+  // pre-pass snapshot.
+  const deliveredIds = new Set();
+
   for (let i = 0; i < pendingExports.length; i++) {
+    if (attempted >= CONFIG.FLUSH_BATCH_MAX) {
+      stop = 'batch_cap';
+      break;
+    }
+
     const item = pendingExports[i];
+    attempted++;
+
     try {
       const resp = await backendPost(item);
       if (resp.ok || resp.status === 409) {
         console.log(`[Export] Flushed buffered capture: ${item.captureId}`);
         await markDelivered(item.captureId);
+        deliveredIds.add(item.captureId);
+        delivered++;
+      } else if (resp.status === 429) {
+        console.warn(`[Export] Flush rate limited: ${item.captureId}`, resp.status);
+        lastError = `HTTP ${resp.status}`;
+        stop = 'rate_limited';
+        break;
+      } else if (resp.status === 401 || resp.status === 403) {
+        console.warn(`[Export] Flush auth failure: ${item.captureId}`, resp.status);
+        lastError = `HTTP ${resp.status}`;
+        stop = 'auth';
+        break;
       } else {
-        remaining.push(item);
+        console.warn(`[Export] Flush failed: ${item.captureId}`, resp.status);
+        lastError = `HTTP ${resp.status}`;
       }
-    } catch {
-      // Backend unreachable -- preserve the current item AND every
-      // un-iterated item still in the queue, then stop trying. Without
-      // the slice, the prior `break` would silently drop everything
-      // after index i on the first network failure.
-      remaining.push(...pendingExports.slice(i));
+    } catch (err) {
+      if (err && err.name === 'InvalidApiKeyError') {
+        // Stored key never reached fetch() -- don't let it masquerade as
+        // 'offline'. Log the error object only (its message is already
+        // sanitized by validateApiKey); never interpolate the key itself.
+        console.warn('[Export] Flush rejected: stored API key is invalid', err);
+        lastError = err.message;
+        stop = 'auth';
+        break;
+      }
+      // Backend unreachable -- stop trying; every un-iterated item (plus
+      // the current one) simply stays in storage since we never removed
+      // it, so no explicit re-push is needed here.
+      console.warn(`[Export] Flush offline: ${item.captureId}`, err);
+      lastError = err.message;
+      stop = 'offline';
       break;
     }
   }
+
+  const fresh = await chrome.storage.local.get('pendingExports');
+  const freshItems = fresh.pendingExports || [];
+  const remaining = freshItems.filter(i => !deliveredIds.has(i.captureId));
   await chrome.storage.local.set({ pendingExports: remaining });
+
+  if (remaining.length > 0) {
+    ensureFlushAlarm();
+  } else {
+    clearFlushAlarm();
+  }
+
+  return { attempted, delivered, remaining: remaining.length, stop, lastError };
 }
 
 // ── Retry Single Export (used by cache.js) ───────────────────────────────────
@@ -197,14 +348,30 @@ export async function retrySingleExport(captureId) {
   const item = pendingExports[idx];
   try {
     const resp = await backendPost(item);
-    if (resp.ok) {
-      pendingExports.splice(idx, 1);
-      await chrome.storage.local.set({ pendingExports });
+    if (resp.ok || resp.status === 409) {
+      // Re-read storage rather than writing back the pre-request snapshot
+      // (mirrors runFlushPass's post-loop reconcile above) -- an
+      // item pushed by a concurrent exportCapture() while this request was
+      // in flight must survive the write, not get clobbered by it.
+      const fresh = await chrome.storage.local.get('pendingExports');
+      const updated = (fresh.pendingExports || []).filter(
+        s => s.captureId !== captureId
+      );
+      await chrome.storage.local.set({ pendingExports: updated });
       await markDelivered(captureId);
       return { success: true, delivery: 'delivered' };
     }
-    return { success: false, delivery: 'backend_error' };
-  } catch {
-    return { success: false, delivery: 'backend_offline' };
+    console.warn(`[Export] Retry failed: ${captureId}`, resp.status);
+    return { success: false, delivery: 'backend_error', status: resp.status };
+  } catch (err) {
+    if (err && err.name === 'InvalidApiKeyError') {
+      // Stored key never reached fetch() -- this is an auth problem, not
+      // 'backend_offline'. Log the error object only (message is already
+      // sanitized); never interpolate the key itself.
+      console.warn(`[Export] Retry rejected: stored API key is invalid for ${captureId}`, err);
+      return { success: false, delivery: 'backend_error', error: err.message };
+    }
+    console.warn(`[Export] Retry offline: ${captureId}`, err);
+    return { success: false, delivery: 'backend_offline', error: err.message };
   }
 }

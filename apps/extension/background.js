@@ -236,11 +236,12 @@ chrome.bookmarks.onCreated.addListener((id, bookmark) => {
 });
 
 // =============================================================================
-// Alarm — Passive capture timeout backup
+// Alarm — dispatches the passive-capture timeout backup and the
+// pending-export flush (spec D7)
 // =============================================================================
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'passive_capture_timeout') {
+  if (alarm.name === CONFIG.ALARM_NAME) {
     const ps = passive.getState();
     const trivial = ps.pages.length < CONFIG.TRIVIAL_THRESHOLD;
     const aged = ps.startTime && (Date.now() - ps.startTime) >= CONFIG.MAX_CAPTURE_AGE_MS;
@@ -251,6 +252,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       return;
     }
     passive.finalizeCapture();
+  } else if (alarm.name === CONFIG.FLUSH_ALARM_NAME) {
+    // Periodic drain of buffered exports (spec D7) -- self-manages whether
+    // it needs to keep firing via ensureFlushAlarm()/clearFlushAlarm().
+    flushPendingExports();
   }
 });
 
@@ -295,15 +300,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // ── Passive force-finalize ──────────────────────────────────────────────
+  // Always ends with a flush pass (spec D5/D6) so the popup can report
+  // "Exported N, M buffered" -- reusing the active export's own pass when it
+  // delivered (exportCapture already ran one), to avoid spending two passes'
+  // worth of request budget on a single Force Export click.
   if (message.action === 'forceFinalize') {
     const result = passive.finalizeCapture();
     if (!result.exportPromise) {
-      sendResponse({ success: true, delivery: 'no_capture' });
-      return;
+      flushPendingExports()
+        .then(flush => sendResponse({ success: true, delivery: 'no_capture', flush }))
+        .catch((err) => {
+          console.warn('[Export] Force finalize failed:', err);
+          sendResponse({ success: false, delivery: 'failed', flush: null });
+        });
+    } else {
+      result.exportPromise
+        .then(async ({ delivery, flush }) => {
+          const f = delivery === 'delivered' && flush ? flush : await flushPendingExports();
+          sendResponse({ success: true, delivery, flush: f });
+        })
+        .catch((err) => {
+          console.warn('[Export] Force finalize failed:', err);
+          sendResponse({ success: false, delivery: 'failed', flush: null });
+        });
     }
-    result.exportPromise
-      .then(delivery => sendResponse({ success: true, delivery }))
-      .catch(() => sendResponse({ success: false, delivery: 'failed' }));
     return true;
   }
 

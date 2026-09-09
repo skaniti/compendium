@@ -24,10 +24,52 @@ export async function getConfig() {
   };
 }
 
+const CONTROL_CHAR_ESCAPES = { 0x09: '\\t', 0x0a: '\\n', 0x0d: '\\r' };
+
+function renderChar(ch, code) {
+  if (CONTROL_CHAR_ESCAPES[code]) return CONTROL_CHAR_ESCAPES[code];
+  if (code < 0x20 || code === 0x7f) {
+    return '\\x' + code.toString(16).padStart(2, '0');
+  }
+  return ch;
+}
+
+/**
+ * Validate an API key for the ByteString-safe header contract (spec:
+ * docs/project-plans/nextjs-migration/2026-09-09-125414-extension-hardening/spec.md
+ * D1). Keys are `cmp_...` ASCII; every character must be printable ASCII
+ * (U+0021-U+007E). An empty/missing key is valid (means "no key") -- it is
+ * NOT the same failure class as a key containing an invalid character.
+ *
+ * Returns null when valid, or a human message naming the first offending
+ * character, its code point, and its 1-based position.
+ */
+export function validateApiKey(key) {
+  if (key === undefined || key === null || key === '') return null;
+
+  const chars = Array.from(key);
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const code = ch.codePointAt(0);
+    if (code < 0x21 || code > 0x7e) {
+      const hex = code.toString(16).toUpperCase().padStart(4, '0');
+      return `Invalid character "${renderChar(ch, code)}" (U+${hex}) at position ${i + 1} — re-paste the key`;
+    }
+  }
+  return null;
+}
+
 /**
  * Save user-configurable settings to chrome.storage.local.
+ * Throws when apiKey is provided and fails validateApiKey (defense in
+ * depth -- callers are expected to validate first and show an inline error).
  */
 export async function saveConfig({ backendUrl, apiKey, deviceLabel }) {
+  if (apiKey !== undefined) {
+    const error = validateApiKey(apiKey);
+    if (error) throw new Error(error);
+  }
+
   const updates = {};
   if (backendUrl !== undefined) updates.backendUrl = backendUrl;
   if (apiKey !== undefined) updates.apiKey = apiKey;
@@ -68,5 +110,11 @@ export const CONFIG = {
 
   // Export cache retention
   EXPORT_CACHE_MAX_ENTRIES: 56,
-  EXPORT_CACHE_TTL_MS: 28 * 24 * 60 * 60 * 1000
+  EXPORT_CACHE_TTL_MS: 28 * 24 * 60 * 60 * 1000,
+
+  // Flush pacing (spec D4/D7): no Retry-After exists, so the client
+  // self-paces via a per-pass cap and a periodic alarm.
+  FLUSH_BATCH_MAX: 10,
+  FLUSH_ALARM_NAME: 'pending_export_flush',
+  FLUSH_ALARM_PERIOD_MINUTES: 1
 };

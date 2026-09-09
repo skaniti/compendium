@@ -102,3 +102,9 @@ apps/android/.gradle/
 apps/android/.idea/
 apps/android/.kotlin/
 apps/android/local.properties
+
+# apps/extension: AMO (Firefox) signing artifacts -- machine/CI local, not
+# product; explorer's copy carries an untracked .amo-upload-uuid today, same
+# tooling runs from here after the flip
+apps/extension/.amo-upload-uuid
+apps/extension/web-ext-artifacts/
