@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
+    # Session expiry tuning (docs/project-plans/2026-09-09-125949-session-
+    # expiry-tuning/spec.md, decision D1): per-role session policy. A
+    # "remembered" login (explicit opt-in checkbox, never available to the
+    # demo role) gets a 90-day refresh token and no idle lapse; demo gets a
+    # longer idle window (public read-only, no long-refresh path); default
+    # is unchanged from the historical 60-minute idle behavior.
+    jwt_refresh_token_expire_days_remembered: int = 90
+    session_idle_minutes: int = 60
+    session_idle_minutes_demo: int = 720
+    session_idle_minutes_remembered: int = 0
 
     # ==========================================================================
     # User Identity (dev / bootstrap)

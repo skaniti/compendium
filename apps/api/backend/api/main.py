@@ -2562,6 +2562,9 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=254)
     password: str = Field(..., min_length=1, max_length=128)
+    # Session expiry tuning (spec D1/D4): "keep me signed in on this
+    # device" opt-in. Ignored server-side for the demo role -- see login().
+    remember: bool = False
 
 
 class PreferencesRequest(BaseModel):
@@ -2647,8 +2650,14 @@ async def login(request: Request, body: LoginRequest):
     if not auth_service.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Server-authoritative: role is a DB lookup, never client-trusted, so
+    # the demo credential can never obtain a remembered/90-day session
+    # even if it posts remember=true (spec D1).
+    role = ar.get_role(user["id"])
+    remembered = body.remember and role != "demo"
+
     access_token = auth_service.create_access_token(user["id"], user["email"])
-    refresh_token = auth_service.create_refresh_token(user["id"])
+    refresh_token = auth_service.create_refresh_token(user["id"], remembered=remembered)
 
     return {
         "access_token": access_token,
@@ -2659,6 +2668,7 @@ async def login(request: Request, body: LoginRequest):
             "email": user["email"],
             "name": user["name"],
         },
+        "session_policy": auth_service.session_policy(role, remembered),
     }
 
 
@@ -2746,6 +2756,11 @@ async def view_as(
             "email": demo["email"],
             "name": demo["name"],
         },
+        # acting=True: resume False (no refresh path exists for this
+        # token), remembered forced False, idle_minutes the acting cap
+        # (informational only -- the 60-minute access-token TTL above is
+        # the actual enforcement).
+        "session_policy": auth_service.session_policy("demo", False, acting=True),
     }
 
 
@@ -2800,6 +2815,16 @@ async def return_to_admin(
             "email": admin["email"],
             "name": admin["name"],
         },
+        # remembered is not knowable here (no refresh token round-trips
+        # through return-to-admin -- see the no-refresh comment above), so
+        # a remembered admin re-enters the default (7-day/60-min) policy
+        # until their next refresh rotation restores it from the DB-backed
+        # `remembered` flag on their refresh token. The refresh response is
+        # the authoritative source of a remembered policy, not this one.
+        # Role is the literal "admin" -- already verified from the DB by
+        # the ar.get_role(admin_id) != "admin" check above; a second
+        # get_role round-trip here would be redundant.
+        "session_policy": auth_service.session_policy("admin", False),
     }
 
 
@@ -2824,11 +2849,12 @@ async def refresh_token_endpoint(body: RefreshRequest):
     if result is None:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
-    access, refresh = result
+    access, refresh, policy = result
     return {
         "access_token": access,
         "refresh_token": refresh,
         "token_type": "bearer",
+        "session_policy": policy,
     }
 
 

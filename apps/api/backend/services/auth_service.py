@@ -93,24 +93,37 @@ def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
-def create_refresh_token(user_id: int) -> str:
+def create_refresh_token(user_id: int, remembered: bool = False) -> str:
     """Create a long-lived refresh token, store its hash in the DB.
+
+    ``remembered`` (spec D1) selects the lifetime:
+    ``jwt_refresh_token_expire_days_remembered`` (90 days) when True, else
+    the default ``jwt_refresh_token_expire_days`` (7 days). Persisted
+    alongside the token hash so a later rotation can carry the flag
+    forward without re-trusting client input.
 
     Returns the raw token (to be sent to the client).
     """
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.jwt_refresh_token_expire_days
+    days = (
+        settings.jwt_refresh_token_expire_days_remembered
+        if remembered
+        else settings.jwt_refresh_token_expire_days
     )
-    auth_repo.save_refresh_token(user_id, token_hash, expires_at)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+    auth_repo.save_refresh_token(user_id, token_hash, expires_at, remembered=remembered)
     return raw_token
 
 
-def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
+def rotate_refresh_token(raw_token: str) -> tuple[str, str, dict] | None:
     """Validate a refresh token, revoke it, and issue new access + refresh.
 
-    Returns (new_access_token, new_refresh_token) or None if invalid.
+    Returns ``(new_access_token, new_refresh_token, session_policy)`` or
+    None if invalid. The ``remembered`` flag on the stored token carries
+    forward to the newly minted refresh token (spec D1), and the policy is
+    recomputed from the user's current DB role -- a demoted/promoted user
+    gets the right policy on their very next refresh.
     """
     token_hash = _hash_token(raw_token)
     stored = auth_repo.get_refresh_token(token_hash)
@@ -140,11 +153,66 @@ def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
     if user is None:
         return None
 
+    # Read the CURRENT role BEFORE minting -- spec D1's hard constraint (the
+    # demo role can never hold a 90-day token) must hold even for a user
+    # whose role changed to demo since the stored token was minted. Reading
+    # role after minting (the pre-fix bug) let the new refresh token inherit
+    # the stale `remembered` flag while only the *reported* policy reflected
+    # the corrected role, so a demoted-to-demo user kept a 90-day token with
+    # a policy that claimed remembered: False.
+    role = auth_repo.get_role(user["id"])
+    remembered = bool(stored["remembered"]) and role != "demo"
     access = create_access_token(user["id"], user["email"])
-    refresh = create_refresh_token(user["id"])
-    return access, refresh
+    refresh = create_refresh_token(user["id"], remembered=remembered)
+    policy = session_policy(role, remembered)
+    return access, refresh, policy
 
 
 def revoke_refresh_token(raw_token: str) -> None:
     """Revoke a single refresh token (logout)."""
     auth_repo.revoke_refresh_token(_hash_token(raw_token))
+
+
+# ── Session policy ─────────────────────────────────────────────────────
+
+
+def session_policy(role: str, remembered: bool, acting: bool = False) -> dict:
+    """Compute the per-``(role, remembered)`` session policy (spec D1).
+
+    Returned to the client from login/refresh/view-as/return-to-admin so
+    ``apps/web`` can decide idle-lapse and resume behavior without
+    hardcoding lifetimes. The backend token lifetimes remain the actual
+    enforcement -- this is informational, like ``session_expires_at``.
+
+    ``acting=True`` (view-as-demo) takes priority over everything else:
+    the 60-minute no-refresh cap is unchanged and ``remembered`` is always
+    False for an acting session, regardless of the role/remembered inputs.
+
+    ``role == "demo"`` forces ``remembered`` to False even if the caller
+    passed True -- the public demo credential can never obtain a 90-day
+    token or a no-idle policy (server-side, DB-derived role; never
+    client-trusted).
+    """
+    if acting:
+        return {
+            "idle_minutes": settings.session_idle_minutes,
+            "resume": False,
+            "remembered": False,
+        }
+    if role == "demo":
+        return {
+            "idle_minutes": settings.session_idle_minutes_demo,
+            "resume": True,
+            "remembered": False,
+        }
+    if remembered:
+        return {
+            "idle_minutes": settings.session_idle_minutes_remembered,
+            "resume": True,
+            "remembered": True,
+        }
+    return {
+        "idle_minutes": settings.session_idle_minutes,
+        "resume": True,
+        "remembered": False,
+    }

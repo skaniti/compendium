@@ -107,17 +107,24 @@ def get_user_by_login(identifier: str) -> dict | None:
 # ── Refresh tokens ─────────────────────────────────────────────────────
 
 
-def save_refresh_token(user_id: int, token_hash: str, expires_at: datetime) -> int:
-    """Store a hashed refresh token. Returns the token row ID."""
+def save_refresh_token(
+    user_id: int, token_hash: str, expires_at: datetime, remembered: bool = False
+) -> int:
+    """Store a hashed refresh token. Returns the token row ID.
+
+    ``remembered`` (migration 044) records whether this token came from a
+    "keep me signed in" login/rotation, so ``session_policy`` can be
+    recomputed from the DB on refresh without re-trusting client input.
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-                VALUES (%s, %s, %s)
+                INSERT INTO refresh_tokens (user_id, token_hash, expires_at, remembered)
+                VALUES (%s, %s, %s, %s)
                 RETURNING id
                 """,
-                (user_id, token_hash, expires_at),
+                (user_id, token_hash, expires_at, remembered),
             )
             return cur.fetchone()[0]
 
@@ -128,7 +135,7 @@ def get_refresh_token(token_hash: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
+                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, remembered
                 FROM refresh_tokens
                 WHERE token_hash = %s
                 """,
@@ -146,6 +153,7 @@ def get_refresh_token(token_hash: str) -> dict | None:
         "expires_at": row[3],
         "created_at": row[4],
         "revoked_at": row[5],
+        "remembered": row[6],
     }
 
 
