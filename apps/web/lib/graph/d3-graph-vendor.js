@@ -880,8 +880,19 @@
 //      math factored out so the floor k is derived from the real fit.
 //      Unresolvable pairs mark the smaller plate overflow with a computed
 //      exile onset kExile (record: __scLayout / dev __d3ScLayoutReport).
-//      (c) [Task 5 extends this entry: exile rendering, dot+leader, glide
-//      anchor attrs.] (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
+//      (c) drawWatermarks: every plate records data-anchor-x/y (anchored
+//      translate) + data-plate-cx/cy/hw/hh (footprint geometry); overflow
+//      plates below their kExile are centered on a peripheral point --
+//      radially outward from the cloud centroid to the fit bbox exit +
+//      SC_EXILE_MARGIN_PX, order-preserving angular spacing (spaceOnRing),
+//      clamped inside the viewport by SC_EXILE_VIEWPORT_MARGIN_PX -- with
+//      a g.watermark-leader (dot at the anchor + straight leader clipped
+//      to the plate rect) in a leader sub-layer painted beneath the
+//      plates; dot carries the nameplate's hover/click. The glide's anchor
+//      now comes from data-anchor-x/y so anchored<->exiled transitions
+//      animate through the unchanged delta-#29 machinery; updateLeaderEnd
+//      keeps the leader on the moving plate each frame.
+//      (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
 //      footprint as well as fog halo (payload.scSeparation). The R6
 //      resolver and delta-#29 glide are unchanged and now act only as a
 //      safety net.
@@ -2418,6 +2429,71 @@ var __vendorExpandedGroups;
                  top: Math.min(y1, y2), bottom: Math.max(y1, y2) };
     }
 
+    /** Delta #32 (Task 5): keep an exiled plate (footprint `fp`, screen px,
+     *  centered on world point `p`) inside the viewport minus
+     *  SC_EXILE_VIEWPORT_MARGIN_PX. Uses the same root CTM + container rect
+     *  mapping updateEdgeChips uses; returns `p` unchanged when the DOM
+     *  cannot be measured (jsdom) or the plate already fits. */
+    function clampPlateCenterToViewport(p, fp) {
+        if (!svg || !__mountedContainer) return p;
+        var rootNode = svg.select('.graph-root').node();
+        var ctm = rootNode && rootNode.getScreenCTM ? rootNode.getScreenCTM() : null;
+        if (!ctm || !(ctm.a > 0)) return p;
+        var crect = __mountedContainer.getBoundingClientRect();
+        if (!(crect.width > 0) || !(crect.height > 0)) return p;
+        var sx = ctm.a * p.x + ctm.c * p.y + ctm.e - crect.left;
+        var sy = ctm.b * p.x + ctm.d * p.y + ctm.f - crect.top;
+        var M = SC_EXILE_VIEWPORT_MARGIN_PX;
+        var nx = Math.min(Math.max(sx, M - fp.left), crect.width - M - fp.right);
+        var ny = Math.min(Math.max(sy, M - fp.top), crect.height - M - fp.bottom);
+        if (nx === sx && ny === sy) return p;
+        // Inverse of the translate+scale CTM (rotation-free by construction).
+        return { x: (nx + crect.left - ctm.e) / ctm.a, y: (ny + crect.top - ctm.f) / ctm.d };
+    }
+
+    /** Delta #32 (Task 5): point the plate's leader line at the plate's
+     *  CURRENT footprint edge (the plate moves during the glide; the dot
+     *  never does). No-op for plates without a leader. */
+    function updateLeaderEnd(plateEl) {
+        if (!plateEl || !svg) return;
+        var kw = plateEl.getAttribute('data-sc');
+        if (!kw) return;
+        var leader = svg.select('.graph-root').select('.watermarks').select('.watermark-leaders')
+            .selectAll('g.watermark-leader').filter(function () { return this.getAttribute('data-sc') === kw; });
+        if (leader.empty()) return;
+        var m = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(plateEl.getAttribute('transform') || '');
+        if (!m) return;
+        var tx = parseFloat(m[1]), ty = parseFloat(m[2]);
+        var cx = tx + parseFloat(plateEl.getAttribute('data-plate-cx') || '0');
+        var cy = ty + parseFloat(plateEl.getAttribute('data-plate-cy') || '0');
+        var hw = parseFloat(plateEl.getAttribute('data-plate-hw') || '0');
+        var hh = parseFloat(plateEl.getAttribute('data-plate-hh') || '0');
+        var line = leader.select('line.watermark-leader-line');
+        var x1 = parseFloat(line.attr('x1')), y1 = parseFloat(line.attr('y1'));
+        var end = clipSegmentToRect(x1, y1, cx, cy, { minX: cx - hw, maxX: cx + hw, minY: cy - hh, maxY: cy + hh });
+        line.attr('x2', end.x).attr('y2', end.y);
+    }
+
+    /** Delta #32 (Task 5): shared "is this SC actually painted" test --
+     *  previously duplicated between applyScLayoutSeparation's scKeys
+     *  filter (Task 3) and drawWatermarks' per-keyword loop guard. A
+     *  keyword is painted only when it has a super_clusters entry with an
+     *  icon_id AND that icon has actually mounted (__mountedIcons, was
+     *  window.__superClusterIcons -- header comment delta #5). Returns
+     *  `{ sc, icon }` or null. */
+    function paintedScEntry(keyword) {
+        if (!currentData) return null;
+        var superClusters = currentData.super_clusters || [];
+        var sc = null;
+        for (var i = 0; i < superClusters.length; i++) {
+            if (superClusters[i].keyword === keyword) { sc = superClusters[i]; break; }
+        }
+        if (!sc || !sc.icon_id || !__mountedIcons) return null;
+        var icon = __mountedIcons[sc.icon_id];
+        if (!icon) return null;
+        return { sc: sc, icon: icon };
+    }
+
     // Shared "is this element actually painted" test for the LOD gates
     // added in R6 -- icon fade (drawWatermarks) and the group-caption gate
     // (positionGroupCaptions) both drive an element's opacity to 0 well
@@ -3685,21 +3761,54 @@ var __vendorExpandedGroups;
         var centroids = computeClusterCentroids(clusters, currentData.nodes || []);
         lastClusterCentroids = centroids;
 
+        // ── Delta #32: anchors first, then exile placement for overflow plates ──
+        var fpParams = scFootprintParams();
+        var zoomRatio = (fitZoom > 0) ? (currentZoomK / fitZoom) : 1;
+        var anchorByKw = {};
+        for (var kw0 in groups) {
+            var ax0 = 0, ay0 = 0, an0 = 0;
+            groups[kw0].forEach(function (mc) { var cen = centroids[mc.id]; if (cen) { ax0 += cen.x; ay0 += cen.y; an0++; } });
+            if (an0) anchorByKw[kw0] = { x: ax0 / an0, y: ay0 / an0 };
+        }
+        var exileCenter = {};   // keyword -> world point the exiled plate's footprint is centered on
+        if (__scLayout && __scLayout.plates) {
+            var C = __scLayout.cloudCentroid, B = __scLayout.cloudBBox;
+            var ringItems = [], fpByKw = {};
+            for (var kw1 in groups) {
+                var info1 = __scLayout.plates[kw1];
+                var a1 = anchorByKw[kw1];
+                if (!info1 || !info1.overflow || !a1 || !(currentZoomK < info1.kExile)) continue;
+                var dx1 = a1.x - C.x, dy1 = a1.y - C.y, len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
+                var f1 = plateFootprintAtRatio(kw1, zoomRatio, fpParams);
+                fpByKw[kw1] = f1;
+                var halfDiagPx = Math.sqrt(Math.pow((f1.right - f1.left) / 2, 2) + Math.pow((f1.bottom - f1.top) / 2, 2));
+                var exit1 = rayExitFromRect(C.x, C.y, dx1 / len1, dy1 / len1, B);
+                var R1 = Math.sqrt(Math.pow(exit1.x - C.x, 2) + Math.pow(exit1.y - C.y, 2)) + (SC_EXILE_MARGIN_PX + halfDiagPx) / (currentZoomK || 1);
+                ringItems.push({ key: kw1, angle: Math.atan2(dy1, dx1), halfAngle: Math.atan2(halfDiagPx / (currentZoomK || 1), R1) });
+            }
+            if (ringItems.length) {
+                var spaced = spaceOnRing(ringItems);
+                ringItems.forEach(function (it) {
+                    var th = spaced[it.key], ux = Math.cos(th), uy = Math.sin(th);
+                    var f = fpByKw[it.key];
+                    var hd = Math.sqrt(Math.pow((f.right - f.left) / 2, 2) + Math.pow((f.bottom - f.top) / 2, 2));
+                    var ex = rayExitFromRect(C.x, C.y, ux, uy, B);
+                    var R = Math.sqrt(Math.pow(ex.x - C.x, 2) + Math.pow(ex.y - C.y, 2)) + (SC_EXILE_MARGIN_PX + hd) / (currentZoomK || 1);
+                    exileCenter[it.key] = clampPlateCenterToViewport({ x: C.x + ux * R, y: C.y + uy * R }, f);
+                });
+            }
+        }
+        var leaderLayer = layer.append('g').attr('class', 'watermark-leaders');  // painted beneath the plates
+
         for (var keyword in groups) {
             var memberClusters = groups[keyword];
-            var sc = superClusters.find(function (s) { return s.keyword === keyword; });
-            if (!sc || !sc.icon_id) continue;
-            var icon = __mountedIcons[sc.icon_id];  // was window.__superClusterIcons (header comment delta #5)
-            if (!icon) continue;
+            var painted = paintedScEntry(keyword);
+            if (!painted) continue;
+            var sc = painted.sc, icon = painted.icon;
 
-            // Compute super-cluster centroid (average of member cluster centroids)
-            var wcx = 0, wcy = 0, wcn = 0;
-            memberClusters.forEach(function (mc) {
-                var cen = centroids[mc.id];
-                if (cen) { wcx += cen.x; wcy += cen.y; wcn++; }
-            });
-            if (wcn === 0) continue;
-            wcx /= wcn; wcy /= wcn;
+            var anchorPt = anchorByKw[keyword];
+            if (!anchorPt) continue;
+            var wcx = anchorPt.x, wcy = anchorPt.y;
 
             var color = nebulaColor(clusterColorMap[memberClusters[0].id] || fallbackColor());
 
@@ -3723,6 +3832,22 @@ var __vendorExpandedGroups;
             // zoom-OUT).
             var nameRatio = (fitZoom > 0) ? (currentZoomK / fitZoom) : 1;
 
+            // Delta #32: anchored placement is what R6 always drew; an
+            // overflow plate below its kExile is instead centered on its
+            // peripheral exile point. Both are recorded on the element so
+            // the glide (application pass + wmGlideStep) can compose
+            // anchor + offset and animate anchored<->exiled transitions.
+            var fpNow = plateFootprintAtRatio(keyword, nameRatio, fpParams);
+            var kInv = 1 / (currentZoomK || 1);
+            var plateCxW = ICON_SIZE / 2 + ((fpNow.left + fpNow.right) / 2) * kInv;   // world offset from translate origin to footprint center
+            var plateCyW = ICON_SIZE / 2 + ((fpNow.top + fpNow.bottom) / 2) * kInv;
+            var plateHwW = ((fpNow.right - fpNow.left) / 2) * kInv;
+            var plateHhW = ((fpNow.bottom - fpNow.top) / 2) * kInv;
+            var anchoredTx = wcx - ICON_SIZE / 2, anchoredTy = wcy - ICON_SIZE / 2;
+            var ex = exileCenter[keyword];
+            var tx0 = ex ? ex.x - plateCxW : anchoredTx;
+            var ty0 = ex ? ex.y - plateCyW : anchoredTy;
+
             // Rethink R6.1: past ICON_LOD_FADE_START you're inside the
             // galaxy -- the big icon fades out and the nameplate hands off
             // to an edge chip (updateEdgeChips) for wayfinding.
@@ -3744,7 +3869,17 @@ var __vendorExpandedGroups;
                 // bigger SCs (more member pages) hold their anchored spot,
                 // smaller ones nudge out of the way.
                 .attr('data-pages', totalPages)
-                .attr('transform', 'translate(' + (wcx - ICON_SIZE / 2) + ',' + (wcy - ICON_SIZE / 2) + ')')
+                .attr('transform', 'translate(' + tx0 + ',' + ty0 + ')')
+                // Delta #32: anchored translate + footprint geometry, read
+                // back by the glide (anchor source) and by updateLeaderEnd
+                // (leader clipping) -- see this function's own header note.
+                .attr('data-anchor-x', anchoredTx)
+                .attr('data-anchor-y', anchoredTy)
+                .attr('data-plate-cx', plateCxW)
+                .attr('data-plate-cy', plateCyW)
+                .attr('data-plate-hw', plateHwW)
+                .attr('data-plate-hh', plateHhW)
+                .attr('data-exiled', ex ? '1' : null)
                 // Rethink R2.5: SC hover card. 'bounding-box' (not the
                 // default) so the whole icon+label footprint is a hit
                 // target, not just the painted stroke pixels. R6.1: once the
@@ -3848,6 +3983,47 @@ var __vendorExpandedGroups;
                         .text(line);
                 });
             }
+
+            // Delta #32: exiled plates keep a dot at the SC's true anchor
+            // and a straight leader back to the plate -- the leader lives
+            // in leaderLayer (appended before any plate, so it paints
+            // beneath every plate) rather than inside `g` itself, since the
+            // dot must stay fixed at the anchor while `g` glides to its
+            // exile position.
+            if (ex) {
+                var lg = leaderLayer.append('g')
+                    .attr('class', 'watermark-leader')
+                    .attr('data-sc', keyword);
+                lg.append('line')
+                    .attr('class', 'watermark-leader-line')
+                    .attr('stroke', color)
+                    .attr('stroke-width', 1.25 * kInv)
+                    .attr('x1', wcx).attr('y1', wcy)
+                    .attr('x2', wcx).attr('y2', wcy);   // real end set by updateLeaderEnd below
+                lg.append('circle')
+                    .attr('class', 'watermark-anchor-dot')
+                    .attr('cx', wcx).attr('cy', wcy)
+                    .attr('r', 4 * kInv)
+                    .attr('stroke-width', 1.25 * kInv)
+                    .attr('fill', color)
+                    .attr('cursor', 'pointer')
+                    .style('pointer-events', 'all')
+                    .on('mouseenter', (function (kw, members) {
+                        return function (event) {
+                            var pages = 0;
+                            members.forEach(function (mc) { pages += (mc.page_ids || []).length; });
+                            showLinesTooltip(event, [kw, members.length + ' topics · ' + pages + ' pages']);
+                        };
+                    })(keyword, memberClusters))
+                    .on('mouseleave', hideTooltip)
+                    .on('click', (function (kw) {
+                        return function (event) {
+                            event.stopPropagation();
+                            frameWorldBBox(scWorldBBox(kw), { maxRatio: 1.2, minRatio: 0.6 });
+                        };
+                    })(keyword));
+                updateLeaderEnd(g.node());
+            }
         }
 
         // Empty superclusters (allocated keywords with no member clusters)
@@ -3926,9 +4102,15 @@ var __vendorExpandedGroups;
             // against THIS anchor to get the target displacement to glide
             // toward, never the previously-applied (possibly still
             // mid-glide) transform.
+            //
+            // Delta #32: the glide's anchor is the ANCHORED translate
+            // recorded at build time, not the current transform -- for an
+            // exiled plate the current transform already includes the
+            // exile displacement, which must glide like any other offset.
             var anchorM = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(e.el.getAttribute('transform') || '');
-            e.ax = anchorM ? parseFloat(anchorM[1]) : 0;
-            e.ay = anchorM ? parseFloat(anchorM[2]) : 0;
+            var dax = e.el.getAttribute('data-anchor-x'), day = e.el.getAttribute('data-anchor-y');
+            e.ax = dax != null ? parseFloat(dax) : (anchorM ? parseFloat(anchorM[1]) : 0);
+            e.ay = day != null ? parseFloat(day) : (anchorM ? parseFloat(anchorM[2]) : 0);
             var guard = 0, moved = true;
             // Cycle detection (see comment block above): which placed
             // indices this entry has already been pushed off, and whether
@@ -4060,6 +4242,7 @@ var __vendorExpandedGroups;
             __wmGlide.offsets[keyword] = step.offset;
             if (!step.converged) __wmUnconverged = true;
             e.el.setAttribute('transform', 'translate(' + (e.ax + step.offset.x) + ',' + (e.ay + step.offset.y) + ')');
+            updateLeaderEnd(e.el);
         });
 
         // Prune keywords absent from THIS draw (SC removed, or the
@@ -4127,6 +4310,7 @@ var __vendorExpandedGroups;
             var el = elByKeyword[keyword];
             if (el) {
                 el.setAttribute('transform', 'translate(' + (anchor.x + step.offset.x) + ',' + (anchor.y + step.offset.y) + ')');
+                updateLeaderEnd(el);
             }
         }
 
@@ -4673,7 +4857,6 @@ var __vendorExpandedGroups;
         __scLayout = null;
         var nodes = ctx.nodes, clusters = ctx.clusters;
         if (!nodes.length || !__mountedIcons || !currentData) return;
-        var superClusters = currentData.super_clusters || [];
         var canvasW = ctx.width, canvasH = effectiveCanvasHeight(ctx.height);
         if (!(canvasW > 0) || !(canvasH > 0)) return;
         var fp = scFootprintParams();
@@ -4686,9 +4869,7 @@ var __vendorExpandedGroups;
         });
         // Only SCs drawWatermarks will actually paint take part.
         var scKeys = Object.keys(groups).filter(function (kw) {
-            var sc = null;
-            for (var i = 0; i < superClusters.length; i++) if (superClusters[i].keyword === kw) { sc = superClusters[i]; break; }
-            return !!(sc && sc.icon_id && __mountedIcons[sc.icon_id]);
+            return !!paintedScEntry(kw);
         }).sort();
         if (scKeys.length < 2) return;
 

@@ -48,9 +48,18 @@ function flushSettleChunks(): void {
 }
 
 function installTinyGeometryStubs(): void {
-  (SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }).getScreenCTM = function (
+  (SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix | null }).getScreenCTM = function (
     this: Element,
-  ): DOMMatrix {
+  ): DOMMatrix | null {
+    // Scoped to g.watermark (identified by data-sc) -- the only elements
+    // screenBBoxOf (R6 resolver) ever calls this on in this test file. Real
+    // jsdom has no getScreenCTM at all (verified: undefined, not merely
+    // throwing); every other element -- in particular .graph-root, whose
+    // transform carries the d3-zoom SCALE this identity-matrix stub cannot
+    // represent -- stays unstubbed, so Task 5's clampPlateCenterToViewport
+    // hits its own documented "DOM cannot be measured" fallback (returns
+    // the point unclamped) exactly as it would against real jsdom.
+    if (!this.getAttribute("data-sc")) return null;
     const m = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(this.getAttribute("transform") || "");
     const tx = m ? parseFloat(m[1]) : 0;
     const ty = m ? parseFloat(m[2]) : 0;
@@ -124,7 +133,15 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     vi.stubGlobal("Worker", SyncFakeSimWorker);
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     installTinyGeometryStubs();
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    // Task 5 addition: "requestAnimationFrame" joins the fake set. jsdom (this
+    // project's vitest environment) DOES define a real requestAnimationFrame
+    // (unlike getScreenCTM/getBBox, which are simply absent) -- but it is
+    // wired to genuine wall-clock time, independent of vi's fake setTimeout,
+    // so __wmRafSchedule's rAF branch (delta #29, drawWatermarks) never fires
+    // deterministically under `advanceTimersByTimeAsync` without this. The
+    // existing Task 3 tests never exercise that continuation (no zoom, no
+    // exile) so adding it here is a no-op for them.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "requestAnimationFrame"] });
   });
   afterEach(() => {
     flushSettleChunks();
@@ -206,5 +223,69 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     render(container, crowdedPayload("one", 1, 3), { icons: iconsFor("one") });
     flushSettleChunks();
     expect((window as W).__d3ScLayoutReport!()).toBeNull();
+  });
+
+  it("exiles an overflow plate below kExile: data-exiled, dot + leader present, leader ends on the plate rect", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 420, 320);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("exl", 3, 2), { icons: iconsFor("exl") });
+    flushSettleChunks();
+    const report = (window as W).__d3ScLayoutReport!()!;
+    const victim = report.find((r) => r.overflow)!;
+    expect(victim).toBeTruthy();
+    // Zoom to the floor so currentZoomK < kExile for every overflow plate.
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    // The exile displacement rides the delta-#29 glide: let it converge
+    // before reading transforms (fake timers drive the rAF fallback).
+    await vi.advanceTimersByTimeAsync(2000);
+    const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === victim.keyword)!;
+    expect(g.getAttribute("data-exiled")).toBe("1");
+    const leader = container.querySelector(`g.watermark-leader[data-sc="${victim.keyword}"]`)!;
+    expect(leader).toBeTruthy();
+    const dot = leader.querySelector("circle.watermark-anchor-dot")!;
+    const line = leader.querySelector("line.watermark-leader-line")!;
+    expect(dot).toBeTruthy(); expect(line).toBeTruthy();
+    // Dot sits at the anchor; leader starts there.
+    const ax = parseFloat(g.getAttribute("data-anchor-x")!), ay = parseFloat(g.getAttribute("data-anchor-y")!);
+    const hw = parseFloat(g.getAttribute("data-plate-hw")!);
+    expect(parseFloat(line.getAttribute("x1")!)).toBeCloseTo(parseFloat(dot.getAttribute("cx")!), 6);
+    // The plate's transform differs from its anchor (it was moved to the periphery).
+    const t = parseTranslate(g.getAttribute("transform"));
+    expect(Math.hypot(t.x - ax, t.y - ay)).toBeGreaterThan(hw);
+    // A non-overflow plate stays at its anchor (zero displacement) after the glide settles.
+    await vi.advanceTimersByTimeAsync(2000);
+    const keeper = report.find((r) => !r.overflow)!;
+    const gk = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === keeper.keyword)!;
+    const tk = parseTranslate(gk.getAttribute("transform"));
+    expect(tk.x).toBeCloseTo(parseFloat(gk.getAttribute("data-anchor-x")!), 3);
+    expect(tk.y).toBeCloseTo(parseFloat(gk.getAttribute("data-anchor-y")!), 3);
+  });
+
+  it("returns an exiled plate to its anchor above kExile and removes its leader", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 420, 320);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("ret", 3, 2), { icons: iconsFor("ret") });
+    flushSettleChunks();
+    const victim = (window as W).__d3ScLayoutReport!()!.find((r) => r.overflow && isFinite(r.kExile));
+    if (!victim) return; // Infinity kExile means always exiled; nothing to assert for this fixture
+    // __d3ZoomTo applies the transform directly with no scaleExtent clamp --
+    // clamp to the extent's max here so the transform stays in range (Task 3
+    // review carry-over).
+    const [, kMax] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(Math.min(victim.kExile * 1.05, kMax))).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === victim.keyword)!;
+    expect(g.getAttribute("data-exiled")).toBeNull();
+    expect(container.querySelector(`g.watermark-leader[data-sc="${victim.keyword}"]`)).toBeNull();
+    const t = parseTranslate(g.getAttribute("transform"));
+    expect(t.x).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-x")!), 3);
+    expect(t.y).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-y")!), 3);
   });
 });

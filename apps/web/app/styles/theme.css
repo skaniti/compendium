@@ -261,6 +261,19 @@ html, body {
     stroke: var(--ink);
 }
 
+/* Delta #32: overflow nameplates exiled to the cloud periphery keep a dot at
+   their supercluster's anchor and a straight leader back to the plate. Color
+   comes from d3 (the SC's nebula color) as attributes; only the theme-aware
+   halo lives here. */
+.watermark-leader-line {
+    stroke-opacity: 0.75;
+    stroke-linecap: round;
+    pointer-events: none;
+}
+.watermark-anchor-dot {
+    stroke: var(--bg);
+}
+
 /* Collapsed-group caption (batch C C1, hybrid mode): the single caption
    over a casual/binge dense mass. UI sans at full strength — the decorative
    Almagest face is reserved for supercluster names; captions carry
