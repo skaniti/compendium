@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
+import { ingressHeaders } from "@/lib/ingress";
 
 export const runtime = "nodejs";
 
@@ -34,13 +35,17 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // (AUTH_REQUIRED=1, backend not in dev mode) the SAME missing-header
 // request still 401s, now from the backend's own real check instead of
 // this route's redundant one, an identical outcome.
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
 
   let res: Response;
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    // D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): relay the
+    // caller's ingress verdict so the backend's session_policy response
+    // (D1's view-as-demo row) is computed the same way as every other auth
+    // route -- this route already forwards the caller's own Authorization.
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...ingressHeaders(req) };
     if (accessToken) headers.authorization = `Bearer ${accessToken}`;
     res = await fetch(`${BACKEND}/api/auth/view-as`, {
       method: "POST",

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { applySessionCookies, clearSessionCookies, parseSessionPolicy, REFRESH_TOKEN_COOKIE } from "@/lib/session-cookies";
+import { ingressHeaders } from "@/lib/ingress";
 
 export const runtime = "nodejs";
 
@@ -26,12 +27,15 @@ type RefreshResult =
 // result.
 const inFlightRefreshes = new Map<string, Promise<RefreshResult>>();
 
-async function performBackendRefresh(refreshToken: string): Promise<RefreshResult> {
+async function performBackendRefresh(
+  refreshToken: string,
+  ingressHdrs: Record<string, string>
+): Promise<RefreshResult> {
   let res: Response;
   try {
     res = await fetch(`${BACKEND}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...ingressHdrs },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
   } catch (err) {
@@ -83,7 +87,7 @@ async function performBackendRefresh(refreshToken: string): Promise<RefreshResul
 // user. Holds within one Node process (the current docker/local deploy
 // shape); a multi-instance deploy would make this best-effort only (see
 // spec D3).
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
   if (!refreshToken) {
@@ -98,7 +102,14 @@ export async function POST(): Promise<Response> {
 
   let resultPromise = inFlightRefreshes.get(refreshToken);
   if (!resultPromise) {
-    resultPromise = performBackendRefresh(refreshToken).finally(() => {
+    // D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): the ingress
+    // verdict forwarded to the backend is the FIRST caller's -- this map is
+    // keyed by token value alone, so a second concurrent POST() presenting
+    // the SAME refresh_token joins this in-flight call instead of starting
+    // its own with its own ingress headers. Both callers are the same
+    // browser/session (same refresh token), so in practice their ingress
+    // verdicts match; documented here rather than silently assumed.
+    resultPromise = performBackendRefresh(refreshToken, ingressHeaders(req)).finally(() => {
       inFlightRefreshes.delete(refreshToken);
     });
     inFlightRefreshes.set(refreshToken, resultPromise);

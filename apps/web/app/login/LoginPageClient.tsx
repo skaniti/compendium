@@ -47,7 +47,6 @@ const labelStyle: CSSProperties = {
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
 
   // D4 (session-expiry-tuning): a remembered (or otherwise still-resumable)
@@ -80,7 +79,7 @@ function LoginForm() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, remember }),
+      body: JSON.stringify({ email, password }),
     });
     if (res.ok) {
       // Full reload (not router navigation) is deliberate: login must
@@ -178,26 +177,6 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
           />
-          <label
-            style={{
-              ...labelStyle,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginTop: 10,
-              marginBottom: 2,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              name="remember"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            Keep me signed in on this device
-          </label>
-          <p style={{ ...labelStyle, margin: "0 0 14px 0" }}>Not available for the demo account.</p>
           <div
             role={error ? "alert" : undefined}
             style={{

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
+import { INGRESS_HEADER } from "@/lib/ingress";
 
 // D2 correction #1 (batch 04 auth/session parity): the Slice-1 login route
 // discarded the backend's refresh_token entirely. This pins the fix
@@ -48,9 +49,10 @@ function makeAccessToken(expSeconds: number): string {
   return `${header}.${payload}.sig`;
 }
 
-function makeLoginRequest(body: { email: string; password: string }): Request {
+function makeLoginRequest(body: { email: string; password: string }, headers?: Record<string, string>): Request {
   return new Request("http://localhost/api/auth/login", {
     method: "POST",
+    headers,
     body: JSON.stringify(body),
   });
 }
@@ -99,9 +101,11 @@ describe("POST /api/auth/login", () => {
     expect(jar.get("access_token")).toBeUndefined();
   });
 
-  // D4 (session-expiry-tuning): the login form's "Keep me signed in on this
-  // device" checkbox.
-  it("forwards remember: false to the backend when the request body omits it", async () => {
+  // D1/D4 (session-expiry-tuning, 2026-09-10 amendment): the login form's
+  // "Keep me signed in on this device" checkbox and `remember` body field
+  // are gone -- the backend derives `remembered` itself from the ingress
+  // header, never from a client-supplied flag.
+  it("forwards exactly {email, password} to the backend, with no remember field", async () => {
     const jar = makeFakeCookieJar();
     vi.mocked(cookies).mockResolvedValue(jar as never);
     const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
@@ -119,12 +123,14 @@ describe("POST /api/auth/login", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/login"),
       expect.objectContaining({
-        body: JSON.stringify({ email: "alice", password: "hunter2", remember: false }),
+        body: JSON.stringify({ email: "alice", password: "hunter2" }),
       })
     );
   });
 
-  it("forwards remember: true to the backend when the checkbox was checked", async () => {
+  // D6 (session-expiry-tuning, 2026-09-10 amendment): the route relays
+  // whatever ingress verdict Caddy stamped on the inbound request.
+  it("forwards the X-Compendium-Ingress header to the backend when the inbound request carries it", async () => {
     const jar = makeFakeCookieJar();
     vi.mocked(cookies).mockResolvedValue(jar as never);
     const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
@@ -137,19 +143,34 @@ describe("POST /api/auth/login", () => {
       }),
     });
 
-    await POST(
-      new Request("http://localhost/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
-      })
-    );
+    await POST(makeLoginRequest({ email: "alice", password: "hunter2" }, { [INGRESS_HEADER]: "tailnet" }));
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/login"),
       expect.objectContaining({
-        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
+        headers: expect.objectContaining({ [INGRESS_HEADER]: "tailnet" }),
       })
     );
+  });
+
+  it("omits the X-Compendium-Ingress header from the backend call when the inbound request has none", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        refresh_token: "refresh-xyz",
+        user: { id: 1, email: "alice@example.com", name: "Alice" },
+      }),
+    });
+
+    await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+
+    const call = fetchMock.mock.calls[0];
+    const headers = (call[1] as { headers: Record<string, string> }).headers;
+    expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
   });
 
   it("sets the session_policy cookie from the backend's session_policy on success", async () => {

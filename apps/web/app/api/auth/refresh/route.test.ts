@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
+import { INGRESS_HEADER } from "@/lib/ingress";
 
 // D2 (batch 04 auth/session parity): the refresh route SessionKeeper polls.
 // No route-handler test idiom exists yet in this repo (task-4-brief
@@ -42,6 +43,14 @@ function mockFetchResponse(response: { ok: boolean; status?: number; json: () =>
   return fn;
 }
 
+// D6 (session-expiry-tuning, 2026-09-10 amendment): the refresh route's
+// POST() now reads the inbound request's ingress header (see the two tests
+// at the bottom of this file); every other test just needs SOME request,
+// with no ingress header, since they aren't exercising that behavior.
+function makeRefreshRequest(headers?: Record<string, string>): Request {
+  return new Request("http://localhost/api/auth/refresh", { method: "POST", headers });
+}
+
 describe("POST /api/auth/refresh", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -52,7 +61,7 @@ describe("POST /api/auth/refresh", () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -74,7 +83,7 @@ describe("POST /api/auth/refresh", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -98,7 +107,7 @@ describe("POST /api/auth/refresh", () => {
       }),
     });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/refresh"),
@@ -123,7 +132,7 @@ describe("POST /api/auth/refresh", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     mockFetchResponse({ ok: false, status: 401, json: async () => ({ error: "invalid" }) });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(res.status).toBe(401);
     expect(jar.get("access_token")).toBeUndefined();
@@ -140,7 +149,7 @@ describe("POST /api/auth/refresh", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     mockFetchResponse({ ok: false, status: 403, json: async () => ({ error: "revoked" }) });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(res.status).toBe(401);
     expect(jar.get("access_token")).toBeUndefined();
@@ -157,7 +166,7 @@ describe("POST /api/auth/refresh", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     mockFetchResponse({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     // Must NOT be 401: apiFetch's client-side interceptor (lib/api.ts)
     // treats any 401 as "session is dead, bounce to /login" -- a transient
@@ -181,7 +190,7 @@ describe("POST /api/auth/refresh", () => {
       vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED"))
     );
 
-    const res = await POST();
+    const res = await POST(makeRefreshRequest());
 
     expect(res.status).not.toBe(401);
     expect(res.status).toBe(502);
@@ -211,7 +220,7 @@ describe("POST /api/auth/refresh", () => {
       }),
     });
 
-    await POST();
+    await POST(makeRefreshRequest());
 
     expect(jar.get("session_policy")?.value).toBe(
       JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
@@ -234,7 +243,7 @@ describe("POST /api/auth/refresh", () => {
       }),
     });
 
-    await POST();
+    await POST(makeRefreshRequest());
 
     expect(jar.get("session_policy")?.value).toBe("pre-existing");
   });
@@ -272,7 +281,7 @@ describe("POST /api/auth/refresh", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const [resA, resB] = await Promise.all([POST(), POST()]);
+    const [resA, resB] = await Promise.all([POST(makeRefreshRequest()), POST(makeRefreshRequest())]);
 
     expect(backendCalls).toBe(1);
     expect(resA.status).toBe(200);
@@ -308,8 +317,43 @@ describe("POST /api/auth/refresh", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await Promise.all([POST(), POST()]);
+    await Promise.all([POST(makeRefreshRequest()), POST(makeRefreshRequest())]);
 
     expect(backendCalls).toBe(2);
+  });
+
+  // D6 (session-expiry-tuning, 2026-09-10 amendment): the route relays
+  // whatever ingress verdict Caddy stamped on the inbound request.
+  it("forwards the X-Compendium-Ingress header to the backend when the inbound request carries it", async () => {
+    const jar = makeFakeCookieJar({ refresh_token: "old-refresh" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ access_token: "a.b.c", refresh_token: "new-refresh", token_type: "bearer" }),
+    });
+
+    await POST(makeRefreshRequest({ [INGRESS_HEADER]: "tailnet" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/refresh"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ [INGRESS_HEADER]: "tailnet" }),
+      })
+    );
+  });
+
+  it("omits the X-Compendium-Ingress header from the backend call when the inbound request has none", async () => {
+    const jar = makeFakeCookieJar({ refresh_token: "old-refresh" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const fetchMock = mockFetchResponse({
+      ok: true,
+      json: async () => ({ access_token: "a.b.c", refresh_token: "new-refresh", token_type: "bearer" }),
+    });
+
+    await POST(makeRefreshRequest());
+
+    const call = fetchMock.mock.calls[0];
+    const headers = (call[1] as { headers: Record<string, string> }).headers;
+    expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
   });
 });

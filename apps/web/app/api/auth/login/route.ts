@@ -1,23 +1,23 @@
 import { cookies } from "next/headers";
 import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
+import { ingressHeaders } from "@/lib/ingress";
 
 export const runtime = "nodejs";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
-// D4 (session-expiry-tuning): forwards the login form's "Keep me signed in
-// on this device" checkbox to the backend as `remember`. Defaults to false
-// (== body.remember === true, not a bare truthy check) so an absent/
-// malformed field from an older client never accidentally opts a request
-// in. The backend is the sole enforcement point for what `remember`
-// actually grants -- it ignores the flag outright for the demo account
-// (spec D1) -- this route never special-cases that here.
+// D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): the "Keep me
+// signed in on this device" checkbox and its `remember` body field are
+// gone -- LoginRequest on the backend no longer accepts `remember` at all.
+// `remembered` is now derived server-side from the tailnet ingress header
+// (spec D1), which Caddy sets at the edge (spec D6) and this route simply
+// relays via ingressHeaders -- it never sets or invents the header itself.
 export async function POST(req: Request): Promise<Response> {
-  const body = (await req.json()) as { email: string; password: string; remember?: boolean };
+  const body = (await req.json()) as { email: string; password: string };
   const res = await fetch(`${BACKEND}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: body.email, password: body.password, remember: body.remember === true }),
+    headers: { "Content-Type": "application/json", ...ingressHeaders(req) },
+    body: JSON.stringify({ email: body.email, password: body.password }),
   });
   if (!res.ok) {
     // Copy aligned with Dash's _do_login (trailing period) -- empty-field

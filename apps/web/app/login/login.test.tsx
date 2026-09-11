@@ -71,7 +71,12 @@ describe("LoginPage", () => {
     expect(screen.getByRole("heading", { name: "compendium" })).toBeInTheDocument();
   });
 
-  it("submits {email, password, remember: false} JSON to /api/auth/login on submit (checkbox left unchecked)", async () => {
+  // D4 (session-expiry-tuning, 2026-09-10 amendment): the "keep me signed
+  // in" checkbox and its `remember` body field are gone -- the backend now
+  // derives `remembered` itself from the tailnet ingress header (spec
+  // D1/D4), which apps/web only relays (lib/ingress.ts), never sets from a
+  // client-supplied value. The POST body is exactly {email, password}.
+  it("submits {email, password} JSON to /api/auth/login on submit, with no remember field", async () => {
     const fetchMock = mockFetch({ ok: true, json: async () => ({ user: { id: 1 } }) });
     render(<LoginPage />);
 
@@ -85,39 +90,16 @@ describe("LoginPage", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ email: "alice", password: "hunter2", remember: false }),
+        body: JSON.stringify({ email: "alice", password: "hunter2" }),
       })
     );
   });
 
-  // D4 (session-expiry-tuning): "Keep me signed in on this device".
-  it("renders the remember-me checkbox unchecked by default, with the demo-account note", () => {
+  it("renders no keep-me-signed-in checkbox", () => {
     mockFetch({ ok: true, json: async () => ({}) });
     render(<LoginPage />);
 
-    const checkbox = screen.getByRole("checkbox", { name: /keep me signed in on this device/i }) as HTMLInputElement;
-    expect(checkbox).toBeInTheDocument();
-    expect(checkbox.checked).toBe(false);
-    expect(checkbox.name).toBe("remember");
-    expect(screen.getByText(/not available for the demo account/i)).toBeInTheDocument();
-  });
-
-  it("submits remember: true when the checkbox is checked", async () => {
-    const fetchMock = mockFetch({ ok: true, json: async () => ({ user: { id: 1 } }) });
-    render(<LoginPage />);
-
-    await userEvent.type(screen.getByLabelText(/email or username/i), "alice");
-    await userEvent.type(screen.getByLabelText(/password/i), "hunter2");
-    await userEvent.click(screen.getByRole("checkbox", { name: /keep me signed in on this device/i }));
-    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/auth/login",
-      expect.objectContaining({
-        body: JSON.stringify({ email: "alice", password: "hunter2", remember: true }),
-      })
-    );
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("redirects to / on a successful login", async () => {

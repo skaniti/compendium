@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
+import { INGRESS_HEADER } from "@/lib/ingress";
 
 // D5 (batch 04 auth/session parity): the return-to-admin route. Same
 // route-handler test idiom as app/api/auth/refresh/route.test.ts.
@@ -39,6 +40,13 @@ function mockFetchResponse(response: { ok: boolean; status?: number; json: () =>
   return fn;
 }
 
+// D6 (session-expiry-tuning, 2026-09-10 amendment): the route now reads the
+// inbound request's ingress header (see the two tests at the bottom of this
+// file); every other test just needs SOME request, with no ingress header.
+function makeReturnRequest(headers?: Record<string, string>): Request {
+  return new Request("http://localhost/api/auth/return", { method: "POST", headers });
+}
+
 describe("POST /api/auth/return", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -54,7 +62,7 @@ describe("POST /api/auth/return", () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
-    await POST();
+    await POST(makeReturnRequest());
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/return-to-admin"),
@@ -81,7 +89,7 @@ describe("POST /api/auth/return", () => {
       }),
     });
 
-    await POST();
+    await POST(makeReturnRequest());
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/return-to-admin"),
@@ -111,7 +119,7 @@ describe("POST /api/auth/return", () => {
       }),
     });
 
-    const res = await POST();
+    const res = await POST(makeReturnRequest());
 
     expect(res.status).toBe(200);
     expect(jar.get("access_token")?.value).toBe(adminAccessToken);
@@ -127,7 +135,7 @@ describe("POST /api/auth/return", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     mockFetchResponse({ ok: false, status: 403, json: async () => ({ detail: "Not currently viewing as demo" }) });
 
-    const res = await POST();
+    const res = await POST(makeReturnRequest());
 
     expect(res.status).toBe(403);
     expect(jar.get("access_token")?.value).toBe("demo-acting-access");
@@ -142,7 +150,7 @@ describe("POST /api/auth/return", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED")));
 
-    const res = await POST();
+    const res = await POST(makeReturnRequest());
 
     expect(res.status).toBe(502);
     expect(jar.get("access_token")?.value).toBe("demo-acting-access");
@@ -171,10 +179,38 @@ describe("POST /api/auth/return", () => {
       }),
     });
 
-    await POST();
+    await POST(makeReturnRequest());
 
     expect(jar.get("session_policy")?.value).toBe(
       JSON.stringify({ idleMinutes: 60, resume: true, remembered: false })
     );
+  });
+
+  // D6 (session-expiry-tuning, 2026-09-10 amendment): the route relays
+  // whatever ingress verdict Caddy stamped on the inbound request, same as
+  // the caller's own (acting) Authorization it already forwards.
+  it("forwards the X-Compendium-Ingress header to the backend when the inbound request carries it", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
+
+    await POST(makeReturnRequest({ [INGRESS_HEADER]: "tailnet" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/return-to-admin"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ [INGRESS_HEADER]: "tailnet" }),
+      })
+    );
+  });
+
+  it("omits the X-Compendium-Ingress header from the backend call when the inbound request has none", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
+
+    await POST(makeReturnRequest());
+
+    const call = fetchMock.mock.calls[0];
+    const headers = (call[1] as { headers: Record<string, string> }).headers;
+    expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
   });
 });

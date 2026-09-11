@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
+import { ingressHeaders } from "@/lib/ingress";
 
 export const runtime = "nodejs";
 
@@ -17,13 +18,16 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // longer self-rejects with 401 when the access_token cookie is absent,
 // only conditionally adds the Authorization header, mirroring
 // app/api/[...path]/route.ts's own "inject if present" idiom.
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
 
   let res: Response;
   try {
-    const headers: Record<string, string> = {};
+    // D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): relay the
+    // caller's ingress verdict, same as the sibling view-as route -- this
+    // route already forwards the caller's own (acting) Authorization.
+    const headers: Record<string, string> = { ...ingressHeaders(req) };
     if (accessToken) headers.authorization = `Bearer ${accessToken}`;
     res = await fetch(`${BACKEND}/api/auth/return-to-admin`, {
       method: "POST",
@@ -65,7 +69,9 @@ export async function POST(): Promise<Response> {
   // resolvable from this endpoint) -- it returns the DEFAULT admin policy
   // (remembered: false, resume: true) rather than guessing. A remembered
   // admin re-enters the default policy until the next refresh rotation
-  // restores the remembered one from the token itself; applySessionCookies
+  // recomputes it from the ingress verdict (2026-09-10 amendment: rotation
+  // derives `remembered` from the current request's ingress header, not from
+  // the stored flag); applySessionCookies
   // here just writes whatever policy the backend decided to send, same as
   // every other route.
   applySessionCookies(cookieStore, {
