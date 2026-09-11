@@ -47,22 +47,42 @@ function flushSettleChunks(): void {
   }
 }
 
+// Review fix (Task 5 follow-up): off by default -- gates whether
+// installTinyGeometryStubs' getScreenCTM stub also answers for
+// `.graph-root` (a REAL, scale-aware CTM parsed from its own "translate(x,y)
+// scale(k)" transform) instead of falling through to jsdom's real (absent)
+// behavior. Every test except the clamp test below relies on
+// clampPlateCenterToViewport hitting its documented "DOM cannot be
+// measured" fallback, matching real unstubbed jsdom; only that one test
+// flips this on, and afterEach always clears it so it can't leak.
+let __ctmGraphRootEnabled = false;
+
 function installTinyGeometryStubs(): void {
   (SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix | null }).getScreenCTM = function (
     this: Element,
   ): DOMMatrix | null {
     // Scoped to g.watermark (identified by data-sc) -- the only elements
-    // screenBBoxOf (R6 resolver) ever calls this on in this test file. Real
+    // screenBBoxOf (R6 resolver) ever calls this on in this test file --
+    // plus, when __ctmGraphRootEnabled is set, .graph-root itself (the only
+    // other element clampPlateCenterToViewport ever calls this on). Real
     // jsdom has no getScreenCTM at all (verified: undefined, not merely
-    // throwing); every other element -- in particular .graph-root, whose
-    // transform carries the d3-zoom SCALE this identity-matrix stub cannot
-    // represent -- stays unstubbed, so Task 5's clampPlateCenterToViewport
-    // hits its own documented "DOM cannot be measured" fallback (returns
-    // the point unclamped) exactly as it would against real jsdom.
-    if (!this.getAttribute("data-sc")) return null;
-    const m = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(this.getAttribute("transform") || "");
+    // throwing); every other element stays unstubbed.
+    const isWatermark = this.getAttribute("data-sc") != null;
+    const isGraphRoot = __ctmGraphRootEnabled && this.classList.contains("graph-root");
+    if (!isWatermark && !isGraphRoot) return null;
+    const transform = this.getAttribute("transform") || "";
+    const m = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(transform);
     const tx = m ? parseFloat(m[1]) : 0;
     const ty = m ? parseFloat(m[2]) : 0;
+    if (isGraphRoot) {
+      // .graph-root's transform carries the d3-zoom SCALE
+      // ("translate(x,y) scale(k)") -- unlike a g.watermark's bare
+      // translate, this one needs the real k for the clamp test to exercise
+      // genuine screen-space arithmetic.
+      const s = /scale\(([-\d.eE]+)\)/.exec(transform);
+      const k = s ? parseFloat(s[1]) : 1;
+      return { a: k, b: 0, c: 0, d: k, e: tx, f: ty } as DOMMatrix;
+    }
     return { a: 1, b: 0, c: 0, d: 1, e: tx, f: ty } as DOMMatrix;
   };
   (SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = function (this: Element): DOMRect {
@@ -148,6 +168,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     (window as W).__d3SetScSeparationOptions?.({ budgetRatio: 0.5 });
     vi.useRealTimers();
     uninstallTinyGeometryStubs();
+    __ctmGraphRootEnabled = false;
     document.documentElement.style.removeProperty("--galaxy-0");
     vi.unstubAllGlobals();
   });
@@ -240,7 +261,8 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const [kMin] = (window as W).__d3GetZoomScaleExtent!();
     expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
     // The exile displacement rides the delta-#29 glide: let it converge
-    // before reading transforms (fake timers drive the rAF fallback).
+    // before reading transforms (requestAnimationFrame is faked in
+    // beforeEach, so this deterministically drains the rAF continuation).
     await vi.advanceTimersByTimeAsync(2000);
     const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === victim.keyword)!;
     expect(g.getAttribute("data-exiled")).toBe("1");
@@ -252,10 +274,25 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // Dot sits at the anchor; leader starts there.
     const ax = parseFloat(g.getAttribute("data-anchor-x")!), ay = parseFloat(g.getAttribute("data-anchor-y")!);
     const hw = parseFloat(g.getAttribute("data-plate-hw")!);
+    const hh = parseFloat(g.getAttribute("data-plate-hh")!);
     expect(parseFloat(line.getAttribute("x1")!)).toBeCloseTo(parseFloat(dot.getAttribute("cx")!), 6);
     // The plate's transform differs from its anchor (it was moved to the periphery).
     const t = parseTranslate(g.getAttribute("transform"));
     expect(Math.hypot(t.x - ax, t.y - ay)).toBeGreaterThan(hw);
+    // Item 3 (review fix): the leader's far endpoint lands ON the plate's
+    // rect boundary, not merely somewhere unconstrained -- derive the rect
+    // from the SAME transform + data-plate-* attrs updateLeaderEnd itself
+    // reads, and require the endpoint sit on one edge while staying inside
+    // the rect on the other axis (clipSegmentToRect always exits on exactly
+    // one edge for a segment from outside to inside).
+    const cx = t.x + parseFloat(g.getAttribute("data-plate-cx")!);
+    const cy = t.y + parseFloat(g.getAttribute("data-plate-cy")!);
+    const x2 = parseFloat(line.getAttribute("x2")!), y2 = parseFloat(line.getAttribute("y2")!);
+    const onVerticalEdge = Math.abs(Math.abs(x2 - cx) - hw) < 1e-6;
+    const onHorizontalEdge = Math.abs(Math.abs(y2 - cy) - hh) < 1e-6;
+    expect(onVerticalEdge || onHorizontalEdge).toBe(true);
+    if (onVerticalEdge) expect(Math.abs(y2 - cy)).toBeLessThanOrEqual(hh + 1e-6);
+    if (onHorizontalEdge) expect(Math.abs(x2 - cx)).toBeLessThanOrEqual(hw + 1e-6);
     // A non-overflow plate stays at its anchor (zero displacement) after the glide settles.
     await vi.advanceTimersByTimeAsync(2000);
     const keeper = report.find((r) => !r.overflow)!;
@@ -263,6 +300,70 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const tk = parseTranslate(gk.getAttribute("transform"));
     expect(tk.x).toBeCloseTo(parseFloat(gk.getAttribute("data-anchor-x")!), 3);
     expect(tk.y).toBeCloseTo(parseFloat(gk.getAttribute("data-anchor-y")!), 3);
+  });
+
+  it("clamps every exiled plate's footprint inside the viewport with symmetric half-sizes about its center", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 420, 320);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("clp", 3, 2), { icons: iconsFor("clp") });
+    flushSettleChunks();
+    const report = (window as W).__d3ScLayoutReport!()!;
+    const overflowKeywords = report.filter((r) => r.overflow).map((r) => r.keyword);
+    expect(overflowKeywords.length).toBeGreaterThan(0);
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    // Every other test in this file exercises clampPlateCenterToViewport's
+    // "DOM cannot be measured" fallback (real, unstubbed jsdom has no
+    // getScreenCTM at all). This test targets the clamp arithmetic itself:
+    // flip on the .graph-root CTM stub and redraw at the SAME k -- d3-zoom's
+    // imperative `.transform()` setter dispatches the 'zoom' event (and
+    // therefore drawWatermarks) regardless of whether the value changed, so
+    // this re-runs the exile pre-pass with a REAL, scale-aware CTM this
+    // time.
+    __ctmGraphRootEnabled = true;
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    // Same CTM clampPlateCenterToViewport itself used: .graph-root's own
+    // "translate(tx,ty) scale(k)" transform, parsed the same way the stub
+    // (and the production `ctm.a*wx + ctm.c*wy + ctm.e` mapping) does.
+    const rootEl = container.querySelector(".graph-root")!;
+    const rootTransform = rootEl.getAttribute("transform") || "";
+    const tm = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(rootTransform)!;
+    const sm = /scale\(([-\d.eE]+)\)/.exec(rootTransform);
+    const rtx = parseFloat(tm[1]), rty = parseFloat(tm[2]), k = sm ? parseFloat(sm[1]) : 1;
+    const crect = container.getBoundingClientRect();
+    const M = 28; // SC_EXILE_VIEWPORT_MARGIN_PX
+
+    // Every overflow SC, not just the first: the pre-fix bug was a
+    // DIRECTIONAL asymmetry (fp.top and fp.bottom differ, since the label
+    // extends further below the icon than the icon extends above its own
+    // center) -- a plate exiled toward the BOTTOM of the viewport was
+    // over-clamped (harmless), while one exiled toward the TOP could
+    // overshoot past the margin. Asserting on only one keyword risks
+    // picking the direction that happens not to expose the bug.
+    for (const keyword of overflowKeywords) {
+      const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === keyword)!;
+      if (g.getAttribute("data-exiled") !== "1") continue; // above its own kExile at kMin -- nothing to clamp
+      const t = parseTranslate(g.getAttribute("transform"));
+      const plateCx = parseFloat(g.getAttribute("data-plate-cx")!), plateCy = parseFloat(g.getAttribute("data-plate-cy")!);
+      const hw = parseFloat(g.getAttribute("data-plate-hw")!), hh = parseFloat(g.getAttribute("data-plate-hh")!);
+      const cx = t.x + plateCx, cy = t.y + plateCy;
+      const screenCx = k * cx + rtx - crect.left;
+      const screenCy = k * cy + rty - crect.top;
+      // data-plate-hw/hh are WORLD half-sizes (already divided by
+      // currentZoomK when drawWatermarks recorded them) -- multiply back by
+      // k to get the screen-space half-sizes the clamp itself reasoned in.
+      const screenHw = hw * k, screenHh = hh * k;
+
+      expect(screenCy - screenHh).toBeGreaterThanOrEqual(M - 1e-6);
+      expect(screenCy + screenHh).toBeLessThanOrEqual(crect.height - M + 1e-6);
+      expect(screenCx - screenHw).toBeGreaterThanOrEqual(M - 1e-6);
+      expect(screenCx + screenHw).toBeLessThanOrEqual(crect.width - M + 1e-6);
+    }
   });
 
   it("returns an exiled plate to its anchor above kExile and removes its leader", async () => {

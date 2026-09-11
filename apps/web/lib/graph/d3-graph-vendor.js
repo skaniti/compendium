@@ -2433,19 +2433,32 @@ var __vendorExpandedGroups;
      *  centered on world point `p`) inside the viewport minus
      *  SC_EXILE_VIEWPORT_MARGIN_PX. Uses the same root CTM + container rect
      *  mapping updateEdgeChips uses; returns `p` unchanged when the DOM
-     *  cannot be measured (jsdom) or the plate already fits. */
+     *  cannot be measured (jsdom) or the plate already fits.
+     *
+     *  Review fix (Task 5 follow-up): `p` is the FOOTPRINT CENTER (the
+     *  pre-pass places it `halfDiag` past the bbox exit, and the per-plate
+     *  code recovers the translate origin by subtracting plateCxW/plateCyW
+     *  from it) -- but `fp.top/bottom/left/right` are offsets from the ICON
+     *  center, not `p`, and are vertically asymmetric (`bottom` includes
+     *  labelTopPad + the name's height). Clamping with `M - fp.top` /
+     *  `H - M - fp.bottom` was off by `(fp.top + fp.bottom) / 2`: the real
+     *  top edge could still overshoot the viewport while the bottom was
+     *  over-clamped. Clamp with half-sizes measured about `p` itself
+     *  instead -- symmetric by construction, so both edges land exactly on
+     *  the margin when the raw point is outside it. */
     function clampPlateCenterToViewport(p, fp) {
         if (!svg || !__mountedContainer) return p;
         var rootNode = svg.select('.graph-root').node();
         var ctm = rootNode && rootNode.getScreenCTM ? rootNode.getScreenCTM() : null;
-        if (!ctm || !(ctm.a > 0)) return p;
+        if (!ctm || !(ctm.a > 0) || !(ctm.d > 0)) return p;
         var crect = __mountedContainer.getBoundingClientRect();
         if (!(crect.width > 0) || !(crect.height > 0)) return p;
         var sx = ctm.a * p.x + ctm.c * p.y + ctm.e - crect.left;
         var sy = ctm.b * p.x + ctm.d * p.y + ctm.f - crect.top;
         var M = SC_EXILE_VIEWPORT_MARGIN_PX;
-        var nx = Math.min(Math.max(sx, M - fp.left), crect.width - M - fp.right);
-        var ny = Math.min(Math.max(sy, M - fp.top), crect.height - M - fp.bottom);
+        var hw = (fp.right - fp.left) / 2, hh = (fp.bottom - fp.top) / 2;
+        var nx = Math.min(Math.max(sx, M + hw), crect.width - M - hw);
+        var ny = Math.min(Math.max(sy, M + hh), crect.height - M - hh);
         if (nx === sx && ny === sy) return p;
         // Inverse of the translate+scale CTM (rotation-free by construction).
         return { x: (nx + crect.left - ctm.e) / ctm.a, y: (ny + crect.top - ctm.f) / ctm.d };
@@ -2470,6 +2483,17 @@ var __vendorExpandedGroups;
         var hh = parseFloat(plateEl.getAttribute('data-plate-hh') || '0');
         var line = leader.select('line.watermark-leader-line');
         var x1 = parseFloat(line.attr('x1')), y1 = parseFloat(line.attr('y1'));
+        // Review fix (Task 5 follow-up): at the START of an anchored->exiled
+        // glide the plate rect still CONTAINS the anchor (x1,y1) -- clipping
+        // a segment from a point INSIDE the rect toward its own center exits
+        // on the FAR side, drawing the leader straight through the plate for
+        // the first few frames. Zero-length (dot-only) leader while the
+        // anchor is still inside the rect; clipSegmentToRect only makes
+        // sense once the anchor is genuinely outside it.
+        if (Math.abs(x1 - cx) <= hw && Math.abs(y1 - cy) <= hh) {
+            line.attr('x2', x1).attr('y2', y1);
+            return;
+        }
         var end = clipSegmentToRect(x1, y1, cx, cy, { minX: cx - hw, maxX: cx + hw, minY: cy - hh, maxY: cy + hh });
         line.attr('x2', end.x).attr('y2', end.y);
     }
