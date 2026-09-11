@@ -2,6 +2,7 @@ package dev.skaniti.compendium.gecko
 
 import android.content.Context
 import android.util.Log
+import dev.skaniti.compendium.AtomicWrite
 import dev.skaniti.compendium.TabManager
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,7 +45,7 @@ object TabsStore {
 
     fun save(context: Context, manager: TabManager) {
         try {
-            file(context).writeText(json.encodeToString(TabsSnapshot.serializer(), snapshotOf(manager)))
+            AtomicWrite.write(file(context), json.encodeToString(TabsSnapshot.serializer(), snapshotOf(manager)))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to persist tabs", e)
         }

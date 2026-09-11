@@ -2,6 +2,7 @@ package dev.skaniti.compendium.gecko
 
 import android.content.Context
 import android.util.Log
+import dev.skaniti.compendium.AtomicWrite
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -128,7 +129,7 @@ object NotesStore {
 
     private fun persist(context: Context, list: List<Note>) {
         try {
-            file(context).writeText(encode(list))
+            AtomicWrite.write(file(context), encode(list))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write notes", e)
         }

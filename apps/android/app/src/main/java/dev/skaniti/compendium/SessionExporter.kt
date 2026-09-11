@@ -125,7 +125,7 @@ object SessionExporter {
 
         val file = File(dir, "$sessionId.json")
         return try {
-            file.writeText(jsonString)
+            AtomicWrite.write(file, jsonString)
             Log.i(TAG, "Saved session locally: ${file.absolutePath}")
             file
         } catch (e: Exception) {
@@ -241,7 +241,7 @@ object SessionExporter {
         val existing = readLogFile(logFile)
         val updated = existing + entry
         try {
-            logFile.writeText(json.encodeToString(ListSerializer(ExportLogEntry.serializer()), updated))
+            AtomicWrite.write(logFile, json.encodeToString(ListSerializer(ExportLogEntry.serializer()), updated))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write export log", e)
         }

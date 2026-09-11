@@ -2,6 +2,7 @@ package dev.skaniti.compendium.gecko
 
 import android.content.Context
 import android.util.Log
+import dev.skaniti.compendium.AtomicWrite
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -67,11 +68,12 @@ object BookmarkStore {
 
     private fun save(context: Context, bookmarks: List<Bookmark>) {
         try {
-            file(context).writeText(
+            AtomicWrite.write(
+                file(context),
                 json.encodeToString(
                     kotlinx.serialization.builtins.ListSerializer(Bookmark.serializer()),
                     bookmarks,
-                )
+                ),
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save bookmarks", e)
