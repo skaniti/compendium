@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createSimEngine, hashId, mulberry32, PHASE2_TICKS } from "./sim-layout";
 import type { SimStartPayload } from "./sim-protocol";
-import { plateFootprintAtRatio } from "./sc-separation";
 
 // Batch 03 (graph canvas port) Task group W -- sanity/determinism coverage
 // for the pure force-layout engine sim.worker.ts drives (not required by
@@ -187,8 +186,11 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
       minA = Math.min(minA, Math.hypot(a[keys[i]].x - a[keys[j]].x, a[keys[i]].y - a[keys[j]].y));
       minB = Math.min(minB, Math.hypot(b[keys[i]].x - b[keys[j]].x, b[keys[i]].y - b[keys[j]].y));
     }
-    expect(minB).toBeGreaterThanOrEqual(minA - 1e-6);
+    // Strict, not >=: observed margin for this fixture is ~82 world units
+    // (base 447.29 vs seeded 529.88), so 1 unit of slack still fails if the
+    // footprint term stops binding (e.g. scSeparation gets disconnected from
+    // the repulsion loop) instead of passing vacuously on minB === minA.
+    expect(minB).toBeGreaterThan(minA + 1);
     expect(settle(seeded)).toEqual(settle(seeded));
-    expect(plateFootprintAtRatio(keys[0], 0.5, fp).right).toBeGreaterThan(0); // import used
   });
 });
