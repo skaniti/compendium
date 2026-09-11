@@ -120,6 +120,18 @@ function parseTranslate(transform: string | null): { x: number; y: number } {
   return { x: m ? parseFloat(m[1]) : NaN, y: m ? parseFloat(m[2]) : NaN };
 }
 
+// Final fix wave (delta #32 companion fix, necessitated by wmGlideReset()
+// now running per-settle -- see the "cliff" test's own comment below for
+// why): reads the REAL current zoom scale off `.graph-root`'s own
+// "translate(x,y) scale(k)" transform, set by genuine (unstubbed) d3-zoom
+// machinery regardless of this file's getScreenCTM/getBBox stubs.
+function currentZoomScale(container: HTMLElement): number {
+  const root = container.querySelector(".graph-root");
+  const t = (root && root.getAttribute("transform")) || "";
+  const m = /scale\(([-\d.eE]+)\)/.exec(t);
+  return m ? parseFloat(m[1]) : 1;
+}
+
 // One two-page cluster ("alpha") and one one-page cluster ("beta") per
 // super-cluster -- drawWatermarks' own resolver sorts by member page count
 // DESCENDING, so "alpha" is always placed first (kept at its anchored
@@ -226,16 +238,34 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     installWatermarkGeometryStubs();
     watermarkBoxSize = { width: 5000, height: 250 };
-    // __wmRafSchedule's jsdom fallback is `setTimeout(cb, 16)` (jsdom has no
-    // requestAnimationFrame at all -- vendor's own comment on
-    // __wmRafSchedule). Faking `performance` too makes the glide's own
+    // Final fix wave: "requestAnimationFrame" joins the fake set (same fix
+    // d3-graph-vendor.sc-separation.test.ts's own beforeEach already
+    // applies, see that file's comment). jsdom (this project's vitest
+    // environment) DOES define a real requestAnimationFrame -- contrary to
+    // this describe block's original comment here, which assumed
+    // __wmRafSchedule always fell back to its own `setTimeout(cb, 16)` --
+    // but that real rAF is wired to genuine wall-clock time, independent of
+    // vi's fake setTimeout/performance. Every EXISTING test in this file
+    // happened to never need more than one or two SYNCHRONOUS
+    // drawWatermarks application-pass steps to land within
+    // WM_GLIDE_SNAP_PX (each full `render()` cycle reaches drawWatermarks
+    // 2-3 times synchronously on its own), so the untamed real rAF
+    // continuation never got a chance to matter -- until the final fix
+    // wave's "cliff" test rewrite (below) needed a SINGLE same-settle
+    // zoom-triggered redraw to glide across multiple animation frames:
+    // without faking requestAnimationFrame too, `wmGlideStep`'s
+    // continuation depends on real wall-clock rAF ticks that
+    // `vi.advanceTimersByTimeAsync` cannot drive, so the polling loop
+    // below would observe a stale, non-converged reading as "converged"
+    // (two consecutive fake-time reads happening to land between real rAF
+    // ticks). Faking `performance` too makes the glide's own
     // `performance.now()` dt computation advance in lockstep with fake
     // time, which is what makes "advance N ms, read the DOM" deterministic
     // instead of racing real wall-clock time (contrast with the V2 describe
     // block in the remount test file, which waits on a REAL d3 transition
     // timer via real elapsed time -- this delta's glide has no such
     // external timer to wait on, so faking is both possible and simpler).
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "requestAnimationFrame"] });
   });
 
   afterEach(() => {
@@ -327,9 +357,26 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     // CDP capture measured (a pinch-cycle cliff or an icon-fade footprint
     // cliff both manifest as the resolver's target jumping by a large,
     // structurally different displacement between one tick and the next).
+    // Final fix wave: forced via a same-settle zoom-triggered redraw
+    // (__d3ZoomTo at the CURRENT k -- d3-zoom's imperative `.transform()`
+    // setter dispatches 'zoom' [and therefore drawWatermarks] regardless
+    // of whether the value changed, same technique
+    // d3-graph-vendor.sc-separation.test.ts's exile-clamp test uses), NOT
+    // a second `render()` call. delta #32's final fix wave added
+    // wmGlideReset() to the top of applyScLayoutSeparation (a NEW layout
+    // -- i.e. a new settle -- must snap, not glide, from the PREVIOUS
+    // layout's positions): a second `render()` is itself a new settle, so
+    // it now wipes the very glide state this assertion needs to still be
+    // present. A zoom-triggered redraw matches what this file's own
+    // header names as the real bug (logs/visual-debug/sc-watermark-zoom-
+    // jump) and never touches applyScLayoutSeparation/wmGlideReset() at
+    // all, so draw 1's glide state survives into this cliff exactly as
+    // this assertion requires. The anchors themselves are untouched (no
+    // re-simulation), isolating the resolver's box-orientation flip as
+    // the only thing that changed.
     watermarkBoxSize = { width: 200, height: 5000 };
-    render(container, twoSuperClusterPayload(kw), { icons });
-    flushSettleChunks();
+    const kNow = currentZoomScale(container);
+    expect((window as unknown as { __d3ZoomTo?: (k: number) => boolean }).__d3ZoomTo!(kNow)).toBe(true);
 
     // Immediately after draw 2 (before any glide rAF frame has run), the
     // painted transform must NOT already be at the new target -- it must
