@@ -52,8 +52,9 @@ function flushSettleChunks(): void {
 // `.graph-root` (a REAL, scale-aware CTM parsed from its own "translate(x,y)
 // scale(k)" transform) instead of falling through to jsdom's real (absent)
 // behavior. Every test except the clamp test below relies on
-// clampPlateCenterToViewport hitting its documented "DOM cannot be
-// measured" fallback, matching real unstubbed jsdom; only that one test
+// placeExiledPlates' radial clamp (env.viewport) hitting its documented
+// "DOM cannot be measured" fallback -- env.viewport stays unset and the
+// clamp never runs -- matching real unstubbed jsdom; only that one test
 // flips this on, and afterEach always clears it so it can't leak.
 let __ctmGraphRootEnabled = false;
 
@@ -64,7 +65,8 @@ function installTinyGeometryStubs(): void {
     // Scoped to g.watermark (identified by data-sc) -- the only elements
     // screenBBoxOf (R6 resolver) ever calls this on in this test file --
     // plus, when __ctmGraphRootEnabled is set, .graph-root itself (the only
-    // other element clampPlateCenterToViewport ever calls this on). Real
+    // other element the drawWatermarks exile pre-pass calls this on, to
+    // build placeExiledPlates' env.viewport for its radial clamp). Real
     // jsdom has no getScreenCTM at all (verified: undefined, not merely
     // throwing); every other element stays unstubbed.
     const isWatermark = this.getAttribute("data-sc") != null;
@@ -146,7 +148,21 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>;
-type W = Window & { __d3ScLayoutReport?: () => Report | null; __d3SetScSeparationOptions?: (o: { budgetRatio?: number }) => void; __d3ZoomTo?: (k: number) => boolean; __d3GetZoomScaleExtent?: () => [number, number] };
+type Layout = { kFit: number; kFloor: number; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] };
+type W = Window & {
+  __d3ScLayoutReport?: () => Report | null;
+  __d3ScLayout?: () => Layout | null;
+  __d3ScLayoutRemeasure?: (w: number, h: number) => Layout | null;
+  __d3SetScSeparationOptions?: (o: { budgetRatio?: number; budgetMinPx?: number }) => void;
+  __d3ZoomTo?: (k: number) => boolean;
+  __d3GetZoomScaleExtent?: () => [number, number];
+};
+
+// Final fix wave (item 2): the module defaults, captured ONCE here rather
+// than re-hardcoded at every afterEach restore -- SC_SEPARATION_BUDGET_RATIO
+// / SC_SEPARATION_BUDGET_MIN_PX in the vendor.
+const DEFAULT_SC_SEPARATION_BUDGET_RATIO = 0.5;
+const DEFAULT_SC_SEPARATION_BUDGET_MIN_PX = 60;
 
 describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   beforeEach(() => {
@@ -165,7 +181,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   });
   afterEach(() => {
     flushSettleChunks();
-    (window as W).__d3SetScSeparationOptions?.({ budgetRatio: 0.5 });
+    (window as W).__d3SetScSeparationOptions?.({ budgetRatio: DEFAULT_SC_SEPARATION_BUDGET_RATIO, budgetMinPx: DEFAULT_SC_SEPARATION_BUDGET_MIN_PX });
     vi.useRealTimers();
     uninstallTinyGeometryStubs();
     __ctmGraphRootEnabled = false;
@@ -217,9 +233,52 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     }
   });
 
+  it("__d3ScLayoutRemeasure re-derives kFloor and exile onsets for a new canvas size without moving nodes (resize path)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 900, 700);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("rsz", 4, 6), { icons: iconsFor("rsz") });
+    flushSettleChunks();
+    const before = (window as W).__d3ScLayout!()!;
+    expect(before).toBeTruthy();
+
+    // Halving BOTH canvas dimensions halves kFit (and therefore kFloor)
+    // exactly -- the fit scale is a min() of two ratios that both scale by
+    // the same factor -- without moving a single node (remeasureScLayout is
+    // node-immutable; contrast with applyScLayoutSeparation's own movement
+    // phase, which never runs here).
+    const half = (window as W).__d3ScLayoutRemeasure!(450, 350)!;
+    expect(half).toBeTruthy();
+    expect(half.kFloor).toBeCloseTo(before.kFloor * 0.5, 9);
+    // A smaller canvas packs the SAME anchors (unmoved) into a SMALLER
+    // screen area while footprints (sized off a fixed ratio, not kFloor)
+    // stay the same screen size -- overlap can only get worse, so the
+    // settle-time overflow set (already non-empty per the "separates
+    // anchored plates" test above) persists or grows.
+    const halfOverflow = Object.keys(half.plates).filter((k) => half.plates[k].overflow);
+    expect(halfOverflow.length).toBeGreaterThan(0);
+    for (const kw of halfOverflow) {
+      expect(half.plates[kw].kExile).toBeGreaterThan(half.kFloor * 1.0001);
+    }
+
+    // Idempotence: remeasuring back at the ORIGINAL canvas size reproduces
+    // the settle-time record exactly (deterministic given unmoved nodes).
+    const restored = (window as W).__d3ScLayoutRemeasure!(900, 700)!;
+    expect(restored.kFloor).toBeCloseTo(before.kFloor, 9);
+    const beforeOverflow = Object.keys(before.plates).filter((k) => before.plates[k].overflow).sort();
+    const restoredOverflow = Object.keys(restored.plates).filter((k) => restored.plates[k].overflow).sort();
+    expect(restoredOverflow).toEqual(beforeOverflow);
+    for (const kw of Object.keys(before.plates)) {
+      const b = before.plates[kw].kExile, r = restored.plates[kw].kExile;
+      if (!isFinite(b) && !isFinite(r)) continue; // both Infinity: never resolves at either canvas size
+      expect(r).toBeCloseTo(b, 6);
+    }
+  });
+
   it("with a zero budget every unresolved pair flags the smaller plate as overflow with a finite or infinite kExile", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
@@ -244,7 +303,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
   it("exiled plates yield to anchored plates in the resolver: an anchored plate never moves off its anchor at rest", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
@@ -272,7 +331,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
   it("exiles an overflow plate below kExile: data-exiled, dot + leader present, leader ends on the plate rect", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
@@ -337,7 +396,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
   it("clamps every exiled plate's footprint inside the viewport with symmetric half-sizes about its center", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
@@ -348,8 +407,9 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     expect(overflowKeywords.length).toBeGreaterThan(0);
     const [kMin] = (window as W).__d3GetZoomScaleExtent!();
     expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
-    // Every other test in this file exercises clampPlateCenterToViewport's
-    // "DOM cannot be measured" fallback (real, unstubbed jsdom has no
+    // Every other test in this file exercises placeExiledPlates' radial
+    // clamp (env.viewport) "DOM cannot be measured" fallback -- env.viewport
+    // stays unset so the clamp never runs (real, unstubbed jsdom has no
     // getScreenCTM at all). This test targets the clamp arithmetic itself:
     // flip on the .graph-root CTM stub and redraw at the SAME k -- d3-zoom's
     // imperative `.transform()` setter dispatches the 'zoom' event (and
@@ -360,9 +420,10 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
     await vi.advanceTimersByTimeAsync(2000);
 
-    // Same CTM clampPlateCenterToViewport itself used: .graph-root's own
-    // "translate(tx,ty) scale(k)" transform, parsed the same way the stub
-    // (and the production `ctm.a*wx + ctm.c*wy + ctm.e` mapping) does.
+    // Same CTM the drawWatermarks exile pre-pass itself reads to build
+    // placeExiledPlates' env.viewport: .graph-root's own "translate(tx,ty)
+    // scale(k)" transform, parsed the same way the stub (and the production
+    // `ctm.a*wx + ctm.c*wy + ctm.e` mapping) does.
     const rootEl = container.querySelector(".graph-root")!;
     const rootTransform = rootEl.getAttribute("transform") || "";
     const tm = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(rootTransform)!;
@@ -401,14 +462,14 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
   it("returns an exiled plate to its anchor above kExile and removes its leader", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
     render(container, crowdedPayload("ret", 3, 2), { icons: iconsFor("ret") });
     flushSettleChunks();
-    const victim = (window as W).__d3ScLayoutReport!()!.find((r) => r.overflow && isFinite(r.kExile));
-    if (!victim) return; // Infinity kExile means always exiled; nothing to assert for this fixture
+    const victim = (window as W).__d3ScLayoutReport!()!.find((r) => r.overflow && isFinite(r.kExile))!;
+    expect(victim).toBeTruthy();
     // __d3ZoomTo applies the transform directly with no scaleExtent clamp --
     // clamp to the extent's max here so the transform stays in range (Task 3
     // review carry-over).

@@ -896,7 +896,9 @@
 //      (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
 //      footprint as well as fog halo (payload.scSeparation). The R6
 //      resolver and delta-#29 glide are unchanged and now act only as a
-//      safety net.
+//      safety net. Dev/test-only hooks: __d3ScLayoutReport, __d3ScLayout,
+//      __d3ScLayoutRemeasure, __d3SetScSeparationOptions, __d3ZoomTo (same
+//      class as delta #30's __d3GetZoomScaleExtent).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -993,9 +995,18 @@ var __vendorExpandedGroups;
     // member-set by; measured in screen px at the 0.5x floor. Starting
     // value from the spec; re-set from __d3ScLayoutReport distributions.
     var SC_SEPARATION_BUDGET_RATIO = 0.5;
+    // Final fix wave (Important #2, controller-ruled): floor on the per-SC
+    // shift budget, screen px at the zoom floor (~one plate half-width).
+    // Reach-scaled budgets starve exactly the small SCs whose nameplates
+    // dominate their hulls (real data 2026-09-11: 21- and 15-page SCs got
+    // ~25px budgets against ~150px plates and exiled at the default fit
+    // view); the user's stated preference is that the supercluster moves
+    // with its label.
+    var SC_SEPARATION_BUDGET_MIN_PX = 60;
     var SC_EXILE_MARGIN_PX = 16;           // gap between cloud perimeter and an exiled plate's near edge (screen px)
     var SC_EXILE_VIEWPORT_MARGIN_PX = 28;  // same clearance updateEdgeChips uses
-    var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation)
+    var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation / remeasureScLayout)
+    var __scShiftW = {};                   // final fix wave: per-SC cumulative correction-pass shift, WORLD units (keyword -> number), written by applyScLayoutSeparation's movement phase, cleared at its top; remeasureScLayout reports shiftPx = __scShiftW[kw] * kFloor at whatever floor is current
     var HULL_OPACITY = 0.13;
     var HULL_STROKE_OPACITY = 0.35;
     var LINK_OPACITY = 0.7;
@@ -4839,9 +4850,15 @@ var __vendorExpandedGroups;
      *  SCs changes the fit bbox and therefore the floor k the footprints
      *  are measured against; re-fitting between iterations is what makes
      *  "spread them apart" a redistribution rather than a self-cancelling
-     *  uniform expansion (spec, "fit-renormalization trap"). */
+     *  uniform expansion (spec, "fit-renormalization trap"). Final fix
+     *  wave: the tail (final measure, zero-budget overflow sweep, kExile,
+     *  cloud centroid, __scLayout write) now lives in remeasureScLayout, so
+     *  a later resize can re-derive the SAME record for a new canvas size
+     *  without repeating the movement phase -- see that function's comment. */
     function applyScLayoutSeparation(ctx) {
         __scLayout = null;
+        __scShiftW = {};  // final fix wave: cumulative per-SC shift, cleared per settle
+        wmGlideReset();   // final fix wave (Minor 3): a new layout invalidates every stored glide offset -- the first post-fit draw must snap, not glide from the previous layout's plate positions
         var nodes = ctx.nodes, clusters = ctx.clusters;
         if (!nodes.length || !__mountedIcons || !currentData) return;
         var canvasW = ctx.width, canvasH = effectiveCanvasHeight(ctx.height);
@@ -4889,7 +4906,9 @@ var __vendorExpandedGroups;
                 var geo = scOverlayGeometry(groups[kw], centroids, nodes);
                 if (!geo) { anchors[kw] = null; return; }
                 anchors[kw] = { x: geo.cx, y: geo.cy };
-                budgetPx[kw] = geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO;
+                // Final fix wave (Important #2): floor at SC_SEPARATION_
+                // BUDGET_MIN_PX -- see that var's own comment.
+                budgetPx[kw] = Math.max(geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
             });
             return kFit > 0;
         }
@@ -4926,16 +4945,93 @@ var __vendorExpandedGroups;
             });
             if (!anyMove) break;
         }
-        if (!measure()) return;
 
-        // Guarantee by construction: whatever the iterations above left
-        // overlapping among the plates still counted as anchored becomes
-        // overflow too (zero-budget check), so every plate drawn at its
-        // anchor is disjoint at the floor -- the resolver+glide safety net
-        // should never have to move an anchored plate.
+        // Final fix wave: hand off the per-SC cumulative shift the
+        // movement phase above just produced, then run the shared
+        // measure+report tail through remeasureScLayout (also the
+        // resize-time entry point) so there is exactly one place that
+        // turns "current node positions + canvas size" into a __scLayout
+        // record. __scLayout is set to a non-null placeholder first so
+        // remeasureScLayout's own "no layout yet" guard (meant to keep a
+        // resize from doing work before any settle ever ran) doesn't block
+        // THIS settle from establishing the record in the first place.
+        scKeys.forEach(function (kw) { __scShiftW[kw] = usedW[kw]; });
+        __scLayout = {};
+        remeasureScLayout(canvasW, canvasH);
+    }
+
+    /** Final fix wave (Important #1): __scLayout used to be fixed at the
+     *  canvas size in effect at settle -- a resize left the floor
+     *  guarantee and every plate's exile onset stale, since the
+     *  ResizeObserver handler only re-fits, never re-measures. This is the
+     *  node-immutable "recompute the report for THIS canvas size" tail,
+     *  shared by applyScLayoutSeparation's own settle-time call (above) and
+     *  the ResizeObserver handler's later resize-time call. Recomputes
+     *  groups/painted keys/anchors/node index sets fresh from currentData
+     *  (never from applyScLayoutSeparation's closure -- the two call sites
+     *  don't share one) and never moves a node: the movement phase only
+     *  ever runs inside applyScLayoutSeparation's own outer loop, at
+     *  settle. Per-SC shift is read from __scShiftW (world units, written
+     *  by that movement phase) so shiftPx = __scShiftW[kw] * kFloor is
+     *  correct at WHATEVER floor is current, settle or a later resize
+     *  alike; overflow here comes from the zero-budget check alone (mirrors
+     *  applyScLayoutSeparation's own former post-loop "guarantee by
+     *  construction" sweep, just run standalone against every painted SC
+     *  rather than only the ones the movement phase hadn't already flagged).
+     *  Guard: no-op when __scLayout is null (no layout yet -- nothing for a
+     *  resize to refresh) or fewer than 2 painted SCs. */
+    function remeasureScLayout(canvasW, canvasH) {
+        if (!__scLayout || !currentData || !__mountedIcons) return;
+        if (!(canvasW > 0) || !(canvasH > 0)) return;
+        var nodes = currentData.nodes || [];
+        var clusters = currentData.clusters || [];
+        if (!nodes.length) return;
+        var fp = scFootprintParams();
+
+        var groups = {};
+        clusters.forEach(function (c) {
+            if (!c.super_cluster) return;
+            if (!groups[c.super_cluster]) groups[c.super_cluster] = [];
+            groups[c.super_cluster].push(c);
+        });
+        var scKeys = Object.keys(groups).filter(function (kw) {
+            return !!paintedScEntry(kw);
+        }).sort();
+        if (scKeys.length < 2) return;
+
+        var nodeIdxByKw = {}, pagesByKw = {};
+        scKeys.forEach(function (kw) {
+            var ids = {}, pages = 0;
+            groups[kw].forEach(function (c) { (c.page_ids || []).forEach(function (pid) { ids[pid] = true; }); pages += (c.page_ids || []).length; });
+            var idx = [];
+            for (var i = 0; i < nodes.length; i++) if (ids[nodes[i].id] && nodes[i].x != null) idx.push(i);
+            nodeIdxByKw[kw] = idx; pagesByKw[kw] = pages;
+        });
+
+        var bbox = computeFitBBox(nodes);
+        if (!bbox) return;
+        var kFit = Math.min(canvasW / (bbox.maxX - bbox.minX), canvasH / (bbox.maxY - bbox.minY));
+        if (!(kFit > 0)) return;
+        var kFloor = kFit * MIN_ZOOM_RATIO;
+        var centroids = computeClusterCentroids(clusters, nodes);
+        var anchors = {}, budgetPx = {};
+        scKeys.forEach(function (kw) {
+            var geo = scOverlayGeometry(groups[kw], centroids, nodes);
+            if (!geo) { anchors[kw] = null; return; }
+            anchors[kw] = { x: geo.cx, y: geo.cy };
+            budgetPx[kw] = Math.max(geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
+        });
+
+        // Guarantee by construction: whatever is still overlapping at zero
+        // budget becomes overflow, so every plate drawn at its anchor is
+        // disjoint at the floor -- the resolver+glide safety net should
+        // never have to move an anchored plate. This is the ONLY source of
+        // overflow at a remeasure -- the movement phase (when there was
+        // one) already ran.
+        var overflow = {};
         var checkPlates = [];
         scKeys.forEach(function (kw) {
-            if (overflow[kw] || !anchors[kw]) return;
+            if (!anchors[kw]) return;
             checkPlates.push({ key: kw, pages: pagesByKw[kw], x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor, fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp), budget: 0 });
         });
         solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
@@ -4955,11 +5051,11 @@ var __vendorExpandedGroups;
                 var r = computeExileRatio(kw, anchors, opponents, fp, kFit, MIN_ZOOM_RATIO, 4);
                 kExile = isFinite(r) ? kFit * r : Infinity;
             }
-            // Reported at the FINAL measure()'s kFloor -- usedW (world) times
-            // the scale the rest of this report (budgetPx, anchors) is
-            // already expressed at, so shiftPx <= budgetPx is a true
-            // apples-to-apples invariant, not a comparison across scales.
-            var shiftPx = usedW[kw] * kFloor;
+            // shiftPx re-expresses the correction pass's own world-unit
+            // record (__scShiftW, unaffected by resize) at WHATEVER kFloor
+            // is current, so shiftPx <= budgetPx stays an apples-to-apples
+            // invariant at every canvas size, not just the settle-time one.
+            var shiftPx = (__scShiftW[kw] || 0) * kFloor;
             plateInfo[kw] = { anchor: anchors[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
             report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
         });
@@ -5385,6 +5481,15 @@ var __vendorExpandedGroups;
                         // fitToContent call sites, and a resize between
                         // clicks would otherwise leave lastCanvasDims stale.
                         lastCanvasDims = { w: r.width, h: effH };
+                        // Final fix wave (Important #1): re-derive the SC
+                        // layout record for the NEW canvas size before the
+                        // fit below redraws watermarks -- otherwise the
+                        // floor guarantee and every plate's exile onset
+                        // stay pinned to whatever size was current at
+                        // settle. Must run BEFORE fitToContent so its zoom
+                        // handler (which calls drawWatermarks) sees the
+                        // fresh record on this same tick.
+                        remeasureScLayout(lastCanvasDims.w, lastCanvasDims.h);
                         fitToContent(
                             currentData.nodes || [],
                             r.width, effH,
@@ -6940,6 +7045,15 @@ var __vendorExpandedGroups;
         window.__d3ScLayout = function () { return __scLayout; };
         window.__d3SetScSeparationOptions = function (o) {
             if (o && typeof o.budgetRatio === 'number') SC_SEPARATION_BUDGET_RATIO = o.budgetRatio;
+            if (o && typeof o.budgetMinPx === 'number') SC_SEPARATION_BUDGET_MIN_PX = o.budgetMinPx;
+        };
+        // Final fix wave (Important #1): test-only escape hatch driving the
+        // same node-immutable re-measure the ResizeObserver handler calls,
+        // without needing a real jsdom resize (jsdom never fires
+        // ResizeObserver on layout changes).
+        window.__d3ScLayoutRemeasure = function (w, h) {
+            remeasureScLayout(w, h);
+            return __scLayout;
         };
         // Drives the REAL zoom behavior to absolute k around the viewport
         // center, so tests exercise the zoom-tick pipeline (updateLabelLOD /
