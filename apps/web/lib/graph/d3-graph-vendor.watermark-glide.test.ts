@@ -304,7 +304,16 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     // is a constant (~2*height or ~2*width), so whichever pair has the
     // smaller box dimension wins the Math.min, independent of exactly
     // where the tiny simulated payload settled.
-    watermarkBoxSize = { width: 5000, height: 250 };
+    // height 250 -> 400 (delta #32): applyScLayoutSeparation now runs
+    // BEFORE this resolver and, for this exact two-cluster payload,
+    // deterministically widens alpha/beta's vertical anchor gap from ~198
+    // to ~344 world units (its own estimated-footprint budget, unrelated
+    // to this stub's box) -- at height 250 the two plates no longer
+    // overlap at all post-correction, so the resolver found nothing to
+    // resolve and this test's whole premise (a genuine push to diff
+    // against) went silently vacuous. 400 restores real vertical overlap
+    // with headroom while keeping the box far wider than tall.
+    watermarkBoxSize = { width: 5000, height: 400 };
     render(container, twoSuperClusterPayload(kw), { icons });
     flushSettleChunks();
     const target1 = parseTranslate(watermarkTransform(container, kw + "-beta"));
@@ -454,8 +463,11 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     const icons = iconsFor(kw);
 
     // Draw 1: both SCs present, wide/short box -- seeds real prior glide
-    // state for "beta" (same shape as the cliff test's draw 1).
-    watermarkBoxSize = { width: 5000, height: 250 };
+    // state for "beta" (same shape as the cliff test's draw 1; see that
+    // test's own comment for why height is 400, not the original 250 --
+    // delta #32's applyScLayoutSeparation widens this payload's vertical
+    // anchor gap past 250 before the resolver ever runs).
+    watermarkBoxSize = { width: 5000, height: 400 };
     render(container, twoSuperClusterPayload(kw), { icons });
     flushSettleChunks();
     const seeded = parseTranslate(watermarkTransform(container, kw + "-beta"));
@@ -514,8 +526,10 @@ describe("d3-graph-vendor SC watermark nameplate glide (delta #29, logs/visual-d
     const icons = iconsFor(kw);
 
     // Draw 1: both SCs present, wide/short box -- seeds real prior glide
-    // state for "beta".
-    watermarkBoxSize = { width: 5000, height: 250 };
+    // state for "beta" (height 400, not 250 -- see the cliff test's own
+    // comment: delta #32's applyScLayoutSeparation widens this payload's
+    // vertical anchor gap past 250 before the resolver ever runs).
+    watermarkBoxSize = { width: 5000, height: 400 };
     render(container, twoSuperClusterPayload(kw), { icons });
     flushSettleChunks();
     const seeded = parseTranslate(watermarkTransform(container, kw + "-beta"));

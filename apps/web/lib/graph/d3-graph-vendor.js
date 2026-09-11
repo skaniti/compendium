@@ -866,6 +866,26 @@
 //      stranded if a real cycle happened to be mid-settle when the canvas
 //      raced into one of those domains.
 //
+// SC layout separation (spec docs/project-plans/2026-08-10-162433-sc-
+// separation/spec.md; decisions 2026-08-10 + 2026-09-11):
+//  32. Nameplates no longer leave their SC. (a) P3: SCALE_THRESHOLDS.scName
+//      k_min 1.00 -> 0.75 (TUNER_TYPO_VERSION 3 -> 4) and LOD-faded names
+//      get display:none like R6.1's icons. (b) applyScLayoutSeparation
+//      (called from handleSimEnd after writePositionsIntoNodes, before any
+//      paint/fit) rigidly translates whole SC member-sets until every
+//      painted plate's estimated 0.5x-floor footprint (lib/graph/
+//      sc-separation.ts, same constants drawWatermarks paints with) is
+//      disjoint, per-SC budget SC_SEPARATION_BUDGET_RATIO x
+//      scOverlayGeometry().maxReach; computeFitBBox is fitToContent's bbox
+//      math factored out so the floor k is derived from the real fit.
+//      Unresolvable pairs mark the smaller plate overflow with a computed
+//      exile onset kExile (record: __scLayout / dev __d3ScLayoutReport).
+//      (c) [Task 5 extends this entry: exile rendering, dot+leader, glide
+//      anchor attrs.] (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
+//      footprint as well as fog halo (payload.scSeparation). The R6
+//      resolver and delta-#29 glide are unchanged and now act only as a
+//      safety net.
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -876,6 +896,7 @@
 // =====================================================================
 
 import { GRAPH_DEFAULTS, TUNER_TYPO_VERSION, TUNER_FOG_VERSION } from "./constants";
+import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect } from './sc-separation';
 import d3 from "./d3";
 // Task group W (header comment delta #17): the force-layout pipeline's
 // main-thread client -- see that file's own header comment for why this
@@ -953,6 +974,16 @@ var __vendorExpandedGroups;
     // the pan-clamp (the "everything visible at the floor" expanded rect) --
     // keeping both derived from one constant keeps them in sync.
     var MIN_ZOOM_RATIO = 0.5;
+    // Delta #32: SC layout separation (spec docs/project-plans/2026-08-10-
+    // 162433-sc-layout-separation/spec.md). Budget = fraction of an SC's
+    // scOverlayGeometry().maxReach (its fog reach, the closest thing to a
+    // hull radius) that the post-settle correction may translate the whole
+    // member-set by; measured in screen px at the 0.5x floor. Starting
+    // value from the spec; re-set from __d3ScLayoutReport distributions.
+    var SC_SEPARATION_BUDGET_RATIO = 0.5;
+    var SC_EXILE_MARGIN_PX = 16;           // gap between cloud perimeter and an exiled plate's near edge (screen px)
+    var SC_EXILE_VIEWPORT_MARGIN_PX = 28;  // same clearance updateEdgeChips uses
+    var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation)
     var HULL_OPACITY = 0.13;
     var HULL_STROKE_OPACITY = 0.35;
     var LINK_OPACITY = 0.7;
@@ -4190,8 +4221,14 @@ var __vendorExpandedGroups;
 
     // ── Fit-to-content zoom ──────────────────────────────────────────
 
-    function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
-        if (!nodes.length || !svg) return;
+    /** Delta #32: the fit bbox (world), factored out of fitToContent so the
+     *  post-settle SC separation pass (applyScLayoutSeparation) can derive
+     *  the exact fit scale -- and therefore the exact 0.5x floor -- from the
+     *  same bbox math the fit itself uses, never a parallel estimate. Body
+     *  is byte-identical to what fitToContent inlined before; returns null
+     *  where fitToContent used to early-return. */
+    function computeFitBBox(nodes) {
+        if (!nodes.length) return null;
         var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         nodes.forEach(function (n) {
             if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
@@ -4299,8 +4336,16 @@ var __vendorExpandedGroups;
 
         minX -= HULL_PADDING + FIT_WORLD_PAD; minY -= HULL_PADDING + FIT_WORLD_PAD + 20;
         maxX += HULL_PADDING + FIT_WORLD_PAD; maxY += HULL_PADDING + FIT_WORLD_PAD;
+        if (maxX - minX <= 0 || maxY - minY <= 0) return null;
+        return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+    }
+
+    function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
+        if (!nodes.length || !svg) return;
+        var bb = computeFitBBox(nodes);
+        if (!bb) return;
+        var minX = bb.minX, minY = bb.minY, maxX = bb.maxX, maxY = bb.maxY;
         var bw = maxX - minX, bh = maxY - minY;
-        if (bw <= 0 || bh <= 0) return;
 
         // Store content bounds for pan clamping
         setContentBBox({ x: minX, y: minY, w: bw, h: bh });
@@ -4585,6 +4630,151 @@ var __vendorExpandedGroups;
         }
     }
 
+    /** Delta #32: the paint-path constants the footprint estimator needs,
+     *  read LIVE (tuner overrides included) at call time. charAdvanceEm
+     *  normalizes SC_NAME_CHAR_WIDTH, which computeWatermarkBBox expresses
+     *  at its own hardcoded 30px font, to an em advance. */
+    function scFootprintParams() {
+        return {
+            baseIconSize: BASE_SC_ICON_SIZE,
+            baseNameFontPx: BASE_SC_NAME_FONT_SIZE,
+            labelTopPad: SC_LABEL_TOP_PAD,
+            lineBudget: SC_NAME_LINE_BUDGET,
+            charAdvanceEm: SC_NAME_CHAR_WIDTH / 30,
+            scIcon: SCALE_THRESHOLDS.scIcon,
+            scName: SCALE_THRESHOLDS.scName,
+            pad: 2,  // WM_PAD in drawWatermarks
+        };
+    }
+
+    /** Delta #32 post-settle correction pass. Runs once per layout, after
+     *  the worker's final positions are written into `nodes` and BEFORE
+     *  finishRenderAfterSettle paints or fits anything. Rigidly translates
+     *  whole SC member-sets until every painted nameplate's estimated
+     *  footprint at the 0.5x zoom floor is disjoint from every other,
+     *  bounded per SC by SC_SEPARATION_BUDGET_RATIO x fog reach. Pairs that
+     *  cannot be resolved within budget are NOT forced: the smaller plate
+     *  is recorded as overflow with its computed exile onset k, and
+     *  drawWatermarks exiles it to the periphery below that k. Deterministic
+     *  given the settle output. Up to 3 outer iterations because moving
+     *  SCs changes the fit bbox and therefore the floor k the footprints
+     *  are measured against; re-fitting between iterations is what makes
+     *  "spread them apart" a redistribution rather than a self-cancelling
+     *  uniform expansion (spec, "fit-renormalization trap"). */
+    function applyScLayoutSeparation(ctx) {
+        __scLayout = null;
+        var nodes = ctx.nodes, clusters = ctx.clusters;
+        if (!nodes.length || !__mountedIcons || !currentData) return;
+        var superClusters = currentData.super_clusters || [];
+        var canvasW = ctx.width, canvasH = effectiveCanvasHeight(ctx.height);
+        if (!(canvasW > 0) || !(canvasH > 0)) return;
+        var fp = scFootprintParams();
+
+        var groups = {};
+        clusters.forEach(function (c) {
+            if (!c.super_cluster) return;
+            if (!groups[c.super_cluster]) groups[c.super_cluster] = [];
+            groups[c.super_cluster].push(c);
+        });
+        // Only SCs drawWatermarks will actually paint take part.
+        var scKeys = Object.keys(groups).filter(function (kw) {
+            var sc = null;
+            for (var i = 0; i < superClusters.length; i++) if (superClusters[i].keyword === kw) { sc = superClusters[i]; break; }
+            return !!(sc && sc.icon_id && __mountedIcons[sc.icon_id]);
+        }).sort();
+        if (scKeys.length < 2) return;
+
+        var nodeIdxByKw = {}, pagesByKw = {};
+        scKeys.forEach(function (kw) {
+            var ids = {}, pages = 0;
+            groups[kw].forEach(function (c) { (c.page_ids || []).forEach(function (pid) { ids[pid] = true; }); pages += (c.page_ids || []).length; });
+            var idx = [];
+            for (var i = 0; i < nodes.length; i++) if (ids[nodes[i].id] && nodes[i].x != null) idx.push(i);
+            nodeIdxByKw[kw] = idx; pagesByKw[kw] = pages;
+        });
+
+        var used = {}, budgetPx = {}, overflow = {};
+        scKeys.forEach(function (kw) { used[kw] = 0; budgetPx[kw] = 0; });
+        var kFit = 0, kFloor = 0, bbox = null, anchors = {};
+
+        function measure() {
+            bbox = computeFitBBox(nodes);
+            if (!bbox) return false;
+            kFit = Math.min(canvasW / (bbox.maxX - bbox.minX), canvasH / (bbox.maxY - bbox.minY));
+            kFloor = kFit * MIN_ZOOM_RATIO;
+            var centroids = computeClusterCentroids(clusters, nodes);
+            scKeys.forEach(function (kw) {
+                var geo = scOverlayGeometry(groups[kw], centroids, nodes);
+                if (!geo) { anchors[kw] = null; return; }
+                anchors[kw] = { x: geo.cx, y: geo.cy };
+                budgetPx[kw] = geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO;
+            });
+            return kFit > 0;
+        }
+
+        for (var outer = 0; outer < 3; outer++) {
+            if (!measure()) return;
+            var plates = [];
+            scKeys.forEach(function (kw) {
+                if (overflow[kw] || !anchors[kw]) return;
+                plates.push({
+                    key: kw, pages: pagesByKw[kw],
+                    x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor,
+                    fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp),
+                    budget: Math.max(0, budgetPx[kw] - used[kw]),
+                });
+            });
+            var res = solveSeparation(plates);
+            res.overflow.forEach(function (kw) { overflow[kw] = true; });
+            var anyMove = false;
+            Object.keys(res.shifts).forEach(function (kw) {
+                var s = res.shifts[kw];
+                var len = Math.sqrt(s.dx * s.dx + s.dy * s.dy);
+                if (len < 1e-6) return;
+                anyMove = true;
+                used[kw] += len;
+                var dxW = s.dx / kFloor, dyW = s.dy / kFloor;
+                nodeIdxByKw[kw].forEach(function (i) { nodes[i].x += dxW; nodes[i].y += dyW; });
+            });
+            if (!anyMove) break;
+        }
+        if (!measure()) return;
+
+        // Guarantee by construction: whatever the iterations above left
+        // overlapping among the plates still counted as anchored becomes
+        // overflow too (zero-budget check), so every plate drawn at its
+        // anchor is disjoint at the floor -- the resolver+glide safety net
+        // should never have to move an anchored plate.
+        var checkPlates = [];
+        scKeys.forEach(function (kw) {
+            if (overflow[kw] || !anchors[kw]) return;
+            checkPlates.push({ key: kw, pages: pagesByKw[kw], x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor, fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp), budget: 0 });
+        });
+        solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
+
+        var anchoredKeys = scKeys.filter(function (kw) { return !overflow[kw] && anchors[kw]; });
+        var plateInfo = {}, report = [];
+        var cx = 0, cy = 0, cn = 0;
+        scKeys.forEach(function (kw) {
+            nodeIdxByKw[kw].forEach(function (i) { cx += nodes[i].x; cy += nodes[i].y; cn++; });
+            var kExile = 0;
+            if (overflow[kw] && anchors[kw]) {
+                var r = computeExileRatio(kw, anchors, anchoredKeys, fp, kFit, MIN_ZOOM_RATIO, 4);
+                kExile = isFinite(r) ? kFit * r : Infinity;
+            }
+            plateInfo[kw] = { anchor: anchors[kw], shiftPx: used[kw], budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
+            report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: used[kw], budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
+        });
+        __scLayout = {
+            kFit: kFit, kFloor: kFloor,
+            cloudCentroid: cn ? { x: cx / cn, y: cy / cn } : { x: (bbox.minX + bbox.maxX) / 2, y: (bbox.minY + bbox.maxY) / 2 },
+            cloudBBox: bbox,
+            plates: plateInfo,
+            fpParams: fp,
+            report: report,
+        };
+    }
+
     function handleSimEnd(positions) {
         var ctx = __simRunCtx;
         if (!ctx) return;
@@ -4593,6 +4783,7 @@ var __vendorExpandedGroups;
             __simRafHandle = null;
         }
         writePositionsIntoNodes(ctx.nodes, positions);
+        applyScLayoutSeparation(ctx);  // delta #32: must run before ANY paint/fit of these positions
         if (!ctx.paintedOnce) {
             // Defensive fallback only -- sim.worker.ts's handleStart
             // always posts a seed `tick` before any `end` (even a
@@ -6546,6 +6737,23 @@ var __vendorExpandedGroups;
             return (storedZoomBehavior && typeof storedZoomBehavior.scaleExtent === 'function')
                 ? storedZoomBehavior.scaleExtent()
                 : null;
+        };
+        window.__d3ScLayoutReport = function () { return __scLayout ? __scLayout.report : null; };
+        window.__d3ScLayout = function () { return __scLayout; };
+        window.__d3SetScSeparationOptions = function (o) {
+            if (o && typeof o.budgetRatio === 'number') SC_SEPARATION_BUDGET_RATIO = o.budgetRatio;
+        };
+        // Drives the REAL zoom behavior to absolute k around the viewport
+        // center, so tests exercise the zoom-tick pipeline (updateLabelLOD /
+        // updateLabelScale -> drawWatermarks -> updateEdgeChips) exactly as a
+        // wheel gesture would.
+        window.__d3ZoomTo = function (k) {
+            if (!svg || !storedZoomBehavior || !lastCanvasDims) return false;
+            var t = d3.zoomTransform(svg.node());
+            var cxs = lastCanvasDims.w / 2, cys = lastCanvasDims.h / 2;
+            var nx = cxs - (cxs - t.x) * (k / t.k), ny = cys - (cys - t.y) * (k / t.k);
+            svg.call(storedZoomBehavior.transform, d3.zoomIdentity.translate(nx, ny).scale(k));
+            return true;
         };
     }
 
