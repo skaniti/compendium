@@ -12,6 +12,10 @@ const config = [
       ".superpowers/**",
       // 3,500+ captured demo fixture files -- data, never lint
       "demo/fixtures/**",
+      // dependency-free CommonJS font compiler, not app code
+      "fonts/almagest/tools/**",
+      // generated glyph SVG export
+      "fonts/almagest/glyphs/**",
     ],
   },
   ...nextCoreWebVitals,

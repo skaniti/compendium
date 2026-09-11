@@ -15,7 +15,8 @@
     "test": "npm run test -w apps/web",
     "test:watch": "npm run test:watch -w apps/web",
     "test:extension": "node --test 'apps/extension/tests/**/*.test.mjs'",
-    "demo": "npm run demo -w apps/web"
+    "demo": "npm run demo -w apps/web",
+    "fonts:build": "npm run fonts:build -w apps/web"
   },
   "keywords": [
     "compendium",

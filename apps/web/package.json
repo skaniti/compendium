@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "fonts:build": "node fonts/almagest/tools/build.cjs"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
