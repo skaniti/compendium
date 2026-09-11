@@ -140,6 +140,10 @@ headlessly via jsdom.
   chat search bar. The repo is an npm-workspaces monorepo; root `npm`
   commands (`dev`, `build`, `test`, `lint`, `demo`) delegate into this
   workspace, so the Quickstart above works unchanged from the repo root.
+- **Typeface:** `apps/web/fonts/almagest` — Almagest, an original caps-only
+  constellation face (every glyph is an asterism) in three optical tiers,
+  compiled by `npm run fonts:build` into `apps/web/public/fonts/almagest/`
+  and used for supercluster names on the graph.
 - **API proxy:** `apps/web/app/api/[...path]/route.ts` forwards every
   `/api/*` call verbatim to whatever `BACKEND_URL` points at (injecting the
   auth cookie, streaming SSE through unbuffered), so the frontend never

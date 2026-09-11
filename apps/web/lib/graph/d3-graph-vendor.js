@@ -1199,6 +1199,20 @@ var __vendorExpandedGroups;
     var BASE_SC_LABEL_FONT_SIZE = 9;          // SC-member pill text
     var BASE_SC_ICON_SIZE = 100;              // SC watermark icon size (screen px at fit)
     var BASE_SC_NAME_FONT_SIZE = 22;          // SC name text under watermark
+    // Almagest optical tiers (theme.css @font-face; fonts/almagest/README.md
+    // §3). Chosen by PAINTED px, not CSS px: SC names are screen-clamped via
+    // scName, so painted = nameFontSize * currentZoomK. Metrics are frozen
+    // across the three faces, so a swap never moves a glyph.
+    var ALMAGEST_DISPLAY_MIN_PX = 52;
+    var ALMAGEST_MID_MIN_PX = 22;
+    // painted size is BASE * (effRatio/k) * k and the k cancellation is not
+    // exact in floating point; a hair below a threshold must not drop a tier.
+    var ALMAGEST_TIER_EPS = 0.01;
+    function almagestFace(paintedPx) {
+        if (paintedPx >= ALMAGEST_DISPLAY_MIN_PX - ALMAGEST_TIER_EPS) return '"Almagest Display", "Georgia", serif';
+        if (paintedPx >= ALMAGEST_MID_MIN_PX - ALMAGEST_TIER_EPS) return '"Almagest Mid", "Georgia", serif';
+        return '"Almagest Text", "Georgia", serif';
+    }
     var BASE_SINGLETON_LABEL_FONT_SIZE = 8;   // featured-singleton page titles
     var BASE_GROUP_LABEL_FONT_SIZE = 12;      // collapsed-group captions
     var BASE_PAGE_DOT_SIZE = 1.5;             // page-dot screen radius at fit (px)
@@ -2185,6 +2199,33 @@ var __vendorExpandedGroups;
         updatePageDotScale(zoomK);
     }
 
+    // Almagest arrives lazily: the first draw requests the TTF and measures
+    // SC names in the fallback face, so caption placement is computed against
+    // the wrong rects until the next zoom tick (observed 2026-09-11: captions
+    // parked on top of SC names for as long as the view stayed still). Treat
+    // a font arrival as a zero-delta zoom tick. 'loadingdone' fires once per
+    // font batch, so this runs a handful of times per page life.
+    if (typeof document !== 'undefined' && document.fonts &&
+        typeof document.fonts.addEventListener === 'function') {
+        document.fonts.addEventListener('loadingdone', function () {
+            if (!svg || !(currentZoomK > 0)) return;
+            // Mirror the zoom handler's post-transform calls (.on('zoom', ...)
+            // above), placement-affecting ones only: updateLabelLOD re-derives
+            // hull-label opacity and (re)schedules the collision cull, which
+            // reads SC-name screen bboxes as obstacles -- those bboxes just
+            // changed width/height now that Almagest replaced the fallback
+            // face. updateLabelScale repositions group captions + redraws
+            // watermarks against the now-correct metrics. updateEdgeChips
+            // stays last, same as the zoom handler (R6.2: depends on the
+            // transform/centroids updateLabelScale just refreshed). Skipped:
+            // updateZoomIndicator (UI text only, not placement) and the
+            // transform assignment itself (this is a zero-delta tick).
+            updateLabelLOD(currentZoomK);
+            updateLabelScale(currentZoomK);
+            updateEdgeChips();
+        });
+    }
+
     // Rethink R1.1: world-space radius that paints screen-clamped. The
     // selected/armed x1.8 emphasis is applied by callers, not here.
     function pageDotRadius(d, zoomK) {
@@ -2569,6 +2610,18 @@ var __vendorExpandedGroups;
     // computeWatermarkBBox uses the same value so the shrinkwrap bbox
     // tracks the rendered label position.
     var SC_LABEL_TOP_PAD = 10;
+    // Soft chars per wrapped SC-name line. Almagest averages 0.83em per
+    // glyph (caps-only, frozen across tiers), so 12 chars ≈ 10em, about the
+    // width 14 chars filled in the previous mixed-case face. Shared by
+    // wrapLabelLines (drawWatermarks) and computeWatermarkBBox's estimate so
+    // layout and paint agree.
+    var SC_NAME_LINE_BUDGET = 12;
+    // Per-char width for computeWatermarkBBox's SC-name estimate at its 30px
+    // reference size: Almagest advances average 0.83em (caps-only, identical
+    // across tiers), so 30 * 0.83 ≈ 25. Both constants also ride the sim
+    // worker payload (scNameLineBudget / scNameCharWidth) so the worker's
+    // mirror of computeWatermarkBBox (sim-layout.ts) estimates the same rect.
+    var SC_NAME_CHAR_WIDTH = 25;
 
     /**
      * Wrap a name into display lines using the same heuristic the label
@@ -2738,12 +2791,10 @@ var __vendorExpandedGroups;
         // and made pill placement land "north" of the watermark group.
         var SC_NAME_FONT_SIZE = 30;
         var SC_NAME_LINE_HEIGHT = SC_NAME_FONT_SIZE * 1.15;  // ≈ 34.5
-        // Char width in the SuperclusterLabel font is not Latin-aligned,
-        // but at 30px ≈ 17 px/char gives a conservative width estimate.
-        var SC_NAME_CHAR_WIDTH = 17;
+        // Per-char width: module-scope SC_NAME_CHAR_WIDTH (face-dependent).
 
         var nameText = (scKeyword || '').slice(0, 36);
-        var lines = estimateLabelLines(nameText, 14);
+        var lines = estimateLabelLines(nameText, SC_NAME_LINE_BUDGET);
         var nameH = lines.length * SC_NAME_LINE_HEIGHT;
         var nameMaxLen = 0;
         lines.forEach(function (l) { if (l.length > nameMaxLen) nameMaxLen = l.length; });
@@ -3439,7 +3490,7 @@ var __vendorExpandedGroups;
      * pathological overflow, so real topic names land in ≤3 lines naturally.
      *
      * @param {string} text           topic name, already ≤ 36 chars
-     * @param {number} perLineBudget  soft char budget per line — 14 fits MilkyWay at 20px
+     * @param {number} perLineBudget  soft char budget per line — callers pass SC_NAME_LINE_BUDGET
      * @returns {string[]}            one line per array entry
      */
     function wrapLabelLines(text, perLineBudget) {
@@ -3730,7 +3781,7 @@ var __vendorExpandedGroups;
                 var displayName = rawName.length > 36
                     ? rawName.slice(0, 36)
                     : rawName;
-                var lines = wrapLabelLines(displayName, 14);
+                var lines = wrapLabelLines(displayName, SC_NAME_LINE_BUDGET);
 
                 var labelEl = g.append('text')
                     .attr('class', 'supercluster-label')
@@ -3748,6 +3799,8 @@ var __vendorExpandedGroups;
                     // theme.css `.supercluster-label { font-size: 30px }`
                     // rule; SVG presentation attributes do not.
                     .style('font-size', nameFontSize + 'px')
+                    // Tier by painted size (= world font size x zoom); re-evaluated every zoom tick since this draw reruns then.
+                    .style('font-family', almagestFace(nameFontSize * currentZoomK))
                     .style('opacity', nameOpacity);
 
                 lines.forEach(function (line, i) {
@@ -4157,7 +4210,7 @@ var __vendorExpandedGroups;
             });
             Object.keys(byKw).forEach(function (kw) {
                 var cy = byKw[kw].y / byKw[kw].n;
-                var lines = wrapLabelLines(kw.slice(0, 36), 14).length;
+                var lines = wrapLabelLines(kw.slice(0, 36), SC_NAME_LINE_BUDGET).length;
                 var bottom = cy + BASE_SC_ICON_SIZE / 2 + SC_LABEL_TOP_PAD
                     + lines * BASE_SC_NAME_FONT_SIZE * 1.3 + 8;
                 if (bottom > maxY) maxY = bottom;
@@ -4435,6 +4488,8 @@ var __vendorExpandedGroups;
             nebulaRadiusMult: NEBULA_RADIUS_MULT,
             nebulaMinRadius: NEBULA_MIN_RADIUS,
             scLabelTopPad: SC_LABEL_TOP_PAD,
+            scNameLineBudget: SC_NAME_LINE_BUDGET,
+            scNameCharWidth: SC_NAME_CHAR_WIDTH,
             // The whole cache, not just this run's cluster names -- names
             // from a PRIOR dataset are simply never looked up by this
             // run's clusters, harmless to include (labelDimsCache is

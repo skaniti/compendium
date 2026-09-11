@@ -32,6 +32,8 @@ function payload(overrides: Partial<SimStartPayload> = {}): SimStartPayload {
     nebulaRadiusMult: 9,
     nebulaMinRadius: 200,
     scLabelTopPad: 10,
+    scNameLineBudget: 12,
+    scNameCharWidth: 25,
     labelDims: {},
     expandedGroups: {},
     ...overrides,

@@ -178,21 +178,25 @@ function estimateClusterShrinkwrap(
   };
 }
 
-/** vendor computeWatermarkBBox, :2111-2150. */
+/** vendor computeWatermarkBBox, :2111-2150. The wrap budget and per-char
+ *  width are face-dependent (payload.scNameLineBudget / scNameCharWidth,
+ *  from the vendor's SC_NAME_LINE_BUDGET / SC_NAME_CHAR_WIDTH) so this
+ *  mirror and the painted labels agree. */
 function computeWatermarkBBox(
   scKeyword: string,
   scCentroid: { x: number; y: number },
-  scLabelTopPad: number
+  scLabelTopPad: number,
+  scNameLineBudget: number,
+  scNameCharWidth: number
 ): Rect {
   const ICON_SIZE = 160;
   const SC_NAME_FONT_SIZE = 30;
   const SC_NAME_LINE_HEIGHT = SC_NAME_FONT_SIZE * 1.15;
-  const SC_NAME_CHAR_WIDTH = 17;
 
   const nameText = (scKeyword || "").slice(0, 36);
-  const lines = estimateLabelLines(nameText, 14);
+  const lines = estimateLabelLines(nameText, scNameLineBudget);
   const nameH = lines.length * SC_NAME_LINE_HEIGHT;
-  const nameW = maxLineLen(lines) * SC_NAME_CHAR_WIDTH;
+  const nameW = maxLineLen(lines) * scNameCharWidth;
 
   const halfIcon = ICON_SIZE / 2;
   const nameTopY = scCentroid.y + halfIcon + scLabelTopPad;
@@ -298,6 +302,8 @@ function runClusterCentroidPhases(
   nebulaRadiusMult: number,
   nebulaMinRadius: number,
   scLabelTopPad: number,
+  scNameLineBudget: number,
+  scNameCharWidth: number,
   labelDims: LabelDims,
   expandedGroups: Record<string, boolean>
 ): Map<string, { x: number; y: number }> {
@@ -435,7 +441,13 @@ function runClusterCentroidPhases(
       rscx /= rscn;
       rscy /= rscn;
 
-      const wmBox = computeWatermarkBBox(scKey, { x: rscx, y: rscy }, scLabelTopPad);
+      const wmBox = computeWatermarkBBox(
+        scKey,
+        { x: rscx, y: rscy },
+        scLabelTopPad,
+        scNameLineBudget,
+        scNameCharWidth
+      );
       const wmHalfW = (wmBox.maxX - wmBox.minX) / 2;
       const wmHalfH = (wmBox.maxY - wmBox.minY) / 2;
       const wmHalfDiag = Math.hypot(wmHalfW, wmHalfH);
@@ -669,6 +681,8 @@ export class SimEngine {
       payload.nebulaRadiusMult,
       payload.nebulaMinRadius,
       payload.scLabelTopPad,
+      payload.scNameLineBudget,
+      payload.scNameCharWidth,
       payload.labelDims,
       expandedGroups
     );

@@ -114,6 +114,13 @@ export interface SimStartPayload {
    *  icon-to-name vertical clearance, consumed by Phase 1.5a's
    *  ring-radius calc. */
   scLabelTopPad: number;
+  /** SC_NAME_LINE_BUDGET / SC_NAME_CHAR_WIDTH (vendor module vars) --
+   *  computeWatermarkBBox's SC-name wrap budget and per-char width. Both
+   *  are properties of the SC-name face (Almagest: caps-only, 0.83em
+   *  average advance), shipped here so the worker's mirror estimates the
+   *  same rect the vendor paints instead of carrying its own copy. */
+  scNameLineBudget: number;
+  scNameCharWidth: number;
   /** Real DOM-measured label dims, keyed by cluster NAME (vendor's
    *  labelDimsCache). measureLabelDims() draws into a hidden SVG text
    *  element and reads getBBox() -- a DOM operation only the main thread
