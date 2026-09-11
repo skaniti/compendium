@@ -39,9 +39,9 @@ class TabsStoreTest {
     }
 
     @Test
-    fun truncatedFileDecodesToNullInsteadOfThrowing() {
+    fun truncatedFileDecodesToFailureInsteadOfThrowing() {
         val truncated = """{"activeTabId":1,"tabs":[{"id":1,"title":"t","url":"https://e"""
-        assertNull(TabsStore.decodeOrNull(truncated))
-        assertNull(TabsStore.decodeOrNull(""))
+        assertEquals(true, TabsStore.decodeResult(truncated).isFailure)
+        assertEquals(true, TabsStore.decodeResult("").isFailure)
     }
 }

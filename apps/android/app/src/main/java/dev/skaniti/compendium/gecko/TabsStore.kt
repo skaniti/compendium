@@ -46,8 +46,7 @@ object TabsStore {
     /** A zero-tab snapshot is never legitimate (closing the last tab creates a new one). */
     fun shouldPersist(snapshot: TabsSnapshot): Boolean = snapshot.tabs.isNotEmpty()
 
-    fun decodeOrNull(text: String): TabsSnapshot? =
-        try { decode(text) } catch (e: Exception) { null }
+    fun decodeResult(text: String): Result<TabsSnapshot> = runCatching { decode(text) }
 
     fun save(context: Context, manager: TabManager) {
         val snapshot = snapshotOf(manager)
@@ -68,9 +67,14 @@ object TabsStore {
             Log.i(TAG, "No tabs on disk; starting fresh")
             return null
         }
-        val snap = decodeOrNull(f.readText())
-        if (snap == null) {
-            Log.e(TAG, "Failed to load tabs (unparseable ${f.length()} bytes); starting fresh")
+        val text = try {
+            f.readText()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read tabs; starting fresh", e)
+            return null
+        }
+        val snap = decodeResult(text).getOrElse { e ->
+            Log.e(TAG, "Failed to parse tabs (${text.length} chars); starting fresh", e)
             return null
         }
         // Tabs with neither a URL nor saved state restore as blank husks
