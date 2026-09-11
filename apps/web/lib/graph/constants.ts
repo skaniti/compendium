@@ -127,7 +127,8 @@ export interface GraphDefaults {
 // GRAPH_DEFAULTS.TYPO_V/.FOG_V) because that gating logic compares a
 // saved snapshot against the CURRENT bare constant, not against this
 // module's own defaults object.
-export const TUNER_TYPO_VERSION = 3;
+// v4 (2026-09-11): scName k_min 1.00 -> 0.75 (P3, sc-layout-separation); v3-stamped profiles pinning 1.00 would silently undo it.
+export const TUNER_TYPO_VERSION = 4;
 export const TUNER_FOG_VERSION = 2;
 
 export const GRAPH_DEFAULTS: Readonly<GraphDefaults> = Object.freeze({
@@ -137,7 +138,7 @@ export const GRAPH_DEFAULTS: Readonly<GraphDefaults> = Object.freeze({
     clLabel: { k_min: 1.25, k_max: 2.0 },
     scLabel: { k_min: 1.0, k_max: 2.0 },
     scIcon: { k_min: 0.5, k_max: 1.15 },
-    scName: { k_min: 1.0, k_max: 2.0 },
+    scName: { k_min: 0.75, k_max: 2.0 },
     singletonLabel: { k_min: 1.0, k_max: 2.5 },
     groupLabel: { k_min: 1.0, k_max: 1.6 },
     pageDot: { k_min: 0.9, k_max: 2.1 },

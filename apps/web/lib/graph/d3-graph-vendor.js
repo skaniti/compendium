@@ -1178,7 +1178,7 @@ var __vendorExpandedGroups;
         clLabel: { k_min: 1.25, k_max: 2.00 },
         scLabel: { k_min: 1.00, k_max: 2.00 },
         scIcon:  { k_min: 0.50, k_max: 1.15 },  // was 5.0 — icons grew INTO labels as you zoomed (measured 1.3k->5.4k px² pill x icon); k_min was 0.60 until 2026-07-14 — above MIN_ZOOM_RATIO's 0.5 floor, so ratio in [0.5,0.6) clamped to a constant while zoomK kept shrinking, ballooning icon world-size and destabilizing the nameplate-deconfliction pass right at min zoom (icon jump bug)
-        scName:  { k_min: 1.00, k_max: 2.00 },
+        scName:  { k_min: 0.75, k_max: 2.00 },  // was 1.00 until 2026-09-11 (P3, delta #32): screen-constant names grew their WORLD footprint as zoom shrank, which is what made side-by-side nameplates collide at the floor
         // Singleton page-title labels share the same shape as cluster labels
         // (clamped scale by zoom ratio) but with a smaller base size since
         // they're tertiary signal sitting on top of nebula content.
@@ -3801,7 +3801,14 @@ var __vendorExpandedGroups;
                     .style('font-size', nameFontSize + 'px')
                     // Tier by painted size (= world font size x zoom); re-evaluated every zoom tick since this draw reruns then.
                     .style('font-family', almagestFace(nameFontSize * currentZoomK))
-                    .style('opacity', nameOpacity);
+                    .style('opacity', nameOpacity)
+                    // Delta #32 (mirrors R6.1's icon rule above): once the
+                    // LOD fade has effectively completed, drop the text out
+                    // of bbox/hit-testing entirely -- opacity:0 text still
+                    // reserves its footprint in screenBBoxOf, so the R6
+                    // resolver and collectObstacleRects kept denying that
+                    // space for a name that was not painted.
+                    .style('display', nameOpacity > 0.05 ? null : 'none');
 
                 lines.forEach(function (line, i) {
                     labelEl.append('tspan')

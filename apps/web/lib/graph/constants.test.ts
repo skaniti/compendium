@@ -31,12 +31,15 @@ describe("GRAPH_DEFAULTS", () => {
     expect(GRAPH_DEFAULTS.SC_PILL_SHAPE).toBe("circle");
     expect(GRAPH_DEFAULTS.NEBULA_RADIUS_MULT).toBe(9.0);
     expect(GRAPH_DEFAULTS.LOD_BASE_THRESHOLD).toBe(2.5);
+    // P3 (sc-layout-separation spec, decision #1): names shrink with the
+    // world below fit down to 0.75x instead of staying screen-constant.
+    expect(GRAPH_DEFAULTS.SCALE_THRESHOLDS.scName).toEqual({ k_min: 0.75, k_max: 2.0 });
   });
 });
 
 describe("tuner version stamps", () => {
-  it("TUNER_TYPO_VERSION is 3", () => {
-    expect(TUNER_TYPO_VERSION).toBe(3);
+  it("TUNER_TYPO_VERSION is 4 (P3 scName k_min re-baseline, sc-layout-separation)", () => {
+    expect(TUNER_TYPO_VERSION).toBe(4);
   });
 
   it("TUNER_FOG_VERSION is 2", () => {
