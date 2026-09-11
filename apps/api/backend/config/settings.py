@@ -72,15 +72,33 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
     # Session expiry tuning (docs/project-plans/2026-09-09-125949-session-
-    # expiry-tuning/spec.md, decision D1): per-role session policy. A
-    # "remembered" login (explicit opt-in checkbox, never available to the
-    # demo role) gets a 90-day refresh token and no idle lapse; demo gets a
-    # longer idle window (public read-only, no long-refresh path); default
-    # is unchanged from the historical 60-minute idle behavior.
+    # expiry-tuning/spec.md, decision D1, amended 2026-09-10): per-role
+    # session policy. A "remembered" session (90-day refresh token, no idle
+    # lapse; never available to the demo role) is granted server-side based
+    # on the ingress path the request arrived over, NOT a client opt-in --
+    # see the ingress settings below and ``auth_service.ingress_trusted``.
+    # Demo gets a longer idle window (public read-only, no long-refresh
+    # path); default is unchanged from the historical 60-minute idle
+    # behavior.
     jwt_refresh_token_expire_days_remembered: int = 90
     session_idle_minutes: int = 60
     session_idle_minutes_demo: int = 720
     session_idle_minutes_remembered: int = 0
+    # Amendment 2026-09-10 (spec D1 tailnet-trust rewrite): Caddy overwrites
+    # this header on both loopback listeners before proxying to the app --
+    # ``tailnet`` on the tailscale-serve listener (:8081), ``public`` on the
+    # Cloudflare Tunnel listener (:8080) -- so a public caller cannot forge
+    # it (see spec.md's "Tailnet trust" paragraph and D6). The API trusts
+    # only this header; anything else (including an explicit "public")
+    # means the request is NOT tailnet-trusted.
+    session_ingress_header: str = "X-Compendium-Ingress"
+    session_ingress_trusted_value: str = "tailnet"
+    # Dev-only: local development has no Caddy in front of it, so the header
+    # is always absent. Setting this True treats an ABSENT header as
+    # trusted so a solo local dev session behaves like a tailnet session.
+    # Refused at startup in production -- see _check_production_secrets --
+    # because it would make every public caller implicitly trusted.
+    session_trust_missing_ingress: bool = False
 
     # ==========================================================================
     # User Identity (dev / bootstrap)
@@ -403,6 +421,21 @@ class Settings(BaseSettings):
                     "origins in production (e.g. 'https://compendium.example.com'); "
                     "the dev wildcard '*' is rejected."
                 )
+
+        # SESSION_TRUST_MISSING_INGRESS=1 treats an absent ingress header as
+        # tailnet-trusted -- fine for local dev (no Caddy in front), but
+        # anywhere else (staging, production, or a misspelled/unset
+        # ENVIRONMENT) it would let ANY public caller (the header is simply
+        # never present outside our own Caddy config) obtain a remembered/
+        # 90-day, no-idle-lapse session. Hard-fail at startup for any
+        # non-development environment, same pattern as the JWT secret / CORS
+        # "*" checks above.
+        if self.environment != "development" and self.session_trust_missing_ingress:
+            raise ValueError(
+                "SESSION_TRUST_MISSING_INGRESS is a dev-only knob; refused "
+                "outside environment=development -- it would trust every "
+                "public caller as tailnet-remembered."
+            )
 
         return self
 

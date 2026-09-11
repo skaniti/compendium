@@ -112,9 +112,13 @@ def save_refresh_token(
 ) -> int:
     """Store a hashed refresh token. Returns the token row ID.
 
-    ``remembered`` (migration 044) records whether this token came from a
-    "keep me signed in" login/rotation, so ``session_policy`` can be
-    recomputed from the DB on refresh without re-trusting client input.
+    ``remembered`` (migration 044) records that this token was minted while
+    the request's ingress verdict was tailnet-trusted (see
+    ``auth_service.ingress_trusted``) -- not a client "keep me signed in"
+    opt-in. It is recomputed from the current ingress verdict at every mint
+    (login and each rotation), never carried forward from a stored token's
+    own flag, so ``session_policy`` stays derived from the DB without
+    re-trusting client input.
     """
     with get_conn() as conn:
         with conn.cursor() as cur:

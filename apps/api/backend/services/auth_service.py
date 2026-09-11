@@ -116,14 +116,39 @@ def create_refresh_token(user_id: int, remembered: bool = False) -> str:
     return raw_token
 
 
-def rotate_refresh_token(raw_token: str) -> tuple[str, str, dict] | None:
+def ingress_trusted(headers) -> bool:
+    """Whether the request arrived over the tailnet-trusted Caddy listener
+    (spec D1/D6, amended 2026-09-10).
+
+    ``headers`` is any case-insensitive mapping exposing ``.get()`` --
+    typically Starlette's ``request.headers``. Caddy overwrites
+    ``settings.session_ingress_header`` on both loopback listeners before
+    proxying to the app (``tailnet`` on the tailscale-serve listener,
+    ``public`` on the Cloudflare Tunnel listener), so a public caller
+    cannot forge this value; only an EXACT match against
+    ``settings.session_ingress_trusted_value`` counts as trusted -- any
+    other value, including the literal ``"public"``, is untrusted.
+
+    When the header is entirely absent (no Caddy in front -- local dev),
+    falls back to ``settings.session_trust_missing_ingress`` (refused in
+    production by the ``Settings`` validator).
+    """
+    value = headers.get(settings.session_ingress_header)
+    if value is None:
+        return settings.session_trust_missing_ingress
+    return value == settings.session_ingress_trusted_value
+
+
+def rotate_refresh_token(raw_token: str, ingress_trusted: bool) -> tuple[str, str, dict] | None:
     """Validate a refresh token, revoke it, and issue new access + refresh.
 
     Returns ``(new_access_token, new_refresh_token, session_policy)`` or
-    None if invalid. The ``remembered`` flag on the stored token carries
-    forward to the newly minted refresh token (spec D1), and the policy is
-    recomputed from the user's current DB role -- a demoted/promoted user
-    gets the right policy on their very next refresh.
+    None if invalid. ``remembered`` is RECOMPUTED at every mint from the
+    CURRENT ingress verdict (spec D1, amended 2026-09-10) -- the stored
+    token's own ``remembered`` flag is audit/record-keeping only and no
+    longer carries forward on its own. A device that leaves the tailnet
+    drops to the default policy at its next rotation; one that joins the
+    tailnet upgrades at its next rotation.
     """
     token_hash = _hash_token(raw_token)
     stored = auth_repo.get_refresh_token(token_hash)
@@ -157,11 +182,11 @@ def rotate_refresh_token(raw_token: str) -> tuple[str, str, dict] | None:
     # demo role can never hold a 90-day token) must hold even for a user
     # whose role changed to demo since the stored token was minted. Reading
     # role after minting (the pre-fix bug) let the new refresh token inherit
-    # the stale `remembered` flag while only the *reported* policy reflected
-    # the corrected role, so a demoted-to-demo user kept a 90-day token with
-    # a policy that claimed remembered: False.
+    # a stale flag while only the *reported* policy reflected the corrected
+    # role, so a demoted-to-demo user kept a 90-day token with a policy that
+    # claimed remembered: False.
     role = auth_repo.get_role(user["id"])
-    remembered = bool(stored["remembered"]) and role != "demo"
+    remembered = role != "demo" and ingress_trusted
     access = create_access_token(user["id"], user["email"])
     refresh = create_refresh_token(user["id"], remembered=remembered)
     policy = session_policy(role, remembered)

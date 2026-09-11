@@ -6,6 +6,7 @@
 """
 
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -91,6 +92,33 @@ def _verify_not_production_db():
             )
     except Exception:
         pass  # DB might not be available (non-DB tests); that's fine
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset the app's in-memory slowapi limiter storage before each test.
+
+    ``app.state.limiter`` is a module-level singleton (backend/api/main.py),
+    so without this, per-IP counters (e.g. the 5/minute cap on
+    ``/api/auth/login``) accumulate across every test in the session --
+    since TestClient always presents the same synthetic "testserver"
+    address, unrelated test files that each make a couple of login calls
+    can collectively trip a 429 for a later, otherwise-unrelated test
+    (flagged 2026-09-10: session-expiry-tuning Task 1b's additional
+    login-header test cases pushed a shared count over the limiter's
+    5/minute cap and broke tests/test_api_view_as.py::TestLoginParity when
+    run in the same session). Reset happens BEFORE each test only, so a
+    test that deliberately exercises rate-limiting within itself still
+    accumulates its own calls normally.
+
+    Looks up the already-imported module via ``sys.modules`` instead of
+    importing it (and blind-catching whatever that import might raise):
+    if ``backend.api.main`` was never imported by the running test session,
+    there is no limiter state to reset, so this is a no-op.
+    """
+    mod = sys.modules.get("backend.api.main")
+    if mod is not None:
+        mod.app.state.limiter.reset()
 
 
 def pytest_configure(config):

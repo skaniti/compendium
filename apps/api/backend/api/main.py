@@ -2562,9 +2562,6 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=254)
     password: str = Field(..., min_length=1, max_length=128)
-    # Session expiry tuning (spec D1/D4): "keep me signed in on this
-    # device" opt-in. Ignored server-side for the demo role -- see login().
-    remember: bool = False
 
 
 class PreferencesRequest(BaseModel):
@@ -2650,11 +2647,14 @@ async def login(request: Request, body: LoginRequest):
     if not auth_service.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Server-authoritative: role is a DB lookup, never client-trusted, so
-    # the demo credential can never obtain a remembered/90-day session
-    # even if it posts remember=true (spec D1).
+    # Server-authoritative, amended 2026-09-10 (spec D1): "remembered" is
+    # derived from the ingress path the request arrived over (Caddy's
+    # X-Compendium-Ingress header, unspoofable from the public origin --
+    # see auth_service.ingress_trusted), never a client-supplied opt-in.
+    # Role is a DB lookup, never client-trusted, so the demo credential can
+    # never obtain a remembered/90-day session.
     role = ar.get_role(user["id"])
-    remembered = body.remember and role != "demo"
+    remembered = role != "demo" and auth_service.ingress_trusted(request.headers)
 
     access_token = auth_service.create_access_token(user["id"], user["email"])
     refresh_token = auth_service.create_refresh_token(user["id"], remembered=remembered)
@@ -2841,11 +2841,18 @@ class LogoutRequest(BaseModel):
 
 
 @app.post("/api/auth/refresh", tags=["Auth"])
-async def refresh_token_endpoint(body: RefreshRequest):
-    """Exchange a refresh token for a new access + refresh token pair."""
+async def refresh_token_endpoint(request: Request, body: RefreshRequest):
+    """Exchange a refresh token for a new access + refresh token pair.
+
+    ``remembered`` is recomputed from the CURRENT ingress verdict on every
+    rotation (spec D1, amended 2026-09-10) -- see
+    ``auth_service.rotate_refresh_token`` / ``ingress_trusted``.
+    """
     from backend.services import auth_service
 
-    result = auth_service.rotate_refresh_token(body.refresh_token)
+    result = auth_service.rotate_refresh_token(
+        body.refresh_token, auth_service.ingress_trusted(request.headers)
+    )
     if result is None:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
