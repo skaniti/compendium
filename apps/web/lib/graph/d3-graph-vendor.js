@@ -883,18 +883,16 @@
 //      (c) drawWatermarks: every plate records data-anchor-x/y (anchored
 //      translate) + data-plate-cx/cy/hw/hh (footprint geometry); overflow
 //      plates below their kExile are centered on a peripheral point --
-//      radially outward from the cloud centroid to the fit bbox exit +
-//      SC_EXILE_MARGIN_PX, order-preserving angular spacing (spaceOnRing),
-//      clamped inside the viewport by SC_EXILE_VIEWPORT_MARGIN_PX -- with
-//      a g.watermark-leader (dot at the anchor + straight leader clipped
-//      to the plate rect) in a leader sub-layer painted beneath the
-//      plates; dot carries the nameplate's hover/click. The glide's anchor
-//      now comes from data-anchor-x/y so anchored<->exiled transitions
-//      animate through the unchanged delta-#29 machinery; updateLeaderEnd
-//      keeps the leader on the moving plate each frame. Exile onset is
-//      computed against every other painted plate; exiled plates yield in
-//      the R6 order; leaders are uncrossed by slot swap (`uncrossSegments`)
-//      after the viewport clamp; overfull rings scale their angular demand.
+//      ring placement lives in `placeExiledPlates` (sc-separation.ts): slot
+//      swap on clipped leaders, radial viewport clamp -- with a
+//      g.watermark-leader (dot at the anchor + straight leader clipped to
+//      the plate rect) in a leader sub-layer painted beneath the plates;
+//      dot carries the nameplate's hover/click. The glide's anchor now
+//      comes from data-anchor-x/y so anchored<->exiled transitions animate
+//      through the unchanged delta-#29 machinery; updateLeaderEnd keeps the
+//      leader on the moving plate each frame. Exile onset is computed
+//      against every other painted plate; exiled plates yield in the R6
+//      order.
 //      (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
 //      footprint as well as fog halo (payload.scSeparation). The R6
 //      resolver and delta-#29 glide are unchanged and now act only as a
@@ -910,7 +908,7 @@
 // =====================================================================
 
 import { GRAPH_DEFAULTS, TUNER_TYPO_VERSION, TUNER_FOG_VERSION } from "./constants";
-import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect, uncrossSegments } from './sc-separation';
+import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, clipSegmentToRect, placeExiledPlates } from './sc-separation';
 import d3 from "./d3";
 // Task group W (header comment delta #17): the force-layout pipeline's
 // main-thread client -- see that file's own header comment for why this
@@ -2432,41 +2430,6 @@ var __vendorExpandedGroups;
                  top: Math.min(y1, y2), bottom: Math.max(y1, y2) };
     }
 
-    /** Delta #32 (Task 5): keep an exiled plate (footprint `fp`, screen px,
-     *  centered on world point `p`) inside the viewport minus
-     *  SC_EXILE_VIEWPORT_MARGIN_PX. Uses the same root CTM + container rect
-     *  mapping updateEdgeChips uses; returns `p` unchanged when the DOM
-     *  cannot be measured (jsdom) or the plate already fits.
-     *
-     *  Review fix (Task 5 follow-up): `p` is the FOOTPRINT CENTER (the
-     *  pre-pass places it `halfDiag` past the bbox exit, and the per-plate
-     *  code recovers the translate origin by subtracting plateCxW/plateCyW
-     *  from it) -- but `fp.top/bottom/left/right` are offsets from the ICON
-     *  center, not `p`, and are vertically asymmetric (`bottom` includes
-     *  labelTopPad + the name's height). Clamping with `M - fp.top` /
-     *  `H - M - fp.bottom` was off by `(fp.top + fp.bottom) / 2`: the real
-     *  top edge could still overshoot the viewport while the bottom was
-     *  over-clamped. Clamp with half-sizes measured about `p` itself
-     *  instead -- symmetric by construction, so both edges land exactly on
-     *  the margin when the raw point is outside it. */
-    function clampPlateCenterToViewport(p, fp) {
-        if (!svg || !__mountedContainer) return p;
-        var rootNode = svg.select('.graph-root').node();
-        var ctm = rootNode && rootNode.getScreenCTM ? rootNode.getScreenCTM() : null;
-        if (!ctm || !(ctm.a > 0) || !(ctm.d > 0)) return p;
-        var crect = __mountedContainer.getBoundingClientRect();
-        if (!(crect.width > 0) || !(crect.height > 0)) return p;
-        var sx = ctm.a * p.x + ctm.c * p.y + ctm.e - crect.left;
-        var sy = ctm.b * p.x + ctm.d * p.y + ctm.f - crect.top;
-        var M = SC_EXILE_VIEWPORT_MARGIN_PX;
-        var hw = (fp.right - fp.left) / 2, hh = (fp.bottom - fp.top) / 2;
-        var nx = Math.min(Math.max(sx, M + hw), crect.width - M - hw);
-        var ny = Math.min(Math.max(sy, M + hh), crect.height - M - hh);
-        if (nx === sx && ny === sy) return p;
-        // Inverse of the translate+scale CTM (rotation-free by construction).
-        return { x: (nx + crect.left - ctm.e) / ctm.a, y: (ny + crect.top - ctm.f) / ctm.d };
-    }
-
     /** Delta #32 (Task 5): point the plate's leader line at the plate's
      *  CURRENT footprint edge (the plate moves during the glide; the dot
      *  never does). No-op for plates without a leader. */
@@ -3797,44 +3760,25 @@ var __vendorExpandedGroups;
             groups[kw0].forEach(function (mc) { var cen = centroids[mc.id]; if (cen) { ax0 += cen.x; ay0 += cen.y; an0++; } });
             if (an0) anchorByKw[kw0] = { x: ax0 / an0, y: ay0 / an0 };
         }
-        var exileCenter = {};   // keyword -> world point the exiled plate's footprint is centered on
+        var exileCenter = {};
         if (__scLayout && __scLayout.plates) {
-            var C = __scLayout.cloudCentroid, B = __scLayout.cloudBBox;
-            var ringItems = [], fpByKw = {};
+            var exItems = [];
             for (var kw1 in groups) {
                 var info1 = __scLayout.plates[kw1];
                 var a1 = anchorByKw[kw1];
                 if (!info1 || !info1.overflow || !a1 || !(currentZoomK < info1.kExile)) continue;
-                var dx1 = a1.x - C.x, dy1 = a1.y - C.y, len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
-                var f1 = plateFootprintAtRatio(kw1, zoomRatio, fpParams);
-                fpByKw[kw1] = f1;
-                var halfDiagPx = Math.sqrt(Math.pow((f1.right - f1.left) / 2, 2) + Math.pow((f1.bottom - f1.top) / 2, 2));
-                var exit1 = rayExitFromRect(C.x, C.y, dx1 / len1, dy1 / len1, B);
-                var R1 = Math.sqrt(Math.pow(exit1.x - C.x, 2) + Math.pow(exit1.y - C.y, 2)) + (SC_EXILE_MARGIN_PX + halfDiagPx) / (currentZoomK || 1);
-                ringItems.push({ key: kw1, angle: Math.atan2(dy1, dx1), halfAngle: Math.atan2(halfDiagPx / (currentZoomK || 1), R1) });
+                exItems.push({ key: kw1, ax: a1.x, ay: a1.y, fp: plateFootprintAtRatio(kw1, zoomRatio, fpParams) });
             }
-            if (ringItems.length) {
-                var spaced = spaceOnRing(ringItems);
-                ringItems.forEach(function (it) {
-                    var th = spaced[it.key], ux = Math.cos(th), uy = Math.sin(th);
-                    var f = fpByKw[it.key];
-                    var hd = Math.sqrt(Math.pow((f.right - f.left) / 2, 2) + Math.pow((f.bottom - f.top) / 2, 2));
-                    var ex = rayExitFromRect(C.x, C.y, ux, uy, B);
-                    var R = Math.sqrt(Math.pow(ex.x - C.x, 2) + Math.pow(ex.y - C.y, 2)) + (SC_EXILE_MARGIN_PX + hd) / (currentZoomK || 1);
-                    exileCenter[it.key] = clampPlateCenterToViewport({ x: C.x + ux * R, y: C.y + uy * R }, f);
-                });
-                // Task 7: leaders run from each plate's anchor to its exile
-                // center -- uncross them (2-opt slot swap) after the clamp
-                // above, then re-clamp the swapped centers into the viewport.
-                var segs = ringItems.map(function (it) {
-                    var a = anchorByKw[it.key], c = exileCenter[it.key];
-                    return { key: it.key, ax: a.x, ay: a.y, px: c.x, py: c.y };
-                });
-                var uncrossed = uncrossSegments(segs);
-                ringItems.forEach(function (it) {
-                    var u = uncrossed[it.key];
-                    exileCenter[it.key] = clampPlateCenterToViewport({ x: u.px, y: u.py }, fpByKw[it.key]);
-                });
+            if (exItems.length) {
+                var env = { cx: __scLayout.cloudCentroid.x, cy: __scLayout.cloudCentroid.y, bbox: __scLayout.cloudBBox, k: currentZoomK || 1, marginPx: SC_EXILE_MARGIN_PX };
+                var vpNode = svg && svg.select('.graph-root').node();
+                var vctm = vpNode && vpNode.getScreenCTM ? vpNode.getScreenCTM() : null;
+                var vrect = __mountedContainer ? __mountedContainer.getBoundingClientRect() : null;
+                if (vctm && vctm.a > 0 && vctm.d > 0 && vrect && vrect.width > 0 && vrect.height > 0) {
+                    env.viewport = { a: vctm.a, d: vctm.d, e: vctm.e, f: vctm.f, left: vrect.left, top: vrect.top, width: vrect.width, height: vrect.height, marginPx: SC_EXILE_VIEWPORT_MARGIN_PX };
+                }
+                var placed = placeExiledPlates(exItems, env);
+                exItems.forEach(function (it) { exileCenter[it.key] = { x: placed[it.key].x, y: placed[it.key].y }; });
             }
         }
         var leaderLayer = layer.append('g').attr('class', 'watermark-leaders');  // painted beneath the plates

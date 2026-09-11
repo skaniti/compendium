@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   clampRatio, estimateNameLines, plateFootprintAtRatio, plateRect, rectsOverlap,
   solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect,
-  uncrossSegments,
-  type FootprintParams, type SeparationPlate,
+  uncrossSegments, placeExiledPlates, segmentsCross,
+  type FootprintParams, type SeparationPlate, type ExileItem, type ExileEnv,
 } from "./sc-separation";
 
 const P: FootprintParams = {
@@ -149,7 +149,7 @@ describe("spaceOnRing overfull ring", () => {
     const seq = ["a", "b", "c", "d"].map((k) => out[k]);
     for (let i = 0; i < 3; i++) {
       let d = seq[i + 1] - seq[i]; while (d <= 0) d += 2 * Math.PI;
-      expect(d).toBeGreaterThan(0.5); // roughly 2*pi/4 * 0.98 minus float slop
+      expect(d).toBeGreaterThanOrEqual(2 * Math.PI * 0.98 / 4 - 1e-6); // scaled per-pair need for four equal items
       expect(d).toBeLessThan(Math.PI);
     }
   });
@@ -188,5 +188,107 @@ describe("rayExitFromRect / clipSegmentToRect", () => {
   it("clips the segment at the rect boundary nearest the outside point", () => {
     const p = clipSegmentToRect(-300, 0, 0, 0, r);
     expect(p).toEqual({ x: -100, y: 0 });
+  });
+});
+
+function worldRect(p: { x: number; y: number }, fp: { left: number; right: number; top: number; bottom: number }, k: number) {
+  const hw = (fp.right - fp.left) / 2 / k, hh = (fp.bottom - fp.top) / 2 / k;
+  return { minX: p.x - hw, maxX: p.x + hw, minY: p.y - hh, maxY: p.y + hh };
+}
+function leaderEnd(it: ExileItem, p: { x: number; y: number }, k: number) {
+  const r = worldRect(p, it.fp, k);
+  if (it.ax >= r.minX && it.ax <= r.maxX && it.ay >= r.minY && it.ay <= r.maxY) return { x: it.ax, y: it.ay };
+  return clipSegmentToRect(it.ax, it.ay, p.x, p.y, r);
+}
+function crossings(items: ExileItem[], out: Record<string, { x: number; y: number }>, k: number): number {
+  let n = 0;
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const ei = leaderEnd(items[i], out[items[i].key], k), ej = leaderEnd(items[j], out[items[j].key], k);
+    if (segmentsCross(items[i].ax, items[i].ay, ei.x, ei.y, items[j].ax, items[j].ay, ej.x, ej.y)) n++;
+  }
+  return n;
+}
+function overlaps(items: ExileItem[], out: Record<string, { x: number; y: number }>, k: number): number {
+  let n = 0;
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    if (rectsOverlap(worldRect(out[items[i].key], items[i].fp, k), worldRect(out[items[j].key], items[j].fp, k))) n++;
+  }
+  return n;
+}
+const FP_WIDE = { left: -90, right: 90, top: -27, bottom: 60 };
+const FP_NARROW = { left: -40, right: 40, top: -27, bottom: 45 };
+
+describe("placeExiledPlates", () => {
+  const env: ExileEnv = { cx: 0, cy: 0, bbox: { minX: -400, maxX: 400, minY: -250, maxY: 250 }, k: 0.5, marginPx: 16 };
+  it("places every plate outside the bbox along its radial, with no overlaps and no leader crossings", () => {
+    const items: ExileItem[] = [
+      { key: "a", ax: 300, ay: 20, fp: FP_WIDE },
+      { key: "b", ax: 150, ay: 40, fp: FP_NARROW },   // nearer the centroid, slightly higher angle
+      { key: "c", ax: 250, ay: -30, fp: FP_WIDE },
+      { key: "d", ax: -200, ay: 100, fp: FP_NARROW },
+    ];
+    const out = placeExiledPlates(items, env);
+    for (const it of items) {
+      const p = out[it.key];
+      const r = worldRect(p, it.fp, env.k);
+      expect(rectsOverlap(r, env.bbox)).toBe(false);
+      expect(Math.abs(Math.atan2(p.y - env.cy, p.x - env.cx) - p.angle)).toBeLessThan(1e-9);
+    }
+    expect(overlaps(items, out, env.k)).toBe(0);
+    expect(crossings(items, out, env.k)).toBe(0);
+  });
+  it("uncrosses by swapping slots: near-collinear anchors whose initial ring slots would cross end up uncrossed", () => {
+    // A bare pair can't exercise this: with only two items, order-preserving radial placement
+    // from a common centroid provably never produces a crossing (exhaustively verified while
+    // building this fixture -- 500k+ random 2-item configurations, 0 crossings; see
+    // task-8-report.md). A third, WIDE "mid" item crowding the same narrow angular band (all
+    // three anchors sit within ~2 degrees of each other, at increasing radius) forces it: mid's
+    // large half-angle demand pushes "far" and "near" far enough apart that their CLIPPED-EDGE
+    // leaders (not their centers, which never cross) cross before the swap corrects it. Traced
+    // pre-swap: far/near's leaders cross (far/mid and mid/near do not); the swap trades far's and
+    // near's ring slots, which INVERTS their angular order relative to their raw bearings
+    // (far 19.44 deg < near 19.98 deg bearing, but final near angle -4.49 deg < far angle 17.65
+    // deg) -- exactly the brief's point: uncrossing rendered leaders sometimes requires breaking
+    // simple angular order, which this test pins.
+    const items: ExileItem[] = [
+      { key: "far", ax: 340, ay: 120, fp: FP_NARROW },
+      { key: "mid", ax: 270, ay: 105, fp: FP_WIDE },
+      { key: "near", ax: 110, ay: 40, fp: FP_NARROW },
+    ];
+    const out = placeExiledPlates(items, env);
+    expect(crossings(items, out, env.k)).toBe(0);
+    expect(overlaps(items, out, env.k)).toBe(0);
+  });
+  it("clamps radially inside the viewport, preserving each plate's angle", () => {
+    const vp = { a: 0.5, d: 0.5, e: 300, f: 200, left: 0, top: 0, width: 600, height: 400, marginPx: 28 };
+    const items: ExileItem[] = [{ key: "a", ax: 300, ay: 0, fp: FP_WIDE }, { key: "b", ax: 0, ay: 200, fp: FP_NARROW }];
+    const out = placeExiledPlates(items, { ...env, viewport: vp });
+    for (const it of items) {
+      const p = out[it.key];
+      const sx = vp.a * p.x + vp.e - vp.left, sy = vp.d * p.y + vp.f - vp.top;
+      const hw = (it.fp.right - it.fp.left) / 2, hh = (it.fp.bottom - it.fp.top) / 2;
+      expect(sx - hw).toBeGreaterThanOrEqual(vp.marginPx - 1e-6);
+      expect(sx + hw).toBeLessThanOrEqual(vp.width - vp.marginPx + 1e-6);
+      expect(sy - hh).toBeGreaterThanOrEqual(vp.marginPx - 1e-6);
+      expect(sy + hh).toBeLessThanOrEqual(vp.height - vp.marginPx + 1e-6);
+      expect(Math.abs(Math.atan2(p.y - env.cy, p.x - env.cx) - Math.atan2(it.ay - env.cy, it.ax - env.cx))).toBeLessThan(0.35); // angle kept within the spacing budget
+    }
+  });
+  it("is deterministic and input-order independent", () => {
+    const items: ExileItem[] = [
+      { key: "a", ax: 300, ay: 20, fp: FP_WIDE }, { key: "b", ax: 150, ay: 40, fp: FP_NARROW },
+      { key: "c", ax: 250, ay: -30, fp: FP_WIDE }, { key: "d", ax: -200, ay: 100, fp: FP_NARROW },
+    ];
+    expect(placeExiledPlates(items.slice().reverse(), env)).toEqual(placeExiledPlates(items, env));
+  });
+  it("keeps an overfull ring in angular order with no crossings (overlap allowed)", () => {
+    const items: ExileItem[] = [];
+    for (let i = 0; i < 10; i++) {
+      const th = (i / 10) * 2 * Math.PI;
+      items.push({ key: "p" + i, ax: 200 * Math.cos(th), ay: 200 * Math.sin(th), fp: FP_WIDE });
+    }
+    const small: ExileEnv = { cx: 0, cy: 0, bbox: { minX: -120, maxX: 120, minY: -80, maxY: 80 }, k: 0.25, marginPx: 16 };
+    const out = placeExiledPlates(items, small);
+    expect(crossings(items, out, small.k)).toBe(0);
   });
 });

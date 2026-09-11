@@ -256,7 +256,7 @@ export function clipSegmentToRect(ax: number, ay: number, bx: number, by: number
   return rayExitFromRect(bx, by, dx / len, dy / len, r);
 }
 
-function segmentsCross(a1x: number, a1y: number, b1x: number, b1y: number, a2x: number, a2y: number, b2x: number, b2y: number): boolean {
+export function segmentsCross(a1x: number, a1y: number, b1x: number, b1y: number, a2x: number, a2y: number, b2x: number, b2y: number): boolean {
   const d = (p: number, q: number, r: number, s: number, x: number, y: number) => (r - p) * (y - q) - (s - q) * (x - p);
   const d1 = d(a2x, a2y, b2x, b2y, a1x, a1y), d2 = d(a2x, a2y, b2x, b2y, b1x, b1y);
   const d3 = d(a1x, a1y, b1x, b1y, a2x, a2y), d4 = d(a1x, a1y, b1x, b1y, b2x, b2y);
@@ -284,5 +284,95 @@ export function uncrossSegments(items: Array<{ key: string; ax: number; ay: numb
   }
   const out: Record<string, { px: number; py: number }> = {};
   sorted.forEach((it, i) => { out[it.key] = p[i]; });
+  return out;
+}
+
+export interface ExileItem { key: string; ax: number; ay: number; fp: PlateFootprint } // fp in SCREEN px
+export interface ExileViewport { a: number; d: number; e: number; f: number; left: number; top: number; width: number; height: number; marginPx: number }
+export interface ExileEnv { cx: number; cy: number; bbox: Rect; k: number; marginPx: number; viewport?: ExileViewport }
+export interface ExilePlacement { x: number; y: number; angle: number; radius: number }
+
+/** Largest t in [0, tMax] such that a plate of screen half-sizes (hw, hh)
+ *  centered on C + u*t stays inside the viewport minus its margin; NaN if
+ *  no t in range satisfies both axes. */
+function radialFit(env: ExileEnv, ux: number, uy: number, hw: number, hh: number, tMax: number): number {
+  const vp = env.viewport!;
+  let lo = 0, hi = tMax;
+  const axis = (scale: number, offset: number, c: number, u: number, half: number, extent: number) => {
+    // screen = scale*(c + u t) + offset; require margin+half <= screen <= extent-margin-half
+    const minS = vp.marginPx + half, maxS = extent - vp.marginPx - half;
+    const su = scale * u;
+    if (Math.abs(su) < 1e-12) {
+      const s = scale * c + offset;
+      if (s < minS || s > maxS) { lo = 1; hi = 0; }
+      return;
+    }
+    const t1 = (minS - scale * c - offset) / su, t2 = (maxS - scale * c - offset) / su;
+    lo = Math.max(lo, Math.min(t1, t2)); hi = Math.min(hi, Math.max(t1, t2));
+  };
+  axis(vp.a, vp.e - vp.left, env.cx, ux, hw, vp.width);
+  axis(vp.d, vp.f - vp.top, env.cy, uy, hh, vp.height);
+  return lo <= hi ? hi : NaN;
+}
+
+/**
+ * Peripheral placement for exiled plates. Each plate gets a ring SLOT (an
+ * angle around the cloud centroid, initially its anchor's bearing) and a
+ * radius = the ray's exit from the cloud bbox + (margin + its own
+ * half-diagonal)/k, radially clamped into the viewport (angle preserved).
+ * Slots are spaced order-preservingly with each plate's own half-angle at
+ * its own radius; leaders (anchor -> clipped plate edge) that still cross
+ * swap SLOTS, and the loop re-spaces. Bounded iterations; deterministic.
+ */
+export function placeExiledPlates(items: ExileItem[], env: ExileEnv, iterations = 3): Record<string, ExilePlacement> {
+  const sorted = items.slice().sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const n = sorted.length;
+  const k = env.k || 1;
+  const hw = sorted.map((it) => (it.fp.right - it.fp.left) / 2);
+  const hh = sorted.map((it) => (it.fp.bottom - it.fp.top) / 2);
+  const hd = sorted.map((_, i) => Math.hypot(hw[i], hh[i]));
+  let angle = sorted.map((it) => Math.atan2(it.ay - env.cy, it.ax - env.cx));
+  const out: Record<string, ExilePlacement> = {};
+  let pos: Array<{ x: number; y: number; radius: number }> = [];
+
+  const place = () => {
+    pos = sorted.map((_, i) => {
+      const ux = Math.cos(angle[i]), uy = Math.sin(angle[i]);
+      const exit = rayExitFromRect(env.cx, env.cy, ux, uy, env.bbox);
+      let R = Math.hypot(exit.x - env.cx, exit.y - env.cy) + (env.marginPx + hd[i]) / k;
+      if (env.viewport) {
+        const t = radialFit(env, ux, uy, hw[i], hh[i], R);
+        if (!isNaN(t)) R = t; // else: cannot fit on this ray at any radius -- keep the perimeter position
+      }
+      return { x: env.cx + ux * R, y: env.cy + uy * R, radius: R };
+    });
+  };
+  const leaderEnd = (i: number) => {
+    const p = pos[i];
+    const r = { minX: p.x - hw[i] / k, maxX: p.x + hw[i] / k, minY: p.y - hh[i] / k, maxY: p.y + hh[i] / k };
+    const a = sorted[i];
+    if (a.ax >= r.minX && a.ax <= r.maxX && a.ay >= r.minY && a.ay <= r.maxY) return { x: a.ax, y: a.ay };
+    return clipSegmentToRect(a.ax, a.ay, p.x, p.y, r);
+  };
+
+  for (let iter = 0; iter < Math.max(1, iterations); iter++) {
+    place();
+    // Space slots with each plate's own half-angle at its own (clamped) radius.
+    const spaced = spaceOnRing(sorted.map((it, i) => ({ key: it.key, angle: angle[i], halfAngle: Math.atan2(hd[i] / k, Math.max(pos[i].radius, 1e-9)) })));
+    angle = sorted.map((it) => spaced[it.key]);
+    place();
+    // Uncross on the RENDERED leaders (clipped to plate edges) by swapping slots.
+    let swapped = false;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const ei = leaderEnd(i), ej = leaderEnd(j);
+      if (segmentsCross(sorted[i].ax, sorted[i].ay, ei.x, ei.y, sorted[j].ax, sorted[j].ay, ej.x, ej.y)) {
+        const t = angle[i]; angle[i] = angle[j]; angle[j] = t; swapped = true;
+        place();
+      }
+    }
+    if (!swapped) break;
+  }
+  place();
+  sorted.forEach((it, i) => { out[it.key] = { x: pos[i].x, y: pos[i].y, angle: angle[i], radius: pos[i].radius }; });
   return out;
 }

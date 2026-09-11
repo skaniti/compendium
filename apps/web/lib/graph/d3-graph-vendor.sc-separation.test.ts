@@ -3,7 +3,7 @@ import type { GraphPayload, GraphCluster, GraphSuperCluster, GraphNode } from "@
 import type { IconEntry } from "@/lib/icons";
 import { createSimEngine } from "@/lib/graph/sim-layout";
 import type { MainToWorkerMessage, SimStartPayload, WorkerToMainMessage } from "@/lib/graph/sim-protocol";
-import { plateFootprintAtRatio, plateRect, rectsOverlap } from "@/lib/graph/sc-separation";
+import { plateFootprintAtRatio, plateRect, rectsOverlap, segmentsCross } from "@/lib/graph/sc-separation";
 
 // Delta #32 (vendor header comment) -- exercises the REAL vendor render()
 // pipeline in jsdom, same overall strategy as
@@ -317,6 +317,15 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     expect(onVerticalEdge || onHorizontalEdge).toBe(true);
     if (onVerticalEdge) expect(Math.abs(y2 - cy)).toBeLessThanOrEqual(hh + 1e-6);
     if (onHorizontalEdge) expect(Math.abs(x2 - cx)).toBeLessThanOrEqual(hw + 1e-6);
+    // Task 8: no two rendered leaders (anchor -> clipped plate edge) cross.
+    const leaderLines = Array.from(container.querySelectorAll("g.watermark-leader line.watermark-leader-line")).map((el) => ({
+      x1: parseFloat(el.getAttribute("x1")!), y1: parseFloat(el.getAttribute("y1")!),
+      x2: parseFloat(el.getAttribute("x2")!), y2: parseFloat(el.getAttribute("y2")!),
+    }));
+    for (let i = 0; i < leaderLines.length; i++) for (let j = i + 1; j < leaderLines.length; j++) {
+      const a = leaderLines[i], b = leaderLines[j];
+      expect(segmentsCross(a.x1, a.y1, a.x2, a.y2, b.x1, b.y1, b.x2, b.y2)).toBe(false);
+    }
     // A non-overflow plate stays at its anchor (zero displacement) after the glide settles.
     await vi.advanceTimersByTimeAsync(2000);
     const keeper = report.find((r) => !r.overflow)!;
