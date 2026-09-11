@@ -59,6 +59,9 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     private var lastCommittedUrl: String? = null
     private var isPageFullScreen = false
 
+    /** Set before sessions are closed so a late state callback cannot persist an empty tab list. */
+    private var tornDown = false
+
     private val inactivityChecker = object : Runnable {
         override fun run() {
             if (sessionManager.isActive && sessionManager.isTimedOut()) {
@@ -243,6 +246,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
     override fun onDestroy() {
         handler.removeCallbacks(inactivityChecker)
+        tornDown = true
         tabManager.closeAll()
         super.onDestroy()
     }
@@ -394,7 +398,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 sessionState: GeckoSession.SessionState,
             ) {
                 tab.stateString = sessionState.toString()
-                TabsStore.save(this@MainActivity, tabManager)
+                if (!tornDown) TabsStore.save(this@MainActivity, tabManager)
             }
         }
     }

@@ -43,9 +43,20 @@ object TabsStore {
             },
         )
 
+    /** A zero-tab snapshot is never legitimate (closing the last tab creates a new one). */
+    fun shouldPersist(snapshot: TabsSnapshot): Boolean = snapshot.tabs.isNotEmpty()
+
+    fun decodeOrNull(text: String): TabsSnapshot? =
+        try { decode(text) } catch (e: Exception) { null }
+
     fun save(context: Context, manager: TabManager) {
+        val snapshot = snapshotOf(manager)
+        if (!shouldPersist(snapshot)) {
+            Log.w(TAG, "Skipping zero-tab snapshot (teardown or transient state)")
+            return
+        }
         try {
-            AtomicWrite.write(file(context), json.encodeToString(TabsSnapshot.serializer(), snapshotOf(manager)))
+            AtomicWrite.write(file(context), json.encodeToString(TabsSnapshot.serializer(), snapshot))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to persist tabs", e)
         }
@@ -53,19 +64,21 @@ object TabsStore {
 
     fun load(context: Context): TabsSnapshot? {
         val f = file(context)
-        if (!f.exists()) return null
-        return try {
-            val snap = json.decodeFromString(TabsSnapshot.serializer(), f.readText())
-            // Tabs with neither a URL nor saved state restore as blank husks
-            // (e.g. persisted by a run that died before any navigation) —
-            // drop them; an empty result means start fresh.
-            val worthRestoring = snap.tabs.filter { it.url.isNotEmpty() || it.state != null }
-            if (worthRestoring.isEmpty()) null
-            else snap.copy(tabs = worthRestoring)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load tabs; starting fresh", e)
-            null
+        if (!f.exists()) {
+            Log.i(TAG, "No tabs on disk; starting fresh")
+            return null
         }
+        val snap = decodeOrNull(f.readText())
+        if (snap == null) {
+            Log.e(TAG, "Failed to load tabs (unparseable ${f.length()} bytes); starting fresh")
+            return null
+        }
+        // Tabs with neither a URL nor saved state restore as blank husks
+        // (e.g. persisted by a run that died before any navigation) —
+        // drop them; an empty result means start fresh.
+        val worthRestoring = snap.tabs.filter { it.url.isNotEmpty() || it.state != null }
+        Log.i(TAG, "Restored ${worthRestoring.size} tab(s) (${snap.tabs.size} on disk)")
+        return if (worthRestoring.isEmpty()) null else snap.copy(tabs = worthRestoring)
     }
 
     fun encode(snapshot: TabsSnapshot): String =

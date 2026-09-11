@@ -26,4 +26,22 @@ class TabsStoreTest {
         assertEquals(1, decoded.tabs.size)
         assertNull(decoded.tabs[0].state)
     }
+
+    @Test
+    fun zeroTabSnapshotIsNeverPersisted() {
+        val empty = TabsStore.TabsSnapshot(activeTabId = -1, tabs = emptyList())
+        val one = TabsStore.TabsSnapshot(
+            activeTabId = 1,
+            tabs = listOf(TabsStore.TabSnapshot(1, "Wiki", "https://en.wikipedia.org/")),
+        )
+        assertEquals(false, TabsStore.shouldPersist(empty))
+        assertEquals(true, TabsStore.shouldPersist(one))
+    }
+
+    @Test
+    fun truncatedFileDecodesToNullInsteadOfThrowing() {
+        val truncated = """{"activeTabId":1,"tabs":[{"id":1,"title":"t","url":"https://e"""
+        assertNull(TabsStore.decodeOrNull(truncated))
+        assertNull(TabsStore.decodeOrNull(""))
+    }
 }
