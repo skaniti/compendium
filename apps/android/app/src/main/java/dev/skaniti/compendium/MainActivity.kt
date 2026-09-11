@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     companion object {
         private const val TAG = "MainActivity"
         private const val INACTIVITY_CHECK_INTERVAL_MS = 60_000L
+        // Start page for the launch tab, the close-last-tab fallback, and every new tab (dev-note N1).
         private const val DEFAULT_URL = "https://en.wikipedia.org/"
     }
 
@@ -158,6 +159,10 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         webViewContainer = findViewById(R.id.webViewContainer)
 
         geckoView = GeckoView(this)
+        // The default "auto" never triggers the Android Autofill framework for
+        // GeckoView (Fenix forces YES for the same reason); this is what lets
+        // 1Password and other system autofill services fill web forms (dev-note N3).
+        geckoView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
         swipeRefresh = SwipeRefreshLayout(this).apply {
             addView(
                 geckoView,
@@ -486,7 +491,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
     override fun onTabSelected(tabId: Int) = switchToTab(tabId)
     override fun onTabClosed(tabId: Int) = closeTab(tabId)
-    override fun onNewTabRequested() = createNewTab()
+    override fun onNewTabRequested() = createNewTab(DEFAULT_URL, isTyped = true)
     override fun getTabManager(): TabManager = tabManager
 
     // -------------------------------------------------------------------------
@@ -516,7 +521,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
             tab.session.reload()
         }
 
-        findViewById<ImageButton>(R.id.btnNewTab).setOnClickListener { createNewTab() }
+        findViewById<ImageButton>(R.id.btnNewTab).setOnClickListener { createNewTab(DEFAULT_URL, isTyped = true) }
         findViewById<ImageButton>(R.id.btnTabs).setOnClickListener { showTabGrid() }
         findViewById<ImageButton>(R.id.btnHub).setOnClickListener { launchAnalysisHub() }
 
