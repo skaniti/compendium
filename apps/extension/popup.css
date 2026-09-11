@@ -1,21 +1,63 @@
 /* =============================================================================
    Compendium Capture — Popup Styles
-   Tabbed layout on the Monokai palette: green base (passive) + pink accent
-   (active), cyan for interactive chrome.
+   "Instrument" direction: Compendium Grey palette + one fixed accent.
+   Fonts are bundled locally (fonts/) -- no runtime network requests.
    ============================================================================= */
 
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+
 :root {
-  --mk-bg: #272822;
-  --mk-bg-deep: #1e1f1c;
-  --mk-border: #49483e;
-  --mk-fg: #f8f8f2;
-  --mk-fg-soft: #d8d6cc;
-  --mk-muted: #75715e;
-  --mk-faint: #5a584b;
-  --mk-green: #a6e22e;
-  --mk-pink: #f92672;
-  --mk-orange: #fd971f;
-  --mk-cyan: #66d9ef;
+  --c-bg: #18191A;
+  --c-surface: #212223;
+  --c-surface-2: #272829;
+  --c-border: #34363A;
+  --c-border-strong: #3F3F3F;
+  --c-text: #D7D8DA;
+  --c-text-soft: #B3B5B8;
+  --c-muted: #8C8C8C;
+  --c-faint: #5F6165;
+  --c-accent: #6E85A9;
+  --c-accent-ink: #0F1113;
+  --c-failed: #C77B7B;
+  --c-warn: #C9A66B;
+  --c-focus: #8EA3C4;
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
 }
 
 * {
@@ -25,35 +67,50 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   width: 280px;
-  background: linear-gradient(135deg, var(--mk-bg) 0%, var(--mk-bg-deep) 100%);
-  color: var(--mk-fg);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--c-focus);
+  text-decoration: underline;
 }
 
 .container {
-  padding: 16px;
+  padding: 14px 14px 0;
 }
 
-/* Header */
+/* =============================================================================
+   Header
+   ============================================================================= */
+
 header {
-  text-align: center;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
 h1 {
-  font-size: 22px;
-  font-weight: 700;
-  background: linear-gradient(90deg, var(--mk-green), var(--mk-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
 }
 
-.tagline {
+.version {
   font-size: 11px;
-  color: var(--mk-muted);
-  margin-top: 2px;
+  color: var(--c-faint);
+  font-family: var(--font-mono);
 }
 
 /* =============================================================================
@@ -62,300 +119,277 @@ h1 {
 
 .tab-bar {
   display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  padding: 3px;
+  gap: 18px;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 14px;
 }
 
 .tab {
-  flex: 1;
-  display: flex;
+  font: inherit;
+  font-size: 13px;
+  color: var(--c-muted);
+  background: none;
+  border: 0;
+  padding: 0 0 8px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 7px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
+  position: relative;
   cursor: pointer;
-  transition: all 0.2s ease;
-  background: transparent;
-  color: var(--mk-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  transition: color 120ms ease;
 }
 
-.tab.active.tab-passive {
-  background: rgba(166, 226, 46, 0.12);
-  color: var(--mk-green);
+.tab:hover {
+  color: var(--c-text-soft);
 }
 
-.tab.active.tab-active {
-  background: rgba(249, 38, 114, 0.12);
-  color: var(--mk-pink);
+.tab.active {
+  color: var(--c-text);
+  box-shadow: inset 0 -2px 0 var(--c-accent);
 }
 
-.tab:not(.active):hover {
-  color: var(--mk-fg-soft);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-/* Pulsing dot in active passive tab */
+/* Passive tab dot -- always visible (passive tracking is always on) */
 .tab-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  display: none;
-}
-
-.tab.active .tab-dot {
   display: inline-block;
 }
 
 .dot-passive {
-  background: var(--mk-green);
-  animation: pulse 2s infinite;
+  background: var(--c-accent);
+}
+
+/* Active tab dot -- CSS-drawn, shown only while a journey is recording
+   (popup.js toggles the .recording class in showActiveRecording/Ready) */
+.tab-active.recording::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-failed);
+  display: inline-block;
 }
 
 /* =============================================================================
-   Passive Tab Panel — mirrors original passive extension design
+   Passive Tab Panel
    ============================================================================= */
 
-/* Status banner */
-.status {
-  text-align: center;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
+.tab-panel {
+  display: block;
+}
+
+.status,
+.status-active {
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-bottom: 14px;
+}
+
+/* Session info -- 2-col grid of stat tiles */
+.session-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-bottom: 12px;
 }
 
-.status-active {
-  background: rgba(166, 226, 46, 0.15);
-  color: var(--mk-green);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-/* Session info — two stats side by side */
-.session-info {
-  display: flex;
-  justify-content: space-around;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
 .stat {
-  text-align: center;
-}
-
-.stat-label {
-  display: block;
-  font-size: 10px;
-  color: var(--mk-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 10px 12px 9px;
 }
 
 .stat-value {
   display: block;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mk-green);
-  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
 }
 
-/* Session ID */
+.stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--c-muted);
+  margin-top: 3px;
+}
+
 .session-id {
-  text-align: center;
-  font-size: 10px;
-  color: var(--mk-muted);
-  font-family: monospace;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-faint);
   margin-bottom: 12px;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-id.inactive {
-  color: var(--mk-faint);
-  font-style: italic;
+  font-family: var(--font-sans);
 }
 
-/* Force Export button — prominent green-bordered */
+/* =============================================================================
+   Buttons (shared)
+   ============================================================================= */
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-export {
   width: 100%;
-  padding: 10px 16px;
-  border: 2px solid var(--mk-green);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--mk-green);
-  font-family: inherit;
+  border: 1px solid var(--c-border-strong);
+  background: transparent;
+  color: var(--c-text);
 }
 
-.btn-export:hover {
-  background: rgba(166, 226, 46, 0.2);
-}
-
-.btn-export:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.btn-export:hover:not(:disabled) {
+  background: var(--c-surface);
 }
 
 /* Export status feedback */
 .export-status {
-  text-align: center;
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  font-size: 12px;
+  color: var(--c-muted);
   margin-top: 8px;
 }
 
-.export-ok {
-  background: rgba(166, 226, 46, 0.15);
-  color: var(--mk-green);
-}
-
 .export-warn {
-  background: rgba(253, 151, 31, 0.15);
-  color: var(--mk-orange);
+  color: var(--c-warn);
 }
 
 .export-failed {
-  background: rgba(249, 38, 114, 0.15);
-  color: var(--mk-pink);
+  color: var(--c-failed);
+}
+
+.export-ok {
+  color: var(--c-muted);
 }
 
 /* Pending notice */
 .pending-notice {
-  text-align: center;
-  font-size: 11px;
-  color: var(--mk-orange);
-  margin-top: 8px;
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pending-notice::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-warn);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Links row -- cache link + default-view control, side by side */
+.links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 14px 0;
+}
+
+.links .set-default-row {
+  margin-top: 0;
 }
 
 /* Cache link */
 .cache-link {
-  display: block;
-  text-align: center;
-  font-size: 11px;
-  color: var(--mk-muted);
-  text-decoration: none;
-  margin-top: 10px;
-  transition: color 0.2s ease;
-}
-
-.cache-link:hover {
-  color: var(--mk-cyan);
+  font-size: 12px;
+  color: var(--c-accent);
 }
 
 /* =============================================================================
-   Active Tab Panel — intentionally understated
+   Active Tab Panel
    ============================================================================= */
 
 .active-status-text {
-  text-align: center;
-  font-size: 13px;
-  color: var(--mk-muted);
-  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-bottom: 14px;
 }
 
-.active-stats {
-  display: flex;
-  justify-content: space-around;
-  margin: 12px 0;
-}
-
-.stat-value-active {
-  color: var(--mk-pink);
-}
-
-/* Tracking indicator */
+/* Recording indicator text row. The dot now lives on the Active tab itself
+   (see .tab-active.recording::before); .status-dot is kept in the DOM for
+   compatibility but not shown here to avoid a redundant second indicator. */
 .tracking-status {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 14px;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
+.status-dot,
 .dot-active {
-  background: var(--mk-pink);
-  animation: pulse 1.5s infinite;
+  display: none;
 }
 
 .status-text {
   font-size: 12px;
-  color: var(--mk-fg-soft);
+  color: var(--c-muted);
 }
 
-/* Start Session — outline style, subtler than passive export */
+.active-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat-value-active {
+  color: var(--c-text);
+}
+
+#duration {
+  font-family: var(--font-mono);
+}
+
 .btn-active-start {
   width: 100%;
-  padding: 9px 16px;
-  border: 1.5px solid var(--mk-pink);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: transparent;
-  color: var(--mk-pink);
-  font-family: inherit;
+  border: 1px solid var(--c-accent);
+  background: var(--c-accent);
+  color: var(--c-accent-ink);
+  font-weight: 500;
 }
 
-.btn-active-start:hover {
-  background: rgba(249, 38, 114, 0.12);
+.btn-active-start:hover:not(:disabled) {
+  background: var(--c-focus);
+  border-color: var(--c-focus);
 }
 
-.btn-active-start:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Stop Session */
 .btn-active-stop {
   width: 100%;
-  padding: 9px 16px;
-  border: 1.5px solid rgba(249, 38, 114, 0.5);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--mk-pink);
-  font-family: inherit;
+  border: 1px solid var(--c-border-strong);
+  background: transparent;
+  color: var(--c-text);
 }
 
-.btn-active-stop:hover {
-  background: rgba(249, 38, 114, 0.15);
-  border-color: var(--mk-pink);
+.btn-active-stop:hover:not(:disabled) {
+  background: var(--c-surface);
 }
 
-.btn-active-stop:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.active-note {
+  font-size: 11px;
+  color: var(--c-faint);
+  margin-top: 8px;
 }
 
 /* =============================================================================
@@ -363,28 +397,26 @@ h1 {
    ============================================================================= */
 
 .set-default-row {
-  text-align: center;
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 10px;
+  text-align: right;
 }
 
 .btn-set-default {
   background: none;
-  border: none;
-  color: var(--mk-faint);
-  font-size: 10px;
-  cursor: pointer;
+  border: 0;
+  color: var(--c-faint);
+  font-size: 11px;
   font-family: inherit;
-  transition: color 0.2s ease;
+  cursor: pointer;
+  transition: color 120ms ease;
 }
 
 .btn-set-default:hover {
-  color: var(--mk-fg-soft);
+  color: var(--c-text-soft);
 }
 
 .btn-set-default.is-default {
-  color: var(--mk-muted);
+  color: var(--c-muted);
   cursor: default;
 }
 
@@ -393,69 +425,120 @@ h1 {
    ============================================================================= */
 
 .settings-panel {
-  margin-top: 12px;
-  border-top: 1px solid var(--mk-border);
-  padding-top: 8px;
+  border-top: 1px solid var(--c-border);
+  margin: 14px -14px 0;
 }
 
 .settings-toggle {
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
   font-size: 12px;
-  color: var(--mk-muted);
+  color: var(--c-muted);
+  cursor: pointer;
   user-select: none;
+  list-style: none;
+}
+
+.settings-toggle::-webkit-details-marker {
+  display: none;
+}
+
+/* CSS-drawn chevron: down when closed, up when open */
+.settings-toggle::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--c-faint);
+  border-bottom: 1.5px solid var(--c-faint);
+  transform: rotate(45deg);
+  margin-top: -4px;
+  transition: transform 120ms ease;
+}
+
+.settings-panel[open] .settings-toggle::after {
+  transform: rotate(-135deg);
+  margin-top: 3px;
 }
 
 .settings-body {
-  padding: 8px 0 4px;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .settings-label {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 11px;
-  color: var(--mk-muted);
-  margin-bottom: 8px;
+  color: var(--c-muted);
 }
 
 .settings-input {
-  display: block;
   width: 100%;
-  margin-top: 3px;
-  padding: 5px 8px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border-strong);
+  border-radius: 5px;
+  color: var(--c-text);
+  font: inherit;
   font-size: 12px;
-  border: 1px solid var(--mk-border);
-  border-radius: 4px;
-  background: var(--mk-bg-deep);
-  color: var(--mk-fg);
+  padding: 7px 9px;
+}
+
+#settingsApiKey {
+  font-family: var(--font-mono);
+}
+
+.settings-input.invalid {
+  border-color: var(--c-failed);
 }
 
 .btn-settings-save {
-  display: inline-block;
-  margin-top: 4px;
-  padding: 4px 14px;
-  font-size: 12px;
-  border: 1px solid var(--mk-cyan);
-  border-radius: 4px;
+  align-self: flex-start;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border-strong);
   background: transparent;
-  color: var(--mk-cyan);
+  color: var(--c-text);
   cursor: pointer;
+  transition: background-color 120ms ease;
 }
 
 .btn-settings-save:hover {
-  background: var(--mk-cyan);
-  color: var(--mk-bg);
+  background: var(--c-surface);
 }
 
 .settings-saved {
-  font-size: 11px;
-  color: var(--mk-green);
-  margin-left: 8px;
+  font-size: 12px;
+  color: var(--c-muted);
 }
 
 .settings-error {
   font-size: 11px;
-  color: var(--mk-pink);
-  margin: -4px 0 8px;
-  line-height: 1.4;
+  color: var(--c-failed);
+  line-height: 1.45;
+}
+
+/* =============================================================================
+   Focus visibility
+   ============================================================================= */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.settings-input:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 1px;
 }
 
 /* =============================================================================
@@ -464,4 +547,11 @@ h1 {
 
 .hidden {
   display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

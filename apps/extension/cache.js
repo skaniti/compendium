@@ -130,7 +130,7 @@ function renderCaptureCard(captureData, source, extra = {}) {
 
   let actions = '';
   if (source === 'failed') {
-    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}">Retry Export</button>`;
+    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}">Retry export</button>`;
   }
   if (source !== 'active') {
     actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}">Download JSON</button>`;
@@ -139,11 +139,11 @@ function renderCaptureCard(captureData, source, extra = {}) {
   return `<details class="session-card ${cardClass}">
     <summary>
       <span class="badge ${badgeClass}">${badgeLabel}</span>
-      <span class="card-meta">
+      <span class="card-id">
         <span class="session-name">${escapeHtml(captureId)}</span>
-        <span class="page-count">${pageCount} page${pageCount !== 1 ? 's' : ''}</span>
         ${metaExtra}
       </span>
+      <span class="card-count">${pageCount} page${pageCount !== 1 ? 's' : ''}</span>
       <span class="card-actions">${actions}</span>
     </summary>
     <div class="card-body">
@@ -174,7 +174,7 @@ function renderActiveCapture(session) {
 
 function renderHistory(entries, pendingSet) {
   if (!entries || entries.length === 0) {
-    historyContainer.innerHTML = '<p class="empty-state">No captures in history</p>';
+    historyContainer.innerHTML = '<p class="empty-state-title">Nothing finalized yet.</p><p class="empty-state-hint">The live capture closes after 60 minutes without browsing, or when you use Force export in the popup. It appears here as delivered once the server confirms it, or as failed with a retry if it could not be sent.</p>';
     return;
   }
   historyContainer.innerHTML = entries
@@ -276,7 +276,7 @@ async function retryExport(captureId, btn) {
     btn.after(status);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Retry Export';
+    btn.textContent = 'Retry export';
   }
 }
 
@@ -333,7 +333,7 @@ async function downloadAllAsZip() {
     URL.revokeObjectURL(url);
   } finally {
     downloadAllBtn.disabled = false;
-    downloadAllBtn.textContent = 'Download All as ZIP';
+    downloadAllBtn.textContent = 'Download all as ZIP';
   }
 }
 

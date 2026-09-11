@@ -10,7 +10,7 @@
   <div class="container">
     <header>
       <h1>Compendium Capture</h1>
-      <p class="tagline">Track your curiosity</p>
+      <span id="version" class="version"></span>
     </header>
 
     <!-- Tab Bar -->
@@ -33,21 +33,19 @@
 
         <div class="session-info">
           <div class="stat">
-            <span class="stat-label">Current capture</span>
             <span id="passivePageCount" class="stat-value">0</span>
-            <span class="stat-label">pages</span>
+            <span class="stat-label">pages in this capture</span>
           </div>
           <div class="stat">
-            <span class="stat-label">Completed</span>
             <span id="completedCount" class="stat-value">0</span>
-            <span class="stat-label">captures</span>
+            <span class="stat-label">captures completed</span>
           </div>
         </div>
 
         <div id="captureId" class="session-id">No active capture</div>
 
         <button id="forceExportBtn" class="btn btn-export">
-          Force Export
+          Force export
         </button>
 
         <div id="exportStatus" class="export-status hidden"></div>
@@ -56,10 +54,11 @@
           <span id="pendingCount">0</span> captures awaiting delivery
         </div>
 
-        <a id="viewCacheLink" class="cache-link" href="#">View capture cache</a>
-
-        <div class="set-default-row">
-          <button id="setDefaultPassive" class="btn-set-default">Set as default view</button>
+        <div class="links">
+          <a id="viewCacheLink" class="cache-link" href="#">View capture cache</a>
+          <div class="set-default-row">
+            <button id="setDefaultPassive" class="btn-set-default">Set as default view</button>
+          </div>
         </div>
       </div>
 
@@ -67,13 +66,13 @@
       <div id="panelActive" class="tab-panel hidden">
         <div id="journeyReady">
           <p class="active-status-text">Ready to record</p>
-          <button id="startBtn" class="btn btn-active-start">Start Capture</button>
+          <button id="startBtn" class="btn btn-active-start">Start capture</button>
         </div>
 
         <div id="journeyActive" class="hidden">
           <div class="tracking-status">
             <span class="status-dot dot-active"></span>
-            <span class="status-text">Recording...</span>
+            <span class="status-text">Recording a journey</span>
           </div>
           <div class="active-stats">
             <div class="stat">
@@ -82,10 +81,11 @@
             </div>
             <div class="stat">
               <span id="duration" class="stat-value stat-value-active">0:00</span>
-              <span class="stat-label">time</span>
+              <span class="stat-label">elapsed</span>
             </div>
           </div>
-          <button id="stopBtn" class="btn btn-active-stop">Stop Capture</button>
+          <button id="stopBtn" class="btn btn-active-stop">Stop capture</button>
+          <div class="active-note">Passive tracking pauses while a journey records.</div>
         </div>
 
         <div class="set-default-row">
@@ -103,7 +103,7 @@
                  placeholder="http://localhost:8001">
         </label>
         <label class="settings-label">
-          API Key
+          API key
           <input id="settingsApiKey" type="password" class="settings-input"
                  placeholder="cmp_...">
         </label>
@@ -111,7 +111,7 @@
         <label class="settings-label">
           Device label
           <input id="settingsDeviceLabel" type="text" class="settings-input"
-                 placeholder="e.g. new-laptop">
+                 placeholder="e.g. Work laptop">
         </label>
         <button id="saveSettingsBtn" class="btn btn-settings-save">Save</button>
         <span id="settingsSaved" class="settings-saved hidden">Saved</span>

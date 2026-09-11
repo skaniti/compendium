@@ -10,6 +10,9 @@ import { composeExportResult } from './modules/export-status.js';
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 
+// Header
+const versionEl = document.getElementById('version');
+
 // Tabs
 const tabPassive = document.querySelector('.tab-passive');
 const tabActive = document.querySelector('.tab-active');
@@ -124,6 +127,7 @@ async function updateStatus() {
 function showActiveReady() {
   journeyReadyEl.classList.remove('hidden');
   journeyActiveEl.classList.add('hidden');
+  tabActive.classList.remove('recording');
   if (durationInterval) {
     clearInterval(durationInterval);
     durationInterval = null;
@@ -133,6 +137,7 @@ function showActiveReady() {
 function showActiveRecording(startTime, pageCount) {
   journeyReadyEl.classList.add('hidden');
   journeyActiveEl.classList.remove('hidden');
+  tabActive.classList.add('recording');
   activePageCountEl.textContent = pageCount || 0;
 
   if (durationInterval) clearInterval(durationInterval);
@@ -194,7 +199,7 @@ forceExportBtn.addEventListener('click', async () => {
     showExportResult({ success: false, delivery: 'failed', flush: null });
   } finally {
     forceExportBtn.disabled = false;
-    forceExportBtn.textContent = 'Force Export';
+    forceExportBtn.textContent = 'Force export';
   }
 });
 
@@ -230,10 +235,12 @@ const settingsErrorEl = document.getElementById('settingsError');
 function showSettingsError(message) {
   settingsErrorEl.textContent = message;
   settingsErrorEl.classList.remove('hidden');
+  settingsKeyEl.classList.add('invalid');
 }
 
 function hideSettingsError() {
   settingsErrorEl.classList.add('hidden');
+  settingsKeyEl.classList.remove('invalid');
 }
 
 // Load current settings
@@ -277,6 +284,8 @@ saveSettingsBtn.addEventListener('click', async () => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+
+versionEl.textContent = chrome.runtime.getManifest().version;
 
 chrome.storage.local.get('defaultTab', (data) => {
   const defaultTab = data.defaultTab || 'passive';

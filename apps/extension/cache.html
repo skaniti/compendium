@@ -10,24 +10,24 @@
   <div class="cache-container">
     <header class="cache-header">
       <h1>Compendium Capture / Cache</h1>
-      <p class="subtitle">Emergency recovery &amp; capture inspection</p>
+      <p class="subtitle">Recovery and capture inspection</p>
     </header>
 
     <div class="toolbar">
       <span id="summary" class="summary">Loading...</span>
       <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
-      <button id="downloadAllBtn" class="btn btn-primary" disabled>Download All as ZIP</button>
+      <button id="downloadAllBtn" class="btn btn-primary" disabled>Download all as ZIP</button>
     </div>
 
     <section id="activeSection" class="section">
-      <h2 class="section-title">Active Capture</h2>
-      <div id="activeContainer" class="empty-state">No active capture</div>
+      <h2 class="section-title">Active capture</h2>
+      <div id="activeContainer"><p class="empty-state">No active capture</p></div>
     </section>
 
     <section id="historySection" class="section">
       <h2 class="section-title">History</h2>
-      <p class="section-hint">All finalized passive captures. Items awaiting retry are badged FAILED; the rest are confirmed delivered to the server.</p>
-      <div id="historyContainer" class="empty-state">No captures in history</div>
+      <p class="section-hint">Finalized passive captures and journeys. Items awaiting retry are marked failed; everything else is confirmed delivered to the server.</p>
+      <div id="historyContainer"><p class="empty-state-title">Nothing finalized yet.</p><p class="empty-state-hint">The live capture closes after 60 minutes without browsing, or when you use Force export in the popup. It appears here as delivered once the server confirms it, or as failed with a retry if it could not be sent.</p></div>
     </section>
 
   </div>
