@@ -235,6 +235,30 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // The plate with the MOST pages is never overflow (priority order).
     const top = report.slice().sort((a, b) => b.pages - a.pages || (a.keyword < b.keyword ? -1 : 1))[0];
     expect(top.overflow).toBe(false);
+    // Task 7: an overflow plate overlaps SOMEONE at the floor by definition, so
+    // its exile onset must sit strictly above the floor -- a floor-level kExile
+    // means it never exiles and falls back to the old push-apart slide.
+    const kFloor = (window as unknown as { __d3ScLayout: () => { kFloor: number } }).__d3ScLayout().kFloor;
+    for (const o of overflow) expect(o.kExile).toBeGreaterThan(kFloor * 1.0001);
+  });
+
+  it("exiled plates yield to anchored plates in the resolver: an anchored plate never moves off its anchor at rest", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 420, 320);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("yld", 4, 2), { icons: iconsFor("yld") });
+    flushSettleChunks();
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    for (const g of Array.from(container.querySelectorAll("g.watermark"))) {
+      if (g.getAttribute("data-exiled") === "1") continue;
+      const t = parseTranslate(g.getAttribute("transform"));
+      expect(t.x).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-x")!), 3);
+      expect(t.y).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-y")!), 3);
+    }
   });
 
   it("is a no-op for a single supercluster", async () => {

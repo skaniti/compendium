@@ -28,7 +28,7 @@ export interface SeparationResult { shifts: Record<string, { dx: number; dy: num
 export interface RingItem { key: string; angle: number; halfAngle: number }
 
 const NAME_MAX_CHARS = 36;      // drawWatermarks: rawName.slice(0, 36)
-const NAME_LINE_HEIGHT_EM = 1.15; // tspan dy
+const NAME_LINE_HEIGHT_EM = 1.25; // tspan dy is 1.15em but the painted line box measured ~1.24em at the floor (Almagest; Task 6 real-data floor check) -- estimator must not undershoot
 const RESOLVE_EPS = 0.5;        // px added to a penetration so the pair ends strictly clear
 
 export function clampRatio(ratio: number, band: ScaleBand): number {
@@ -215,13 +215,17 @@ export function spaceOnRing(items: RingItem[], iterations = 32): Record<string, 
   const ang = sorted.map((it) => it.angle);
   const n = sorted.length;
   if (n >= 2) {
+    let demand = 0;
+    for (const it of sorted) demand += 2 * it.halfAngle;
+    const cap = 2 * Math.PI * 0.98;
+    const half = sorted.map((it) => (demand > cap ? it.halfAngle * (cap / demand) : it.halfAngle));
     for (let it = 0; it < iterations; it++) {
       let moved = false;
       for (let i = 0; i < n; i++) {
         const j = (i + 1) % n;
         let gap = ang[j] - ang[i];
         if (j === 0) gap += 2 * Math.PI;
-        const need = sorted[i].halfAngle + sorted[j].halfAngle;
+        const need = half[i] + half[j];
         if (gap < need - 1e-9) {
           const push = (need - gap) / 2;
           ang[i] -= push; ang[j] += push;
@@ -250,4 +254,35 @@ export function clipSegmentToRect(ax: number, ay: number, bx: number, by: number
   const dx = ax - bx, dy = ay - by;
   const len = Math.hypot(dx, dy) || 1;
   return rayExitFromRect(bx, by, dx / len, dy / len, r);
+}
+
+function segmentsCross(a1x: number, a1y: number, b1x: number, b1y: number, a2x: number, a2y: number, b2x: number, b2y: number): boolean {
+  const d = (p: number, q: number, r: number, s: number, x: number, y: number) => (r - p) * (y - q) - (s - q) * (x - p);
+  const d1 = d(a2x, a2y, b2x, b2y, a1x, a1y), d2 = d(a2x, a2y, b2x, b2y, b1x, b1y);
+  const d3 = d(a1x, a1y, b1x, b1y, a2x, a2y), d4 = d(a1x, a1y, b1x, b1y, b2x, b2y);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/**
+ * Leader uncrossing: leaders run from an inside anchor (ax,ay) to an outside
+ * plate point (px,py). Two crossing leaders are uncrossed by swapping their
+ * plate points (a classic 2-opt); repeated until no pair crosses or the
+ * iteration cap is hit. Deterministic: items are visited in key order.
+ */
+export function uncrossSegments(items: Array<{ key: string; ax: number; ay: number; px: number; py: number }>): Record<string, { px: number; py: number }> {
+  const sorted = items.slice().sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const p = sorted.map((it) => ({ px: it.px, py: it.py }));
+  const n = sorted.length;
+  for (let iter = 0; iter < n * n; iter++) {
+    let swapped = false;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      if (segmentsCross(sorted[i].ax, sorted[i].ay, p[i].px, p[i].py, sorted[j].ax, sorted[j].ay, p[j].px, p[j].py)) {
+        const t = p[i]; p[i] = p[j]; p[j] = t; swapped = true;
+      }
+    }
+    if (!swapped) break;
+  }
+  const out: Record<string, { px: number; py: number }> = {};
+  sorted.forEach((it, i) => { out[it.key] = p[i]; });
+  return out;
 }

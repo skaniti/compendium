@@ -891,7 +891,10 @@
 //      plates; dot carries the nameplate's hover/click. The glide's anchor
 //      now comes from data-anchor-x/y so anchored<->exiled transitions
 //      animate through the unchanged delta-#29 machinery; updateLeaderEnd
-//      keeps the leader on the moving plate each frame.
+//      keeps the leader on the moving plate each frame. Exile onset is
+//      computed against every other painted plate; exiled plates yield in
+//      the R6 order; leaders are uncrossed by slot swap (`uncrossSegments`)
+//      after the viewport clamp; overfull rings scale their angular demand.
 //      (d) sim-layout.ts Phase 1.5b seeds SC groups apart by
 //      footprint as well as fog halo (payload.scSeparation). The R6
 //      resolver and delta-#29 glide are unchanged and now act only as a
@@ -907,7 +910,7 @@
 // =====================================================================
 
 import { GRAPH_DEFAULTS, TUNER_TYPO_VERSION, TUNER_FOG_VERSION } from "./constants";
-import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect } from './sc-separation';
+import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect, uncrossSegments } from './sc-separation';
 import d3 from "./d3";
 // Task group W (header comment delta #17): the force-layout pipeline's
 // main-thread client -- see that file's own header comment for why this
@@ -3820,6 +3823,18 @@ var __vendorExpandedGroups;
                     var R = Math.sqrt(Math.pow(ex.x - C.x, 2) + Math.pow(ex.y - C.y, 2)) + (SC_EXILE_MARGIN_PX + hd) / (currentZoomK || 1);
                     exileCenter[it.key] = clampPlateCenterToViewport({ x: C.x + ux * R, y: C.y + uy * R }, f);
                 });
+                // Task 7: leaders run from each plate's anchor to its exile
+                // center -- uncross them (2-opt slot swap) after the clamp
+                // above, then re-clamp the swapped centers into the viewport.
+                var segs = ringItems.map(function (it) {
+                    var a = anchorByKw[it.key], c = exileCenter[it.key];
+                    return { key: it.key, ax: a.x, ay: a.y, px: c.x, py: c.y };
+                });
+                var uncrossed = uncrossSegments(segs);
+                ringItems.forEach(function (it) {
+                    var u = uncrossed[it.key];
+                    exileCenter[it.key] = clampPlateCenterToViewport({ x: u.px, y: u.py }, fpByKw[it.key]);
+                });
             }
         }
         var leaderLayer = layer.append('g').attr('class', 'watermark-leaders');  // painted beneath the plates
@@ -4106,9 +4121,13 @@ var __vendorExpandedGroups;
         // deterministic output independent of float parity.
         var wmEntries = [];
         layer.selectAll('g.watermark').each(function () {
-            wmEntries.push({ el: this, pages: +this.getAttribute('data-pages') || 0 });
+            wmEntries.push({ el: this, pages: +this.getAttribute('data-pages') || 0, exiled: this.getAttribute('data-exiled') === '1' ? 1 : 0 });
         });
-        wmEntries.sort(function (a, b) { return b.pages - a.pages; });
+        // Task 7: anchored plates are placed first (they hold their spot by
+        // construction); exiled plates, which the viewport clamp may have
+        // pulled inward, are placed last so any residual collision moves the
+        // exiled plate, never an anchored one.
+        wmEntries.sort(function (a, b) { return (a.exiled - b.exiled) || (b.pages - a.pages); });
         var WM_PAD = 2;
         // Delta #29's WM_GLIDE_TAU_MS / WM_GLIDE_SNAP_PX tuning constants
         // live at module scope (just above this function), not here --
@@ -4977,14 +4996,19 @@ var __vendorExpandedGroups;
         });
         solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
 
-        var anchoredKeys = scKeys.filter(function (kw) { return !overflow[kw] && anchors[kw]; });
         var plateInfo = {}, report = [];
         var cx = 0, cy = 0, cn = 0;
         scKeys.forEach(function (kw) {
             nodeIdxByKw[kw].forEach(function (i) { cx += nodes[i].x; cy += nodes[i].y; cn++; });
             var kExile = 0;
             if (overflow[kw] && anchors[kw]) {
-                var r = computeExileRatio(kw, anchors, anchoredKeys, fp, kFit, MIN_ZOOM_RATIO, 4);
+                // Task 7: opponents = every other painted plate at its anchor.
+                // Restricting to anchored plates let a plate whose only
+                // collision was with ANOTHER overflow plate compute a
+                // floor-level kExile (already "clear"), so it never exiled and
+                // the R6 safety net slid it ~800px on real data.
+                var opponents = scKeys.filter(function (k) { return k !== kw && anchors[k]; });
+                var r = computeExileRatio(kw, anchors, opponents, fp, kFit, MIN_ZOOM_RATIO, 4);
                 kExile = isFinite(r) ? kFit * r : Infinity;
             }
             // Reported at the FINAL measure()'s kFloor -- usedW (world) times

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clampRatio, estimateNameLines, plateFootprintAtRatio, plateRect, rectsOverlap,
   solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect,
+  uncrossSegments,
   type FootprintParams, type SeparationPlate,
 } from "./sc-separation";
 
@@ -31,7 +32,7 @@ describe("plateFootprintAtRatio", () => {
     expect(fp.top).toBeCloseTo(-25 - 2, 6);
     expect(fp.left).toBeCloseTo(-Math.max(25, nameW / 2) - 2, 6);
     expect(fp.right).toBeCloseTo(Math.max(25, nameW / 2) + 2, 6);
-    expect(fp.bottom).toBeCloseTo(25 + 10 * 0.5 + 1 * fontPx * 1.15 + 2, 6);
+    expect(fp.bottom).toBeCloseTo(25 + 10 * 0.5 + 1 * fontPx * 1.25 + 2, 6);
   });
   it("is monotone: footprint at 1.0 is at least as large as at 0.5 on every side", () => {
     const a = plateFootprintAtRatio("entertainment industry", 0.5, P);
@@ -133,6 +134,46 @@ describe("spaceOnRing", () => {
     ]);
     let d = out.a - out.b; while (d <= -Math.PI) d += 2 * Math.PI; while (d > Math.PI) d -= 2 * Math.PI;
     expect(Math.abs(d)).toBeGreaterThanOrEqual(0.4 - 1e-6);
+  });
+});
+
+describe("spaceOnRing overfull ring", () => {
+  it("scales demand down so order is still preserved when the ring cannot fit everyone", () => {
+    const out = spaceOnRing([
+      { key: "a", angle: 0.0, halfAngle: 1.0 },
+      { key: "b", angle: 0.5, halfAngle: 1.0 },
+      { key: "c", angle: 1.0, halfAngle: 1.0 },
+      { key: "d", angle: 1.5, halfAngle: 1.0 },
+    ]);
+    // total demand 8 rad > 2*pi: scaled to fit; order a<b<c<d preserved around the circle
+    const seq = ["a", "b", "c", "d"].map((k) => out[k]);
+    for (let i = 0; i < 3; i++) {
+      let d = seq[i + 1] - seq[i]; while (d <= 0) d += 2 * Math.PI;
+      expect(d).toBeGreaterThan(0.5); // roughly 2*pi/4 * 0.98 minus float slop
+      expect(d).toBeLessThan(Math.PI);
+    }
+  });
+});
+
+describe("uncrossSegments", () => {
+  it("swaps the outer endpoints of two crossing leaders", () => {
+    // anchors at (-10,0) and (10,0); plates deliberately swapped: left anchor -> right plate
+    const out = uncrossSegments([
+      { key: "L", ax: -10, ay: 0, px: 100, py: 50 },
+      { key: "R", ax: 10, ay: 0, px: -100, py: 50 },
+    ]);
+    expect(out.L).toEqual({ px: -100, py: 50 });
+    expect(out.R).toEqual({ px: 100, py: 50 });
+  });
+  it("leaves non-crossing leaders alone and is deterministic", () => {
+    const items = [
+      { key: "a", ax: 0, ay: 0, px: -100, py: -100 },
+      { key: "b", ax: 5, ay: 0, px: 100, py: -100 },
+      { key: "c", ax: 0, ay: 5, px: 0, py: 120 },
+    ];
+    const out = uncrossSegments(items);
+    expect(out).toEqual({ a: { px: -100, py: -100 }, b: { px: 100, py: -100 }, c: { px: 0, py: 120 } });
+    expect(uncrossSegments(items.slice().reverse())).toEqual(out);
   });
 });
 
