@@ -867,7 +867,7 @@
 //      raced into one of those domains.
 //
 // SC layout separation (spec docs/project-plans/2026-08-10-162433-sc-
-// separation/spec.md; decisions 2026-08-10 + 2026-09-11):
+// layout-separation/spec.md; decisions 2026-08-10 + 2026-09-11):
 //  32. Nameplates no longer leave their SC. (a) P3: SCALE_THRESHOLDS.scName
 //      k_min 1.00 -> 0.75 (TUNER_TYPO_VERSION 3 -> 4) and LOD-faded names
 //      get display:none like R6.1's icons. (b) applyScLayoutSeparation
@@ -4693,8 +4693,14 @@ var __vendorExpandedGroups;
             nodeIdxByKw[kw] = idx; pagesByKw[kw] = pages;
         });
 
-        var used = {}, budgetPx = {}, overflow = {};
-        scKeys.forEach(function (kw) { used[kw] = 0; budgetPx[kw] = 0; });
+        // usedW is WORLD units (fix round 1: kFloor changes every outer
+        // iteration as the correction re-fits, so a running total kept in
+        // SCREEN px would silently mix px measured at different scales --
+        // world units are the one thing that stays comparable across
+        // iterations; re-expressed in the CURRENT iteration's screen px
+        // only where a px comparison against budgetPx is actually needed).
+        var usedW = {}, budgetPx = {}, overflow = {};
+        scKeys.forEach(function (kw) { usedW[kw] = 0; budgetPx[kw] = 0; });
         var kFit = 0, kFloor = 0, bbox = null, anchors = {};
 
         function measure() {
@@ -4721,7 +4727,10 @@ var __vendorExpandedGroups;
                     key: kw, pages: pagesByKw[kw],
                     x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor,
                     fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp),
-                    budget: Math.max(0, budgetPx[kw] - used[kw]),
+                    // usedW (world) re-expressed at THIS iteration's kFloor so
+                    // it compares against budgetPx[kw], which is also this
+                    // iteration's screen px.
+                    budget: Math.max(0, budgetPx[kw] - usedW[kw] * kFloor),
                 });
             });
             var res = solveSeparation(plates);
@@ -4732,7 +4741,10 @@ var __vendorExpandedGroups;
                 var len = Math.sqrt(s.dx * s.dx + s.dy * s.dy);
                 if (len < 1e-6) return;
                 anyMove = true;
-                used[kw] += len;
+                // Accumulate in world units (divide THIS iteration's screen-px
+                // shift by THIS iteration's kFloor) -- keeps usedW comparable
+                // across iterations even though kFloor itself moves each time.
+                usedW[kw] += len / kFloor;
                 var dxW = s.dx / kFloor, dyW = s.dy / kFloor;
                 nodeIdxByKw[kw].forEach(function (i) { nodes[i].x += dxW; nodes[i].y += dyW; });
             });
@@ -4762,8 +4774,13 @@ var __vendorExpandedGroups;
                 var r = computeExileRatio(kw, anchors, anchoredKeys, fp, kFit, MIN_ZOOM_RATIO, 4);
                 kExile = isFinite(r) ? kFit * r : Infinity;
             }
-            plateInfo[kw] = { anchor: anchors[kw], shiftPx: used[kw], budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
-            report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: used[kw], budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
+            // Reported at the FINAL measure()'s kFloor -- usedW (world) times
+            // the scale the rest of this report (budgetPx, anchors) is
+            // already expressed at, so shiftPx <= budgetPx is a true
+            // apples-to-apples invariant, not a comparison across scales.
+            var shiftPx = usedW[kw] * kFloor;
+            plateInfo[kw] = { anchor: anchors[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
+            report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
         });
         __scLayout = {
             kFit: kFit, kFloor: kFloor,

@@ -156,14 +156,21 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const report = (window as W).__d3ScLayoutReport?.();
     expect(report).toBeTruthy();
     expect(report!.length).toBe(4);
-    // The small canvas guarantees the pass had work to do.
-    expect(report!.some((r) => r.shiftPx > 0 || r.overflow)).toBe(true);
+    // Both branches the rest of this test exercises must actually occur:
+    // at least one plate genuinely shifted within budget (not merely
+    // overflowed -- an OR here would pass on overflow alone and leave the
+    // budget-bound shift path unpinned), and at least one plate overflowed.
+    expect(report!.some((r) => r.shiftPx > 0 && !r.overflow)).toBe(true);
+    expect(report!.some((r) => r.overflow)).toBe(true);
     for (const r of report!) {
       expect(r.shiftPx).toBeLessThanOrEqual(r.budgetPx + 1e-6);
     }
     // Anchors (from the report's world positions exposed alongside) are disjoint at the floor.
     const layout = (window as unknown as { __d3ScLayout?: () => { kFloor: number; plates: Record<string, { anchor: { x: number; y: number }; overflow: boolean }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] } }).__d3ScLayout!();
     const keys = Object.keys(layout.plates).filter((k) => !layout.plates[k].overflow);
+    // The pairwise-disjoint loop below is vacuous with fewer than 2
+    // anchored plates -- pin that it actually has pairs to check.
+    expect(keys.length).toBeGreaterThanOrEqual(2);
     for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
       const a = layout.plates[keys[i]].anchor, b = layout.plates[keys[j]].anchor;
       const ra = plateRect(a.x * layout.kFloor, a.y * layout.kFloor, plateFootprintAtRatio(keys[i], 0.5, layout.fpParams));
