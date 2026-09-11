@@ -77,12 +77,12 @@ describe("patchPreferences", () => {
   });
 
   it("callers still pass the bare partial -- wrapping is patchPreferences's job", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    const fetchMock = vi.fn(async (_input: string, _init: RequestInit) => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await patchPreferences({ panel_left_width: "25.00%", panel_right_width: "20%" });
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(init.body as string)).toEqual({
       preferences: { panel_left_width: "25.00%", panel_right_width: "20%" },
     });

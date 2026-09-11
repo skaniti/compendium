@@ -377,12 +377,12 @@ describe("fetchDiaryWindows", () => {
   });
 
   it("omits filter_node_id entirely when not given", async () => {
-    const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => new Response("[]", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await fetchDiaryWindows("week");
 
-    const [url] = fetchMock.mock.calls[0] as [string];
+    const [url] = fetchMock.mock.calls[0];
     expect(url).not.toContain("filter_node_id");
   });
 

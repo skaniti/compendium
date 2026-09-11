@@ -66,6 +66,7 @@ describe("navReducer", () => {
     const state: NavState = { ...withSelection(), filterWindowKey: "win-1", filterHighlightIds: ["a"] };
     const action = resolveCanvasTapAction(null);
     expect(action).toEqual({ type: "HOME" });
+    if (action === null) throw new Error("resolveCanvasTapAction(null) returned null");
     const next = navReducer(state, action);
     expect(next).toEqual(initialNavState);
   });
