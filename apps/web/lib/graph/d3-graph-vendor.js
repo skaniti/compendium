@@ -4542,6 +4542,14 @@ var __vendorExpandedGroups;
             scLabelTopPad: SC_LABEL_TOP_PAD,
             scNameLineBudget: SC_NAME_LINE_BUDGET,
             scNameCharWidth: SC_NAME_CHAR_WIDTH,
+            // Delta #32: footprint-aware Phase 1.5b seeding.
+            scSeparation: {
+                footprint: scFootprintParams(),
+                minZoomRatio: MIN_ZOOM_RATIO,
+                fitWorldPad: FIT_WORLD_PAD,
+                hullPadding: HULL_PADDING,
+                interGapPx: 8,
+            },
             // The whole cache, not just this run's cluster names -- names
             // from a PRIOR dataset are simply never looked up by this
             // run's clusters, harmless to include (labelDimsCache is

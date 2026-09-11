@@ -121,6 +121,17 @@ export interface SimStartPayload {
    *  same rect the vendor paints instead of carrying its own copy. */
   scNameLineBudget: number;
   scNameCharWidth: number;
+  /** Delta #32 (sc-layout-separation): when present, Phase 1.5b's inter-SC
+   *  repulsion also keeps SC centroids apart by their estimated nameplate
+   *  footprint at the zoom floor (world units via an in-worker fit
+   *  estimate), not only by fog halo. Absent = legacy halo-only seeding. */
+  scSeparation?: {
+    footprint: import("./sc-separation").FootprintParams;
+    minZoomRatio: number;  // vendor MIN_ZOOM_RATIO
+    fitWorldPad: number;   // vendor FIT_WORLD_PAD
+    hullPadding: number;   // vendor HULL_PADDING
+    interGapPx: number;    // extra screen px between two plates at the floor
+  };
   /** Real DOM-measured label dims, keyed by cluster NAME (vendor's
    *  labelDimsCache). measureLabelDims() draws into a hidden SVG text
    *  element and reads getBBox() -- a DOM operation only the main thread

@@ -58,6 +58,7 @@ import type {
   SimParams,
   SimStartPayload,
 } from "./sim-protocol";
+import { plateFootprintAtRatio } from "./sc-separation";
 
 // ── Deterministic hash / PRNG (vendor d3-graph-vendor.js :2283-2304,
 // byte-identical port) ──────────────────────────────────────────────────
@@ -305,7 +306,8 @@ function runClusterCentroidPhases(
   scNameLineBudget: number,
   scNameCharWidth: number,
   labelDims: LabelDims,
-  expandedGroups: Record<string, boolean>
+  expandedGroups: Record<string, boolean>,
+  scSeparation: SimStartPayload["scSeparation"]
 ): Map<string, { x: number; y: number }> {
   // ── Phase 1: Position cluster centroids by similarity (vendor :3234-3267) ──
   const clusterNodes: Phase1Node[] = clusters.map((c) => ({ id: c.id }));
@@ -358,6 +360,35 @@ function runClusterCentroidPhases(
     if (scKeys.length > 1) {
       const SC_INTER_REPEL_ITERS = 60;
       const INTER_SC_GAP = 60;
+
+      // Delta #32: footprint half-diagonals in WORLD units at the floor,
+      // from an in-worker fit estimate over the Phase-1 cluster centroids
+      // (+ the fit's own pads). Conservative in the safe direction: the
+      // real fit bbox is larger (fog, nodes), so the real floor k is
+      // smaller and real footprints larger -- the main-thread correction
+      // pass closes the remainder exactly.
+      const fpHalfDiag = new Map<string, number>();
+      if (scSeparation) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        clusterNodes.forEach((cn) => {
+          if (cn.x == null || cn.y == null) return;
+          minX = Math.min(minX, cn.x); maxX = Math.max(maxX, cn.x);
+          minY = Math.min(minY, cn.y); maxY = Math.max(maxY, cn.y);
+        });
+        const padX = 2 * (scSeparation.hullPadding + scSeparation.fitWorldPad);
+        const padY = padX + 20;
+        const bw = maxX - minX + padX, bh = maxY - minY + padY;
+        if (bw > 0 && bh > 0 && width > 0 && height > 0) {
+          const kFloorEst = Math.min(width / bw, height / bh) * scSeparation.minZoomRatio;
+          scKeys.forEach((sk) => {
+            const f = plateFootprintAtRatio(sk, scSeparation.minZoomRatio, scSeparation.footprint);
+            const halfW = (f.right - f.left) / 2 + scSeparation.interGapPx / 2;
+            const halfH = (f.bottom - f.top) / 2 + scSeparation.interGapPx / 2;
+            fpHalfDiag.set(sk, Math.hypot(halfW, halfH) / kFloorEst);
+          });
+        }
+      }
+
       for (let iter = 0; iter < SC_INTER_REPEL_ITERS; iter++) {
         const scCens = new Map<string, { x: number; y: number }>();
         const scHaloR = new Map<string, number>();
@@ -396,7 +427,9 @@ function runClusterCentroidPhases(
             const sdx = ca.x - cb.x,
               sdy = ca.y - cb.y;
             const sdist = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
-            const minDist = (scHaloR.get(scKeys[si]) ?? 0) + (scHaloR.get(scKeys[sj]) ?? 0) + INTER_SC_GAP;
+            const haloDist = (scHaloR.get(scKeys[si]) ?? 0) + (scHaloR.get(scKeys[sj]) ?? 0) + INTER_SC_GAP;
+            const fpDist = (fpHalfDiag.get(scKeys[si]) ?? 0) + (fpHalfDiag.get(scKeys[sj]) ?? 0);
+            const minDist = Math.max(haloDist, fpDist);
             if (sdist < minDist) {
               const push = (minDist - sdist) * 0.02;
               const snx = sdx / sdist,
@@ -684,7 +717,8 @@ export class SimEngine {
       payload.scNameLineBudget,
       payload.scNameCharWidth,
       payload.labelDims,
-      expandedGroups
+      expandedGroups,
+      payload.scSeparation
     );
 
     // ── Phase 2 seed: phyllotaxis spiral from each node's cluster centroid
