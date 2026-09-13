@@ -982,6 +982,107 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
   });
 });
 
+// Graph interaction follow-ups, Batch C (decision: user, 2026-09-13; header
+// comment delta #35): plain wheel pans, Ctrl/Cmd+wheel zooms. Real jsdom
+// WheelEvent dispatches on the rendered <svg> -- exercises zoomBehavior's
+// own `.filter()` AND the new `svg.on('wheel.pan', ...)` listener exactly as
+// a browser would deliver them, not a direct function call into either.
+describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", () => {
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+  });
+
+  afterEach(() => {
+    flushSettleChunks();
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  // 1100x850 (same choice, same rationale, as d3-graph-vendor.sc-separation.
+  // test.ts's own sizeContainer callers): plenty of clamp slack for a
+  // 1-node payload's tiny contentBBox, so a plain wheel's pan isn't
+  // silently absorbed by the pan clamp.
+  function sizeContainer(el: HTMLElement, w: number, h: number): void {
+    el.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
+  }
+
+  function rootTransform(container: HTMLElement): { x: number; y: number; k: number } {
+    const root = container.querySelector(".graph-root");
+    const transform = root?.getAttribute("transform") || "";
+    const t = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(transform);
+    const s = /scale\(([-\d.eE]+)\)/.exec(transform);
+    return {
+      x: t ? parseFloat(t[1]) : NaN,
+      y: t ? parseFloat(t[2]) : NaN,
+      k: s ? parseFloat(s[1]) : NaN,
+    };
+  }
+
+  it("a plain wheel pans (y changes) without zooming (k unchanged)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 1100, 850);
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    flushSettleChunks();
+    const before = rootTransform(container);
+
+    const svgEl = container.querySelector("svg")!;
+    svgEl.dispatchEvent(
+      new WheelEvent("wheel", { deltaX: 0, deltaY: 100, bubbles: true, cancelable: true }),
+    );
+
+    const after = rootTransform(container);
+    expect(after.k).toBeCloseTo(before.k);
+    expect(after.y).not.toBeCloseTo(before.y);
+  });
+
+  it("a Ctrl+wheel zooms (k changes) instead of panning", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 1100, 850);
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    flushSettleChunks();
+    const before = rootTransform(container);
+
+    const svgEl = container.querySelector("svg")!;
+    svgEl.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+
+    const after = rootTransform(container);
+    expect(after.k).not.toBeCloseTo(before.k);
+  });
+
+  it("a Cmd (metaKey)+wheel also zooms", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 1100, 850);
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    flushSettleChunks();
+    const before = rootTransform(container);
+
+    const svgEl = container.querySelector("svg")!;
+    svgEl.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, metaKey: true, bubbles: true, cancelable: true }),
+    );
+
+    const after = rootTransform(container);
+    expect(after.k).not.toBeCloseTo(before.k);
+  });
+});
+
 // Task A1-3 Step 4 (header comment delta #14): the DOM-mirror seam
 // (#noise-toggle-json) is gone -- these exercise the REAL toggleNoise(show)
 // setter against the real module, since GraphCanvas.test.tsx's mocked

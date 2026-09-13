@@ -953,6 +953,30 @@
 //      leak into a fresh mount's very first 'zoom' tick as a nonsense
 //      parallax reference point.
 //
+// Graph interaction follow-ups, Batch C (decision: user, 2026-09-13) --
+// wheel mapping: plain wheel pans, Ctrl/Cmd+wheel zooms:
+//  35. zoomBehavior gains a `.filter()`: a 'wheel' event only drives its
+//      own zoom when `ctrlKey`/`metaKey` is set (trackpad pinch arrives as
+//      a ctrlKey wheel event, so this doubles as pinch-to-zoom); every
+//      OTHER event type falls back to d3-zoom's own unmodified default
+//      (`!event.ctrlKey && !event.button`), since `.filter()` replaces the
+//      default outright rather than composing with it -- click-drag pan
+//      and touch/pinch are unaffected. A new `svg.on('wheel.pan', ...)`
+//      listener (registered right after `svg.call(zoomBehavior)`, same
+//      re-attach-every-render treatment as the existing
+//      `dblclick.zoom`-disable line beside it) claims the plain-wheel case
+//      the filter just excluded: `zoomBehavior.translateBy(svg, -dx*mult/k,
+//      -dy*mult/k)`, `deltaMode`-aware (0/1/2 px/line/page) so the pan
+//      distance is sane across devices. `translateBy` dispatches the same
+//      'zoom' event as every other transform path, so the existing manual
+//      pan clamp inside `.on('zoom', ...)` applies to wheel-pan
+//      identically -- no separate clamp needed. The zoom-indicator's +/-
+//      buttons and `__d3ZoomTo` (both `scaleBy`/`.transform`, never
+//      'wheel' events) are unaffected by the filter. Fixes the "Zoom
+//      (scroll only — no click-drag pan)" comment above the zoom setup,
+//      stale before this change too (click-drag pan already worked via
+//      d3-zoom's own default).
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -5936,7 +5960,17 @@ var __vendorExpandedGroups;
 
         var root = svg.select('.graph-root');
 
-        // Zoom (scroll only — no click-drag pan)
+        // Zoom + pan. Header comment delta #35 (2026-09-13, was stale
+        // before then: "scroll only — no click-drag pan" -- d3-zoom's own
+        // default filter already allowed click-drag pan and touch/pinch
+        // even when this comment claimed otherwise; only wheel behavior
+        // has ever actually changed here): plain wheel (a mouse wheel, or
+        // two-finger trackpad scroll) pans via the dedicated 'wheel.pan'
+        // listener below; Ctrl/Cmd+wheel (including a trackpad pinch,
+        // which browsers deliver as a ctrlKey wheel event) zooms via
+        // zoomBehavior's own default wheel handling. Click-drag and touch/
+        // pinch are unaffected -- zoomBehavior's `.filter()` below mirrors
+        // d3-zoom's own default for every non-wheel event type.
         // contentBBox is set by fitToContent after layout -- module-level
         // (header comment delta #19; see that entry's finishRenderAfterSettle
         // paragraph), not a fresh per-render() local: finishRenderAfterSettle
@@ -5974,6 +6008,23 @@ var __vendorExpandedGroups;
             .scaleExtent(__priorFitZoomForClamp != null
                 ? [__priorFitZoomForClamp * MIN_ZOOM_RATIO, __priorFitZoomForClamp * 4]
                 : [0.05, 6])
+            // Header comment delta #35: excludes a plain (non-modifier)
+            // wheel tick from driving THIS behavior's own zoom -- the new
+            // 'wheel.pan' listener below handles plain wheel instead (pan,
+            // not zoom). Ctrl/Cmd+wheel still reaches d3-zoom's own default
+            // wheel handling (browsers deliver two-finger trackpad pinch as
+            // a ctrlKey wheel event, so this doubles as the pinch-to-zoom
+            // gesture). The non-wheel branch is d3-zoom's own unmodified
+            // default filter (`!event.ctrlKey && !event.button`) restated
+            // explicitly -- `.filter()` REPLACES the default entirely
+            // rather than composing with it, so drag-to-pan (mousedown/
+            // pointerdown-driven) and touch/pinch, neither of which are
+            // 'wheel' events, must be spelled out here too or they'd stop
+            // working.
+            .filter(function (event) {
+                if (event.type === 'wheel') return !!(event.ctrlKey || event.metaKey);
+                return !event.ctrlKey && !event.button;
+            })
             .on('zoom', function (event) {
                 var t = event.transform;
                 // Clamp pan to the world rect visible at the MIN_ZOOM_RATIO
@@ -6054,6 +6105,33 @@ var __vendorExpandedGroups;
         // internal 'dblclick.zoom' listener each time -- this disable must
         // be re-applied after every attach, not just once at construction.
         svg.on('dblclick.zoom', null);
+        // Header comment delta #35: plain wheel pans (two-finger trackpad
+        // scroll, or a mouse wheel), Ctrl/Cmd+wheel zooms (delta #35's own
+        // `.filter()` above excludes a plain wheel from zoomBehavior's own
+        // handling, so this listener owns it instead). `translateBy`
+        // dispatches the SAME 'zoom' event zoomBehavior's own gestures do,
+        // so the manual pan clamp inside the `.on('zoom', ...)` handler
+        // above applies here too -- this listener never touches
+        // `root.attr('transform', ...)` directly. Re-registered on every
+        // render() cycle (like 'dblclick.zoom' just above) since `svg`
+        // itself, not just zoomBehavior, is the event target and a
+        // re-render's `if (!svg) {...} else {...}` branch never removes
+        // pre-existing listeners on an EXISTING svg -- but this is cheap
+        // (d3's `.on()` replaces the same-named listener, never stacks
+        // duplicates) and matches the file's own existing convention.
+        // `deltaMode` (WheelEvent's `DOM_DELTA_PIXEL`/`_LINE`/`_PAGE`, 0/1/2)
+        // reports coarser units for some devices/OSes -- 16px roughly
+        // approximates one text line, and a full page maps to the current
+        // viewport height. Divides by `t.k` so the pan is a CONSTANT
+        // screen-pixel amount at any zoom (translateBy's dx/dy are in the
+        // behavior's own pre-scale coordinate space).
+        svg.on('wheel.pan', function (event) {
+            if (event.ctrlKey || event.metaKey) return; // zoomBehavior's own filter claims this gesture instead
+            event.preventDefault();
+            var t = d3.zoomTransform(svg.node());
+            var mult = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? svg.node().clientHeight : 1;
+            zoomBehavior.translateBy(svg, -event.deltaX * mult / t.k, -event.deltaY * mult / t.k);
+        });
         storedZoomBehavior = zoomBehavior;
         ensureZoomIndicator(container, function () { return storedZoomBehavior; });
         ensureEdgeChipLayer(container);
