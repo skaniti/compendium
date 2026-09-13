@@ -7,9 +7,22 @@ import type { Range } from "@/lib/almagest/params";
 // from the range's own step (a 0.01 step shows 2 decimals, a step of 1 or
 // more shows none) so the two inputs always agree on precision without a
 // second prop.
-export interface SliderProps { id: string; label: string; value: number; range: Range; onChange: (v: number) => void; disabled?: boolean; hint?: string }
+export interface SliderProps {
+  id: string;
+  label: string;
+  value: number;
+  range: Range;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  hint?: string;
+  // Batch A per-parameter reset (spec docs/project-plans/2026-09-13-183006-
+  // graph-interaction-followups/): both optional and only rendered together
+  // -- a caller that doesn't pass `onReset` gets today's row, unchanged.
+  baseline?: number;
+  onReset?: () => void;
+}
 
-export default function Slider({ id, label, value, range, onChange, disabled, hint }: SliderProps) {
+export default function Slider({ id, label, value, range, onChange, disabled, hint, baseline, onReset }: SliderProps) {
   const decimals = range.step >= 1 ? 0 : String(range.step).split(".")[1]?.length ?? 2;
   const formatted = String(Number(value.toFixed(decimals)));
 
@@ -41,8 +54,13 @@ export default function Slider({ id, label, value, range, onChange, disabled, hi
     else setText(formatted);
   }
 
+  // Batch A tweak marker: same condition the reset button's own `disabled`
+  // uses below, reused rather than added as a separate prop -- a row is
+  // "tweaked" exactly when its reset button would do something.
+  const tweaked = onReset !== undefined && value !== baseline;
+
   return (
-    <div className="tuner-row">
+    <div className={tweaked ? "tuner-row tuner-row--tweaked" : "tuner-row"}>
       <label className="tuner-label" htmlFor={id}>{label}</label>
       <input id={id} type="range" min={range.min} max={range.max} step={range.step} value={value} disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
@@ -60,6 +78,18 @@ export default function Slider({ id, label, value, range, onChange, disabled, hi
         onBlur={() => { focused.current = false; commit(); }}
         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       />
+      {onReset ? (
+        <button
+          type="button"
+          className="tuner-reset"
+          aria-label={`Reset ${label}`}
+          title={`Reset ${label} to last-baked value`}
+          disabled={value === baseline}
+          onClick={onReset}
+        >
+          ↺
+        </button>
+      ) : null}
       {hint ? <span className="tuner-hint">{hint}</span> : null}
     </div>
   );

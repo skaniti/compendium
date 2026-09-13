@@ -399,6 +399,21 @@ circle.page, use.star-spikes {
 .almagest-tuner .tuner-tab[aria-pressed="true"] {
     background: color-mix(in srgb, var(--ink) 16%, transparent);
 }
+/* Batch A tweak-count badges (spec docs/project-plans/2026-09-13-183006-
+   graph-interaction-followups/): AlmagestTuner.tsx renders this class on
+   both a tier tab and the frozen <summary>, whichever has a nonzero
+   diffFromBaseline count -- shared chrome, no per-host variant. */
+.tuner-tab-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--galaxy-1, #7cc);
+    color: var(--bg, #000);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+}
 .almagest-tuner .tuner-sliders {
     display: flex;
     flex-direction: column;
@@ -408,7 +423,7 @@ circle.page, use.star-spikes {
    frozen (advance-affecting) ones inside .tuner-frozen below. */
 .tuner-row {
     display: grid;
-    grid-template-columns: 84px 1fr 52px;
+    grid-template-columns: 84px 1fr 52px 20px;
     align-items: center;
     gap: 6px;
 }
@@ -416,6 +431,18 @@ circle.page, use.star-spikes {
     font-size: 11px;
     color: var(--ink);
     opacity: 0.85;
+}
+/* Batch A tweak marker (spec docs/project-plans/2026-09-13-183006-graph-
+   interaction-followups/): a row whose value differs from the last-baked
+   baseline gets a distinct label color and a leading dot, independent of
+   the reset button's own disabled state (belt-and-suspenders -- either
+   signal alone tells the user the row moved). */
+.tuner-row--tweaked .tuner-label {
+    color: var(--galaxy-1, #7cc);
+    opacity: 1;
+}
+.tuner-row--tweaked .tuner-label::before {
+    content: "\2022 ";
 }
 .tuner-row input[type="range"] {
     width: 100%;
@@ -428,6 +455,25 @@ circle.page, use.star-spikes {
     background: transparent;
     color: var(--ink);
     font: inherit;
+}
+/* Batch A per-parameter reset button (Slider.tsx's optional `onReset`) --
+   compact glyph button matching .tuner-num's chrome, sized to the row's
+   4th grid column. */
+.tuner-reset {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--border, #444);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+.tuner-reset:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 .tuner-hint {
     font-size: 10px;
@@ -468,9 +514,25 @@ circle.page, use.star-spikes {
 .almagest-tuner .tuner-switch[aria-checked="true"] {
     background: color-mix(in srgb, var(--ink) 16%, transparent);
 }
+/* Batch A "Tint by tier" debug checkbox -- native input + label (real
+   checkbox semantics), footer-area chrome matching the rest of the panel. */
+.tuner-tint-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    opacity: 0.85;
+    cursor: pointer;
+}
 .almagest-tuner .tuner-bake-notice {
     margin: 0;
     font-size: 10px;
+    opacity: 0.7;
+}
+/* Batch A "N changed since last bake" footer line. */
+.tuner-diff-summary {
+    margin: 0;
+    font-size: 11px;
     opacity: 0.7;
 }
 .almagest-tuner .tuner-status {

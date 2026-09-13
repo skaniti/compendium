@@ -108,7 +108,19 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 
-type W = Window & { __d3SetAlmagestPreview?: (p: unknown) => void };
+type W = Window & { __d3SetAlmagestPreview?: (p: unknown) => void; __d3SetAlmagestTierTint?: (on: boolean) => void };
+
+// Batch A tint-by-tier debug aid (spec docs/project-plans/2026-09-13-183006-
+// graph-interaction-followups/): jsdom's CSSStyleDeclaration normalizes a
+// hex color assigned via .style.fill to "rgb(r, g, b)" when read back (the
+// same normalization d3's own .style() call goes through), so the expected
+// values are derived through the same round-trip rather than hardcoded as
+// hex strings that would never match.
+function normalizedColor(hex: string): string {
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  probe.style.fill = hex;
+  return probe.style.fill;
+}
 
 describe("d3-graph-vendor Almagest preview (delta #33)", () => {
   beforeEach(() => {
@@ -173,5 +185,26 @@ describe("d3-graph-vendor Almagest preview (delta #33)", () => {
     expect(d2.length).toBe(d1.length);
     expect(d2.some((d, i) => d !== d1[i])).toBe(true);
     (window as W).__d3SetAlmagestPreview!(null);
+  });
+
+  it("tints every SC nameplate by tier when __d3SetAlmagestTierTint is on, and clears back to CSS ink when off", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 900, 700);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("tint", 2, 4), { icons: iconsFor("tint") });
+    flushSettleChunks();
+    const tintColors = ["#ff7a59", "#4fc3f7", "#c5e17a"].map(normalizedColor);
+    const labels = () => Array.from(container.querySelectorAll("text.supercluster-label")) as SVGTextElement[];
+    expect(labels().length).toBe(2);
+    for (const el of labels()) expect(el.style.fill).toBe("");
+
+    (window as W).__d3SetAlmagestTierTint!(true);
+    expect(labels().length).toBe(2);
+    for (const el of labels()) expect(tintColors).toContain(el.style.fill);
+
+    (window as W).__d3SetAlmagestTierTint!(false);
+    expect(labels().length).toBe(2);
+    for (const el of labels()) expect(el.style.fill).toBe("");
   });
 });

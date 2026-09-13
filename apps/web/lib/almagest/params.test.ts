@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shippedParams, validateParams, paramsEqual, toJSON, fromJSON, PARAM_RANGES, TIER_NAMES } from "./params";
+import { shippedParams, validateParams, paramsEqual, toJSON, fromJSON, diffFromBaseline, PARAM_RANGES, TIER_NAMES } from "./params";
 import { getGenerator } from "./generator";
 
 describe("almagest params", () => {
@@ -37,5 +37,30 @@ describe("almagest params", () => {
     const p = shippedParams();
     expect(paramsEqual(fromJSON(toJSON(p)), p)).toBe(true);
     expect(paramsEqual({ ...p, frozen: { ...p.frozen, rot: p.frozen.rot + 1 } }, p)).toBe(false);
+  });
+  it("diffFromBaseline reports nothing changed for an identical draft", () => {
+    const p = shippedParams();
+    const d = diffFromBaseline(p, shippedParams());
+    for (const t of TIER_NAMES) expect(d.tiers[t]).toEqual([]);
+    expect(d.frozen).toEqual([]);
+    expect(d.total).toBe(0);
+  });
+  it("diffFromBaseline names a single changed tier param under its tier only", () => {
+    const baseline = shippedParams();
+    const p = { ...baseline, tiers: { ...baseline.tiers, Mid: { ...baseline.tiers.Mid, stroke: baseline.tiers.Mid.stroke + 1 } } };
+    const d = diffFromBaseline(p, baseline);
+    expect(d.tiers.Mid).toEqual(["stroke"]);
+    expect(d.tiers.Display).toEqual([]);
+    expect(d.tiers.Text).toEqual([]);
+    expect(d.frozen).toEqual([]);
+    expect(d.total).toBe(1);
+  });
+  it("diffFromBaseline names a single changed frozen param", () => {
+    const baseline = shippedParams();
+    const p = { ...baseline, frozen: { ...baseline.frozen, rot: baseline.frozen.rot + 1 } };
+    const d = diffFromBaseline(p, baseline);
+    expect(d.frozen).toEqual(["rot"]);
+    for (const t of TIER_NAMES) expect(d.tiers[t]).toEqual([]);
+    expect(d.total).toBe(1);
   });
 });

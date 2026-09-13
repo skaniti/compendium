@@ -921,7 +921,9 @@
 //      almagest-graph-tuner/): `renderScName` seam (text by default,
 //      generator path glyphs under a dev preview), tier breakpoints and
 //      SC_NAME_CHAR_WIDTH read from the generator, dev hook
-//      `__d3SetAlmagestPreview`.
+//      `__d3SetAlmagestPreview`. Batch A (2026-09-13-183006-graph-
+//      interaction-followups) adds a dev-only tier-tint debug aid on top
+//      (`__almagestTierTint`, dev hook `__d3SetAlmagestTierTint`).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1291,6 +1293,13 @@ var __vendorExpandedGroups;
     // its own copies of those numbers at all (grepped: nothing else in the
     // file read either name).
     var __almagestPreview = null;  // AlmagestParams while the dev tuner previews, else null
+    // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-
+    // followups/): dev-only debug aid, off by default and never set outside
+    // the NODE_ENV-gated window.__d3SetAlmagestTierTint hook below --
+    // removable in full by deleting this flag, TIER_TINT, the hook, and the
+    // two renderScName reads of __almagestTierTint.
+    var __almagestTierTint = false;
+    var TIER_TINT = { Display: '#ff7a59', Mid: '#4fc3f7', Text: '#c5e17a' };  // orange / sky / lime -- distinct on every dark palette
     function almagestFace(paintedPx) {
         // faceForPx (lib/almagest/runtime) is the single source for the
         // tier decision, including its own float-noise epsilon -- see that
@@ -3700,6 +3709,13 @@ var __vendorExpandedGroups;
                 // screenBBoxOf, so the R6 resolver and collectObstacleRects
                 // kept denying that space for a name that was not painted.
                 .style('display', opts.opacity > 0.05 ? null : 'none');
+            if (__almagestTierTint) {
+                // Batch A debug aid: tint by the same face the font-family
+                // above just picked, so the color always matches what's
+                // actually painted.
+                var tintFace = faceForPx(opts.paintedPx, __almagestPreview || undefined);
+                labelEl.style('fill', TIER_TINT[tintFace]);
+            }
             lines.forEach(function (line, i) {
                 labelEl.append('tspan').attr('x', opts.x).attr('dy', i === 0 ? 0 : '1.15em').text(line);
             });
@@ -3722,7 +3738,9 @@ var __vendorExpandedGroups;
                 // rule matches these glyph paths too (they live inside
                 // g.watermark) -- a CSS presentation attribute loses to it, so
                 // the hairline stroke must be killed with .style(), not .attr().
-                lineG.append('path').attr('d', gl.d).attr('fill', 'var(--ink)')
+                // Batch A debug aid: tint overrides the default ink fill so
+                // the preview path glyphs match the <text> branch's tint.
+                lineG.append('path').attr('d', gl.d).attr('fill', __almagestTierTint ? TIER_TINT[face] : 'var(--ink)')
                     .style('stroke', 'none')
                     .attr('transform', 'translate(' + gl.x + ',0)');
             });
@@ -7389,6 +7407,16 @@ var __vendorExpandedGroups;
         window.__d3SetAlmagestPreview = function (params) {
             __almagestPreview = params || null;
             if (svg && rawData) updateLabelScale(currentZoomK);  // redraws watermarks only
+        };
+        // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-
+        // followups/): dev-only debug aid -- tints every SC nameplate by the
+        // tier face it's currently painted in (Display/Mid/Text), so a dev
+        // can see which breakpoint a given zoom level exercises. Off by
+        // default and not persisted; redraws the same way the preview hook
+        // above does.
+        window.__d3SetAlmagestTierTint = function (on) {
+            __almagestTierTint = !!on;
+            if (svg && rawData) updateLabelScale(currentZoomK);
         };
     }
 

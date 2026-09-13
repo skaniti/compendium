@@ -6,6 +6,7 @@ import {
   shippedParams,
   validateParams,
   paramsEqual,
+  diffFromBaseline,
   toJSON,
   fromJSON,
   PARAM_RANGES,
@@ -44,6 +45,16 @@ type PreviewFn = (params: AlmagestParams | null) => void;
 function getPreviewFn(): PreviewFn | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as unknown as { __d3SetAlmagestPreview?: PreviewFn }).__d3SetAlmagestPreview;
+}
+
+// Batch A tint-by-tier debug aid (spec docs/project-plans/2026-09-13-183006-
+// graph-interaction-followups/): same window-hook-lookup shape as
+// getPreviewFn above, for the sibling __d3SetAlmagestTierTint hook.
+type TierTintFn = (on: boolean) => void;
+
+function getTierTintFn(): TierTintFn | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { __d3SetAlmagestTierTint?: TierTintFn }).__d3SetAlmagestTierTint;
 }
 
 function loadInitialParams(): AlmagestParams {
@@ -96,9 +107,17 @@ export default function AlmagestTuner() {
   const [frozenOpen, setFrozenOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [baking, setBaking] = useState(false);
+  const [tierTint, setTierTint] = useState(false);
+  // Batch A per-parameter reset/tweak markers: the generator's tables as
+  // loaded at page start (= the last bake). Computed once per mount, not
+  // re-derived on every render -- a bake always reloads the page, so the
+  // only way this value goes stale is a bake, which brings a fresh mount
+  // (and a fresh call to shippedParams()) with it anyway.
+  const [baked] = useState<AlmagestParams>(shippedParams);
 
   const previewAvailable = typeof window !== "undefined" && typeof getPreviewFn() === "function";
   const isDirty = !paramsEqual(params, shippedParams());
+  const diff = diffFromBaseline(params, baked);
 
   // Alt+A toggles open/closed regardless of focus location -- a global
   // listener on `document`, not scoped to the panel, so it works whether
@@ -230,11 +249,23 @@ export default function AlmagestTuner() {
         <div className="almagest-tuner" role="dialog" aria-label="Almagest tuner">
           <div className="tuner-title">Almagest tuner</div>
           <div className="tuner-tabs">
-            {TIER_NAMES.map((t) => (
-              <button key={t} type="button" className="tuner-tab" aria-pressed={tab === t} onClick={() => setTab(t)}>
-                {t}
-              </button>
-            ))}
+            {TIER_NAMES.map((t) => {
+              const tweakedCount = diff.tiers[t].length;
+              return (
+                <button key={t} type="button" className="tuner-tab" aria-pressed={tab === t} onClick={() => setTab(t)}>
+                  {t}
+                  {tweakedCount > 0 ? (
+                    // aria-hidden: purely visual -- the accessible name stays
+                    // exactly the tier name (existing getByRole(..., { name })
+                    // lookups depend on that), the tweak count is conveyed to
+                    // assistive tech via the footer's "N changed" summary.
+                    <span className="tuner-tab-badge" aria-hidden="true">
+                      {tweakedCount}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
           <div className="tuner-sliders">
             {TIER_KEYS.map((key) => (
@@ -246,11 +277,20 @@ export default function AlmagestTuner() {
                 range={PARAM_RANGES.tier[key]}
                 disabled={key === "min" && tab === "Text"}
                 onChange={(v) => updateTier(key, v)}
+                baseline={baked.tiers[tab][key]}
+                onReset={() => updateTier(key, baked.tiers[tab][key])}
               />
             ))}
           </div>
           <details className="tuner-frozen" open={frozenOpen} onToggle={(e) => setFrozenOpen(e.currentTarget.open)}>
-            <summary>Advance-affecting (all tiers)</summary>
+            <summary>
+              Advance-affecting (all tiers)
+              {diff.frozen.length > 0 ? (
+                <span className="tuner-tab-badge" aria-hidden="true">
+                  {diff.frozen.length}
+                </span>
+              ) : null}
+            </summary>
             <p className="tuner-warning">Changes advance widths for every tier; a tier swap may reflow a name.</p>
             {FROZEN_KEYS.map((key) => (
               <Slider
@@ -260,6 +300,8 @@ export default function AlmagestTuner() {
                 value={params.frozen[key]}
                 range={PARAM_RANGES.frozen[key]}
                 onChange={(v) => updateFrozen(key, v)}
+                baseline={baked.frozen[key]}
+                onReset={() => updateFrozen(key, baked.frozen[key])}
               />
             ))}
           </details>
@@ -288,9 +330,24 @@ export default function AlmagestTuner() {
               Bake
             </button>
           </div>
+          <label className="tuner-tint-toggle">
+            <input
+              type="checkbox"
+              checked={tierTint}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setTierTint(on);
+                getTierTintFn()?.(on);
+              }}
+            />
+            Tint by tier
+          </label>
           <p className="tuner-bake-notice">
             Rewrites fonts/almagest/tools/almagest-glyphs.cjs and the three TTFs under
             public/fonts/almagest; commit both together.
+          </p>
+          <p className="tuner-diff-summary">
+            {diff.total > 0 ? `${diff.total} changed since last bake` : "matches last bake"}
           </p>
           <p className="tuner-status" role="status">
             {status || (!previewAvailable ? "graph not ready" : "")}

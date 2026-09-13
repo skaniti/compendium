@@ -75,6 +75,28 @@ export function paramsEqual(a: AlmagestParams, b: AlmagestParams): boolean {
   return toJSON(a) === toJSON(b);
 }
 
+// Batch A tweak markers (spec docs/project-plans/2026-09-13-183006-graph-
+// interaction-followups/): a small pure diff between the working draft and
+// the last-baked baseline (shippedParams() as loaded at page start), used
+// to mark rows/tabs/the frozen group/the footer that have moved since the
+// last bake. Per-key equality (not JSON string compare) so the result
+// names exactly which params changed, not just that something did.
+export function diffFromBaseline(
+  params: AlmagestParams,
+  baseline: AlmagestParams,
+): { tiers: Record<TierName, string[]>; frozen: string[]; total: number } {
+  const tiers = {} as Record<TierName, string[]>;
+  let total = 0;
+  for (const t of TIER_NAMES) {
+    const changed = TIER_KEYS.filter((k) => params.tiers[t][k] !== baseline.tiers[t][k]);
+    tiers[t] = changed;
+    total += changed.length;
+  }
+  const frozen = FROZEN_KEYS.filter((k) => params.frozen[k] !== baseline.frozen[k]);
+  total += frozen.length;
+  return { tiers, frozen, total };
+}
+
 export function toJSON(p: AlmagestParams): string {
   const ordered = {
     frozen: Object.fromEntries(FROZEN_KEYS.map((k) => [k, p.frozen[k]])),

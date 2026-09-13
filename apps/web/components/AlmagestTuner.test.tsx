@@ -10,6 +10,7 @@ describe("AlmagestTuner", () => {
     localStorage.clear();
     sessionStorage.clear();
     (window as unknown as { __d3SetAlmagestPreview?: unknown }).__d3SetAlmagestPreview = vi.fn();
+    (window as unknown as { __d3SetAlmagestTierTint?: unknown }).__d3SetAlmagestTierTint = vi.fn();
     vi.useFakeTimers();
   });
   afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -118,5 +119,62 @@ describe("AlmagestTuner", () => {
     fireEvent.change(stroke, { target: { value: "2" } });
     fireEvent.blur(stroke);
     expect(Number(stroke.value)).toBe(PARAM_RANGES.tier.stroke.min);
+  });
+
+  // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-followups/)
+  it("the tint checkbox calls the tier-tint hook on and off", () => {
+    const tint = (window as unknown as { __d3SetAlmagestTierTint: ReturnType<typeof vi.fn> }).__d3SetAlmagestTierTint;
+    render(<AlmagestTuner />);
+    fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
+    const checkbox = screen.getByRole("checkbox", { name: /tint by tier/i }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(tint).toHaveBeenLastCalledWith(true);
+    fireEvent.click(checkbox);
+    expect(tint).toHaveBeenLastCalledWith(false);
+  });
+
+  it("marks a tweaked row, badges its tab, updates the footer, and per-row reset clears the marker", () => {
+    render(<AlmagestTuner />);
+    fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
+    expect(screen.getByText("matches last bake")).toBeTruthy();
+
+    const midTab = screen.getByRole("button", { name: "Mid" });
+    fireEvent.click(midTab);
+    const stroke = screen.getByLabelText(/^stroke$/i) as HTMLInputElement;
+    const baseline = Number(stroke.value);
+    fireEvent.change(stroke, { target: { value: String(baseline + 1) } });
+
+    const row = stroke.closest(".tuner-row")!;
+    expect(row.className).toContain("tuner-row--tweaked");
+    expect(midTab.querySelector(".tuner-tab-badge")?.textContent).toBe("1");
+    expect(screen.getByText("1 changed since last bake")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /reset stroke/i }));
+    expect(Number((screen.getByLabelText(/^stroke$/i) as HTMLInputElement).value)).toBe(baseline);
+    expect(row.className).not.toContain("tuner-row--tweaked");
+    expect(midTab.querySelector(".tuner-tab-badge")).toBeNull();
+    expect(screen.getByText("matches last bake")).toBeTruthy();
+  });
+
+  it("the global reset still restores everything, clearing every tweak marker", () => {
+    render(<AlmagestTuner />);
+    fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Mid" }));
+    const stroke = screen.getByLabelText(/^stroke$/i) as HTMLInputElement;
+    fireEvent.change(stroke, { target: { value: String(Number(stroke.value) + 1) } });
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    const star = screen.getByLabelText(/^star$/i) as HTMLInputElement;
+    fireEvent.change(star, { target: { value: "250" } });
+    expect(screen.getByText(/changed since last bake/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /reset to shipped/i }));
+
+    expect(screen.getByText("matches last bake")).toBeTruthy();
+    expect((screen.getByLabelText(/^star$/i) as HTMLInputElement).value).toBe(String(shippedParams().tiers.Display.star));
+    fireEvent.click(screen.getByRole("button", { name: "Mid" }));
+    expect((screen.getByLabelText(/^stroke$/i) as HTMLInputElement).closest(".tuner-row")!.className).not.toContain(
+      "tuner-row--tweaked",
+    );
   });
 });
