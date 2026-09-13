@@ -29,14 +29,17 @@ const TIERS = ["Display", "Mid", "Text"];
 
 // Same-origin gate. This route rewrites a tracked source file and rebuilds
 // the shipped fonts on POST, so a dev server left running must never act on
-// a cross-site request even though it 404s outside development (a running
-// :3000 is still reachable from any page open in the same browser).
-// `Sec-Fetch-Site` is sent by every modern browser fetch/XHR/form submit:
-// "same-origin" (the app's own page) and "none" (no fetch metadata at all --
-// a typed URL, a bookmark; never cross-site in practice) both pass. Clients
-// that omit it entirely (curl, older browsers) fall back to comparing
-// `Origin` against the request's own host. Anything else -- a cross-site
-// Sec-Fetch-Site, or a missing/mismatching Origin -- is rejected.
+// a cross-site request. `Sec-Fetch-Site` is sent by every modern browser
+// fetch/XHR/form submit: "same-origin" (the app's own page) and "none" (no
+// fetch metadata at all -- a typed URL, a bookmark; never cross-site in
+// practice) both pass. Clients that omit it entirely (curl, older browsers)
+// fall back to comparing `Origin` against the request's own host. Anything
+// else -- a cross-site Sec-Fetch-Site, or a missing/mismatching Origin -- is
+// rejected. Checked AFTER the dev-only gate below, not before: outside
+// development every request -- same-origin or not -- gets the identical
+// uniform 404, so a cross-site prober against a production deployment never
+// learns that this route exists at all, let alone that it enforces an origin
+// check (a 403 there would leak exactly that).
 function isSameOrigin(req: Request): boolean {
   const secFetchSite = req.headers.get("sec-fetch-site");
   if (secFetchSite === "same-origin" || secFetchSite === "none") return true;
@@ -50,8 +53,8 @@ function isSameOrigin(req: Request): boolean {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  if (!isSameOrigin(req)) return NextResponse.json({ error: "same-origin only" }, { status: 403 });
   if (process.env.NODE_ENV !== "development") return new NextResponse(null, { status: 404 });
+  if (!isSameOrigin(req)) return NextResponse.json({ error: "same-origin only" }, { status: 403 });
   let params;
   try {
     params = validateParams(await req.json());

@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import type { Range } from "@/lib/almagest/params";
 
 // Almagest graph tuner (Task 4): shared range+number slider primitive.
@@ -10,20 +11,55 @@ export interface SliderProps { id: string; label: string; value: number; range: 
 
 export default function Slider({ id, label, value, range, onChange, disabled, hint }: SliderProps) {
   const decimals = range.step >= 1 ? 0 : String(range.step).split(".")[1]?.length ?? 2;
+  const formatted = String(Number(value.toFixed(decimals)));
+
+  // The number input keeps its own free-form draft text and does NOT call
+  // onChange per keystroke -- only on blur (or Enter, via blur()). A
+  // controlled number input that ran the parent's validateParams/clamp on
+  // every keystroke corrupted multi-digit entry: typing "3" into a field
+  // whose range min is 4 clamped the field to "4" immediately, so the
+  // browser's *next* keydown event ("6") appended onto that already-clamped
+  // rendered value ("4" + "6" = "46") instead of onto what the user actually
+  // typed ("36"). Buffering the raw text locally and clamping once at commit
+  // time fixes that. The range input is unaffected -- its own native
+  // min/max/step keep every value in range already, so it keeps pushing
+  // onChange live on every drag tick.
+  const [text, setText] = useState(formatted);
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setText(formatted);
+  }, [formatted]);
+
+  function commit(): void {
+    if (text.trim() === "") {
+      setText(formatted);
+      return;
+    }
+    const v = Number(text);
+    if (Number.isFinite(v)) onChange(v);
+    else setText(formatted);
+  }
+
   return (
     <div className="tuner-row">
       <label className="tuner-label" htmlFor={id}>{label}</label>
       <input id={id} type="range" min={range.min} max={range.max} step={range.step} value={value} disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
-      <input className="tuner-num" type="number" min={range.min} max={range.max} step={range.step} value={Number(value.toFixed(decimals))}
-        disabled={disabled} aria-label={`${label} value`} onChange={(e) => {
-          // `Number("")` is 0, not NaN -- without this guard, clearing the
-          // field (a normal mid-edit state, not a real "set to zero")
-          // would push 0 on every keystroke of the clear.
-          if (e.target.value === "") return;
-          const v = Number(e.target.value);
-          if (Number.isFinite(v)) onChange(v);
-        }} />
+      <input
+        className="tuner-num"
+        type="number"
+        min={range.min}
+        max={range.max}
+        step={range.step}
+        value={text}
+        disabled={disabled}
+        aria-label={`${label} value`}
+        onFocus={() => { focused.current = true; }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => { focused.current = false; commit(); }}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      />
       {hint ? <span className="tuner-hint">{hint}</span> : null}
     </div>
   );

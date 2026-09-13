@@ -76,6 +76,9 @@ describe("AlmagestTuner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mid" }));
     const midBreakpoint = screen.getByLabelText(/breakpoint px value/i) as HTMLInputElement;
     fireEvent.change(midBreakpoint, { target: { value: String(PARAM_RANGES.tier.min.max) } });
+    // The number input commits on blur, not per keystroke (see the
+    // commit-on-blur test below) -- blur it to apply the clamp/invariant.
+    fireEvent.blur(midBreakpoint);
     const midValue = Number(midBreakpoint.value);
     expect(midValue).toBeLessThanOrEqual(PARAM_RANGES.tier.min.max - 1);
 
@@ -90,5 +93,30 @@ describe("AlmagestTuner", () => {
     const draft = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY)!);
     expect(draft.tiers.Mid.min).toBe(midValue);
     expect(draft.tiers.Display.min).toBe(displayValue);
+  });
+  it("commits the number input only on blur, so a clamp mid-typing can't corrupt the next keystroke", () => {
+    render(<AlmagestTuner />);
+    fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Mid" }));
+    const stroke = screen.getByLabelText(/stroke value/i) as HTMLInputElement;
+
+    // Types "3" then "6" as two real keystrokes would: the second change's
+    // target.value is whatever the input currently displays plus the new
+    // digit -- under the old per-keystroke-clamp bug, "3" (below the range
+    // min of 4) would already have been clamped and re-rendered as "4"
+    // before the second keystroke landed, producing "46"; buffering the
+    // draft locally keeps it "3" until blur, so the second keystroke
+    // produces "36".
+    fireEvent.change(stroke, { target: { value: "3" } });
+    fireEvent.change(stroke, { target: { value: stroke.value + "6" } });
+    fireEvent.blur(stroke);
+    expect(stroke.value).toBe("36");
+    expect(JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY)!).tiers.Mid.stroke).toBe(36);
+
+    // A genuinely out-of-range value still clamps, just at commit (blur)
+    // time rather than per keystroke.
+    fireEvent.change(stroke, { target: { value: "2" } });
+    fireEvent.blur(stroke);
+    expect(Number(stroke.value)).toBe(PARAM_RANGES.tier.stroke.min);
   });
 });

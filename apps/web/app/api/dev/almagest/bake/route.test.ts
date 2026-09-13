@@ -55,9 +55,20 @@ describe("POST /api/dev/almagest/bake", () => {
     expect(json.error).toBeTruthy();
   });
 
-  it("returns 403 before doing anything else when Sec-Fetch-Site is cross-site", async () => {
-    // No NODE_ENV stub -- the origin gate must fire ahead of the dev-only
-    // 404 gate, so this rejects regardless of environment.
+  it("returns 404, not 403, for a cross-site request when not development", async () => {
+    // The dev-only gate runs FIRST: outside development every request gets
+    // the identical uniform 404 regardless of origin, so a cross-site
+    // prober against a production deployment never learns this route
+    // exists or that it enforces an origin check.
+    vi.stubEnv("NODE_ENV", "production");
+    vi.resetModules();
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest({}, { "Sec-Fetch-Site": "cross-site" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 for a cross-site request in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
     vi.resetModules();
     const { POST } = await import("./route");
     const res = await POST(makeRequest({}, { "Sec-Fetch-Site": "cross-site" }));
