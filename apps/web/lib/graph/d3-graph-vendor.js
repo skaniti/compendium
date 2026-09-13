@@ -911,6 +911,10 @@
 //      clamp kept as an opt-in `'viewport'` mode. Dev hooks
 //      __d3SetScSeparationOptions / __d3GetScSeparationOptions extended
 //      accordingly (exileClampMode, exileMarginPx).
+//  (f) 2026-09-13 user report (fit/floor cropping exiled plates): fit bbox
+//      = content bbox ∪ plates exiled at fit (+ SC_FIT_EXILE_MARGIN_PX),
+//      fixed-point in remeasureScLayout; ring perimeter = unpadded content
+//      bbox (cloudBBox).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1016,6 +1020,7 @@ var __vendorExpandedGroups;
     // with its label.
     var SC_SEPARATION_BUDGET_MIN_PX = 60;
     var SC_EXILE_MARGIN_PX = 16;           // gap between cloud perimeter and an exiled plate's near edge (screen px)
+    var SC_FIT_EXILE_MARGIN_PX = 12;       // 2026-09-13: fit (100%) includes every plate exiled AT fit, plus this screen-px margin
     var SC_EXILE_CLAMP_MODE = 'periphery';  // 'periphery' (2026-09-13 user direction: exiled plates stay on the cloud perimeter and may leave the viewport) | 'viewport' (radial clamp inside the viewport minus SC_EXILE_VIEWPORT_MARGIN_PX; the behavior shipped 2026-09-11)
     var SC_EXILE_VIEWPORT_MARGIN_PX = 28;  // same clearance updateEdgeChips uses
     var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation / remeasureScLayout)
@@ -4545,15 +4550,48 @@ var __vendorExpandedGroups;
             });
         }
 
+        // Flat pad, applied last so it sits BEYOND the fog/watermark terms
+        // above. unpadFitBBox (just below) mirrors this exact step in
+        // reverse -- keep the two in sync; they're the only two places
+        // these pad constants are applied to a bbox.
         minX -= HULL_PADDING + FIT_WORLD_PAD; minY -= HULL_PADDING + FIT_WORLD_PAD + 20;
         maxX += HULL_PADDING + FIT_WORLD_PAD; maxY += HULL_PADDING + FIT_WORLD_PAD;
         if (maxX - minX <= 0 || maxY - minY <= 0) return null;
         return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
     }
 
+    /** 2026-09-13 fit-includes-exiles fix: the UNPADDED content bbox --
+     *  computeFitBBox's flat-pad step (HULL_PADDING + FIT_WORLD_PAD, +20 more
+     *  on top) removed. Used as the exiled-plate ring perimeter
+     *  (__scLayout.cloudBBox) so plates sit against the nebula itself rather
+     *  than against the fit's own daylight margin, which is what made
+     *  exiled plates float far from the cloud with long leaders (user
+     *  report, 2026-09-13). Pure arithmetic inverse of computeFitBBox's own
+     *  pad step -- factored out so the pad constants stay defined in one
+     *  place (computeFitBBox) and applied/un-applied from exactly two call
+     *  sites. */
+    function unpadFitBBox(bb) {
+        if (!bb) return bb;
+        return {
+            minX: bb.minX + HULL_PADDING + FIT_WORLD_PAD,
+            minY: bb.minY + HULL_PADDING + FIT_WORLD_PAD + 20,
+            maxX: bb.maxX - (HULL_PADDING + FIT_WORLD_PAD),
+            maxY: bb.maxY - (HULL_PADDING + FIT_WORLD_PAD),
+        };
+    }
+
     function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
         if (!nodes.length || !svg) return;
-        var bb = computeFitBBox(nodes);
+        // 2026-09-13 fit-includes-exiles fix: once a settle/resize has run
+        // remeasureScLayout for THIS canvas size (settle path: handleSimEnd
+        // -> applyScLayoutSeparation; resize path: the ResizeObserver calls
+        // remeasureScLayout before fitToContent -- see both call sites
+        // below), __scLayout.fitBBox is the content bbox already expanded to
+        // include every plate exiled AT fit (plus SC_FIT_EXILE_MARGIN_PX).
+        // Falling back to the plain computeFitBBox covers the pre-first-
+        // settle/no-SC-separation case (no __scLayout yet, or fewer than 2
+        // painted SCs -- remeasureScLayout no-ops and leaves fitBBox unset).
+        var bb = (__scLayout && __scLayout.fitBBox) ? __scLayout.fitBBox : computeFitBBox(nodes);
         if (!bb) return;
         var minX = bb.minX, minY = bb.minY, maxX = bb.maxX, maxY = bb.maxY;
         var bw = maxX - minX, bh = maxY - minY;
@@ -5008,7 +5046,16 @@ var __vendorExpandedGroups;
      *  construction" sweep, just run standalone against every painted SC
      *  rather than only the ones the movement phase hadn't already flagged).
      *  Guard: no-op when __scLayout is null (no layout yet -- nothing for a
-     *  resize to refresh) or fewer than 2 painted SCs. */
+     *  resize to refresh) or fewer than 2 painted SCs.
+     *
+     *  2026-09-13 fit-includes-exiles fix: also derives __scLayout.fitBBox
+     *  -- the content bbox expanded (bounded fixed-point search, see the
+     *  loop's own comment) to include every plate exiled AT fit -- which
+     *  fitToContent now fits to instead of the plain content bbox, so 100%
+     *  zoom (and the 0.5x floor beneath it) always contains every exiled
+     *  nameplate. cloudBBox (the ring perimeter exiled plates are placed
+     *  against) is now the UNPADDED content bbox, not the fit bbox -- see
+     *  unpadFitBBox. */
     function remeasureScLayout(canvasW, canvasH) {
         if (!__scLayout || !currentData || !__mountedIcons) return;
         if (!(canvasW > 0) || !(canvasH > 0)) return;
@@ -5037,61 +5084,125 @@ var __vendorExpandedGroups;
             nodeIdxByKw[kw] = idx; pagesByKw[kw] = pages;
         });
 
-        var bbox = computeFitBBox(nodes);
-        if (!bbox) return;
-        var kFit = Math.min(canvasW / (bbox.maxX - bbox.minX), canvasH / (bbox.maxY - bbox.minY));
-        if (!(kFit > 0)) return;
-        var kFloor = kFit * MIN_ZOOM_RATIO;
+        var contentBBox = computeFitBBox(nodes);
+        if (!contentBBox) return;
+        // Ring perimeter for exiled plates is the UNPADDED content bbox
+        // (2026-09-13 user direction: plates hug the nebula instead of
+        // floating out past the fit's own daylight margin) -- invariant
+        // across the fit-search loop below, since it depends only on node
+        // positions, never on canvasW/canvasH or the candidate fit bbox.
+        var cloudBBox = unpadFitBBox(contentBBox);
         var centroids = computeClusterCentroids(clusters, nodes);
-        var anchors = {}, budgetPx = {};
-        scKeys.forEach(function (kw) {
-            var geo = scOverlayGeometry(groups[kw], centroids, nodes);
-            if (!geo) { anchors[kw] = null; return; }
-            anchors[kw] = { x: geo.cx, y: geo.cy };
-            budgetPx[kw] = Math.max(geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
-        });
 
-        // Guarantee by construction: whatever is still overlapping at zero
-        // budget becomes overflow, so every plate drawn at its anchor is
-        // disjoint at the floor -- the resolver+glide safety net should
-        // never have to move an anchored plate. This is the ONLY source of
-        // overflow at a remeasure -- the movement phase (when there was
-        // one) already ran.
-        var overflow = {};
-        var checkPlates = [];
-        scKeys.forEach(function (kw) {
-            if (!anchors[kw]) return;
-            checkPlates.push({ key: kw, pages: pagesByKw[kw], x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor, fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp), budget: 0 });
-        });
-        solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
+        // 2026-09-13 fit-includes-exiles fix: 100% zoom must equal
+        // zoom-to-fit INCLUDING every plate exiled AT fit (plus
+        // SC_FIT_EXILE_MARGIN_PX) -- otherwise fit (and the 0.5x floor
+        // beneath it) crops peripheral plates (user report, screenshot).
+        // Growing the fit bbox to include an exiled plate SHRINKS kFit
+        // (and kFloor with it), which shrinks screen-space separation
+        // between anchors and can push another plate into overflow/exile
+        // that wasn't before -- so this is a bounded fixed-point search,
+        // not a single pass. Each iteration re-derives its candidate
+        // fitBBox from contentBBox (never compounds a prior iteration's
+        // expansion), so a plate that stops being exiled once kFit settles
+        // is dropped again rather than leaving stale slack in the bbox.
+        // Capped at 4 iterations, matching the spec's stated bound.
+        var kFit = 0, kFloor = 0, anchors = {}, budgetPx = {}, overflow = {}, kExileOf = {};
+        var cloudCx = 0, cloudCy = 0;
+        var fitBBox = contentBBox;
+        for (var it = 0; it < 4; it++) {
+            kFit = Math.min(canvasW / (fitBBox.maxX - fitBBox.minX), canvasH / (fitBBox.maxY - fitBBox.minY));
+            if (!(kFit > 0)) return;
+            kFloor = kFit * MIN_ZOOM_RATIO;
+
+            anchors = {}; budgetPx = {};
+            scKeys.forEach(function (kw) {
+                var geo = scOverlayGeometry(groups[kw], centroids, nodes);
+                if (!geo) { anchors[kw] = null; return; }
+                anchors[kw] = { x: geo.cx, y: geo.cy };
+                budgetPx[kw] = Math.max(geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
+            });
+
+            // Guarantee by construction: whatever is still overlapping at
+            // zero budget becomes overflow, so every plate drawn at its
+            // anchor is disjoint at the floor -- the resolver+glide safety
+            // net should never have to move an anchored plate. This is the
+            // ONLY source of overflow at a remeasure -- the movement phase
+            // (when there was one) already ran.
+            overflow = {};
+            var checkPlates = [];
+            scKeys.forEach(function (kw) {
+                if (!anchors[kw]) return;
+                checkPlates.push({ key: kw, pages: pagesByKw[kw], x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor, fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp), budget: 0 });
+            });
+            solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
+
+            kExileOf = {};
+            cloudCx = 0; cloudCy = 0;
+            var cloudN = 0;
+            scKeys.forEach(function (kw) {
+                nodeIdxByKw[kw].forEach(function (i) { cloudCx += nodes[i].x; cloudCy += nodes[i].y; cloudN++; });
+                if (overflow[kw] && anchors[kw]) {
+                    // Task 7: opponents = every other painted plate at its
+                    // anchor. Restricting to anchored plates let a plate
+                    // whose only collision was with ANOTHER overflow plate
+                    // compute a floor-level kExile (already "clear"), so it
+                    // never exiled and the R6 safety net slid it ~800px on
+                    // real data.
+                    var opponents = scKeys.filter(function (k) { return k !== kw && anchors[k]; });
+                    var r = computeExileRatio(kw, anchors, opponents, fp, kFit, MIN_ZOOM_RATIO, 4);
+                    kExileOf[kw] = isFinite(r) ? kFit * r : Infinity;
+                } else {
+                    kExileOf[kw] = 0;
+                }
+            });
+            cloudCx = cloudN ? cloudCx / cloudN : (contentBBox.minX + contentBBox.maxX) / 2;
+            cloudCy = cloudN ? cloudCy / cloudN : (contentBBox.minY + contentBBox.maxY) / 2;
+
+            // "Exiled at fit" = would still be exiled if the user's current
+            // zoom were exactly THIS candidate's fit scale (currentZoomK ==
+            // kFit) -- i.e. kFit hasn't yet reached this plate's own exile
+            // onset at that same candidate scale.
+            var exiledAtFit = scKeys.filter(function (kw) { return overflow[kw] && anchors[kw] && kFit < kExileOf[kw]; });
+            if (!exiledAtFit.length) { fitBBox = contentBBox; break; }
+
+            // Predict drawWatermarks' own exile pre-pass EXACTLY (same
+            // placeExiledPlates call, same env shape) at k = kFit, ratio =
+            // 1.0 (fit) -- so the bbox this loop derives is provably what
+            // fit will actually need, not a parallel estimate.
+            var items = exiledAtFit.map(function (kw) { return { key: kw, ax: anchors[kw].x, ay: anchors[kw].y, fp: plateFootprintAtRatio(kw, 1.0, fp) }; });
+            var placed = placeExiledPlates(items, { cx: cloudCx, cy: cloudCy, bbox: cloudBBox, k: kFit, marginPx: SC_EXILE_MARGIN_PX });
+            var next = { minX: contentBBox.minX, minY: contentBBox.minY, maxX: contentBBox.maxX, maxY: contentBBox.maxY };
+            items.forEach(function (itm) {
+                var p = placed[itm.key];
+                var hw = (itm.fp.right - itm.fp.left) / 2 / kFit + SC_FIT_EXILE_MARGIN_PX / kFit;
+                var hh = (itm.fp.bottom - itm.fp.top) / 2 / kFit + SC_FIT_EXILE_MARGIN_PX / kFit;
+                if (p.x - hw < next.minX) next.minX = p.x - hw;
+                if (p.x + hw > next.maxX) next.maxX = p.x + hw;
+                if (p.y - hh < next.minY) next.minY = p.y - hh;
+                if (p.y + hh > next.maxY) next.maxY = p.y + hh;
+            });
+            var same = Math.abs(next.minX - fitBBox.minX) < 0.5 && Math.abs(next.minY - fitBBox.minY) < 0.5 && Math.abs(next.maxX - fitBBox.maxX) < 0.5 && Math.abs(next.maxY - fitBBox.maxY) < 0.5;
+            fitBBox = next;
+            if (same) break;
+        }
 
         var plateInfo = {}, report = [];
-        var cx = 0, cy = 0, cn = 0;
         scKeys.forEach(function (kw) {
-            nodeIdxByKw[kw].forEach(function (i) { cx += nodes[i].x; cy += nodes[i].y; cn++; });
-            var kExile = 0;
-            if (overflow[kw] && anchors[kw]) {
-                // Task 7: opponents = every other painted plate at its anchor.
-                // Restricting to anchored plates let a plate whose only
-                // collision was with ANOTHER overflow plate compute a
-                // floor-level kExile (already "clear"), so it never exiled and
-                // the R6 safety net slid it ~800px on real data.
-                var opponents = scKeys.filter(function (k) { return k !== kw && anchors[k]; });
-                var r = computeExileRatio(kw, anchors, opponents, fp, kFit, MIN_ZOOM_RATIO, 4);
-                kExile = isFinite(r) ? kFit * r : Infinity;
-            }
             // shiftPx re-expresses the correction pass's own world-unit
             // record (__scShiftW, unaffected by resize) at WHATEVER kFloor
             // is current, so shiftPx <= budgetPx stays an apples-to-apples
             // invariant at every canvas size, not just the settle-time one.
             var shiftPx = (__scShiftW[kw] || 0) * kFloor;
+            var kExile = kExileOf[kw] || 0;
             plateInfo[kw] = { anchor: anchors[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
             report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
         });
         __scLayout = {
             kFit: kFit, kFloor: kFloor,
-            cloudCentroid: cn ? { x: cx / cn, y: cy / cn } : { x: (bbox.minX + bbox.maxX) / 2, y: (bbox.minY + bbox.maxY) / 2 },
-            cloudBBox: bbox,
+            cloudCentroid: { x: cloudCx, y: cloudCy },
+            cloudBBox: cloudBBox,
+            fitBBox: fitBBox,
             plates: plateInfo,
             fpParams: fp,
             report: report,

@@ -148,7 +148,7 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>;
-type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] };
+type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
 type ExileClampMode = "periphery" | "viewport";
 type SeparationOptions = {
   budgetRatio?: number;
@@ -209,18 +209,25 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   it("separates anchored plates so floor footprints are pairwise disjoint and shifts stay within budget", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
-    // 900x700 (not the brief's illustrative 420x320): at 420x320 every
-    // plate's overlap so vastly exceeds its budget that solveSeparation's
-    // all-or-nothing pair rule (sc-separation.ts) marks every non-top plate
-    // overflow WITHOUT applying any partial shift at all (shiftPx stays 0
-    // for all four; observed and recorded in task-3-report.md) -- the OR
-    // assertion below still passes on overflow alone, but the budget-bound
-    // shift path and the "two anchored, pairwise disjoint" branch of the
-    // assertions below go unexercised. 900x700 lands in the middle of the
-    // pass's own effect range (same fixture, canvas size is the only knob
-    // turned): two plates land within budget (partial shift, non-overflow)
-    // and two exceed it (overflow, zero shift) -- exercising both branches.
-    sizeContainer(container, 900, 700);
+    // 1100x850 (not the brief's illustrative 420x320, and not this test's
+    // prior 900x700): at 420x320 every plate's overlap so vastly exceeds
+    // its budget that solveSeparation's all-or-nothing pair rule
+    // (sc-separation.ts) marks every non-top plate overflow WITHOUT
+    // applying any partial shift at all (shiftPx stays 0 for all four,
+    // observed and recorded in task-3-report.md) -- the OR assertion below
+    // still passes on overflow alone, but the budget-bound shift path and
+    // the "two anchored, pairwise disjoint" branch go unexercised. 900x700
+    // moved (2026-09-13, fit-includes-exiles fix): at that size sc3's
+    // floor-level kExile already sits above kFit, so remeasureScLayout's
+    // new fixed-point loop (d3-graph-vendor.js) grows the fit bbox to
+    // include it -- shrinking kFit/kFloor enough to cascade two MORE
+    // plates into overflow (verified: only 1 of 4 stays anchored), which
+    // starves the pairwise-disjoint branch this test exists to exercise.
+    // 1100x850 keeps every plate's kExile below kFit (no plate is exiled
+    // AT FIT), so the new loop is a no-op here and the original two-plates-
+    // shift / two-plates-overflow split is preserved; the fit-inclusion
+    // loop itself is exercised by the dedicated tests below instead.
+    sizeContainer(container, 1100, 850);
     document.body.appendChild(container);
     render(container, crowdedPayload("sep", 4, 6), { icons: iconsFor("sep") });
     flushSettleChunks();
@@ -253,7 +260,19 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   it("__d3ScLayoutRemeasure re-derives kFloor and exile onsets for a new canvas size without moving nodes (resize path)", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
-    sizeContainer(container, 900, 700);
+    // 3600x2800 (not this test's prior 900x700): 2026-09-13 fit-includes-
+    // exiles fix -- remeasureScLayout's fixed-point loop recomputes
+    // kFit/kFloor from a fitBBox that grows to include any plate exiled AT
+    // fit, so a canvas size where that loop actually engages breaks the
+    // clean "halving the canvas exactly halves kFit" arithmetic this test
+    // exists to pin (verified: at 900x700 -> 450x350 kFloor lands at ~14%
+    // of before.kFloor, not 50%). 3600x2800 keeps every plate's kExile
+    // below kFit at BOTH this size and its half (1800x1400) -- the loop is
+    // a no-op at both, so the linear-scaling arithmetic holds exactly, and
+    // halving alone (unrelated to the new loop) still pushes one plate
+    // into overflow, preserving this test's original intent. The
+    // fit-inclusion loop itself is exercised by the dedicated tests below.
+    sizeContainer(container, 3600, 2800);
     document.body.appendChild(container);
     render(container, crowdedPayload("rsz", 4, 6), { icons: iconsFor("rsz") });
     flushSettleChunks();
@@ -265,14 +284,14 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // the same factor -- without moving a single node (remeasureScLayout is
     // node-immutable; contrast with applyScLayoutSeparation's own movement
     // phase, which never runs here).
-    const half = (window as W).__d3ScLayoutRemeasure!(450, 350)!;
+    const half = (window as W).__d3ScLayoutRemeasure!(1800, 1400)!;
     expect(half).toBeTruthy();
     expect(half.kFloor).toBeCloseTo(before.kFloor * 0.5, 9);
     // A smaller canvas packs the SAME anchors (unmoved) into a SMALLER
     // screen area while footprints (sized off a fixed ratio, not kFloor)
     // stay the same screen size -- overlap can only get worse, so the
-    // settle-time overflow set (already non-empty per the "separates
-    // anchored plates" test above) persists or grows.
+    // settle-time overflow set persists or grows (at this size it grows
+    // from empty at "before" to one plate at "half").
     const halfOverflow = Object.keys(half.plates).filter((k) => half.plates[k].overflow);
     expect(halfOverflow.length).toBeGreaterThan(0);
     for (const kw of halfOverflow) {
@@ -281,7 +300,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
     // Idempotence: remeasuring back at the ORIGINAL canvas size reproduces
     // the settle-time record exactly (deterministic given unmoved nodes).
-    const restored = (window as W).__d3ScLayoutRemeasure!(900, 700)!;
+    const restored = (window as W).__d3ScLayoutRemeasure!(3600, 2800)!;
     expect(restored.kFloor).toBeCloseTo(before.kFloor, 9);
     const beforeOverflow = Object.keys(before.plates).filter((k) => before.plates[k].overflow).sort();
     const restoredOverflow = Object.keys(restored.plates).filter((k) => restored.plates[k].overflow).sort();
@@ -551,7 +570,16 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
-    sizeContainer(container, 420, 320);
+    // 1200x920 (not the brief's illustrative 420x320): at 420x320 this
+    // fixture's zero budget forces such extreme floor overlap that BOTH
+    // overflow plates' kExile search (computeExileRatio, sc-separation.ts)
+    // never finds clearance within its rMax=4 bound -- every candidate this
+    // test needs (`isFinite(r.kExile)`) is Infinity (verified empirically).
+    // 1200x920 keeps two plates overflow with a FINITE kExile, both still
+    // below kFit (nothing is exiled AT FIT here, so the 2026-09-13
+    // fit-includes-exiles loop is a no-op) -- the "zoom just above kExile
+    // returns it to anchor" behavior this test targets.
+    sizeContainer(container, 1200, 920);
     document.body.appendChild(container);
     render(container, crowdedPayload("ret", 3, 2), { icons: iconsFor("ret") });
     flushSettleChunks();
@@ -569,5 +597,90 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const t = parseTranslate(g.getAttribute("transform"));
     expect(t.x).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-x")!), 3);
     expect(t.y).toBeCloseTo(parseFloat(g.getAttribute("data-anchor-y")!), 3);
+  });
+
+  // 2026-09-13 fit-includes-exiles fix (user report: at 50%/floor zoom
+  // exiled nameplates are cut off at the viewport edge, and at 100%/"fit"
+  // they are outside the view -- 100% must always equal zoom-to-fit
+  // INCLUDING the exiled labels, plus a small margin; since the floor is
+  // 0.5x fit, fixing fit fixes the floor).
+  it("fit includes every plate exiled at fit, plus a small margin", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    // 800x620, 2 SCs (crowdedPayload("cvg", 2, 4)): zero budget forces the
+    // lower-priority SC (cvg-sc1 -- same page count as cvg-sc0, so priority
+    // ties break by key, sc0 < sc1) into overflow with a floor-level
+    // kExile (~1.15) comfortably ABOVE kFit (~0.45) at this canvas size --
+    // i.e. genuinely exiled AT FIT (100% zoom), the exact pre-fix bug: with
+    // the old single-pass computeFitBBox, fitToContent had no idea this
+    // plate would be drawn off in the periphery and framed only the
+    // content, cropping it at 100% (and therefore at the 0.5x floor too).
+    sizeContainer(container, 800, 620);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("cvg", 2, 4), { icons: iconsFor("cvg") });
+    flushSettleChunks();
+    const layout = (window as W).__d3ScLayout!()!;
+    expect(layout.fitBBox).toBeTruthy();
+
+    // fitBBox contains cloudBBox (the unpadded content bbox, ring perimeter
+    // for exile placement).
+    expect(layout.fitBBox.minX).toBeLessThanOrEqual(layout.cloudBBox.minX);
+    expect(layout.fitBBox.minY).toBeLessThanOrEqual(layout.cloudBBox.minY);
+    expect(layout.fitBBox.maxX).toBeGreaterThanOrEqual(layout.cloudBBox.maxX);
+    expect(layout.fitBBox.maxY).toBeGreaterThanOrEqual(layout.cloudBBox.maxY);
+
+    const exiledAtFit = layout.report.filter((r) => r.overflow && r.kExile > layout.kFit);
+    expect(exiledAtFit.length).toBeGreaterThan(0);
+    for (const r of exiledAtFit) {
+      // render() draws at fit by default (currentZoomK === fitZoom, ratio
+      // 1.0) -- no zoom needed to observe the exile placement fitToContent
+      // must already account for.
+      const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === r.keyword)!;
+      expect(g.getAttribute("data-exiled")).toBe("1");
+      const t = parseTranslate(g.getAttribute("transform"));
+      const plateCx = parseFloat(g.getAttribute("data-plate-cx")!), plateCy = parseFloat(g.getAttribute("data-plate-cy")!);
+      const hw = parseFloat(g.getAttribute("data-plate-hw")!), hh = parseFloat(g.getAttribute("data-plate-hh")!);
+      const cx = t.x + plateCx, cy = t.y + plateCy;
+      const rect = { minX: cx - hw, maxX: cx + hw, minY: cy - hh, maxY: cy + hh };
+      expect(rect.minX).toBeGreaterThanOrEqual(layout.fitBBox.minX - 1e-6);
+      expect(rect.maxX).toBeLessThanOrEqual(layout.fitBBox.maxX + 1e-6);
+      expect(rect.minY).toBeGreaterThanOrEqual(layout.fitBBox.minY - 1e-6);
+      expect(rect.maxY).toBeLessThanOrEqual(layout.fitBBox.maxY + 1e-6);
+      expect(rectsOverlap(rect, layout.cloudBBox)).toBe(false);
+    }
+
+    // extent[0] (the 0.5x zoom-out floor) is derived from fitToContent's
+    // own scale computation over THIS SAME fitBBox -- effectiveCanvasHeight
+    // is a no-op here (no .search-bar-wrapper mounted in this test's DOM),
+    // so W/H are exactly the sizeContainer dims passed above.
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    const expectedKMin = 0.5 * Math.min(
+      800 / (layout.fitBBox.maxX - layout.fitBBox.minX),
+      620 / (layout.fitBBox.maxY - layout.fitBBox.minY),
+    );
+    expect(kMin).toBeCloseTo(expectedKMin, 9);
+  });
+
+  it("cloudBBox is the unpadded content bbox when no plate is exiled at fit", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    // Default separation options (generous budget) + a roomy canvas: the
+    // report shows no overflow at all, so remeasureScLayout's fixed-point
+    // loop breaks on iteration 0 with fitBBox === contentBBox exactly (the
+    // plain, padded computeFitBBox(nodes) result) -- isolating the
+    // unpadFitBBox arithmetic from the exile-inclusion loop.
+    sizeContainer(container, 1600, 1240);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("pad", 2, 4), { icons: iconsFor("pad") });
+    flushSettleChunks();
+    const layout = (window as W).__d3ScLayout!()!;
+    expect(layout.report.some((r) => r.overflow)).toBe(false);
+    // HULL_PADDING (20) + FIT_WORLD_PAD (155) = 175 on left/right/bottom;
+    // +20 more (195) on top -- see computeFitBBox's own flat-pad step.
+    expect(layout.cloudBBox.minX - layout.fitBBox.minX).toBeCloseTo(175, 6);
+    expect(layout.fitBBox.maxX - layout.cloudBBox.maxX).toBeCloseTo(175, 6);
+    expect(layout.cloudBBox.minY - layout.fitBBox.minY).toBeCloseTo(195, 6);
+    expect(layout.fitBBox.maxY - layout.cloudBBox.maxY).toBeCloseTo(175, 6);
   });
 });
