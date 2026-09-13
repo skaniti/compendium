@@ -13,7 +13,13 @@
 
 /** One pan/zoom transform snapshot, plus the transform `fitToContent` last
  *  established -- `fitX/fitY/fitK` are the reference point Starfield's
- *  parallax offset is measured from (dx = (x - fitX) * (fitK / k) * factor).
+ *  parallax offset is measured from, and `cx/cy` (fix review C1, 2026-09-13)
+ *  is the canvas center that fit was centered on. Starfield's corrected
+ *  formula is `dx = ((cx - fitX) * (1 - fitK/k) + (x - fitX) * (fitK/k)) *
+ *  factor` (same for y) -- the `cx`/`fitK`/`k` term makes a pure zoom about
+ *  the canvas center (no real world-space pan) report zero offset instead
+ *  of the apparent screen-space shift zooming about a fixed point produces;
+ *  see components/Starfield.tsx's own comment for the full derivation.
  */
 export interface GraphView {
   x: number;
@@ -22,6 +28,8 @@ export interface GraphView {
   fitX: number;
   fitY: number;
   fitK: number;
+  cx: number;
+  cy: number;
 }
 
 type Listener = (view: GraphView) => void;

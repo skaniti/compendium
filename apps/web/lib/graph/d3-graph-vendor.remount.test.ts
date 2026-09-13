@@ -927,7 +927,9 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
     return w.__d3ZoomTo?.(k) ?? false;
   }
 
-  it("fires with {x, y, k, fitX, fitY, fitK} on the fit tick, and again (fit fields unchanged) on a later __d3ZoomTo", async () => {
+  type ViewCall = { x: number; y: number; k: number; fitX: number; fitY: number; fitK: number; cx: number; cy: number };
+
+  it("fires with {x, y, k, fitX, fitY, fitK, cx, cy} on the fit tick, and again (fit fields unchanged) on a later __d3ZoomTo", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -937,9 +939,7 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
     flushSettleChunks(); // runs fitToContent -- fires the fit tick synchronously
 
     expect(onViewChange).toHaveBeenCalled();
-    const fitCall = onViewChange.mock.calls[onViewChange.mock.calls.length - 1][0] as {
-      x: number; y: number; k: number; fitX: number; fitY: number; fitK: number;
-    };
+    const fitCall = onViewChange.mock.calls[onViewChange.mock.calls.length - 1][0] as ViewCall;
     expect(fitCall).toEqual({
       x: expect.any(Number),
       y: expect.any(Number),
@@ -947,28 +947,71 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
       fitX: expect.any(Number),
       fitY: expect.any(Number),
       fitK: expect.any(Number),
+      cx: expect.any(Number),
+      cy: expect.any(Number),
     });
-    // The fit tick's own reading has zero pan relative to itself -- see
-    // the vendor's __fitTransform comment for why (recorded AFTER the fit
-    // transform's own synchronous 'zoom' event already fired).
-    expect(fitCall.x).toBeCloseTo(fitCall.fitX);
-    expect(fitCall.y).toBeCloseTo(fitCall.fitY);
-    expect(fitCall.k).toBeCloseTo(fitCall.fitK);
+    // Fix review I1: __fitTransform is now recorded BEFORE
+    // `svg.call(zoomBehavior.transform, transform)` (which dispatches
+    // 'zoom' synchronously) -- so the fit tick's own onViewChange call
+    // reads the transform IT JUST ESTABLISHED, not a stale prior one, and
+    // x/y/k are therefore EXACTLY equal to fitX/fitY/fitK (not merely
+    // "close to" -- this is the fixed behavior the pre-fix code got wrong,
+    // see that assignment's own comment for the full writeup).
+    expect(fitCall.x).toBe(fitCall.fitX);
+    expect(fitCall.y).toBe(fitCall.fitY);
+    expect(fitCall.k).toBe(fitCall.fitK);
 
     onViewChange.mockClear();
     const newK = fitCall.fitK * 2; // within fitToContent's [fitK*0.5, fitK*4] scaleExtent
     expect(zoomTo(newK)).toBe(true);
 
     expect(onViewChange).toHaveBeenCalledTimes(1);
-    const zoomCall = onViewChange.mock.calls[0][0] as {
-      x: number; y: number; k: number; fitX: number; fitY: number; fitK: number;
-    };
+    const zoomCall = onViewChange.mock.calls[0][0] as ViewCall;
     expect(zoomCall.k).toBeCloseTo(newK);
-    // Reference point unchanged -- still the transform the earlier fit
-    // established, not this zoom's own transform.
+    // Reference point unchanged -- still the transform (and canvas center)
+    // the earlier fit established, not this zoom's own transform.
     expect(zoomCall.fitX).toBeCloseTo(fitCall.fitX);
     expect(zoomCall.fitY).toBeCloseTo(fitCall.fitY);
     expect(zoomCall.fitK).toBeCloseTo(fitCall.fitK);
+    expect(zoomCall.cx).toBeCloseTo(fitCall.cx);
+    expect(zoomCall.cy).toBeCloseTo(fitCall.cy);
+  });
+
+  // Fix review I1: the bug was that __fitTransform got recorded AFTER
+  // dispatching 'zoom', so EVERY refit (not just the very first one) read
+  // stale fitX/fitY/fitK on its own fit tick -- a resize's re-fit is the
+  // most visible case (Starfield.tsx would sit at half the correct
+  // parallax offset until the user's next pan/zoom). A container-SWAP
+  // would NOT discriminate this bug (delta #34 already resets
+  // __fitTransform to null on a swap, so a swapped mount's first fit
+  // trivially satisfies x===fitX either way) -- this instead re-renders
+  // into the SAME, non-swapped container at a DIFFERENT canvas size.
+  // render() re-reads container.getBoundingClientRect() fresh on every
+  // call, so this reaches a genuinely NEW fitToContent call (different
+  // canvasW/canvasH -> different transform) while __fitTransform (a module
+  // var that survives across render() calls for the SAME mount) still
+  // holds the FIRST fit's value until this cycle's own fitToContent
+  // reassigns it -- exactly the window the pre-fix assignment-order bug
+  // exposed: pre-fix, `x` (the new, different-size fit) would NOT equal
+  // `fitX` (the stale first fit) on this tick.
+  it("a SECOND fit (same mount, different canvas size) also publishes x === fitX on its own tick, not the stale prior fit", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(container, ONE_NODE_PAYLOAD, {}); // first fit at jsdom's 800x600 fallback size
+    flushSettleChunks();
+
+    container.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, left: 0, top: 0, width: 1200, height: 900, right: 1200, bottom: 900, toJSON() { return {}; } }) as DOMRect;
+    const onViewChange = vi.fn();
+    render(container, ONE_NODE_PAYLOAD, { onViewChange }); // re-render, SAME container -- not a swap
+    flushSettleChunks();
+
+    expect(onViewChange).toHaveBeenCalled();
+    const fitCall = onViewChange.mock.calls[onViewChange.mock.calls.length - 1][0] as ViewCall;
+    expect(fitCall.x).toBe(fitCall.fitX);
+    expect(fitCall.y).toBe(fitCall.fitY);
+    expect(fitCall.k).toBe(fitCall.fitK);
   });
 
   it("never throws when onViewChange is omitted from opts", async () => {
@@ -979,6 +1022,37 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
     expect(() => render(container, ONE_NODE_PAYLOAD, {})).not.toThrow();
     flushSettleChunks();
     expect(zoomTo(1)).toBe(true); // the 'zoom' handler's onViewChange guard doesn't throw either
+  });
+
+  // Fix review I2: onViewChange joined the opts-carry-forward set
+  // (delta #28/#31's Object.assign({}, carried, opts) mechanism) so an
+  // opts-omitted internal re-render (toggleNoise's own `render(rawData)`
+  // tail) doesn't silently freeze Starfield.tsx on the pan/zoom state from
+  // before the toggle.
+  it("carries onViewChange through an opts-omitted toggleNoise() re-render", async () => {
+    const { render, toggleNoise } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onViewChange = vi.fn();
+    toggleNoise(true);
+    render(container, ONE_NODE_PAYLOAD, { onViewChange });
+    flushSettleChunks();
+    expect(onViewChange).toHaveBeenCalled();
+
+    onViewChange.mockClear();
+    toggleNoise(false); // internally: render(rawData) -- opts omitted entirely
+    flushSettleChunks();
+
+    // Discriminating: pre-fix, onViewChange would never fire again for this
+    // mount once an opts-omitted re-render happened, since the fresh
+    // zoomBehavior/'zoom' closure that internal render() built captured
+    // opts WITHOUT onViewChange.
+    expect(zoomTo(1)).toBe(true);
+    expect(onViewChange).toHaveBeenCalled();
+
+    toggleNoise(true); // restore for any test ordering after this one
+    flushSettleChunks();
   });
 });
 
@@ -1024,7 +1098,7 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
     };
   }
 
-  it("a plain wheel pans (y changes) without zooming (k unchanged)", async () => {
+  it("a plain wheel pans y by exactly the dispatched deltaY, x and k unchanged", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
     sizeContainer(container, 1100, 850);
@@ -1040,8 +1114,15 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
     );
 
     const after = rootTransform(container);
-    expect(after.k).toBeCloseTo(before.k);
-    expect(after.y).not.toBeCloseTo(before.y);
+    // Fix review minor: exact assertions -- the 1100x850 fixture has
+    // plenty of clamp slack (d3-graph-vendor.sc-separation.test.ts's own
+    // rationale for that size), so the wheel.pan listener's
+    // `-event.deltaY * mult / t.k` (mult=1 at deltaMode 0, t.k unchanged)
+    // lands on EXACTLY -100 screen px of y-translate, not merely "some
+    // change".
+    expect(after.y).toBeCloseTo(before.y - 100, 6);
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.k).toBeCloseTo(before.k, 6);
   });
 
   it("a Ctrl+wheel zooms (k changes) instead of panning", async () => {
@@ -1061,6 +1142,37 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
 
     const after = rootTransform(container);
     expect(after.k).not.toBeCloseTo(before.k);
+  });
+
+  // Fix review C2: d3-zoom's own default wheelDelta multiplies a ctrlKey
+  // wheel's delta by 10 (meant for a real trackpad pinch's tiny per-tick
+  // deltaY) -- unclamped, a real mouse's Ctrl+wheel notch (deltaY ~100,
+  // the SAME magnitude a plain wheel pan tick delivers) zoomed ~4x
+  // (2^2) in one notch. The vendor's own .wheelDelta() override caps a
+  // single event's exponent to [-0.5, 0.5], bounding one notch to at most
+  // ~1.41x (2^0.5). Negative deltaY (zoom IN) matches this file's own
+  // existing Ctrl+wheel convention above and d3-zoom's default formula
+  // (`-event.deltaY * ... * 10`, verified against the installed d3-zoom
+  // source) -- a negative deltaY produces a positive wheelDelta exponent,
+  // i.e. `k` increases.
+  it("a single Ctrl+wheel notch zooms in by at most ~1.41x (2^0.5), not the uncapped ~4x", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, 1100, 850);
+    document.body.appendChild(container);
+
+    render(container, ONE_NODE_PAYLOAD, {});
+    flushSettleChunks();
+    const before = rootTransform(container);
+
+    const svgEl = container.querySelector("svg")!;
+    svgEl.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+
+    const after = rootTransform(container);
+    expect(after.k).toBeGreaterThan(before.k);
+    expect(after.k).toBeLessThanOrEqual(before.k * 1.5);
   });
 
   it("a Cmd (metaKey)+wheel also zooms", async () => {

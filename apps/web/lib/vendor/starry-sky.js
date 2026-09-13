@@ -19,17 +19,45 @@
  * StarfieldProvider's context replaces its localStorage read. See
  * .superpowers/sdd/task-8-report.md for the full rationale.
  *
- * One functional edit below this header: the trailing CommonJS-interop
- * line (`if (typeof module !== 'undefined' && module.exports) ...`) is
- * removed. It's dead code in this integration -- this file is only ever
- * loaded via a browser-side dynamic `import()` (components/Starfield.tsx),
- * never `require()`'d from Node -- and package.json's `"type": "module"`
- * makes Turbopack statically flag that CommonJS-shaped line as a
- * module-format mismatch ("Exports made by CommonJs syntax will lead to a
- * runtime error"), even though the `typeof module !== 'undefined'` guard
- * makes it unreachable in a browser. Removing it silences a real `npm run
- * build` warning without touching any code that runs in this app. Every
- * other line below is untouched.
+ * Two functional edits below this header:
+ *
+ * 1. The trailing CommonJS-interop line (`if (typeof module !== 'undefined'
+ *    && module.exports) ...`) is removed. It's dead code in this
+ *    integration -- this file is only ever loaded via a browser-side
+ *    dynamic `import()` (components/Starfield.tsx), never `require()`'d
+ *    from Node -- and package.json's `"type": "module"` makes Turbopack
+ *    statically flag that CommonJS-shaped line as a module-format mismatch
+ *    ("Exports made by CommonJs syntax will lead to a runtime error"),
+ *    even though the `typeof module !== 'undefined'` guard makes it
+ *    unreachable in a browser. Removing it silences a real `npm run build`
+ *    warning without touching any code that runs in this app.
+ *
+ * 2. Graph interaction follow-ups fix review I3 (2026-09-13): three more
+ *    per-variant options -- `twinkleCount` (twinkle), `glintCount`
+ *    (twinkle, pan), `streamCount` (hyperspace) -- are now exposed as
+ *    observed attributes (`twinkle-count`/`glint-count`/`stream-count`)
+ *    and imperative `mount()` options, mirroring EXACTLY how `count`/
+ *    `seed`/`duration` already worked: additive only, every default stays
+ *    the same when the new attribute/option is absent. Needed because
+ *    `count` (the option components/Starfield.tsx originally scaled for
+ *    its 4x-oversized mount) turns out to be a NO-OP for visible density --
+ *    see the note on `boxShadowField` below -- while `twinkleCount`/
+ *    `glintCount`/`streamCount` gate the layers that actually render, and
+ *    had no way to be set past their hardcoded defaults before this edit.
+ *
+ * NOTE (found during the fix-review above, NOT fixed here -- flagged in
+ * the plan folder's results and the fix report instead): `boxShadowField`
+ * below builds `box-shadow` values with PERCENTAGE offsets (`"12.34%
+ * 56.78% 0 rgba(...)"`). Per the CSS box-shadow grammar, the offset
+ * components are `<length>`, not `<length-percentage>` -- percentages are
+ * invalid there (unlike e.g. `background-position`), so every
+ * `count`-driven layer (`.dust`/`.mid`/`.bright` on every variant) silently
+ * never renders at all; verified directly (jsdom's CSSOM setter drops the
+ * whole declaration when fed a percent-offset box-shadow, `element.style.
+ * boxShadow` reads back as `""` afterward). This is a PRE-EXISTING bug in
+ * the vendored source, not introduced by this port or by edit 2 above --
+ * left as-is per explicit review instruction (out of scope for this fix).
+ * Every other line below is untouched (beyond edits 1 and 2 above).
  */
 /*!
  * starry-sky.js — drop-in animated starry sky overlays (vanilla JS, no deps).
@@ -45,10 +73,15 @@
  *   <starry-sky variant="twinkle"></starry-sky>  <!-- or "pan" or "hyperspace" -->
  *
  *   Attributes (all optional):
- *     variant   "twinkle" | "pan" | "hyperspace"   default "twinkle"
- *     seed      number — deterministic star layout
- *     count     total stars in the base field
- *     duration  seconds per cycle (pan, hyperspace)
+ *     variant        "twinkle" | "pan" | "hyperspace"   default "twinkle"
+ *     seed           number — deterministic star layout
+ *     count          total stars in the base field (see the header
+ *                    comment's I3 note: currently a no-op for visible
+ *                    density -- kept for forward-compat)
+ *     duration       seconds per cycle (pan, hyperspace)
+ *     twinkle-count  individually-animated bright stars (twinkle only)
+ *     glint-count    SVG glint/sparkle stars (twinkle, pan)
+ *     stream-count   streaking stars (hyperspace only)
  *
  * USAGE — imperative:
  *
@@ -328,7 +361,7 @@
   // ─────────────────────────────────────────────────────────────
   class StarrySkyElement extends HTMLElement {
     static get observedAttributes() {
-      return ['variant', 'seed', 'count', 'duration'];
+      return ['variant', 'seed', 'count', 'duration', 'twinkle-count', 'glint-count', 'stream-count'];
     }
     constructor() {
       super();
@@ -351,6 +384,12 @@
       if (countAttr != null) opts.count = Number(countAttr);
       const durAttr = this.getAttribute('duration');
       if (durAttr != null) opts.duration = Number(durAttr);
+      const twinkleCountAttr = this.getAttribute('twinkle-count');
+      if (twinkleCountAttr != null) opts.twinkleCount = Number(twinkleCountAttr);
+      const glintCountAttr = this.getAttribute('glint-count');
+      if (glintCountAttr != null) opts.glintCount = Number(glintCountAttr);
+      const streamCountAttr = this.getAttribute('stream-count');
+      if (streamCountAttr != null) opts.streamCount = Number(streamCountAttr);
 
       let el;
       if (variant === 'pan') el = buildPan(opts);
@@ -372,6 +411,9 @@
       if (options.seed != null) el.setAttribute('seed', String(options.seed));
       if (options.count != null) el.setAttribute('count', String(options.count));
       if (options.duration != null) el.setAttribute('duration', String(options.duration));
+      if (options.twinkleCount != null) el.setAttribute('twinkle-count', String(options.twinkleCount));
+      if (options.glintCount != null) el.setAttribute('glint-count', String(options.glintCount));
+      if (options.streamCount != null) el.setAttribute('stream-count', String(options.streamCount));
       (parent || document.body).appendChild(el);
       return el;
     },

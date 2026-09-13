@@ -929,29 +929,43 @@
 // graph-interaction-followups/spec.md; decision: controller, 2026-09-13),
 // Batch B -- starfield parallax:
 //  34. `fitToContent` records the transform it just applied as
-//      `__fitTransform` (module var). The `'zoom'` handler, after the
+//      `__fitTransform` (module var), INCLUDING the canvas center it fit
+//      about (`cx: canvasW / 2, cy: canvasH / 2` -- fix review C1), and
+//      does so BEFORE calling `zoomBehavior.transform` (fix review I1 --
+//      that call dispatches 'zoom' synchronously, so recording after it,
+//      the original shipped order, made the fit tick's own onViewChange
+//      fire against the stale PRIOR fit). The `'zoom'` handler, after the
 //      manual pan clamp and the existing updateLabelLOD/updateZoomIndicator/
 //      updateLabelScale/updateEdgeChips calls, fires the new
 //      `GraphRenderOptions.onViewChange` callback (vendor.d.ts) with
-//      `{x, y, k, fitX, fitY, fitK}` -- the just-clamped transform plus the
-//      most recent fit's own transform (or the same tick's x/y/k when no
-//      fit has run yet). Every transform path (wheel, drag, scaleBy/
-//      scaleTo, __d3ZoomTo) funnels through this one handler, so this
-//      fires for all of them alike. lib/graph/view-bus.ts's `publishView`
-//      is components/GraphCanvas.tsx's wiring; components/Starfield.tsx
+//      `{x, y, k, fitX, fitY, fitK, cx, cy}` -- the just-clamped transform
+//      plus the most recent fit's own transform and canvas center (or the
+//      same tick's x/y/k plus the CURRENT canvas center when no fit has
+//      run yet). Every transform path (wheel, drag, scaleBy/scaleTo,
+//      __d3ZoomTo) funnels through this one handler, so this fires for
+//      all of them alike. Included in the opts-carry-forward set (delta
+//      #28/#31) as of fix review I2 -- an opts-omitted internal re-render
+//      (toggleNoise/applyTunerSnapshot's `render(rawData)` tails) would
+//      otherwise silently drop onViewChange for that cycle, same bug class
+//      delta #28 originally fixed for onFirstPaint, leaving
+//      components/Starfield.tsx frozen on the pan/zoom state from before
+//      the toggle. lib/graph/view-bus.ts's `publishView` is
+//      components/GraphCanvas.tsx's wiring; components/Starfield.tsx
 //      subscribes and pans its mount at a parallax factor of
-//      `(x - fitX) * (fitK / k)`. NOT included in the opts-carry-forward
-//      set (delta #28/#31) -- an opts-omitted internal re-render
-//      (toggleNoise/applyTunerSnapshot's `render(rawData)` tails) drops
-//      onViewChange until the next full remount, same as it would for any
-//      newly-added callback that isn't named in that carry list; the
-//      graphVersion-bump/mount call sites in GraphCanvas.tsx always pass
-//      it directly. `__fitTransform` is reset to null under the SAME
-//      `svg`-null gate as delta #30's `__priorFitZoomForClamp` (a genuine
-//      first-ever mount, or the first render after a container swap/
-//      dispose) -- without it, a stale PRIOR mount's fit transform would
-//      leak into a fresh mount's very first 'zoom' tick as a nonsense
-//      parallax reference point.
+//      `((cx - fitX) * (1 - fitK/k) + (x - fitX) * (fitK/k))` -- the
+//      `cx`/`fitK`/`k` correction term (fix review C1) makes a pure zoom
+//      about the canvas center (no real world-space pan -- e.g. the
+//      zoom-indicator's scaleBy/scaleTo, __d3ZoomTo, or a real ctrl+wheel
+//      notch, all of which anchor on `cx`/`cy` by default) report zero
+//      parallax offset instead of the apparent screen-space `x`/`y` shift
+//      zooming about a fixed point produces; the original shipped formula
+//      (`(x - fitX) * (fitK/k)`, no correction term) moved the stars on a
+//      pure zoom, which was wrong. `__fitTransform` is reset to null under
+//      the SAME `svg`-null gate as delta #30's `__priorFitZoomForClamp` (a
+//      genuine first-ever mount, or the first render after a container
+//      swap/dispose) -- without it, a stale PRIOR mount's fit transform
+//      would leak into a fresh mount's very first 'zoom' tick as a
+//      nonsense parallax reference point.
 //
 // Graph interaction follow-ups, Batch C (decision: user, 2026-09-13) --
 // wheel mapping: plain wheel pans, Ctrl/Cmd+wheel zooms:
@@ -975,7 +989,15 @@
 //      'wheel' events) are unaffected by the filter. Fixes the "Zoom
 //      (scroll only — no click-drag pan)" comment above the zoom setup,
 //      stale before this change too (click-drag pan already worked via
-//      d3-zoom's own default).
+//      d3-zoom's own default). Fix review C2: zoomBehavior also gains a
+//      `.wheelDelta()` restating d3-zoom's own default formula but
+//      clamping its exponent to [-0.5, 0.5] -- unclamped, a real mouse's
+//      Ctrl+wheel notch (deltaY ~100, same magnitude a plain wheel pan
+//      tick delivers) fed through the default's ctrlKey*10 pinch
+//      multiplier zoomed ~4x per notch; the cap bounds a single event to
+//      at most a ~1.41x (2^0.5) change, matching the zoom-indicator's own
+//      per-click step feel. A genuine trackpad pinch's small per-tick
+//      deltaY rarely reaches the cap.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1286,12 +1308,16 @@ var __vendorExpandedGroups;
     var currentZoomK = 1;  // most recent zoom transform.k; used by updateLabelScale
     var zoomIndicatorPctEl = null;  // span inside the upper-right zoom indicator
     var edgeChipLayerEl = null;  // HTML overlay div holding the R6.2 edge chips
-    // Header comment delta #34: the transform fitToContent last established
-    // (recorded there, AFTER svg.call(zoomBehavior.transform, transform))
-    // -- the reference point onViewChange's fitX/fitY/fitK report, so
-    // Starfield.tsx's parallax offset is measured from "how far the graph
-    // has panned since it was last fit," not from an arbitrary origin.
-    // null until the first fitToContent call for this mount/remount.
+    // Header comment delta #34: the transform fitToContent last established,
+    // plus the canvas center (`cx`/`cy`) it was centered on (fix review C1)
+    // -- recorded BEFORE calling `zoomBehavior.transform` (fix review I1;
+    // that call dispatches 'zoom' SYNCHRONOUSLY, so recording after it would
+    // make the fit tick's own onViewChange fire against the stale PRIOR
+    // reference point) -- the reference point onViewChange's fitX/fitY/fitK/
+    // cx/cy report, so Starfield.tsx's parallax offset is measured from
+    // "how far the graph has panned since it was last fit," not from an
+    // arbitrary origin, and a pure zoom about that same center reports zero
+    // pan. null until the first fitToContent call for this mount/remount.
     var __fitTransform = null;
 
     // Scale thresholds (relative to fit-zoom). For each key, k_min clamps
@@ -4767,15 +4793,24 @@ var __vendorExpandedGroups;
         var transform = d3.zoomIdentity
             .translate(canvasW / 2 - mx * scale, canvasH / 2 - my * scale)
             .scale(scale);
+        // Fix review I1 (2026-09-13): record the transform just established
+        // as the new parallax reference point BEFORE calling
+        // `zoomBehavior.transform` below, not after -- that call dispatches
+        // 'zoom' SYNCHRONOUSLY, so assigning __fitTransform afterward meant
+        // the fit tick's own onViewChange fired against the PRIOR (stale)
+        // reference point, and every consumer (Starfield.tsx) stayed
+        // pinned to the old fit's parallax offset until the NEXT tick
+        // (visibly: stars parked at half the correct delta after a resize
+        // until the user's next pan/zoom). Also carries `cx`/`cy` (fix
+        // review C1) -- the canvas center this fit is centered on, needed
+        // by Starfield.tsx's corrected parallax formula so a pure zoom
+        // about that same center (the zoom-indicator's scaleBy/scaleTo,
+        // __d3ZoomTo, or a real ctrl+wheel notch, none of which move the
+        // "camera" in world space) reports zero pan instead of the
+        // apparent screen-space `x` shift zooming about a fixed point
+        // otherwise produces.
+        __fitTransform = { x: transform.x, y: transform.y, k: scale, cx: canvasW / 2, cy: canvasH / 2 };
         svg.call(zoomBehavior.transform, transform);
-        // Header comment delta #34: record the transform just established
-        // as the new parallax reference point. The 'zoom' event the call
-        // above just dispatched synchronously already fired onViewChange
-        // (if any) against the PRIOR __fitTransform (or null) -- see that
-        // handler's own comment -- so this assignment only affects LATER
-        // zoom ticks, which is correct: the fit-tick itself has zero pan
-        // relative to whatever fit preceded it.
-        __fitTransform = { x: transform.x, y: transform.y, k: scale };
         // Zoom range in RELATIVE terms (× fit-scale) so behavior is
         // compendium-size-agnostic.
         //   min = scale * 0.10 (galaxy-overview view; matches the
@@ -5685,31 +5720,40 @@ var __vendorExpandedGroups;
         }
 
         // Task V3 item 3 fix (header comment delta #28), GENERALIZED by
-        // batch 03 V4 item 2 (header comment delta #31): a caller that
-        // OMITS `opts` entirely -- __vendorToggleNoise's and
-        // applyTunerSnapshot's own `render(rawData)` re-render tails, both
-        // by original design ("re-run the SAME render with whatever's
-        // already configured") -- OR passes a REAL but SPARSE opts object
-        // that doesn't carry these keys -- toggleGroupExpansion's
-        // knot-expand `render(rawData, {preserveView, frameGroupId})` --
-        // must not silently drop the in-flight render's onFirstPaint/
-        // onRenderCycleStart/onSettleEnd signals. Backfills whichever of
-        // the three this call's own opts doesn't already specify from the
-        // CURRENT __simRunCtx's own opts (the previous run, not yet
-        // overwritten below) -- deliberately NOT the full opts object:
-        // `frameGroupId` (only ever set by toggleGroupExpansion, see that
-        // field's own comment further down) is a one-shot expand signal
-        // that must never leak into an unrelated later re-render, and
-        // carrying `preserveView` forward would change toggleNoise's/
+        // batch 03 V4 item 2 (header comment delta #31), and by fix review
+        // I2 (delta #34): a caller that OMITS `opts` entirely --
+        // __vendorToggleNoise's and applyTunerSnapshot's own
+        // `render(rawData)` re-render tails, both by original design
+        // ("re-run the SAME render with whatever's already configured") --
+        // OR passes a REAL but SPARSE opts object that doesn't carry these
+        // keys -- toggleGroupExpansion's knot-expand `render(rawData,
+        // {preserveView, frameGroupId})` -- must not silently drop the
+        // in-flight render's onFirstPaint/onRenderCycleStart/onSettleEnd/
+        // onViewChange signals. Backfills whichever of the four this
+        // call's own opts doesn't already specify from the CURRENT
+        // __simRunCtx's own opts (the previous run, not yet overwritten
+        // below) -- deliberately NOT the full opts object: `frameGroupId`
+        // (only ever set by toggleGroupExpansion, see that field's own
+        // comment further down) is a one-shot expand signal that must
+        // never leak into an unrelated later re-render, and carrying
+        // `preserveView` forward would change toggleNoise's/
         // applyTunerSnapshot's existing "reset to fit-content" behavior --
-        // out of scope for this fix. See delta #28/#31 for the root-cause
-        // writeups this closes.
+        // out of scope for this fix. onViewChange joined this list
+        // (originally delta #34 shipped it OUTSIDE the carry set,
+        // reasoning it was cheap enough to just re-pass on every real call
+        // site) once review flagged that toggleNoise/applyTunerSnapshot's
+        // own internal re-renders would otherwise leave Starfield.tsx
+        // frozen on the pan/zoom state from before the toggle -- the SAME
+        // "opts omitted, callback silently dropped" bug class delta #28
+        // originally fixed for onFirstPaint. See delta #28/#31 for the
+        // root-cause writeups this closes.
         var __priorCycleOpts = (__simRunCtx && __simRunCtx.opts) || null;
         if (__priorCycleOpts) {
             var __carriedCallbacks = {
                 onFirstPaint: __priorCycleOpts.onFirstPaint,
                 onRenderCycleStart: __priorCycleOpts.onRenderCycleStart,
                 onSettleEnd: __priorCycleOpts.onSettleEnd,
+                onViewChange: __priorCycleOpts.onViewChange,
             };
             opts = opts ? Object.assign({}, __carriedCallbacks, opts) : __carriedCallbacks;
         }
@@ -6025,6 +6069,25 @@ var __vendorExpandedGroups;
                 if (event.type === 'wheel') return !!(event.ctrlKey || event.metaKey);
                 return !event.ctrlKey && !event.button;
             })
+            // Fix review C2: d3-zoom's OWN default `wheelDelta` (verified
+            // against the installed d3-zoom package,
+            // node_modules/d3-zoom/dist/d3-zoom.js) already multiplies a
+            // ctrlKey wheel's delta by 10 -- meant for a real trackpad
+            // pinch, whose deltaY per gesture-tick is tiny, but a real
+            // physical mouse's Ctrl+wheel notch delivers the SAME
+            // deltaY magnitude a plain wheel pan tick does (~100), so
+            // without a cap a single Ctrl+wheel notch on a mouse zoomed
+            // ~4x (2^2) instead of a normal single-notch step. Restates
+            // the exact same default formula (same coefficients, verified
+            // against the source above) and additionally clamps the
+            // exponent to [-0.5, 0.5] -- a single event can move `k` by at
+            // most a factor of 2^0.5 (~1.41x), regardless of device or
+            // deltaMode. A genuine trackpad pinch's own deltaY is small
+            // enough that this cap almost never engages for it.
+            .wheelDelta(function (event) {
+                var d = -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002) * (event.ctrlKey ? 10 : 1);
+                return Math.max(-0.5, Math.min(0.5, d));
+            })
             .on('zoom', function (event) {
                 var t = event.transform;
                 // Clamp pan to the world rect visible at the MIN_ZOOM_RATIO
@@ -6090,12 +6153,17 @@ var __vendorExpandedGroups;
                 // clamped values -- Starfield.tsx's own parallax transform.
                 // __fitTransform is null only before this mount's first
                 // fitToContent has ever run; falling back to the just-
-                // clamped t itself makes that tick's own fitX/fitY/fitK
-                // equal x/y/k (zero offset), the correct "no pan yet"
-                // reading rather than an undefined reference point.
+                // clamped t itself (cx/cy from the current canvas dims)
+                // makes that tick's own fitX/fitY/fitK equal x/y/k (zero
+                // offset), the correct "no pan yet" reading rather than an
+                // undefined reference point.
                 if (opts && typeof opts.onViewChange === 'function') {
-                    var fit = __fitTransform || { x: t.x, y: t.y, k: t.k };
-                    opts.onViewChange({ x: t.x, y: t.y, k: t.k, fitX: fit.x, fitY: fit.y, fitK: fit.k });
+                    var fit = __fitTransform || { x: t.x, y: t.y, k: t.k, cx: width / 2, cy: effectiveCanvasHeight(height) / 2 };
+                    opts.onViewChange({
+                        x: t.x, y: t.y, k: t.k,
+                        fitX: fit.x, fitY: fit.y, fitK: fit.k,
+                        cx: fit.cx, cy: fit.cy,
+                    });
                 }
             });
         svg.call(zoomBehavior);
