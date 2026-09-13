@@ -130,12 +130,12 @@
   // FROZEN is what makes the LOD swap invisible: anything that moves a vertex
   // is identical in all three faces, so advance widths are byte-identical and a
   // tier change can never reflow, shift or re-break a line.
-  var FROZEN = { width: 1.15, tracking: 180, sidebearing: 46, points: 4, rot: 20 };
+  var FROZEN = { width: 0.9, tracking: 100, sidebearing: 50, points: 5, rot: 50 };
 
   var TIERS = {
-    Display: { min: 52, star: 190, contrast: 1.70, trim: 1.00, stroke: 27, pointiness: 0.61 },
-    Mid:     { min: 22, star: 170, contrast: 1.60, trim: 0.80, stroke: 31, pointiness: 0.58 },
-    Text:    { min: 0,  star: 62,  contrast: 1.06, trim: 0.00, stroke: 62, pointiness: 0.18 }
+    Display: { min: 52, star: 190, contrast: 1.7, trim: 1, stroke: 27, pointiness: 0.61 },
+    Mid:     { min: 10, star: 170, contrast: 1.5, trim: 1.1, stroke: 32, pointiness: 0.65 },
+    Text:    { min: 0, star: 62, contrast: 1.06, trim: 0, stroke: 62, pointiness: 0.18 }
   };
   function tier(name) {
     var t = TIERS[name];
