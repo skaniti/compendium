@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "fonts:build": "node fonts/almagest/tools/build.cjs"
+    "fonts:build": "node fonts/almagest/tools/build.cjs",
+    "fonts:set-params": "node fonts/almagest/tools/set-params.cjs fonts/almagest/tools/almagest-glyphs.cjs"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

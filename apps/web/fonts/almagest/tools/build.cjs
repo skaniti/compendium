@@ -11,7 +11,7 @@
  */
 var fs = require('fs');
 var path = require('path');
-var A = require('./almagest-glyphs.cjs');
+var A = require(process.env.ALMAGEST_GLYPHS_SOURCE || './almagest-glyphs.cjs');
 var TTF = require('./build-ttf.cjs');
 
 // Tracked build output (compiled TTFs) vs. generated design-time export
