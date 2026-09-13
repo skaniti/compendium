@@ -915,6 +915,11 @@
 //      = content bbox ∪ plates exiled at fit (+ SC_FIT_EXILE_MARGIN_PX),
 //      fixed-point in remeasureScLayout; ring perimeter = unpadded content
 //      bbox (cloudBBox).
+//  33. Almagest graph tuner (spec docs/project-plans/2026-09-13-143030-
+//      almagest-graph-tuner/): `renderScName` seam (text by default,
+//      generator path glyphs under a dev preview), tier breakpoints and
+//      SC_NAME_CHAR_WIDTH read from the generator, dev hook
+//      `__d3SetAlmagestPreview`.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -927,6 +932,8 @@
 
 import { GRAPH_DEFAULTS, TUNER_TYPO_VERSION, TUNER_FOG_VERSION } from "./constants";
 import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, clipSegmentToRect, placeExiledPlates } from './sc-separation';
+import { layoutLine, faceForPx, averageAdvanceEm } from '../almagest/runtime';
+import { getGenerator } from '../almagest/generator';
 import d3 from "./d3";
 // Task group W (header comment delta #17): the force-layout pipeline's
 // main-thread client -- see that file's own header comment for why this
@@ -1275,15 +1282,21 @@ var __vendorExpandedGroups;
     // §3). Chosen by PAINTED px, not CSS px: SC names are screen-clamped via
     // scName, so painted = nameFontSize * currentZoomK. Metrics are frozen
     // across the three faces, so a swap never moves a glyph.
-    var ALMAGEST_DISPLAY_MIN_PX = 52;
-    var ALMAGEST_MID_MIN_PX = 22;
-    // painted size is BASE * (effRatio/k) * k and the k cancellation is not
-    // exact in floating point; a hair below a threshold must not drop a tier.
-    var ALMAGEST_TIER_EPS = 0.01;
+    // Delta #33: tier breakpoints come from the Almagest generator
+    // (fonts/almagest/tools/almagest-glyphs.cjs) -- the single source of
+    // truth -- instead of hand-typed copies. Names kept for anything else in
+    // the file that reads them (none currently does; almagestFace itself now
+    // defers the whole tier decision to lib/almagest/runtime's faceForPx).
+    var ALMAGEST_DISPLAY_MIN_PX = getGenerator().TIERS.Display.min;
+    var ALMAGEST_MIN_PX = getGenerator().TIERS.Mid.min;
+    var __almagestPreview = null;  // AlmagestParams while the dev tuner previews, else null
     function almagestFace(paintedPx) {
-        if (paintedPx >= ALMAGEST_DISPLAY_MIN_PX - ALMAGEST_TIER_EPS) return '"Almagest Display", "Georgia", serif';
-        if (paintedPx >= ALMAGEST_MID_MIN_PX - ALMAGEST_TIER_EPS) return '"Almagest Mid", "Georgia", serif';
-        return '"Almagest Text", "Georgia", serif';
+        // faceForPx (lib/almagest/runtime) is the single source for the
+        // tier decision, including its own float-noise epsilon -- see that
+        // module's comment for why 1e-6 (not this file's former 0.01,
+        // which contradicted the runtime's own breakpoint test).
+        var face = faceForPx(paintedPx, __almagestPreview || undefined);
+        return '"Almagest ' + face + '", "Georgia", serif';
     }
     var BASE_SINGLETON_LABEL_FONT_SIZE = 8;   // featured-singleton page titles
     var BASE_GROUP_LABEL_FONT_SIZE = 12;      // collapsed-group captions
@@ -2748,7 +2761,9 @@ var __vendorExpandedGroups;
     // across tiers), so 30 * 0.83 ≈ 25. Both constants also ride the sim
     // worker payload (scNameLineBudget / scNameCharWidth) so the worker's
     // mirror of computeWatermarkBBox (sim-layout.ts) estimates the same rect.
-    var SC_NAME_CHAR_WIDTH = 25;
+    // Delta #33: derived from the generator's average A-Z advance at the
+    // estimator's 30px reference size (was the hand-typed 25 = 0.83em x 30).
+    var SC_NAME_CHAR_WIDTH = Math.round(averageAdvanceEm() * 30 * 100) / 100;
 
     /**
      * Wrap a name into display lines using the same heuristic the label
@@ -3639,6 +3654,64 @@ var __vendorExpandedGroups;
         return lines;
     }
 
+    /** Delta #33: one place that paints an SC name. Default = the <text>
+     *  element the R6 era always drew. With a dev preview active
+     *  (__almagestPreview), a <g class="supercluster-label"> of one <path>
+     *  per glyph laid out by lib/almagest/runtime -- same class so
+     *  collectObstacleRects / screenBBoxOf / the label cull measure it
+     *  exactly like the text. `opts`: { x, y, fontPx, paintedPx, opacity }.
+     *  y is the visual top of line 0 (the text uses dominant-baseline:
+     *  hanging); glyph paths are y-up with baseline 0 and cap height CAP, so
+     *  each line is translated to (x - advance*s/2, y + CAP*s + i*1.15*fontPx)
+     *  and scaled (s, -s) with s = fontPx / UPEM. */
+    function renderScName(g, lines, opts) {
+        if (!__almagestPreview) {
+            var labelEl = g.append('text')
+                .attr('class', 'supercluster-label')
+                .attr('x', opts.x)
+                .attr('y', opts.y)
+                // dominant-baseline="hanging" anchors y at the visual top of
+                // the glyph rather than the baseline, so the padding between
+                // icon bottom and label top stays exactly the caller's pad
+                // (SC_LABEL_TOP_PAD * iconScale) at any font size.
+                .attr('dominant-baseline', 'hanging')
+                // Use .style() not .attr() — inline style overrides the
+                // theme.css `.supercluster-label { font-size: 30px }` rule;
+                // SVG presentation attributes do not.
+                .style('font-size', opts.fontPx + 'px')
+                // Tier by painted size (= world font size x zoom); re-evaluated every zoom tick since this draw reruns then.
+                .style('font-family', almagestFace(opts.paintedPx))
+                .style('opacity', opts.opacity)
+                // Delta #32 (mirrors R6.1's icon rule): once the LOD fade has
+                // effectively completed, drop the text out of bbox/hit-testing
+                // entirely -- opacity:0 text still reserves its footprint in
+                // screenBBoxOf, so the R6 resolver and collectObstacleRects
+                // kept denying that space for a name that was not painted.
+                .style('display', opts.opacity > 0.05 ? null : 'none');
+            lines.forEach(function (line, i) {
+                labelEl.append('tspan').attr('x', opts.x).attr('dy', i === 0 ? 0 : '1.15em').text(line);
+            });
+            return labelEl;
+        }
+        var gen = getGenerator();
+        var s = opts.fontPx / gen.UPEM;
+        var face = faceForPx(opts.paintedPx, __almagestPreview);
+        var grp = g.append('g')
+            .attr('class', 'supercluster-label')
+            .attr('data-almagest-preview', '1')
+            .style('opacity', opts.opacity)
+            .style('display', opts.opacity > 0.05 ? null : 'none');
+        lines.forEach(function (line, i) {
+            var laid = layoutLine(line, face, __almagestPreview);
+            var lineG = grp.append('g').attr('transform',
+                'translate(' + (opts.x - laid.advance * s / 2) + ',' + (opts.y + gen.CAP * s + i * 1.15 * opts.fontPx) + ') scale(' + s + ',' + (-s) + ')');
+            laid.glyphs.forEach(function (gl) {
+                lineG.append('path').attr('d', gl.d).attr('fill', 'var(--ink)').attr('transform', 'translate(' + gl.x + ',0)');
+            });
+        });
+        return grp;
+    }
+
     // Delta #29 module state: nameplate glide (see the big comment block
     // above the application pass inside drawWatermarks below for the full
     // design rationale -- this is just the state it needs). Carries the R6
@@ -3974,38 +4047,17 @@ var __vendorExpandedGroups;
                     : rawName;
                 var lines = wrapLabelLines(displayName, SC_NAME_LINE_BUDGET);
 
-                var labelEl = g.append('text')
-                    .attr('class', 'supercluster-label')
-                    .attr('x', ICON_SIZE / 2)
-                    .attr('y', ICON_SIZE + SC_LABEL_TOP_PAD * iconScale)
-                    // Pad scales with the icon's clamp factor so the
-                    // icon->name gap stays screen-stable like the icon
-                    // itself (R3.2: band growth must track scIcon k_max).
-                    // dominant-baseline="hanging" anchors y at the visual top
-                    // of the glyph rather than the baseline, so the padding
-                    // between icon bottom and label top stays exactly
-                    // SC_LABEL_TOP_PAD * iconScale at any font size.
-                    .attr('dominant-baseline', 'hanging')
-                    // Use .style() not .attr() — inline style overrides the
-                    // theme.css `.supercluster-label { font-size: 30px }`
-                    // rule; SVG presentation attributes do not.
-                    .style('font-size', nameFontSize + 'px')
-                    // Tier by painted size (= world font size x zoom); re-evaluated every zoom tick since this draw reruns then.
-                    .style('font-family', almagestFace(nameFontSize * currentZoomK))
-                    .style('opacity', nameOpacity)
-                    // Delta #32 (mirrors R6.1's icon rule above): once the
-                    // LOD fade has effectively completed, drop the text out
-                    // of bbox/hit-testing entirely -- opacity:0 text still
-                    // reserves its footprint in screenBBoxOf, so the R6
-                    // resolver and collectObstacleRects kept denying that
-                    // space for a name that was not painted.
-                    .style('display', nameOpacity > 0.05 ? null : 'none');
-
-                lines.forEach(function (line, i) {
-                    labelEl.append('tspan')
-                        .attr('x', ICON_SIZE / 2)
-                        .attr('dy', i === 0 ? 0 : '1.15em')
-                        .text(line);
+                // Pad scales with the icon's clamp factor so the icon->name
+                // gap stays screen-stable like the icon itself (R3.2: band
+                // growth must track scIcon k_max) -- see renderScName for
+                // the hanging-baseline / painted-size-tier machinery this y
+                // and paintedPx feed.
+                renderScName(g, lines, {
+                    x: ICON_SIZE / 2,
+                    y: ICON_SIZE + SC_LABEL_TOP_PAD * iconScale,
+                    fontPx: nameFontSize,
+                    paintedPx: nameFontSize * currentZoomK,
+                    opacity: nameOpacity,
                 });
             }
 
@@ -7302,6 +7354,14 @@ var __vendorExpandedGroups;
             var nx = cxs - (cxs - t.x) * (k / t.k), ny = cys - (cys - t.y) * (k / t.k);
             svg.call(storedZoomBehavior.transform, d3.zoomIdentity.translate(nx, ny).scale(k));
             return true;
+        };
+        // Almagest graph tuner (delta #33): live-preview a draft AlmagestParams
+        // set (or null to fall back to shippedParams) without a re-render --
+        // redraws just the SC nameplates via the same path a real zoom tick
+        // uses (updateLabelScale -> drawWatermarks -> renderScName).
+        window.__d3SetAlmagestPreview = function (params) {
+            __almagestPreview = params || null;
+            if (svg && rawData) updateLabelScale(currentZoomK);  // redraws watermarks only
         };
     }
 
