@@ -925,6 +925,34 @@
 //      interaction-followups) adds a dev-only tier-tint debug aid on top
 //      (`__almagestTierTint`, dev hook `__d3SetAlmagestTierTint`).
 //
+// Graph interaction follow-ups (spec docs/project-plans/2026-09-13-183006-
+// graph-interaction-followups/spec.md; decision: controller, 2026-09-13),
+// Batch B -- starfield parallax:
+//  34. `fitToContent` records the transform it just applied as
+//      `__fitTransform` (module var). The `'zoom'` handler, after the
+//      manual pan clamp and the existing updateLabelLOD/updateZoomIndicator/
+//      updateLabelScale/updateEdgeChips calls, fires the new
+//      `GraphRenderOptions.onViewChange` callback (vendor.d.ts) with
+//      `{x, y, k, fitX, fitY, fitK}` -- the just-clamped transform plus the
+//      most recent fit's own transform (or the same tick's x/y/k when no
+//      fit has run yet). Every transform path (wheel, drag, scaleBy/
+//      scaleTo, __d3ZoomTo) funnels through this one handler, so this
+//      fires for all of them alike. lib/graph/view-bus.ts's `publishView`
+//      is components/GraphCanvas.tsx's wiring; components/Starfield.tsx
+//      subscribes and pans its mount at a parallax factor of
+//      `(x - fitX) * (fitK / k)`. NOT included in the opts-carry-forward
+//      set (delta #28/#31) -- an opts-omitted internal re-render
+//      (toggleNoise/applyTunerSnapshot's `render(rawData)` tails) drops
+//      onViewChange until the next full remount, same as it would for any
+//      newly-added callback that isn't named in that carry list; the
+//      graphVersion-bump/mount call sites in GraphCanvas.tsx always pass
+//      it directly. `__fitTransform` is reset to null under the SAME
+//      `svg`-null gate as delta #30's `__priorFitZoomForClamp` (a genuine
+//      first-ever mount, or the first render after a container swap/
+//      dispose) -- without it, a stale PRIOR mount's fit transform would
+//      leak into a fresh mount's very first 'zoom' tick as a nonsense
+//      parallax reference point.
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -1234,6 +1262,13 @@ var __vendorExpandedGroups;
     var currentZoomK = 1;  // most recent zoom transform.k; used by updateLabelScale
     var zoomIndicatorPctEl = null;  // span inside the upper-right zoom indicator
     var edgeChipLayerEl = null;  // HTML overlay div holding the R6.2 edge chips
+    // Header comment delta #34: the transform fitToContent last established
+    // (recorded there, AFTER svg.call(zoomBehavior.transform, transform))
+    // -- the reference point onViewChange's fitX/fitY/fitK report, so
+    // Starfield.tsx's parallax offset is measured from "how far the graph
+    // has panned since it was last fit," not from an arbitrary origin.
+    // null until the first fitToContent call for this mount/remount.
+    var __fitTransform = null;
 
     // Scale thresholds (relative to fit-zoom). For each key, k_min clamps
     // how small the element can get at zoom-out (1.0 = don't shrink below
@@ -4709,6 +4744,14 @@ var __vendorExpandedGroups;
             .translate(canvasW / 2 - mx * scale, canvasH / 2 - my * scale)
             .scale(scale);
         svg.call(zoomBehavior.transform, transform);
+        // Header comment delta #34: record the transform just established
+        // as the new parallax reference point. The 'zoom' event the call
+        // above just dispatched synchronously already fired onViewChange
+        // (if any) against the PRIOR __fitTransform (or null) -- see that
+        // handler's own comment -- so this assignment only affects LATER
+        // zoom ticks, which is correct: the fit-tick itself has zero pan
+        // relative to whatever fit preceded it.
+        __fitTransform = { x: transform.x, y: transform.y, k: scale };
         // Zoom range in RELATIVE terms (× fit-scale) so behavior is
         // compendium-size-agnostic.
         //   min = scale * 0.10 (galaxy-overview view; matches the
@@ -5718,6 +5761,13 @@ var __vendorExpandedGroups;
         // after a container swap/dispose (both null `svg`, see items
         // 10/11/23).
         var __priorFitZoomForClamp = svg ? fitZoom : null;
+        // Header comment delta #34: same "svg null means no prior mount to
+        // trust" gate as __priorFitZoomForClamp just above -- without this,
+        // __fitTransform (a plain module var, like fitZoom) would carry a
+        // PRIOR, unrelated mount's fit transform into this genuinely fresh
+        // mount/container-swap's very first 'zoom' tick, reporting a
+        // nonsense parallax reference point instead of "no pan yet."
+        if (!svg) __fitTransform = null;
 
         if (!svg) {
             svg = d3.select(container).append('svg')
@@ -5982,6 +6032,20 @@ var __vendorExpandedGroups;
                 // (world->screen), so this must come after updateLabelScale,
                 // not before.
                 updateEdgeChips();
+                // Header comment delta #34: fires on every zoom tick (pan,
+                // wheel, pinch, the zoom-indicator's scaleBy/scaleTo, and
+                // __d3ZoomTo alike -- every path funnels through this same
+                // handler), AFTER the clamp above, so t.x/t.y are the final
+                // clamped values -- Starfield.tsx's own parallax transform.
+                // __fitTransform is null only before this mount's first
+                // fitToContent has ever run; falling back to the just-
+                // clamped t itself makes that tick's own fitX/fitY/fitK
+                // equal x/y/k (zero offset), the correct "no pan yet"
+                // reading rather than an undefined reference point.
+                if (opts && typeof opts.onViewChange === 'function') {
+                    var fit = __fitTransform || { x: t.x, y: t.y, k: t.k };
+                    opts.onViewChange({ x: t.x, y: t.y, k: t.k, fitX: fit.x, fitY: fit.y, fitK: fit.k });
+                }
             });
         svg.call(zoomBehavior);
         // d3-zoom's own dblclick-zoom conflicts with the app's dblclick

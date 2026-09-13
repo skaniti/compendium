@@ -902,6 +902,86 @@ describe("d3-graph-vendor render() settle lifecycle callbacks (header comment de
   });
 });
 
+// Graph interaction follow-ups, Batch B (spec docs/project-plans/2026-09-13-
+// 183006-graph-interaction-followups/spec.md; header comment delta #34):
+// onViewChange fires on every 'zoom' tick -- pan, wheel, __d3ZoomTo alike --
+// with the just-clamped transform plus the most recent fit's own transform.
+describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () => {
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
+    (
+      SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
+    ).getScreenCTM = () =>
+      ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
+  });
+
+  afterEach(() => {
+    flushSettleChunks();
+    document.documentElement.style.removeProperty("--galaxy-0");
+    delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
+      .getScreenCTM;
+  });
+
+  function zoomTo(k: number): boolean {
+    const w = window as unknown as { __d3ZoomTo?: (k: number) => boolean };
+    return w.__d3ZoomTo?.(k) ?? false;
+  }
+
+  it("fires with {x, y, k, fitX, fitY, fitK} on the fit tick, and again (fit fields unchanged) on a later __d3ZoomTo", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const onViewChange = vi.fn();
+    render(container, ONE_NODE_PAYLOAD, { onViewChange });
+    flushSettleChunks(); // runs fitToContent -- fires the fit tick synchronously
+
+    expect(onViewChange).toHaveBeenCalled();
+    const fitCall = onViewChange.mock.calls[onViewChange.mock.calls.length - 1][0] as {
+      x: number; y: number; k: number; fitX: number; fitY: number; fitK: number;
+    };
+    expect(fitCall).toEqual({
+      x: expect.any(Number),
+      y: expect.any(Number),
+      k: expect.any(Number),
+      fitX: expect.any(Number),
+      fitY: expect.any(Number),
+      fitK: expect.any(Number),
+    });
+    // The fit tick's own reading has zero pan relative to itself -- see
+    // the vendor's __fitTransform comment for why (recorded AFTER the fit
+    // transform's own synchronous 'zoom' event already fired).
+    expect(fitCall.x).toBeCloseTo(fitCall.fitX);
+    expect(fitCall.y).toBeCloseTo(fitCall.fitY);
+    expect(fitCall.k).toBeCloseTo(fitCall.fitK);
+
+    onViewChange.mockClear();
+    const newK = fitCall.fitK * 2; // within fitToContent's [fitK*0.5, fitK*4] scaleExtent
+    expect(zoomTo(newK)).toBe(true);
+
+    expect(onViewChange).toHaveBeenCalledTimes(1);
+    const zoomCall = onViewChange.mock.calls[0][0] as {
+      x: number; y: number; k: number; fitX: number; fitY: number; fitK: number;
+    };
+    expect(zoomCall.k).toBeCloseTo(newK);
+    // Reference point unchanged -- still the transform the earlier fit
+    // established, not this zoom's own transform.
+    expect(zoomCall.fitX).toBeCloseTo(fitCall.fitX);
+    expect(zoomCall.fitY).toBeCloseTo(fitCall.fitY);
+    expect(zoomCall.fitK).toBeCloseTo(fitCall.fitK);
+  });
+
+  it("never throws when onViewChange is omitted from opts", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    expect(() => render(container, ONE_NODE_PAYLOAD, {})).not.toThrow();
+    flushSettleChunks();
+    expect(zoomTo(1)).toBe(true); // the 'zoom' handler's onViewChange guard doesn't throw either
+  });
+});
+
 // Task A1-3 Step 4 (header comment delta #14): the DOM-mirror seam
 // (#noise-toggle-json) is gone -- these exercise the REAL toggleNoise(show)
 // setter against the real module, since GraphCanvas.test.tsx's mocked

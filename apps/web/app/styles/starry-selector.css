@@ -78,10 +78,23 @@
 
 .panel-center #starry-sky-mount {
     position: absolute;
-    inset: 0;
+    /* Batch B parallax (spec docs/project-plans/2026-09-13-183006-graph-
+     * interaction-followups/spec.md): oversized to 200%x200% (4x area) so
+     * the mount's own edge never shows through the max screen-space offset
+     * Starfield.tsx's parallax transform can reach at the default 0.5
+     * factor -- see components/Starfield.tsx's applyParallax comment for
+     * the dx/dy math and components/GraphCanvas.tsx's fitToContent pan-
+     * clamp math for why "factor x viewport" bounds that offset at every
+     * zoom. `count` is scaled 4x to match (Starfield.tsx's mount call) so
+     * the larger box doesn't read as a sparser sky.
+     */
+    inset: -50%;
+    width: 200%;
+    height: 200%;
     z-index: 0;          /* above panel bg, below graph (z:1) and overlays */
     pointer-events: none;
     overflow: hidden;
+    will-change: transform;
 }
 
 .panel-center starry-sky {

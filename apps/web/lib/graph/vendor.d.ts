@@ -15,6 +15,7 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   import type { GraphPayload } from "@/lib/types";
   import type { GraphDefaults } from "@/lib/graph/constants";
   import type { IconEntry } from "@/lib/icons";
+  import type { GraphView } from "@/lib/graph/view-bus";
 
   export interface GraphRenderOptions {
     // Fired from writeTapStore (selectNode/selectCluster/clearSelection) --
@@ -78,6 +79,21 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // (GraphCanvas.tsx never calls render() for those; see its own
     // comments for the equivalent wrapper-visible resolution).
     onSettleEnd?: () => void;
+    // Batch B (spec docs/project-plans/2026-09-13-183006-graph-interaction-
+    // followups/spec.md): fires on every 'zoom' tick -- pan, wheel, pinch,
+    // the zoom-indicator's +/- buttons, and __d3ZoomTo alike, every path
+    // funnels through the same d3-zoom handler -- AFTER the vendor's own
+    // manual pan clamp has already been applied to the transform, so x/y/k
+    // are the final, clamped values. fitX/fitY/fitK are the transform the
+    // most recent fitToContent call established (or, before this mount's
+    // first fit has run, the SAME tick's own x/y/k -- i.e. zero offset).
+    // components/Starfield.tsx subscribes to this (via lib/graph/view-bus.ts
+    // publishView, wired here by components/GraphCanvas.tsx) to pan the
+    // starfield mount at a parallax factor of the graph's own pan. Called
+    // MANY times per second during a drag/wheel gesture -- consumers must
+    // be cheap (no React state per tick; write a style directly, as
+    // Starfield.tsx does).
+    onViewChange?: (view: GraphView) => void;
   }
 
   // A1-1 promotion (vendor header comment delta #11): returns a dispose()

@@ -20,6 +20,7 @@ import iconDataRaw from "@/lib/icon-data.json";
 import type { IconEntry } from "@/lib/icons";
 import { GRAPH_DEFAULTS, type GraphDefaults } from "@/lib/graph/constants";
 import { resolveTunerSnapshot } from "@/lib/graph/tuner-snapshot";
+import { publishView } from "@/lib/graph/view-bus";
 
 // Type-only handle onto the vendor module's own shape (lib/graph/vendor.d.ts)
 // -- used below to type renderRef, which holds the raw render() binding
@@ -610,6 +611,12 @@ export default function GraphCanvas() {
         // comment for the suppression design.
         onRenderCycleStart: handleSettleVeilRaise,
         onSettleEnd: handleSettleVeilDrop,
+        // Batch B (spec docs/project-plans/2026-09-13-183006-graph-
+        // interaction-followups/spec.md): publishes every pan/zoom tick to
+        // lib/graph/view-bus.ts so components/Starfield.tsx can pan the
+        // starfield mount at a parallax factor -- see that module's own
+        // comment for why this is a plain pub/sub, not React state.
+        onViewChange: publishView,
         // Task group W (batch 03 Web Worker force sim), W3 step: render()
         // itself is synchronous (it starts the worker and returns), but
         // "started" no longer means "painted" now that the force layout
@@ -838,6 +845,11 @@ export default function GraphCanvas() {
       // an already-mounted canvas" cycle the veil exists to cover).
       onRenderCycleStart: handleSettleVeilRaise,
       onSettleEnd: handleSettleVeilDrop,
+      // Batch B: same view-bus wiring as the mount effect above -- a
+      // graphVersion-bump re-render rebuilds the zoom behavior too, so this
+      // must be re-passed here as well or panning after a window switch/
+      // recluster would silently stop updating the starfield.
+      onViewChange: publishView,
       // Task V1 fix (vision-review fix loop, F1): re-apply selection AND
       // filter dim from onFirstPaint, NOT synchronously right after this
       // renderRef.current() call returns (the previous site, and the
