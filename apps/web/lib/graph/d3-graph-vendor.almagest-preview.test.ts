@@ -145,6 +145,12 @@ describe("d3-graph-vendor Almagest preview (delta #33)", () => {
       const nonSpace = kw.slice(0, 36).replace(/\s/g, "").length;
       expect(paths.length).toBe(nonSpace);
       expect(gEl.getAttribute("transform")).toBeNull(); // positioned via child transforms, class kept on the group
+      for (const p of Array.from(paths)) {
+        // Review fix: theme.css's `.watermark path { stroke: var(--ink) }`
+        // would otherwise put a hairline stroke on every glyph -- renderScName
+        // kills it with an inline style (a presentation attribute would lose).
+        expect((p as SVGPathElement).style.stroke).toBe("none");
+      }
     }
     (window as W).__d3SetAlmagestPreview!(null);
     expect(container.querySelectorAll("text.supercluster-label").length).toBe(2);

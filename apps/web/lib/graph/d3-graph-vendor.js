@@ -1282,13 +1282,12 @@ var __vendorExpandedGroups;
     // §3). Chosen by PAINTED px, not CSS px: SC names are screen-clamped via
     // scName, so painted = nameFontSize * currentZoomK. Metrics are frozen
     // across the three faces, so a swap never moves a glyph.
-    // Delta #33: tier breakpoints come from the Almagest generator
-    // (fonts/almagest/tools/almagest-glyphs.cjs) -- the single source of
-    // truth -- instead of hand-typed copies. Names kept for anything else in
-    // the file that reads them (none currently does; almagestFace itself now
-    // defers the whole tier decision to lib/almagest/runtime's faceForPx).
-    var ALMAGEST_DISPLAY_MIN_PX = getGenerator().TIERS.Display.min;
-    var ALMAGEST_MIN_PX = getGenerator().TIERS.Mid.min;
+    // Delta #33 (review fix): the hand-typed ALMAGEST_DISPLAY_MIN_PX /
+    // ALMAGEST_MID_MIN_PX breakpoints are gone -- almagestFace defers the
+    // whole tier decision to lib/almagest/runtime's faceForPx, which reads
+    // the generator's TIERS.*.min directly, so the vendor no longer needs
+    // its own copies of those numbers at all (grepped: nothing else in the
+    // file read either name).
     var __almagestPreview = null;  // AlmagestParams while the dev tuner previews, else null
     function almagestFace(paintedPx) {
         // faceForPx (lib/almagest/runtime) is the single source for the
@@ -2584,7 +2583,11 @@ var __vendorExpandedGroups;
         // except when a LOD gate (SC_NAME_LOD, GROUP_CAPTION_LOD) has faded
         // one to invisible; an unpainted caption must not block a cullable
         // label from taking its pixels (R6.3).
-        svg.selectAll('text.supercluster-label, text.group-label').each(function () {
+        // Delta #33 (review fix): `.supercluster-label`, not `text.
+        // supercluster-label` -- a dev preview renders the name as a <g>
+        // (renderScName), and this pass only calls computedOpacity/
+        // screenBBoxOf, both of which work on either tag.
+        svg.selectAll('.supercluster-label, text.group-label').each(function () {
             if (computedOpacity(this) <= 0.05) return;
             var r = screenBBoxOf(this);
             if (r) kept.push(r);
@@ -2686,7 +2689,10 @@ var __vendorExpandedGroups;
         // Re-add supercluster-label rects independently, same as
         // runLabelCull's separate obstacle pass, so a caption can't land on
         // a still-painted SC name just because its sibling icon vanished.
-        svg.selectAll('text.supercluster-label').each(function () {
+        // Delta #33 (review fix): `.supercluster-label`, not `text.
+        // supercluster-label` -- see runLabelCull's own comment above for
+        // why the tag prefix must not gate a preview <g> out of this pass.
+        svg.selectAll('.supercluster-label').each(function () {
             if (computedOpacity(this) <= 0.05) return;
             var r = screenBBoxOf(this);
             if (r) placed.push(r);
@@ -3657,11 +3663,15 @@ var __vendorExpandedGroups;
     /** Delta #33: one place that paints an SC name. Default = the <text>
      *  element the R6 era always drew. With a dev preview active
      *  (__almagestPreview), a <g class="supercluster-label"> of one <path>
-     *  per glyph laid out by lib/almagest/runtime -- same class so
-     *  collectObstacleRects / screenBBoxOf / the label cull measure it
-     *  exactly like the text. `opts`: { x, y, fontPx, paintedPx, opacity }.
-     *  y is the visual top of line 0 (the text uses dominant-baseline:
-     *  hanging); glyph paths are y-up with baseline 0 and cap height CAP, so
+     *  per glyph laid out by lib/almagest/runtime -- same class, and every
+     *  consumer (runLabelCull, positionGroupCaptions' obstacle re-add) only
+     *  selects `.supercluster-label` and calls computedOpacity/screenBBoxOf
+     *  on it, both of which a <g> satisfies just as well as a <text>
+     *  (collectObstacleRects measures the enclosing g.watermark instead, so
+     *  it never looks at this element's tag at all).
+     *  `opts`: { x, y, fontPx, paintedPx, opacity }. y is the visual top of
+     *  line 0 (the text uses dominant-baseline: hanging); glyph paths are
+     *  y-up with baseline 0 and cap height CAP, so
      *  each line is translated to (x - advance*s/2, y + CAP*s + i*1.15*fontPx)
      *  and scaled (s, -s) with s = fontPx / UPEM. */
     function renderScName(g, lines, opts) {
@@ -3706,7 +3716,13 @@ var __vendorExpandedGroups;
             var lineG = grp.append('g').attr('transform',
                 'translate(' + (opts.x - laid.advance * s / 2) + ',' + (opts.y + gen.CAP * s + i * 1.15 * opts.fontPx) + ') scale(' + s + ',' + (-s) + ')');
             laid.glyphs.forEach(function (gl) {
-                lineG.append('path').attr('d', gl.d).attr('fill', 'var(--ink)').attr('transform', 'translate(' + gl.x + ',0)');
+                // Review fix: theme.css's `.watermark path { stroke: var(--ink) }`
+                // rule matches these glyph paths too (they live inside
+                // g.watermark) -- a CSS presentation attribute loses to it, so
+                // the hairline stroke must be killed with .style(), not .attr().
+                lineG.append('path').attr('d', gl.d).attr('fill', 'var(--ink)')
+                    .style('stroke', 'none')
+                    .attr('transform', 'translate(' + gl.x + ',0)');
             });
         });
         return grp;
