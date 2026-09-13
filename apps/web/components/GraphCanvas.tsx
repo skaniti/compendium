@@ -277,17 +277,19 @@ function isRoleToolingVisible(): boolean {
 }
 
 // Almagest graph tuner (Task 4, dev-only): production safety hinges on
-// GraphCanvas.tsx never containing a top-level `import ... from
-// "./AlmagestTuner"` -- that component imports "@/lib/almagest/params",
+// GraphCanvas.tsx never containing a top-level static import of the
+// ./AlmagestTuner module -- that component imports "@/lib/almagest/params",
 // which side-effect-loads the CommonJS glyph generator, and a static import
 // here would pull the whole thing into every client bundle regardless of
-// environment. `dynamic(() => import("./AlmagestTuner"), { ssr: false })`
-// is instead called from INSIDE this `development`-only ternary, so the
-// call -- and the chunk it produces -- is only ever reached at runtime when
-// NODE_ENV is "development"; a production build never executes this branch
-// and the browser never fetches that chunk. (GraphCanvas.test.tsx asserts
-// the no-static-import half of this directly by reading this file's own
-// source text.)
+// environment. The dynamic() call below (the only place this file spells
+// the module specifier as a quoted string) is instead called from INSIDE
+// this `development`-only ternary, so the call -- and the chunk it
+// produces -- is only ever reached at runtime when NODE_ENV is
+// "development"; a production build never executes this branch and the
+// browser never fetches that chunk. (GraphCanvas.test.tsx asserts the
+// no-static-import half of this directly by reading this file's own source
+// text -- and asserts there is exactly one quoted reference to the module,
+// so this comment deliberately avoids spelling it as a quoted string.)
 const AlmagestTunerDev =
   process.env.NODE_ENV === "development" ? dynamic(() => import("./AlmagestTuner"), { ssr: false }) : null;
 

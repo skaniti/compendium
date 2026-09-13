@@ -82,13 +82,24 @@ export default function AlmagestTuner() {
 
   // Alt+A toggles open/closed regardless of focus location -- a global
   // listener on `document`, not scoped to the panel, so it works whether
-  // or not the tuner currently has DOM focus.
+  // or not the tuner currently has DOM focus. Matches on `e.code` ("KeyA",
+  // the physical key) rather than `e.key` -- macOS's Option+A produces the
+  // composed character "å" for `e.key`, not "a", so a `key`-based check
+  // would silently never fire on that platform. Ignores the event when
+  // focus is inside a form control or a contenteditable region, so typing
+  // "a" with Alt held (e.g. an OS input-method chord) inside the panel's
+  // own number inputs -- or any other text field in the app -- doesn't
+  // also toggle the panel shut underneath the user.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.altKey && e.key.toLowerCase() === "a") {
-        e.preventDefault();
-        setOpen((o) => !o);
+      if (!e.altKey || e.code !== "KeyA") return;
+      const target = e.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
       }
+      e.preventDefault();
+      setOpen((o) => !o);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);

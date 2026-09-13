@@ -16,7 +16,14 @@ export default function Slider({ id, label, value, range, onChange, disabled, hi
       <input id={id} type="range" min={range.min} max={range.max} step={range.step} value={value} disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
       <input className="tuner-num" type="number" min={range.min} max={range.max} step={range.step} value={Number(value.toFixed(decimals))}
-        disabled={disabled} aria-label={`${label} value`} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onChange(v); }} />
+        disabled={disabled} aria-label={`${label} value`} onChange={(e) => {
+          // `Number("")` is 0, not NaN -- without this guard, clearing the
+          // field (a normal mid-edit state, not a real "set to zero")
+          // would push 0 on every keystroke of the clear.
+          if (e.target.value === "") return;
+          const v = Number(e.target.value);
+          if (Number.isFinite(v)) onChange(v);
+        }} />
       {hint ? <span className="tuner-hint">{hint}</span> : null}
     </div>
   );

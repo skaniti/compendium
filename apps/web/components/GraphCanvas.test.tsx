@@ -2048,6 +2048,21 @@ describe("GraphCanvas mount safety: AlmagestTuner stays out of the static import
     const here = path.dirname(fileURLToPath(import.meta.url));
     const source = fs.readFileSync(path.join(here, "GraphCanvas.tsx"), "utf8");
     expect(source).not.toMatch(/^\s*import\s[^;]*from\s+["']\.\/AlmagestTuner["'];?/m);
+
+    // The no-static-import check above passes even if the NODE_ENV gate
+    // were deleted and dynamic(() => import("./AlmagestTuner"), ...) were
+    // left unconditional -- it only forbids an ES `import` statement, not
+    // an unconditionally-reached dynamic() call, and it can't see a
+    // side-effect import, an `export ... from`, or an aliased specifier
+    // either. Pin the actual gated shape directly, and pin that the
+    // module specifier is spelled as a quoted string exactly once in the
+    // whole file -- together these rule out both an ungated dynamic() call
+    // and an alternate (side-effect/export/alias) way of pulling the
+    // module in statically.
+    expect(source).toMatch(
+      /process\.env\.NODE_ENV === "development"\s*\?\s*dynamic\(\(\) => import\("\.\/AlmagestTuner"\),\s*\{ ssr: false \}\)\s*:\s*null/
+    );
+    expect(source.match(/AlmagestTuner["']/g)).toHaveLength(1);
   });
 });
 

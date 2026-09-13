@@ -1,22 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import AlmagestTuner from "./AlmagestTuner";
 import { shippedParams, DRAFT_STORAGE_KEY } from "@/lib/almagest/params";
-
-// @testing-library/dom's waitFor() only takes its fake-timer-aware branch
-// (which self-advances the clock instead of polling via a real setTimeout)
-// when it detects a global `jest`; under Vitest that global doesn't exist,
-// so waitFor()'s internal microtask-drain step schedules an un-advanced
-// FAKE setTimeout(0) and hangs forever whenever vi.useFakeTimers() is still
-// active (confirmed with a standalone `await waitFor(() => expect(true)
-// .toBe(true))` repro -- hangs regardless of assertion content). The "bake"
-// test below is the one case in this file that needs both (fake timers for
-// the debounce tests earlier via the shared beforeEach, and waitFor here
-// once the mocked fetch/reload settle) -- this file-scoped shim (the
-// standard fix: https://github.com/testing-library/dom-testing-library/
-// issues/939) makes that combination work without touching the shared
-// vitest.setup.ts or any other test file's behavior.
-(globalThis as unknown as { jest?: unknown }).jest = vi;
 
 describe("AlmagestTuner", () => {
   beforeEach(() => { localStorage.clear(); (window as unknown as { __d3SetAlmagestPreview?: unknown }).__d3SetAlmagestPreview = vi.fn(); vi.useFakeTimers(); });
@@ -27,7 +12,7 @@ describe("AlmagestTuner", () => {
     expect(screen.queryByRole("dialog", { name: /almagest/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
     expect(screen.getByRole("dialog", { name: /almagest/i })).toBeTruthy();
-    fireEvent.keyDown(document, { key: "a", altKey: true });
+    fireEvent.keyDown(document, { key: "a", code: "KeyA", altKey: true });
     expect(screen.queryByRole("dialog", { name: /almagest/i })).toBeNull();
   });
   it("pushes a debounced preview when preview is on and a slider moves, and null when preview goes off", () => {
@@ -60,8 +45,15 @@ describe("AlmagestTuner", () => {
     render(<AlmagestTuner />);
     fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
     fireEvent.click(screen.getByRole("button", { name: /^bake$/i }));
-    await vi.runAllTimersAsync();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/dev/almagest/bake", expect.objectContaining({ method: "POST" })));
-    await waitFor(() => expect(reload).toHaveBeenCalled());
+    // Real-timer-scoped `waitFor` polling never fires while
+    // vi.useFakeTimers() (set in beforeEach, above) is still active -- same
+    // established convention as GraphCanvas.test.tsx's fake-timer tests
+    // (~line 943): drive the fake clock inside `act` so React flushes the
+    // resulting state updates, then assert directly.
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/dev/almagest/bake", expect.objectContaining({ method: "POST" }));
+    expect(reload).toHaveBeenCalled();
   });
 });
