@@ -914,7 +914,9 @@
 //  (f) 2026-09-13 user report (fit/floor cropping exiled plates): fit bbox
 //      = content bbox ∪ plates exiled at fit (+ SC_FIT_EXILE_MARGIN_PX),
 //      fixed-point in remeasureScLayout; ring perimeter = unpadded content
-//      bbox (cloudBBox).
+//      bbox (cloudBBox); fit bbox expanded symmetrically about the content
+//      center, so a one-sided exile can't push the nebula off-center at
+//      100% (Task 9).
 //  33. Almagest graph tuner (spec docs/project-plans/2026-09-13-143030-
 //      almagest-graph-tuner/): `renderScName` seam (text by default,
 //      generator path glyphs under a dev preview), tier breakpoints and
@@ -5323,6 +5325,14 @@ var __vendorExpandedGroups;
                 if (p.y + hh > next.maxY) next.maxY = p.y + hh;
             });
 
+            // Task 9 (2026-09-13): keep the nebula centered at 100%. The union
+            // alone centers the union, shifting the cloud away from a one-sided
+            // exile; expand symmetrically about the CONTENT bbox center instead
+            // (equal empty margin on the lighter side; kFit slightly lower).
+            var ccx = (contentBBox.minX + contentBBox.maxX) / 2, ccy = (contentBBox.minY + contentBBox.maxY) / 2;
+            var hwN = Math.max(ccx - next.minX, next.maxX - ccx), hhN = Math.max(ccy - next.minY, next.maxY - ccy);
+            next = { minX: ccx - hwN, minY: ccy - hhN, maxX: ccx + hwN, maxY: ccy + hhN };
+
             // Review Minor 1: relative-k convergence (was an absolute
             // 0.5-world-unit bbox tolerance) -- converged once the NEXT
             // candidate's own fit scale would move kFit by less than 0.1%.
@@ -5349,6 +5359,7 @@ var __vendorExpandedGroups;
             kFit: kFit, kFloor: kFloor,
             cloudCentroid: { x: cloudCx, y: cloudCy },
             cloudBBox: cloudBBox,
+            contentBBox: contentBBox,
             fitBBox: fitBBox,
             plates: plateInfo,
             fpParams: fp,

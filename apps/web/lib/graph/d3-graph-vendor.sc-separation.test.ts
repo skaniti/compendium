@@ -148,7 +148,7 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>;
-type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
+type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; contentBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
 type ExileClampMode = "periphery" | "viewport";
 type SeparationOptions = {
   budgetRatio?: number;
@@ -683,6 +683,35 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // lag. Checked directly, alongside the independent W/H-derived
     // computation above.
     expect(Math.abs(kMin - 0.5 * layout.kFit)).toBeLessThan(1e-9);
+  });
+
+  // Task 9 (2026-09-13 user direction): the union above centers the UNION,
+  // so a one-sided exile shifts the nebula off the viewport center at 100%
+  // zoom. remeasureScLayout must expand fitBBox symmetrically about the
+  // content bbox's own center instead (equal empty margin on the lighter
+  // side).
+  it("fit bbox is symmetric about the content bbox center, so the nebula stays centered at 100%", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 800, 620);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("ctr", 2, 4), { icons: iconsFor("ctr") });
+    flushSettleChunks();
+    const layout = (window as W).__d3ScLayout!()!;
+    const exiledAtFit = layout.report.filter((r) => r.overflow && r.kExile > layout.kFit);
+    expect(exiledAtFit.length).toBeGreaterThan(0);
+    // contentBBox is the padded content bbox (cloudBBox re-padded) -- its
+    // center differs from cloudBBox's (unpadded) by 10 on y, since the pad
+    // is symmetric on x but +20 extra on top -- so the symmetry center MUST
+    // be read from contentBBox, not derived from cloudBBox.
+    const cx = (layout.contentBBox.minX + layout.contentBBox.maxX) / 2;
+    const cy = (layout.contentBBox.minY + layout.contentBBox.maxY) / 2;
+    expect(Math.abs((layout.fitBBox.minX + layout.fitBBox.maxX) / 2 - cx)).toBeLessThan(1e-6);
+    expect(Math.abs((layout.fitBBox.minY + layout.fitBBox.maxY) / 2 - cy)).toBeLessThan(1e-6);
+    // and it still contains every exiled plate's rect (existing containment test covers the DOM rects)
+    expect(layout.fitBBox.minX).toBeLessThanOrEqual(layout.cloudBBox.minX);
+    expect(layout.fitBBox.maxX).toBeGreaterThanOrEqual(layout.cloudBBox.maxX);
   });
 
   it("cloudBBox is the unpadded content bbox when no plate is exiled at fit", async () => {
