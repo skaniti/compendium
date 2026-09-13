@@ -113,6 +113,12 @@ h1 {
   font-family: var(--font-mono);
 }
 
+/* No release-notes URL configured -- reads as plain text, not a dead link */
+.version:not([href]):hover {
+  color: var(--c-faint);
+  text-decoration: none;
+}
+
 /* =============================================================================
    Tab Bar
    ============================================================================= */
@@ -488,12 +494,61 @@ h1 {
   padding: 7px 9px;
 }
 
-#settingsApiKey {
+.settings-input.invalid {
+  border-color: var(--c-failed);
+}
+
+.mono {
   font-family: var(--font-mono);
 }
 
-.settings-input.invalid {
-  border-color: var(--c-failed);
+/* API key masked readout + change/cancel flow */
+.settings-readout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-readout {
+  font-size: 12px;
+  color: var(--c-text-soft);
+}
+
+.settings-readout.faint {
+  color: var(--c-faint);
+}
+
+.btn-text {
+  font: inherit;
+  font-size: 11px;
+  color: var(--c-accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.btn-text:hover {
+  text-decoration: underline;
+}
+
+.btn-text-danger {
+  color: var(--c-failed);
+}
+
+#apiKeyEdit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: -2px;
+}
+
+.apikey-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .btn-settings-save {

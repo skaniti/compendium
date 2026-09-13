@@ -7,7 +7,7 @@ import { installChromeShim, silenceLog } from './helpers/chrome-shim.mjs';
 const shim = installChromeShim();
 silenceLog();
 
-const { validateApiKey, saveConfig, CONFIG } = await import('../modules/config.js');
+const { validateApiKey, saveConfig, maskApiKey, CONFIG } = await import('../modules/config.js');
 
 // ── CONFIG additions ─────────────────────────────────────────────────────────
 
@@ -15,6 +15,30 @@ test('CONFIG: flush pacing constants', () => {
   assert.equal(CONFIG.FLUSH_BATCH_MAX, 10);
   assert.equal(CONFIG.FLUSH_ALARM_NAME, 'pending_export_flush');
   assert.equal(CONFIG.FLUSH_ALARM_PERIOD_MINUTES, 1);
+});
+
+test('CONFIG: RELEASE_NOTES_URL defaults empty', () => {
+  assert.equal(CONFIG.RELEASE_NOTES_URL, '');
+});
+
+// ── maskApiKey ───────────────────────────────────────────────────────────────
+
+test('maskApiKey: a cmp_ key keeps a 7-char prefix, then 8 bullets', () => {
+  assert.equal(maskApiKey('cmp_7f3abcdef123'), 'cmp_7f3••••••••');
+});
+
+test('maskApiKey: a short key (shorter than the prefix) is not padded out', () => {
+  assert.equal(maskApiKey('cmp_a'), 'cmp_a••••••••');
+});
+
+test('maskApiKey: empty/undefined/null render as empty string', () => {
+  assert.equal(maskApiKey(''), '');
+  assert.equal(maskApiKey(undefined), '');
+  assert.equal(maskApiKey(null), '');
+});
+
+test('maskApiKey: a non-cmp_ key shows only a 3-char prefix, then 8 bullets', () => {
+  assert.equal(maskApiKey('abcdefgh'), 'abc••••••••');
 });
 
 // ── validateApiKey ───────────────────────────────────────────────────────────
@@ -97,4 +121,16 @@ test('saveConfig: apiKey omitted entirely does not validate or touch storage', a
   await saveConfig({ backendUrl: 'http://example.test' });
   assert.equal(shim.storage.has('apiKey'), false);
   assert.equal(shim.storage.get('backendUrl'), 'http://example.test');
+});
+
+test('saveConfig: apiKey \'\' clears an existing key; saveConfig({}) leaves it untouched', async () => {
+  shim.reset();
+  await saveConfig({ apiKey: 'cmp_existing123' });
+  assert.equal(shim.storage.get('apiKey'), 'cmp_existing123');
+
+  await saveConfig({});
+  assert.equal(shim.storage.get('apiKey'), 'cmp_existing123');
+
+  await saveConfig({ apiKey: '' });
+  assert.equal(shim.storage.get('apiKey'), '');
 });

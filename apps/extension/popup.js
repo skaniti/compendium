@@ -5,7 +5,7 @@
  * regardless of which tab is visible — this is purely a UI concern.
  */
 
-import { validateApiKey, saveConfig } from './modules/config.js';
+import { validateApiKey, saveConfig, maskApiKey, CONFIG } from './modules/config.js';
 import { composeExportResult } from './modules/export-status.js';
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
@@ -60,14 +60,14 @@ function activateTab(tabName) {
 
 function updateDefaultIndicators(defaultTab) {
   if (defaultTab === 'passive') {
-    setDefaultPassiveBtn.textContent = 'Default view';
+    setDefaultPassiveBtn.textContent = 'Opens on this tab';
     setDefaultPassiveBtn.classList.add('is-default');
-    setDefaultActiveBtn.textContent = 'Set as default view';
+    setDefaultActiveBtn.textContent = 'Open this tab first';
     setDefaultActiveBtn.classList.remove('is-default');
   } else {
-    setDefaultActiveBtn.textContent = 'Default view';
+    setDefaultActiveBtn.textContent = 'Opens on this tab';
     setDefaultActiveBtn.classList.add('is-default');
-    setDefaultPassiveBtn.textContent = 'Set as default view';
+    setDefaultPassiveBtn.textContent = 'Open this tab first';
     setDefaultPassiveBtn.classList.remove('is-default');
   }
 }
@@ -231,6 +231,22 @@ const settingsDeviceLabelEl = document.getElementById('settingsDeviceLabel');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const settingsSavedEl = document.getElementById('settingsSaved');
 const settingsErrorEl = document.getElementById('settingsError');
+const apiKeyMaskedEl = document.getElementById('apiKeyMasked');
+const apiKeyEditEl = document.getElementById('apiKeyEdit');
+const apiKeyChangeBtn = document.getElementById('apiKeyChangeBtn');
+const apiKeyCancelBtn = document.getElementById('apiKeyCancelBtn');
+const apiKeyRemoveBtn = document.getElementById('apiKeyRemoveBtn');
+
+// The real key, held only in memory -- the masked readout is display-only
+// and is never written back to storage.
+let storedApiKey = '';
+
+// Set when the load-time path opens the edit block because the stored key
+// is invalid (spec D1). While true and the stored key is still invalid, an
+// empty-input Save must keep the edit block open instead of silently
+// closing over an unresolved error. Cleared once a valid key is saved or
+// the key is removed.
+let editOpenedForBadKey = false;
 
 function showSettingsError(message) {
   settingsErrorEl.textContent = message;
@@ -243,18 +259,66 @@ function hideSettingsError() {
   settingsKeyEl.classList.remove('invalid');
 }
 
+function renderMaskedKey() {
+  if (storedApiKey) {
+    apiKeyMaskedEl.textContent = maskApiKey(storedApiKey);
+    apiKeyMaskedEl.classList.remove('faint');
+    apiKeyRemoveBtn.classList.remove('hidden');
+  } else {
+    apiKeyMaskedEl.textContent = 'No key set';
+    apiKeyMaskedEl.classList.add('faint');
+    apiKeyRemoveBtn.classList.add('hidden');
+  }
+}
+
+function openApiKeyEdit(prefill = '') {
+  apiKeyEditEl.classList.remove('hidden');
+  settingsKeyEl.value = prefill;
+}
+
+function closeApiKeyEdit() {
+  apiKeyEditEl.classList.add('hidden');
+  settingsKeyEl.value = '';
+  hideSettingsError();
+}
+
+apiKeyChangeBtn.addEventListener('click', () => {
+  hideSettingsError();
+  openApiKeyEdit('');
+  settingsKeyEl.focus();
+});
+
+apiKeyCancelBtn.addEventListener('click', () => {
+  closeApiKeyEdit();
+});
+
+apiKeyRemoveBtn.addEventListener('click', async () => {
+  if (!confirm('Remove the stored API key? Captures will buffer on this device until a key is set again.')) return;
+
+  await saveConfig({ apiKey: '' });
+  storedApiKey = '';
+  editOpenedForBadKey = false;
+  renderMaskedKey();
+  closeApiKeyEdit();
+});
+
 // Load current settings
 chrome.storage.local.get(['backendUrl', 'apiKey', 'deviceLabel'], (data) => {
   settingsUrlEl.value = data.backendUrl || 'http://localhost:8001';
-  settingsKeyEl.value = data.apiKey || '';
   settingsDeviceLabelEl.value = data.deviceLabel || '';
+  storedApiKey = data.apiKey || '';
+  renderMaskedKey();
 
   // A pre-existing bad key (e.g. saved before this validator existed) is
-  // surfaced here too, so it's visible without re-saving (spec D1).
-  const err = validateApiKey(data.apiKey || '');
+  // surfaced here too, so it's visible without re-saving (spec D1). Since
+  // the raw key only shows in the edit block, open it pre-filled with the
+  // offending value so the user can see and fix it in place.
+  const err = validateApiKey(storedApiKey);
   if (err) {
+    openApiKeyEdit(storedApiKey);
     showSettingsError(err);
     settingsErrorEl.closest('details').open = true;
+    editOpenedForBadKey = true;
   } else {
     hideSettingsError();
   }
@@ -262,21 +326,43 @@ chrome.storage.local.get(['backendUrl', 'apiKey', 'deviceLabel'], (data) => {
 
 saveSettingsBtn.addEventListener('click', async () => {
   const backendUrl = settingsUrlEl.value.trim().replace(/\/+$/, '');
-  const apiKey = settingsKeyEl.value.trim();
   const deviceLabel = settingsDeviceLabelEl.value.trim();
 
-  const err = validateApiKey(apiKey);
-  if (err) {
-    showSettingsError(err);
-    return;
+  const editOpen = !apiKeyEditEl.classList.contains('hidden');
+  const newKey = settingsKeyEl.value.trim();
+  const changingKey = editOpen && newKey !== '';
+  // Empty-input Save closes the edit block, unless the load-time
+  // bad-stored-key path opened it and the stored key is still invalid --
+  // then the error must stay visible instead of being swept away.
+  const stillBadFromLoad = editOpenedForBadKey && Boolean(validateApiKey(storedApiKey));
+  const clearingEdit = editOpen && newKey === '' && !stillBadFromLoad;
+
+  if (changingKey) {
+    const err = validateApiKey(newKey);
+    if (err) {
+      showSettingsError(err);
+      return;
+    }
+    hideSettingsError();
   }
-  hideSettingsError();
+
+  const payload = { backendUrl, deviceLabel };
+  if (changingKey) payload.apiKey = newKey;
 
   try {
-    await saveConfig({ backendUrl, apiKey, deviceLabel });
+    await saveConfig(payload);
   } catch (err) {
     showSettingsError(err.message);
     return;
+  }
+
+  if (changingKey) {
+    storedApiKey = newKey;
+    editOpenedForBadKey = false;
+    renderMaskedKey();
+    closeApiKeyEdit();
+  } else if (clearingEdit) {
+    closeApiKeyEdit();
   }
 
   settingsSavedEl.classList.remove('hidden');
@@ -285,7 +371,21 @@ saveSettingsBtn.addEventListener('click', async () => {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
-versionEl.textContent = chrome.runtime.getManifest().version;
+{
+  const version = chrome.runtime.getManifest().version;
+  versionEl.textContent = `v${version}`;
+  if (CONFIG.RELEASE_NOTES_URL) {
+    versionEl.href = `${CONFIG.RELEASE_NOTES_URL}#v${version}`;
+    versionEl.target = '_blank';
+    versionEl.rel = 'noopener';
+    versionEl.title = 'Release notes';
+    versionEl.style.cursor = 'pointer';
+  } else {
+    versionEl.removeAttribute('href');
+    versionEl.title = 'Release notes page coming soon';
+    versionEl.style.cursor = 'default';
+  }
+}
 
 chrome.storage.local.get('defaultTab', (data) => {
   const defaultTab = data.defaultTab || 'passive';

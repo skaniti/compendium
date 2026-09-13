@@ -59,7 +59,7 @@ async function loadAllData() {
 // =============================================================================
 
 function formatDwell(ms) {
-  if (!ms && ms !== 0) return '-';
+  if (!ms && ms !== 0) return '—';
   const sec = Math.round(ms / 1000);
   if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
@@ -86,7 +86,11 @@ function renderPageTable(pages) {
     const title = escapeHtml(p.title || p.url || 'Untitled');
     const url = p.url ? escapeAttr(p.url) : '';
     const href = url ? `<a href="${url}" target="_blank" rel="noopener">${title}</a>` : title;
-    const dwell = escapeHtml(formatDwell(p.dwellTime));
+    // tracker-core.js stores finished pages' dwell time as `dwellTimeSeconds`
+    // (seconds); the live-capture path above computes `dwellTime` (ms) for
+    // the current page only. Route both through the same ms-based helper.
+    const dwellMs = p.dwellTimeSeconds != null ? p.dwellTimeSeconds * 1000 : (p.dwellTime ?? null);
+    const dwell = escapeHtml(formatDwell(dwellMs));
     const transition = escapeHtml(p.transitionType || p.transition || '-');
     const contentLen = p.extractedText ? p.extractedText.length : 0;
     const content = contentLen > 0
@@ -102,14 +106,27 @@ function renderPageTable(pages) {
   }).join('');
 
   return `<table class="page-table">
-    <thead><tr><th>#</th><th>Title</th><th>Dwell</th><th>Transition</th><th>Content</th></tr></thead>
+    <thead><tr>
+      <th title="Order the page was visited in">#</th>
+      <th title="Page title -- links to the page">Title</th>
+      <th title="Time spent on the page before leaving it">Dwell</th>
+      <th title="How the page was reached">Transition</th>
+      <th title="Extracted text length in characters (thousands)">Text</th>
+    </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
+const BADGE_TITLES = {
+  active: 'Still recording',
+  delivered: 'Confirmed saved by the server',
+  failed: 'Not delivered yet; retries every minute while the backend is reachable'
+};
+
 function renderCaptureCard(captureData, source, extra = {}) {
   const badgeClass = { active: 'badge-live', failed: 'badge-failed', delivered: 'badge-delivered' }[source];
   const badgeLabel = { active: 'LIVE', failed: 'FAILED', delivered: 'DELIVERED' }[source];
+  const badgeTitle = BADGE_TITLES[source];
   const cardClass = `source-${source}`;
 
   const pages = captureData.pages || [];
@@ -130,15 +147,15 @@ function renderCaptureCard(captureData, source, extra = {}) {
 
   let actions = '';
   if (source === 'failed') {
-    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}">Retry export</button>`;
+    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}" title="Send this capture to the backend again">Retry export</button>`;
   }
   if (source !== 'active') {
-    actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}">Download JSON</button>`;
+    actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}" title="Save this capture's raw JSON to disk">Download JSON</button>`;
   }
 
   return `<details class="session-card ${cardClass}">
     <summary>
-      <span class="badge ${badgeClass}">${badgeLabel}</span>
+      <span class="badge ${badgeClass}" title="${badgeTitle}">${badgeLabel}</span>
       <span class="card-id">
         <span class="session-name">${escapeHtml(captureId)}</span>
         ${metaExtra}

@@ -90,7 +90,28 @@ export function buildHeaders(config) {
   return headers;
 }
 
+const MASK_BULLET = '•'; // •
+const MASK_BULLET_COUNT = 8;
+
+/**
+ * Render a stored API key as a masked readout for display -- never the raw
+ * key. `cmp_` keys keep the 4-char prefix plus 3 more characters (7 total)
+ * so a `cmp_` key is visually recognizable; any other key shows only its
+ * first 3 characters. Always followed by 8 bullet characters, regardless of
+ * the real key's length.
+ */
+export function maskApiKey(key) {
+  if (!key) return '';
+  const prefixLen = key.startsWith('cmp_') ? 7 : 3;
+  return key.slice(0, prefixLen) + MASK_BULLET.repeat(MASK_BULLET_COUNT);
+}
+
 export const CONFIG = {
+  // Release-notes page for the version link in the popup footer. Set to the
+  // release-notes page when it exists; empty renders the version as plain
+  // text (no link).
+  RELEASE_NOTES_URL: '',
+
   trackedDomains: [
     'wikipedia.org',
     'youtube.com',
