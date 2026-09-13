@@ -148,12 +148,20 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>;
-type Layout = { kFit: number; kFloor: number; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] };
+type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number; overflow: boolean; kExile: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] };
+type ExileClampMode = "periphery" | "viewport";
+type SeparationOptions = {
+  budgetRatio?: number;
+  budgetMinPx?: number;
+  exileClampMode?: ExileClampMode;
+  exileMarginPx?: number;
+};
 type W = Window & {
   __d3ScLayoutReport?: () => Report | null;
   __d3ScLayout?: () => Layout | null;
   __d3ScLayoutRemeasure?: (w: number, h: number) => Layout | null;
-  __d3SetScSeparationOptions?: (o: { budgetRatio?: number; budgetMinPx?: number }) => void;
+  __d3SetScSeparationOptions?: (o: SeparationOptions) => void;
+  __d3GetScSeparationOptions?: () => Required<SeparationOptions>;
   __d3ZoomTo?: (k: number) => boolean;
   __d3GetZoomScaleExtent?: () => [number, number];
 };
@@ -163,6 +171,10 @@ type W = Window & {
 // / SC_SEPARATION_BUDGET_MIN_PX in the vendor.
 const DEFAULT_SC_SEPARATION_BUDGET_RATIO = 0.5;
 const DEFAULT_SC_SEPARATION_BUDGET_MIN_PX = 60;
+// Followups item 3: same idea for the exile-clamp knobs -- SC_EXILE_CLAMP_MODE
+// / SC_EXILE_MARGIN_PX in the vendor.
+const DEFAULT_SC_EXILE_CLAMP_MODE: ExileClampMode = "periphery";
+const DEFAULT_SC_EXILE_MARGIN_PX = 16;
 
 describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   beforeEach(() => {
@@ -181,7 +193,12 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   });
   afterEach(() => {
     flushSettleChunks();
-    (window as W).__d3SetScSeparationOptions?.({ budgetRatio: DEFAULT_SC_SEPARATION_BUDGET_RATIO, budgetMinPx: DEFAULT_SC_SEPARATION_BUDGET_MIN_PX });
+    (window as W).__d3SetScSeparationOptions?.({
+      budgetRatio: DEFAULT_SC_SEPARATION_BUDGET_RATIO,
+      budgetMinPx: DEFAULT_SC_SEPARATION_BUDGET_MIN_PX,
+      exileClampMode: DEFAULT_SC_EXILE_CLAMP_MODE,
+      exileMarginPx: DEFAULT_SC_EXILE_MARGIN_PX,
+    });
     vi.useRealTimers();
     uninstallTinyGeometryStubs();
     __ctmGraphRootEnabled = false;
@@ -396,7 +413,10 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
   it("clamps every exiled plate's footprint inside the viewport with symmetric half-sizes about its center", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    // Followups item 3: this is the 'viewport' clamp mode specifically --
+    // the module default is now 'periphery' (no clamp), so opt into the
+    // shipped-2026-09-11 radial clamp explicitly.
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0, exileClampMode: "viewport" });
     const container = document.createElement("div");
     sizeContainer(container, 420, 320);
     document.body.appendChild(container);
@@ -458,6 +478,73 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       expect(screenCx - screenHw).toBeGreaterThanOrEqual(M - 1e-6);
       expect(screenCx + screenHw).toBeLessThanOrEqual(crect.width - M + 1e-6);
     }
+  });
+
+  it("in the default periphery mode, an exiled plate stays off the cloud and may leave the viewport (no clamp)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    // 260x200: smaller than the 420x320 the 'viewport' clamp test above
+    // uses. At 420x320 the periphery placement (this fixture, this margin)
+    // never actually leaves the container -- the cloud's own screen extent
+    // at that fit scale still comfortably contains the ring point. Shrunk
+    // until at least one exiled plate's screen rect crosses an edge
+    // (verified empirically): 260x200 does it for this 3-SC/2-page fixture.
+    sizeContainer(container, 260, 200);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("per", 3, 2), { icons: iconsFor("per") });
+    flushSettleChunks();
+    const report = (window as W).__d3ScLayoutReport!()!;
+    const overflowKeywords = report.filter((r) => r.overflow).map((r) => r.keyword);
+    expect(overflowKeywords.length).toBeGreaterThan(0);
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    // Same gated .graph-root CTM stub as the 'viewport' clamp test above --
+    // a real, scale-aware CTM is on, so a viewport clamp WOULD engage here
+    // if exileClampMode were 'viewport'. Left at its module default
+    // ('periphery') this test asserts no clamp happens.
+    __ctmGraphRootEnabled = true;
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect((window as W).__d3GetScSeparationOptions!().exileClampMode).toBe("periphery");
+
+    const rootEl = container.querySelector(".graph-root")!;
+    const rootTransform = rootEl.getAttribute("transform") || "";
+    const tm = /translate\(([-\d.eE]+),\s*([-\d.eE]+)\)/.exec(rootTransform)!;
+    const sm = /scale\(([-\d.eE]+)\)/.exec(rootTransform);
+    const rtx = parseFloat(tm[1]), rty = parseFloat(tm[2]), k = sm ? parseFloat(sm[1]) : 1;
+    const crect = container.getBoundingClientRect();
+    const layout = (window as W).__d3ScLayout!()!;
+
+    let anyBeyondContainer = false;
+    let exiledCount = 0;
+    for (const keyword of overflowKeywords) {
+      const g = Array.from(container.querySelectorAll("g.watermark")).find((n) => n.getAttribute("data-sc") === keyword)!;
+      if (g.getAttribute("data-exiled") !== "1") continue; // above its own kExile at kMin -- nothing exiled to check
+      exiledCount++;
+      const t = parseTranslate(g.getAttribute("transform"));
+      const plateCx = parseFloat(g.getAttribute("data-plate-cx")!), plateCy = parseFloat(g.getAttribute("data-plate-cy")!);
+      const hw = parseFloat(g.getAttribute("data-plate-hw")!), hh = parseFloat(g.getAttribute("data-plate-hh")!);
+      // World-space footprint center + half-sizes (data-plate-hw/hh are
+      // already world units, unlike the 'viewport' clamp test's screen-space
+      // comparison) -- cloudBBox is in the SAME world space, so this checks
+      // the plate rect against it directly, no CTM involved.
+      const cx = t.x + plateCx, cy = t.y + plateCy;
+      const plateRectWorld = { minX: cx - hw, maxX: cx + hw, minY: cy - hh, maxY: cy + hh };
+      expect(rectsOverlap(plateRectWorld, layout.cloudBBox)).toBe(false);
+
+      // Screen-space rect (same conversion the 'viewport' clamp test uses)
+      // to check whether this plate's footprint crosses the container edge.
+      const screenCx = k * cx + rtx - crect.left;
+      const screenCy = k * cy + rty - crect.top;
+      const screenHw = hw * k, screenHh = hh * k;
+      const beyond = screenCx - screenHw < 0 || screenCx + screenHw > crect.width ||
+        screenCy - screenHh < 0 || screenCy + screenHh > crect.height;
+      if (beyond) anyBeyondContainer = true;
+    }
+    expect(exiledCount).toBeGreaterThan(0);
+    expect(anyBeyondContainer).toBe(true);
   });
 
   it("returns an exiled plate to its anchor above kExile and removes its leader", async () => {

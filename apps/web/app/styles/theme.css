@@ -262,16 +262,17 @@ html, body {
 }
 
 /* Delta #32: overflow nameplates exiled to the cloud periphery keep a dot at
-   their supercluster's anchor and a straight leader back to the plate. Color
-   comes from d3 (the SC's nebula color) as attributes; only the theme-aware
-   halo lives here. */
+   their supercluster's anchor and a straight leader back to the plate.
+   2026-09-13 user direction: opaque white (`#ffffff`, set as an attribute in
+   the vendor), not the SC's nebula color -- all eight palettes are dark, so
+   a single opaque white reads cleanly on every one; no dot outline. */
 .watermark-leader-line {
-    stroke-opacity: 0.75;
+    stroke-opacity: 1;
     stroke-linecap: round;
     pointer-events: none;
 }
 .watermark-anchor-dot {
-    stroke: var(--bg);
+    stroke: none;
 }
 
 /* Collapsed-group caption (batch C C1, hybrid mode): the single caption

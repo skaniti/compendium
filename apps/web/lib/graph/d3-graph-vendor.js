@@ -899,6 +899,18 @@
 //      safety net. Dev/test-only hooks: __d3ScLayoutReport, __d3ScLayout,
 //      __d3ScLayoutRemeasure, __d3SetScSeparationOptions, __d3ZoomTo (same
 //      class as delta #30's __d3GetZoomScaleExtent).
+//      (e) 2026-09-13 user direction, three follow-ups. Leader + anchor
+//      dot are opaque white (`#ffffff`, not the SC's nebula color -- all
+//      eight palettes are dark), dot outline removed. SC icons no longer
+//      fade on zoom-in: `ICON_LOD_FADE_ON_ZOOM_IN` gates the R6.1 fade off
+//      by default, so only the name fades (on zoom-out) and the icon
+//      persists at every zoom-in level; ICON_LOD_FADE_START/END stay
+//      tuner-exposed but inert while the switch is false. Exile placement
+//      defaults to the cloud periphery and may leave the viewport
+//      (`SC_EXILE_CLAMP_MODE`), with the pre-existing radial viewport
+//      clamp kept as an opt-in `'viewport'` mode. Dev hooks
+//      __d3SetScSeparationOptions / __d3GetScSeparationOptions extended
+//      accordingly (exileClampMode, exileMarginPx).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1004,6 +1016,7 @@ var __vendorExpandedGroups;
     // with its label.
     var SC_SEPARATION_BUDGET_MIN_PX = 60;
     var SC_EXILE_MARGIN_PX = 16;           // gap between cloud perimeter and an exiled plate's near edge (screen px)
+    var SC_EXILE_CLAMP_MODE = 'periphery';  // 'periphery' (2026-09-13 user direction: exiled plates stay on the cloud perimeter and may leave the viewport) | 'viewport' (radial clamp inside the viewport minus SC_EXILE_VIEWPORT_MARGIN_PX; the behavior shipped 2026-09-11)
     var SC_EXILE_VIEWPORT_MARGIN_PX = 28;  // same clearance updateEdgeChips uses
     var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation / remeasureScLayout)
     var __scShiftW = {};                   // final fix wave: per-SC cumulative correction-pass shift, WORLD units (keyword -> number), written by applyScLayoutSeparation's movement phase, cleared at its top; remeasureScLayout reports shiftPx = __scShiftW[kw] * kFloor at whatever floor is current
@@ -1328,6 +1341,7 @@ var __vendorExpandedGroups;
     // you zoom IN, not as you zoom out).
     var ICON_LOD_FADE_START = 1.3;
     var ICON_LOD_FADE_END = 1.8;
+    var ICON_LOD_FADE_ON_ZOOM_IN = false;  // 2026-09-13 user direction: SC icons persist at every zoom-in level; the R6.1 zoom-in fade below stays in the code behind this switch. ICON_LOD_FADE_START/END keep their tuner exposure but are inert while this is false.
 
     // Rethink R6.3: collapsed-group captions gate off at far zoom-out --
     // at galaxy-overview scale a caption's screen-constant font crowds
@@ -3782,11 +3796,18 @@ var __vendorExpandedGroups;
             }
             if (exItems.length) {
                 var env = { cx: __scLayout.cloudCentroid.x, cy: __scLayout.cloudCentroid.y, bbox: __scLayout.cloudBBox, k: currentZoomK || 1, marginPx: SC_EXILE_MARGIN_PX };
-                var vpNode = svg && svg.select('.graph-root').node();
-                var vctm = vpNode && vpNode.getScreenCTM ? vpNode.getScreenCTM() : null;
-                var vrect = __mountedContainer ? __mountedContainer.getBoundingClientRect() : null;
-                if (vctm && vctm.a > 0 && vctm.d > 0 && vrect && vrect.width > 0 && vrect.height > 0) {
-                    env.viewport = { a: vctm.a, d: vctm.d, e: vctm.e, f: vctm.f, left: vrect.left, top: vrect.top, width: vrect.width, height: vrect.height, marginPx: SC_EXILE_VIEWPORT_MARGIN_PX };
+                // Item 3 (2026-09-13): env.viewport only gets populated in
+                // 'viewport' mode -- placeExiledPlates treats a missing
+                // viewport as "no clamp" (periphery mode's default), so
+                // exiled plates stay on the cloud perimeter and may leave
+                // the viewport instead of being radially clamped inside it.
+                if (SC_EXILE_CLAMP_MODE === 'viewport') {
+                    var vpNode = svg && svg.select('.graph-root').node();
+                    var vctm = vpNode && vpNode.getScreenCTM ? vpNode.getScreenCTM() : null;
+                    var vrect = __mountedContainer ? __mountedContainer.getBoundingClientRect() : null;
+                    if (vctm && vctm.a > 0 && vctm.d > 0 && vrect && vrect.width > 0 && vrect.height > 0) {
+                        env.viewport = { a: vctm.a, d: vctm.d, e: vctm.e, f: vctm.f, left: vrect.left, top: vrect.top, width: vrect.width, height: vrect.height, marginPx: SC_EXILE_VIEWPORT_MARGIN_PX };
+                    }
                 }
                 var placed = placeExiledPlates(exItems, env);
                 exItems.forEach(function (it) { exileCenter[it.key] = { x: placed[it.key].x, y: placed[it.key].y }; });
@@ -3844,9 +3865,14 @@ var __vendorExpandedGroups;
 
             // Rethink R6.1: past ICON_LOD_FADE_START you're inside the
             // galaxy -- the big icon fades out and the nameplate hands off
-            // to an edge chip (updateEdgeChips) for wayfinding.
+            // to an edge chip (updateEdgeChips) for wayfinding. 2026-09-13:
+            // gated behind ICON_LOD_FADE_ON_ZOOM_IN (default false) -- the
+            // user's rule is nothing disappears as you zoom in, so the icon
+            // now just stays fully opaque; the fade math is kept, inert,
+            // for the switch to flip back on.
             var iconOpacity;
-            if (nameRatio <= ICON_LOD_FADE_START) iconOpacity = 1;
+            if (!ICON_LOD_FADE_ON_ZOOM_IN) iconOpacity = 1;
+            else if (nameRatio <= ICON_LOD_FADE_START) iconOpacity = 1;
             else if (nameRatio >= ICON_LOD_FADE_END) iconOpacity = 0;
             else iconOpacity = 1 - (nameRatio - ICON_LOD_FADE_START) / (ICON_LOD_FADE_END - ICON_LOD_FADE_START);
 
@@ -3990,7 +4016,9 @@ var __vendorExpandedGroups;
                     .attr('data-sc', keyword);
                 lg.append('line')
                     .attr('class', 'watermark-leader-line')
-                    .attr('stroke', color)
+                    // 2026-09-13 user direction: opaque white, not the SC's
+                    // nebula color -- all eight palettes are dark.
+                    .attr('stroke', '#ffffff')
                     .attr('stroke-width', 1.25 * kInv)
                     .attr('x1', wcx).attr('y1', wcy)
                     .attr('x2', wcx).attr('y2', wcy);   // real end set by updateLeaderEnd below
@@ -3998,8 +4026,9 @@ var __vendorExpandedGroups;
                     .attr('class', 'watermark-anchor-dot')
                     .attr('cx', wcx).attr('cy', wcy)
                     .attr('r', 4 * kInv)
-                    .attr('stroke-width', 1.25 * kInv)
-                    .attr('fill', color)
+                    // 2026-09-13 user direction: opaque white fill, no
+                    // outline (stroke-width dropped along with the color).
+                    .attr('fill', '#ffffff')
                     .attr('cursor', 'pointer')
                     .style('pointer-events', 'all')
                     .on('mouseenter', (function (kw, members) {
@@ -7046,6 +7075,23 @@ var __vendorExpandedGroups;
         window.__d3SetScSeparationOptions = function (o) {
             if (o && typeof o.budgetRatio === 'number') SC_SEPARATION_BUDGET_RATIO = o.budgetRatio;
             if (o && typeof o.budgetMinPx === 'number') SC_SEPARATION_BUDGET_MIN_PX = o.budgetMinPx;
+            // Item 3 (2026-09-13): live-tunable exile placement, same class
+            // as the two options above -- validated against the two known
+            // modes so a typo can't silently wedge the switch into a
+            // falsy-but-not-'periphery' state.
+            if (o && (o.exileClampMode === 'periphery' || o.exileClampMode === 'viewport')) SC_EXILE_CLAMP_MODE = o.exileClampMode;
+            if (o && typeof o.exileMarginPx === 'number') SC_EXILE_MARGIN_PX = o.exileMarginPx;
+        };
+        // Item 3 (2026-09-13): read side of the option set above, so tests
+        // (and live tuning) can assert/inspect the current values without
+        // reaching into module-private state.
+        window.__d3GetScSeparationOptions = function () {
+            return {
+                budgetRatio: SC_SEPARATION_BUDGET_RATIO,
+                budgetMinPx: SC_SEPARATION_BUDGET_MIN_PX,
+                exileClampMode: SC_EXILE_CLAMP_MODE,
+                exileMarginPx: SC_EXILE_MARGIN_PX,
+            };
         };
         // Final fix wave (Important #1): test-only escape hatch driving the
         // same node-immutable re-measure the ResizeObserver handler calls,
