@@ -244,13 +244,18 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       expect(r.shiftPx).toBeLessThanOrEqual(r.budgetPx + 1e-6);
     }
     // Anchors (from the report's world positions exposed alongside) are disjoint at the floor.
-    const layout = (window as unknown as { __d3ScLayout?: () => { kFloor: number; plates: Record<string, { anchor: { x: number; y: number }; overflow: boolean }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2] } }).__d3ScLayout!();
+    const layout = (window as W).__d3ScLayout!()!;
+    // Review Minor 3(b): checked precondition -- 1100x850 was chosen
+    // specifically so nothing here is exiled AT FIT (the fit-inclusion loop
+    // is a no-op), which is what makes the rest of this test's floor-only
+    // assertions meaningful in isolation from that loop.
+    expect(layout.report.every((r) => !(r.overflow && r.kExile > layout.kFit))).toBe(true);
     const keys = Object.keys(layout.plates).filter((k) => !layout.plates[k].overflow);
     // The pairwise-disjoint loop below is vacuous with fewer than 2
     // anchored plates -- pin that it actually has pairs to check.
     expect(keys.length).toBeGreaterThanOrEqual(2);
     for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
-      const a = layout.plates[keys[i]].anchor, b = layout.plates[keys[j]].anchor;
+      const a = layout.plates[keys[i]].anchor!, b = layout.plates[keys[j]].anchor!;
       const ra = plateRect(a.x * layout.kFloor, a.y * layout.kFloor, plateFootprintAtRatio(keys[i], 0.5, layout.fpParams));
       const rb = plateRect(b.x * layout.kFloor, b.y * layout.kFloor, plateFootprintAtRatio(keys[j], 0.5, layout.fpParams));
       expect(rectsOverlap(ra, rb)).toBe(false);
@@ -287,6 +292,16 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const half = (window as W).__d3ScLayoutRemeasure!(1800, 1400)!;
     expect(half).toBeTruthy();
     expect(half.kFloor).toBeCloseTo(before.kFloor * 0.5, 9);
+    // Review Minor 3(d): kFit itself (not just kFloor) halves exactly.
+    expect(Math.abs(half.kFit - before.kFit * 0.5)).toBeLessThan(1e-9);
+    // Review Minor 3(a): fitBBox is the node-only content bbox at both
+    // sizes (the fit-inclusion loop is a no-op here, by design -- see the
+    // comment above) -- it must be IDENTICAL at both canvas sizes, since it
+    // depends only on unmoved node positions, never on canvasW/canvasH.
+    // Without this, "halving the canvas exactly halves kFit" would hold by
+    // coincidence rather than because the two measurements are actually
+    // comparing the same content.
+    expect(half.fitBBox).toEqual(before.fitBBox);
     // A smaller canvas packs the SAME anchors (unmoved) into a SMALLER
     // screen area while footprints (sized off a fixed ratio, not kFloor)
     // stay the same screen size -- overlap can only get worse, so the
@@ -660,6 +675,14 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       620 / (layout.fitBBox.maxY - layout.fitBBox.minY),
     );
     expect(kMin).toBeCloseTo(expectedKMin, 9);
+    // Review Minor 3(c): after the Important-1 fix, __scLayout.kFit is
+    // ALWAYS measured from the SAME bbox that ends up stored as fitBBox
+    // (measureAtBBox runs immediately whenever fitBBox changes, never on a
+    // deferred later pass) -- so layout.kFit now equals the fit the app
+    // actually applies, not merely something close to it modulo a one-pass
+    // lag. Checked directly, alongside the independent W/H-derived
+    // computation above.
+    expect(Math.abs(kMin - 0.5 * layout.kFit)).toBeLessThan(1e-9);
   });
 
   it("cloudBBox is the unpadded content bbox when no plate is exiled at fit", async () => {

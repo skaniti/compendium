@@ -5055,7 +5055,16 @@ var __vendorExpandedGroups;
      *  zoom (and the 0.5x floor beneath it) always contains every exiled
      *  nameplate. cloudBBox (the ring perimeter exiled plates are placed
      *  against) is now the UNPADDED content bbox, not the fit bbox -- see
-     *  unpadFitBBox. */
+     *  unpadFitBBox.
+     *
+     *  Review round (2026-09-13): the record written to __scLayout (kFit,
+     *  kFloor, overflow, kExileOf, budgetPx) must ALWAYS be measured from
+     *  the SAME bbox that ends up stored as fitBBox -- measureAtBBox below
+     *  is the one place a candidate bbox turns into that record, called
+     *  immediately after fitBBox changes (never deferred to "the next loop
+     *  pass"), so every exit path (converged, cap hit, or the no-exile
+     *  reset) leaves fitZoom/kExile/the floor sweep judging the SAME scale
+     *  that is actually stored and later applied by fitToContent. */
     function remeasureScLayout(canvasW, canvasH) {
         if (!__scLayout || !currentData || !__mountedIcons) return;
         if (!(canvasW > 0) || !(canvasH > 0)) return;
@@ -5092,7 +5101,27 @@ var __vendorExpandedGroups;
         // across the fit-search loop below, since it depends only on node
         // positions, never on canvasW/canvasH or the candidate fit bbox.
         var cloudBBox = unpadFitBBox(contentBBox);
+
+        // Review Minor 2: anchors (scOverlayGeometry) and the cloud
+        // centroid are pure functions of node positions -- independent of
+        // kFit/kFloor -- so both are computed ONCE here, not on every
+        // fixed-point pass below. Only budgetPx (uses kFloor) and the
+        // overflow/kExile sweep (use kFit/kFloor) are k-dependent and stay
+        // inside measureAtBBox.
         var centroids = computeClusterCentroids(clusters, nodes);
+        var anchors = {}, reachOf = {};
+        scKeys.forEach(function (kw) {
+            var geo = scOverlayGeometry(groups[kw], centroids, nodes);
+            if (!geo) { anchors[kw] = null; return; }
+            anchors[kw] = { x: geo.cx, y: geo.cy };
+            reachOf[kw] = geo.maxReach;
+        });
+        var cloudCx = 0, cloudCy = 0, cloudN = 0;
+        scKeys.forEach(function (kw) {
+            nodeIdxByKw[kw].forEach(function (i) { cloudCx += nodes[i].x; cloudCy += nodes[i].y; cloudN++; });
+        });
+        cloudCx = cloudN ? cloudCx / cloudN : (contentBBox.minX + contentBBox.maxX) / 2;
+        cloudCy = cloudN ? cloudCy / cloudN : (contentBBox.minY + contentBBox.maxY) / 2;
 
         // 2026-09-13 fit-includes-exiles fix: 100% zoom must equal
         // zoom-to-fit INCLUDING every plate exiled AT fit (plus
@@ -5102,25 +5131,24 @@ var __vendorExpandedGroups;
         // (and kFloor with it), which shrinks screen-space separation
         // between anchors and can push another plate into overflow/exile
         // that wasn't before -- so this is a bounded fixed-point search,
-        // not a single pass. Each iteration re-derives its candidate
-        // fitBBox from contentBBox (never compounds a prior iteration's
-        // expansion), so a plate that stops being exiled once kFit settles
-        // is dropped again rather than leaving stale slack in the bbox.
-        // Capped at 4 iterations, matching the spec's stated bound.
-        var kFit = 0, kFloor = 0, anchors = {}, budgetPx = {}, overflow = {}, kExileOf = {};
-        var cloudCx = 0, cloudCy = 0;
-        var fitBBox = contentBBox;
-        for (var it = 0; it < 4; it++) {
-            kFit = Math.min(canvasW / (fitBBox.maxX - fitBBox.minX), canvasH / (fitBBox.maxY - fitBBox.minY));
-            if (!(kFit > 0)) return;
+        // not a single pass.
+        var kFit = 0, kFloor = 0, budgetPx = {}, overflow = {}, kExileOf = {};
+
+        /** Turns a candidate bbox into the k-dependent half of the record
+         *  (kFit/kFloor/budgetPx/overflow/kExileOf, all outer vars mutated
+         *  as a side effect) and returns the keys exiled AT that bbox's own
+         *  fit scale. Called immediately whenever fitBBox changes -- never
+         *  on a later pass -- so the outer vars are never left describing a
+         *  bbox other than whatever fitBBox currently holds. */
+        function measureAtBBox(bb) {
+            kFit = Math.min(canvasW / (bb.maxX - bb.minX), canvasH / (bb.maxY - bb.minY));
+            if (!(kFit > 0)) return [];
             kFloor = kFit * MIN_ZOOM_RATIO;
 
-            anchors = {}; budgetPx = {};
+            budgetPx = {};
             scKeys.forEach(function (kw) {
-                var geo = scOverlayGeometry(groups[kw], centroids, nodes);
-                if (!geo) { anchors[kw] = null; return; }
-                anchors[kw] = { x: geo.cx, y: geo.cy };
-                budgetPx[kw] = Math.max(geo.maxReach * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
+                if (!anchors[kw]) return;
+                budgetPx[kw] = Math.max(reachOf[kw] * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
             });
 
             // Guarantee by construction: whatever is still overlapping at
@@ -5138,10 +5166,7 @@ var __vendorExpandedGroups;
             solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
 
             kExileOf = {};
-            cloudCx = 0; cloudCy = 0;
-            var cloudN = 0;
             scKeys.forEach(function (kw) {
-                nodeIdxByKw[kw].forEach(function (i) { cloudCx += nodes[i].x; cloudCy += nodes[i].y; cloudN++; });
                 if (overflow[kw] && anchors[kw]) {
                     // Task 7: opponents = every other painted plate at its
                     // anchor. Restricting to anchored plates let a plate
@@ -5156,15 +5181,39 @@ var __vendorExpandedGroups;
                     kExileOf[kw] = 0;
                 }
             });
-            cloudCx = cloudN ? cloudCx / cloudN : (contentBBox.minX + contentBBox.maxX) / 2;
-            cloudCy = cloudN ? cloudCy / cloudN : (contentBBox.minY + contentBBox.maxY) / 2;
 
             // "Exiled at fit" = would still be exiled if the user's current
             // zoom were exactly THIS candidate's fit scale (currentZoomK ==
             // kFit) -- i.e. kFit hasn't yet reached this plate's own exile
             // onset at that same candidate scale.
-            var exiledAtFit = scKeys.filter(function (kw) { return overflow[kw] && anchors[kw] && kFit < kExileOf[kw]; });
-            if (!exiledAtFit.length) { fitBBox = contentBBox; break; }
+            return scKeys.filter(function (kw) { return overflow[kw] && anchors[kw] && kFit < kExileOf[kw]; });
+        }
+
+        // Review Minor 1: cap raised from a flat 4 to scKeys.length + 4 --
+        // the exiled-at-fit set can only grow by at most one plate per pass
+        // (each pass either folds the newly-discovered exiles into the
+        // bbox or proves none remain), so scKeys.length passes exhausts
+        // every plate; +4 slack covers the no-exile reset pass below and
+        // general settling. Per the task brief this cap is reported
+        // against, not raised further, if a fixture still hasn't converged.
+        var maxIterations = scKeys.length + 4;
+        var fitBBox = contentBBox;
+        var exiledAtFit = measureAtBBox(fitBBox);
+        for (var it = 0; it < maxIterations; it++) {
+            var isLast = (it === maxIterations - 1);
+
+            if (!exiledAtFit.length) {
+                if (fitBBox === contentBBox) break; // record already matches fitBBox
+                // fitBBox was expanded on an earlier pass but nothing is
+                // exiled at fit against it -- drop back to contentBBox and
+                // re-measure IMMEDIATELY (not on a later pass, which the cap
+                // could cut off before it runs) so the stored record can
+                // never describe a bbox other than the one about to be
+                // stored.
+                fitBBox = contentBBox;
+                exiledAtFit = measureAtBBox(fitBBox);
+                continue;
+            }
 
             // Predict drawWatermarks' own exile pre-pass EXACTLY (same
             // placeExiledPlates call, same env shape) at k = kFit, ratio =
@@ -5182,9 +5231,16 @@ var __vendorExpandedGroups;
                 if (p.y - hh < next.minY) next.minY = p.y - hh;
                 if (p.y + hh > next.maxY) next.maxY = p.y + hh;
             });
-            var same = Math.abs(next.minX - fitBBox.minX) < 0.5 && Math.abs(next.minY - fitBBox.minY) < 0.5 && Math.abs(next.maxX - fitBBox.maxX) < 0.5 && Math.abs(next.maxY - fitBBox.maxY) < 0.5;
+
+            // Review Minor 1: relative-k convergence (was an absolute
+            // 0.5-world-unit bbox tolerance) -- converged once the NEXT
+            // candidate's own fit scale would move kFit by less than 0.1%.
+            var kNext = Math.min(canvasW / (next.maxX - next.minX), canvasH / (next.maxY - next.minY));
+            var converged = kFit > 0 && Math.abs(kNext - kFit) / kFit < 1e-3;
+            if (converged || isLast) break; // record (measured from fitBBox) already matches the stored fitBBox -- do NOT replace it with next
+
             fitBBox = next;
-            if (same) break;
+            exiledAtFit = measureAtBBox(fitBBox);
         }
 
         var plateInfo = {}, report = [];
