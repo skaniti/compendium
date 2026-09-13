@@ -116,13 +116,25 @@ function parseTranslate(transform: string | null): { x: number; y: number } {
 
 /** N single-cluster superclusters, each with `pagesPer` pages, names long
  *  enough to wrap to 2-3 lines, so their floor footprints overlap when the
- *  tiny sim packs them close. */
-function crowdedPayload(prefix: string, n: number, pagesPer: number): GraphPayload {
+ *  tiny sim packs them close. `nameSuffix` defaults to the original fixture
+ *  text; a handful of tests below pass a longer one -- see their own
+ *  comments for why (2026-09-13 Almagest bake: the shipped font's average
+ *  glyph advance narrowed from ~0.83em to ~0.6129em, so SC_NAME_CHAR_WIDTH
+ *  -- the vendor's derived per-char footprint width -- dropped from ~24.78
+ *  to ~18.39px at the 30px reference size; some fixtures need a longer name
+ *  to reach the same overflow/exile preconditions the old, wider glyphs
+ *  produced at this default suffix). */
+function crowdedPayload(
+  prefix: string,
+  n: number,
+  pagesPer: number,
+  nameSuffix = "extremely long supercluster name",
+): GraphPayload {
   const nodes: GraphNode[] = [];
   const clusters: GraphCluster[] = [];
   const superClusters: GraphSuperCluster[] = [];
   for (let i = 0; i < n; i++) {
-    const kw = `${prefix}-sc${i} extremely long supercluster name`;
+    const kw = `${prefix}-sc${i} ${nameSuffix}`;
     const cid = `${prefix}-c${i}`;
     const ids: string[] = [];
     for (let p = 0; p < pagesPer; p++) {
@@ -265,19 +277,27 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   it("__d3ScLayoutRemeasure re-derives kFloor and exile onsets for a new canvas size without moving nodes (resize path)", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
-    // 3600x2800 (not this test's prior 900x700): 2026-09-13 fit-includes-
-    // exiles fix -- remeasureScLayout's fixed-point loop recomputes
-    // kFit/kFloor from a fitBBox that grows to include any plate exiled AT
-    // fit, so a canvas size where that loop actually engages breaks the
-    // clean "halving the canvas exactly halves kFit" arithmetic this test
-    // exists to pin (verified: at 900x700 -> 450x350 kFloor lands at ~14%
-    // of before.kFloor, not 50%). 3600x2800 keeps every plate's kExile
-    // below kFit at BOTH this size and its half (1800x1400) -- the loop is
-    // a no-op at both, so the linear-scaling arithmetic holds exactly, and
-    // halving alone (unrelated to the new loop) still pushes one plate
-    // into overflow, preserving this test's original intent. The
-    // fit-inclusion loop itself is exercised by the dedicated tests below.
-    sizeContainer(container, 3600, 2800);
+    // 2670x2076 (not this test's prior 900x700, nor the 3600x2800 this
+    // scaled down from): 2026-09-13 fit-includes-exiles fix -- remeasure-
+    // ScLayout's fixed-point loop recomputes kFit/kFloor from a fitBBox
+    // that grows to include any plate exiled AT fit, so a canvas size where
+    // that loop actually engages breaks the clean "halving the canvas
+    // exactly halves kFit" arithmetic this test exists to pin (verified: at
+    // 900x700 -> 450x350 kFloor lands at ~14% of before.kFloor, not 50%).
+    // 2026-09-13 Almagest bake: the shipped font's average glyph advance
+    // narrowed from ~0.83em to ~0.6129em (SC_NAME_CHAR_WIDTH ~24.78 ->
+    // ~18.39 at the 30px reference size), so the original 3600x2800 no
+    // longer produces ANY overflow even after halving -- narrower names
+    // pack into less footprint width for the same anchor spacing. Scaled
+    // down by that same ~0.742 advance-width ratio (3600*0.742 ~= 2670,
+    // 2800*0.742 ~= 2076) to restore equivalent crowding: this size keeps
+    // every plate's kExile below kFit at BOTH this size and its half
+    // (1335x1038) -- the loop is a no-op at both, so the linear-scaling
+    // arithmetic holds exactly, and halving alone (unrelated to the new
+    // loop) still pushes plates into overflow, preserving this test's
+    // original intent. The fit-inclusion loop itself is exercised by the
+    // dedicated tests below.
+    sizeContainer(container, 2670, 2076);
     document.body.appendChild(container);
     render(container, crowdedPayload("rsz", 4, 6), { icons: iconsFor("rsz") });
     flushSettleChunks();
@@ -289,7 +309,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // the same factor -- without moving a single node (remeasureScLayout is
     // node-immutable; contrast with applyScLayoutSeparation's own movement
     // phase, which never runs here).
-    const half = (window as W).__d3ScLayoutRemeasure!(1800, 1400)!;
+    const half = (window as W).__d3ScLayoutRemeasure!(1335, 1038)!;
     expect(half).toBeTruthy();
     expect(half.kFloor).toBeCloseTo(before.kFloor * 0.5, 9);
     // Review Minor 3(d): kFit itself (not just kFloor) halves exactly.
@@ -306,7 +326,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // screen area while footprints (sized off a fixed ratio, not kFloor)
     // stay the same screen size -- overlap can only get worse, so the
     // settle-time overflow set persists or grows (at this size it grows
-    // from empty at "before" to one plate at "half").
+    // from empty at "before" to two plates at "half").
     const halfOverflow = Object.keys(half.plates).filter((k) => half.plates[k].overflow);
     expect(halfOverflow.length).toBeGreaterThan(0);
     for (const kw of halfOverflow) {
@@ -315,7 +335,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
 
     // Idempotence: remeasuring back at the ORIGINAL canvas size reproduces
     // the settle-time record exactly (deterministic given unmoved nodes).
-    const restored = (window as W).__d3ScLayoutRemeasure!(3600, 2800)!;
+    const restored = (window as W).__d3ScLayoutRemeasure!(2670, 2076)!;
     expect(restored.kFloor).toBeCloseTo(before.kFloor, 9);
     const beforeOverflow = Object.keys(before.plates).filter((k) => before.plates[k].overflow).sort();
     const restoredOverflow = Object.keys(restored.plates).filter((k) => restored.plates[k].overflow).sort();
@@ -623,17 +643,30 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
     const container = document.createElement("div");
-    // 800x620, 2 SCs (crowdedPayload("cvg", 2, 4)): zero budget forces the
-    // lower-priority SC (cvg-sc1 -- same page count as cvg-sc0, so priority
-    // ties break by key, sc0 < sc1) into overflow with a floor-level
-    // kExile (~1.15) comfortably ABOVE kFit (~0.45) at this canvas size --
-    // i.e. genuinely exiled AT FIT (100% zoom), the exact pre-fix bug: with
-    // the old single-pass computeFitBBox, fitToContent had no idea this
-    // plate would be drawn off in the periphery and framed only the
-    // content, cropping it at 100% (and therefore at the 0.5x floor too).
+    // 800x620, 2 SCs (crowdedPayload("cvg", 2, 4, ...)): zero budget forces
+    // the lower-priority SC (cvg-sc1 -- same page count as cvg-sc0, so
+    // priority ties break by key, sc0 < sc1) into overflow with a
+    // floor-level kExile comfortably ABOVE kFit at this canvas size -- i.e.
+    // genuinely exiled AT FIT (100% zoom), the exact pre-fix bug: with the
+    // old single-pass computeFitBBox, fitToContent had no idea this plate
+    // would be drawn off in the periphery and framed only the content,
+    // cropping it at 100% (and therefore at the 0.5x floor too).
+    // 2026-09-13 Almagest bake: the shipped font's average glyph advance
+    // narrowed from ~0.83em to ~0.6129em (SC_NAME_CHAR_WIDTH ~24.78 ->
+    // ~18.39 at the 30px reference size), so the original default name
+    // suffix no longer produces a plate wide enough to stay overflow-and-
+    // exiled-above-kFit at this canvas size (kExile ~0.33 dropped BELOW
+    // kFit ~0.53 -- resolved well before 100%, not after). A longer name
+    // (metric-independent -- widens the plate directly rather than
+    // retuning the canvas around the new glyph metrics) restores it:
+    // kExile ~1.06, comfortably above kFit ~0.30, observed empirically.
     sizeContainer(container, 800, 620);
     document.body.appendChild(container);
-    render(container, crowdedPayload("cvg", 2, 4), { icons: iconsFor("cvg") });
+    render(
+      container,
+      crowdedPayload("cvg", 2, 4, "extraordinarily verbose supercluster keyword name here"),
+      { icons: iconsFor("cvg") },
+    );
     flushSettleChunks();
     const layout = (window as W).__d3ScLayout!()!;
     expect(layout.fitBBox).toBeTruthy();
@@ -696,7 +729,16 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const container = document.createElement("div");
     sizeContainer(container, 800, 620);
     document.body.appendChild(container);
-    render(container, crowdedPayload("ctr", 2, 4), { icons: iconsFor("ctr") });
+    // 2026-09-13 Almagest bake: same longer name as the "fit includes"
+    // test above, and for the same reason -- see its comment for the
+    // observed kExile/kFit numbers (this test needs the identical
+    // exiled-at-fit precondition, just checking symmetry instead of
+    // containment).
+    render(
+      container,
+      crowdedPayload("ctr", 2, 4, "extraordinarily verbose supercluster keyword name here"),
+      { icons: iconsFor("ctr") },
+    );
     flushSettleChunks();
     const layout = (window as W).__d3ScLayout!()!;
     const exiledAtFit = layout.report.filter((r) => r.overflow && r.kExile > layout.kFit);

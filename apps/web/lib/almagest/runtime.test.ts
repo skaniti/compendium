@@ -5,14 +5,20 @@ import { getGenerator } from "./generator";
 
 describe("almagest runtime", () => {
   it("faceForPx uses the tier breakpoints from the params", () => {
-    expect(faceForPx(60)).toBe("Display");
-    expect(faceForPx(52)).toBe("Display");
-    expect(faceForPx(51.99)).toBe("Mid");
-    expect(faceForPx(22)).toBe("Mid");
-    expect(faceForPx(21)).toBe("Text");
+    // Derived from shippedParams() rather than hardcoded literals -- the
+    // breakpoints move with every bake (2026-09-13: Display.min 52,
+    // Mid.min 10), so this stays meaningful for any valid tier tables.
     const p = shippedParams();
-    p.tiers.Display.min = 90;
-    expect(faceForPx(60, p)).toBe("Mid");
+    const d = p.tiers.Display.min, m = p.tiers.Mid.min;
+    expect(faceForPx(d)).toBe("Display");
+    if (d - 0.5 >= m) expect(faceForPx(d - 0.5)).toBe("Mid");
+    expect(faceForPx(m)).toBe("Mid");
+    if (m >= 1) expect(faceForPx(m - 0.5)).toBe("Text");
+    // Explicit-params override: a Display breakpoint raised above the
+    // tested pixel size routes to Mid instead of the shipped params' answer.
+    const override = shippedParams();
+    override.tiers.Display.min = 90;
+    expect(faceForPx(60, override)).toBe("Mid");
   });
   it("tierParamsFor equals the generator's own tier() merge for shipped params", () => {
     const g = getGenerator();
@@ -42,10 +48,22 @@ describe("almagest runtime", () => {
   it("lowercase input maps to the same caps glyphs", () => {
     expect(layoutLine("abc", "Mid").advance).toBe(layoutLine("ABC", "Mid").advance);
   });
-  it("averageAdvanceEm for shipped params is in the 0.80..0.86 band the footprint estimator assumes", () => {
+  it("averageAdvanceEm is finite, in a sane range, and matches an independent recomputation of its own definition", () => {
+    // The old 0.80..0.86 band pinned the hand-typed estimator assumption
+    // that shipped BEFORE the vendor derived SC_NAME_CHAR_WIDTH from this
+    // function -- there is no longer a fixed target band to pin (2026-09-13
+    // bake: 0.6129em). Replaced with (a) a broad sanity range and (b) parity
+    // against the same computation performed inline against the generator,
+    // so a regression in the definition itself would still be caught.
     const em = averageAdvanceEm();
-    expect(em).toBeGreaterThan(0.8);
-    expect(em).toBeLessThan(0.86);
+    expect(Number.isFinite(em)).toBe(true);
+    expect(em).toBeGreaterThan(0.3);
+    expect(em).toBeLessThan(1.5);
+    const g = getGenerator();
+    const t = g.tier("Mid");
+    let sum = 0;
+    for (let c = 65; c <= 90; c++) sum += g.outline(String.fromCharCode(c), t).advance;
+    expect(em).toBe(sum / 26 / g.UPEM);
   });
   it("cache is keyed on params: changing stroke changes path data", () => {
     clearGlyphCache();
