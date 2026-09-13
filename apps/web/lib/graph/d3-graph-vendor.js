@@ -4582,6 +4582,22 @@ var __vendorExpandedGroups;
 
     function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
         if (!nodes.length || !svg) return;
+        // 2026-09-13 swoop fix: a fit is never a wheel gesture (settle,
+        // resize, or an explicit refit -- the only three call sites below)
+        // so the very next watermark draw should always SNAP, never glide.
+        // Without this, finishRenderAfterSettle's chunk 2 (drawWatermarks,
+        // via applyScLayoutSeparation's own settle-time draw) paints exile
+        // placements computed at whatever currentZoomK was left over from
+        // BEFORE this cycle's fit (module-init default 1 on a fresh mount,
+        // or the prior render's zoom level otherwise) -- wrong relative to
+        // the fit this call is about to establish. Chunk 3 (here) then
+        // applies the correct transform, whose synchronous 'zoom' event
+        // redraws watermarks at the right currentZoomK, but the delta-#29
+        // glide (still holding chunk 2's now-stale offset) eases toward it
+        // instead of snapping, so exiled plates visibly swoop as the settle
+        // veil lifts (and a test reading the DOM immediately after settle,
+        // with no timer advance, observes the wrong, pre-swoop position).
+        wmGlideReset();
         // 2026-09-13 fit-includes-exiles fix: once a settle/resize has run
         // remeasureScLayout for THIS canvas size (settle path: handleSimEnd
         // -> applyScLayoutSeparation; resize path: the ResizeObserver calls
@@ -5199,6 +5215,13 @@ var __vendorExpandedGroups;
         var maxIterations = scKeys.length + 4;
         var fitBBox = contentBBox;
         var exiledAtFit = measureAtBBox(fitBBox);
+        // Review guard: measureAtBBox returns [] (not a signal) when
+        // kFit <= 0, so without this check a degenerate canvas/bbox would
+        // fall straight into the "no exile" branch below and overwrite
+        // __scLayout with a zeroed-out record. Bail out here instead,
+        // matching the pre-fix behavior of leaving any previously-valid
+        // __scLayout untouched.
+        if (!(kFit > 0)) return;
         for (var it = 0; it < maxIterations; it++) {
             var isLast = (it === maxIterations - 1);
 
