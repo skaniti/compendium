@@ -5,6 +5,28 @@
  * Passive runs by default; when user starts a journey, passive is
  * finalized and pages go exclusively to the active tracker until
  * the journey ends, preventing duplicate captures.
+ *
+ * Passive tracking can also be switched off entirely from the popup, via the
+ * `passiveEnabled` storage flag (absent/true = on). `passiveEnabled` is kept
+ * current here through chrome.storage.onChanged. While off: dispatchPageVisit
+ * and dispatchEvent skip the passive tracker whenever no journey is active
+ * (a journey/Active-tab recording is unaffected either way), and the
+ * passive_capture_timeout alarm branch is a no-op. Flipping the flag from on
+ * to off finalizes (exports) whatever the current passive capture already
+ * holds, rather than silently dropping it, and clears the timeout alarm.
+ *
+ * Init ordering: `initialize()` runs at module load and its promise is kept
+ * as `ready`, below. All Chrome listeners are registered synchronously at
+ * module top level (required so a woken MV3 service worker doesn't miss the
+ * event that woke it), but every callback that dispatches into passive/
+ * active tracker state -- storage.onChanged, the webNavigation/tabs/windows/
+ * bookmarks listeners, the alarm handler, and the message handler's
+ * forceFinalize/startCapture/stopCapture branches -- awaits `ready` before
+ * touching that state. Without this, an event firing while the worker is
+ * still cold runs against each tracker's pre-restore in-memory defaults
+ * (not what `restoreState()` loads from chrome.storage.local), and a
+ * finalize/persist in that window overwrites the real stored capture with
+ * an empty one.
  */
 
 import { CONFIG } from './modules/config.js';
@@ -19,6 +41,10 @@ import { flushPendingExports, retrySingleExport } from './modules/export.js';
 // =============================================================================
 
 const _pendingTransitions = new Map();
+
+// Whether passive tracking is currently on (absent in storage = on). Kept
+// current via chrome.storage.onChanged, below.
+let passiveEnabled = true;
 
 // =============================================================================
 // Dual-dispatch helpers
@@ -39,6 +65,9 @@ function dispatchPageVisit(url, title, transitionType, transitionQualifiers, tab
     );
     return;
   }
+
+  // No active journey — passive tracking may be switched off
+  if (!passiveEnabled) return;
 
   // No active journey — record to passive tracker
   passive.ensureCapture();
@@ -65,11 +94,33 @@ function dispatchEvent(type, details = {}) {
     return;
   }
 
+  // No active journey — passive tracking may be switched off
+  if (!passiveEnabled) return;
+
   recordEvent(
     passive.getState(), type, details,
     'Passive', () => passive.updateLastActivity()
   );
 }
+
+/**
+ * Keep `passiveEnabled` current with storage, and finalize (rather than
+ * drop) whatever the passive capture already holds the moment the user
+ * switches passive tracking off.
+ */
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName !== 'local' || !changes.passiveEnabled) return;
+
+  await ready;
+
+  const wasEnabled = passiveEnabled;
+  passiveEnabled = changes.passiveEnabled.newValue !== false;
+
+  if (wasEnabled && !passiveEnabled) {
+    passive.finalizeCapture();
+    chrome.alarms.clear(CONFIG.ALARM_NAME);
+  }
+});
 
 // =============================================================================
 // Chrome Event Listeners
@@ -112,6 +163,8 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
     // Tab may have closed
   }
 
+  await ready;
+
   dispatchPageVisit(
     url, title,
     transition.transitionType || null,
@@ -124,6 +177,8 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
  * Handle tab activation (switching between tabs).
  */
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  await ready;
+
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     if (tab.url && !isInternalUrl(tab.url)) {
@@ -137,7 +192,9 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 /**
  * Handle tab close — finalize dwell time and record event.
  */
-chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+  await ready;
+
   recordCurrentPage(passive.getState());
   if (active.isTracking()) recordCurrentPage(active.getState());
 
@@ -147,7 +204,9 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 /**
  * Handle new tab creation.
  */
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener(async (tab) => {
+  await ready;
+
   dispatchEvent('tab_created', {
     tabId: tab.id,
     openerTabId: tab.openerTabId || null,
@@ -158,7 +217,9 @@ chrome.tabs.onCreated.addListener((tab) => {
 /**
  * Handle window focus changes.
  */
-chrome.windows.onFocusChanged.addListener((windowId) => {
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  await ready;
+
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
     dispatchEvent('window_blur', {});
   } else {
@@ -186,6 +247,8 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
   } catch {
     // Tab may have closed
   }
+
+  await ready;
 
   dispatchPageVisit(
     url, title,
@@ -216,6 +279,8 @@ chrome.webNavigation.onReferenceFragmentUpdated.addListener(async (details) => {
     // Tab may have closed
   }
 
+  await ready;
+
   dispatchEvent('fragment_navigation', {
     tabId: details.tabId,
     url,
@@ -228,7 +293,9 @@ chrome.webNavigation.onReferenceFragmentUpdated.addListener(async (details) => {
 /**
  * Handle bookmarking.
  */
-chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
+  await ready;
+
   dispatchEvent('bookmark_created', {
     url: bookmark.url || null,
     title: bookmark.title || null,
@@ -240,8 +307,12 @@ chrome.bookmarks.onCreated.addListener((id, bookmark) => {
 // pending-export flush (spec D7)
 // =============================================================================
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  await ready;
+
   if (alarm.name === CONFIG.ALARM_NAME) {
+    if (!passiveEnabled) return;
+
     const ps = passive.getState();
     const trivial = ps.pages.length < CONFIG.TRIVIAL_THRESHOLD;
     const aged = ps.startTime && (Date.now() - ps.startTime) >= CONFIG.MAX_CAPTURE_AGE_MS;
@@ -266,36 +337,59 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ── Status (popup) ──────────────────────────────────────────────────────
   if (message.action === 'getStatus') {
-    chrome.storage.local.get(['completedCaptures', 'pendingExports'], (data) => {
-      const ps = passive.getState();
-      sendResponse({
-        // Passive
-        passiveCaptureId: ps.captureId,
-        passivePageCount: ps.pages.length,
-        passiveStartTime: ps.startTime,
-        passiveExtractedCount: ps.pages.filter(p => p.extractedText).length,
-        completedCount: (data.completedCaptures || []).length,
-        pendingExports: (data.pendingExports || []).length,
-        // Active
-        isTracking: active.isTracking(),
-        activePageCount: active.getState().pages.length,
-        activeStartTime: active.getState().startTime
+    // Deferred until `ready` resolves -- reading tracker state before then
+    // would see each tracker's pre-restore in-memory defaults, not what
+    // restoreState() loaded from chrome.storage.local (see header comment).
+    ready.then(() => {
+      chrome.storage.local.get(['completedCaptures', 'pendingExports'], (data) => {
+        const ps = passive.getState();
+        sendResponse({
+          // Passive
+          passiveCaptureId: ps.captureId,
+          passivePageCount: ps.pages.length,
+          passiveStartTime: ps.startTime,
+          passiveExtractedCount: ps.pages.filter(p => p.extractedText).length,
+          completedCount: (data.completedCaptures || []).length,
+          pendingExports: (data.pendingExports || []).length,
+          // Active
+          isTracking: active.isTracking(),
+          activePageCount: active.getState().pages.length,
+          activeStartTime: active.getState().startTime,
+          passiveEnabled
+        });
       });
     });
     return true;
   }
 
   // ── Journey controls ────────────────────────────────────────────────────
+  // Both branches defer their tracker work until `ready` resolves (init
+  // race, see header comment) while still returning `true` synchronously
+  // so the sendResponse channel stays open.
   if (message.action === 'startCapture') {
     // Finalize the current passive capture so pre-journey pages aren't lost,
     // then start the active journey (passive won't record during the journey).
-    passive.finalizeCapture();
-    active.startCapture().then(() => sendResponse({ success: true }));
+    ready
+      .then(() => {
+        passive.finalizeCapture();
+        return active.startCapture();
+      })
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => {
+        console.warn('[Compendium] startCapture failed:', err);
+        sendResponse({ success: false });
+      });
     return true;
   }
 
   if (message.action === 'stopCapture') {
-    active.stopCapture().then(() => sendResponse({ success: true }));
+    ready
+      .then(() => active.stopCapture())
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => {
+        console.warn('[Compendium] stopCapture failed:', err);
+        sendResponse({ success: false });
+      });
     return true;
   }
 
@@ -303,44 +397,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Always ends with a flush pass (spec D5/D6) so the popup can report
   // "Exported N, M buffered" -- reusing the active export's own pass when it
   // delivered (exportCapture already ran one), to avoid spending two passes'
-  // worth of request budget on a single Force Export click.
+  // worth of request budget on a single Force Export click. Deferred until
+  // `ready` resolves, same reasoning as startCapture/stopCapture above.
   if (message.action === 'forceFinalize') {
-    const result = passive.finalizeCapture();
-    if (!result.exportPromise) {
-      flushPendingExports()
-        .then(flush => sendResponse({ success: true, delivery: 'no_capture', flush }))
-        .catch((err) => {
-          console.warn('[Export] Force finalize failed:', err);
-          sendResponse({ success: false, delivery: 'failed', flush: null });
-        });
-    } else {
-      result.exportPromise
-        .then(async ({ delivery, flush }) => {
-          const f = delivery === 'delivered' && flush ? flush : await flushPendingExports();
-          sendResponse({ success: true, delivery, flush: f });
-        })
-        .catch((err) => {
-          console.warn('[Export] Force finalize failed:', err);
-          sendResponse({ success: false, delivery: 'failed', flush: null });
-        });
-    }
+    ready.then(() => {
+      const result = passive.finalizeCapture();
+      if (!result.exportPromise) {
+        flushPendingExports()
+          .then(flush => sendResponse({ success: true, delivery: 'no_capture', flush }))
+          .catch((err) => {
+            console.warn('[Export] Force finalize failed:', err);
+            sendResponse({ success: false, delivery: 'failed', flush: null });
+          });
+      } else {
+        result.exportPromise
+          .then(async ({ delivery, flush }) => {
+            const f = delivery === 'delivered' && flush ? flush : await flushPendingExports();
+            sendResponse({ success: true, delivery, flush: f });
+          })
+          .catch((err) => {
+            console.warn('[Export] Force finalize failed:', err);
+            sendResponse({ success: false, delivery: 'failed', flush: null });
+          });
+      }
+    });
     return true;
   }
 
   // ── Cache viewer ────────────────────────────────────────────────────────
   if (message.action === 'getCacheData') {
-    const ps = passive.getState();
-    sendResponse({
-      activeCapture: ps.captureId ? {
-        captureId: ps.captureId,
-        startTime: ps.startTime,
-        lastActivityTime: ps.lastActivityTime,
-        pages: ps.pages,
-        currentPage: ps.currentPage,
-        currentPageStartTime: ps.currentPageStartTime
-      } : null
+    // Deferred until `ready` resolves -- same reasoning as getStatus above.
+    ready.then(() => {
+      const ps = passive.getState();
+      sendResponse({
+        activeCapture: ps.captureId ? {
+          captureId: ps.captureId,
+          startTime: ps.startTime,
+          lastActivityTime: ps.lastActivityTime,
+          pages: ps.pages,
+          currentPage: ps.currentPage,
+          currentPageStartTime: ps.currentPageStartTime
+        } : null
+      });
     });
-    return;
+    return true;
   }
 
   if (message.action === 'retryPendingExport') {
@@ -372,12 +472,28 @@ async function initialize() {
     }
   });
 
+  const { passiveEnabled: storedPassiveEnabled } = await chrome.storage.local.get('passiveEnabled');
+  passiveEnabled = storedPassiveEnabled !== false;
+
   await Promise.all([
     passive.restoreState(),
     active.restoreState()
   ]);
+
+  // A capture can come back from restoreState() still open here when
+  // passive tracking was switched off while the service worker was idle --
+  // nothing will ever finalize it on its own with tracking off, so export
+  // it now instead of leaving it stranded.
+  if (!passiveEnabled && passive.getState().captureId) {
+    passive.finalizeCapture();
+  }
+
   flushPendingExports();
   console.log('[Compendium] Unified extension initialized');
 }
 
-initialize();
+// Kept so every listener above can await tracker-state readiness before
+// dispatching into passive/active state -- see header comment. Caught here
+// so a rejected initialize() still resolves `ready` (after logging) instead
+// of leaving every awaiting listener permanently hung.
+const ready = initialize().catch(err => console.error('[Compendium] init failed', err));

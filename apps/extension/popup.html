@@ -15,7 +15,7 @@
 
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <button class="tab tab-passive active" data-tab="passive" title="Always-on capture of your browsing, finalized after 60 minutes idle">
+      <button class="tab tab-passive active" data-tab="passive" title="Passive capture of your browsing, finalized after 60 minutes idle (switch below turns it off)">
         <span class="tab-dot dot-passive"></span>
         Passive
       </button>
@@ -31,6 +31,12 @@
           Always tracking
         </div>
 
+        <label class="switch-row" title="Turn passive tracking off if you only want to record journeys you start yourself">
+          <span>Passive tracking</span>
+          <input type="checkbox" id="passiveToggle" class="switch">
+          <span class="switch-track"></span>
+        </label>
+
         <div class="session-info">
           <div class="stat" title="Pages recorded in the capture still open">
             <span id="passivePageCount" class="stat-value">0</span>
@@ -42,7 +48,7 @@
           </div>
         </div>
 
-        <div id="captureId" class="session-id" title="Id of the capture still open; appears in the cache page">No active capture</div>
+        <div class="session-id" title="Id of the capture still open; appears in the cache page"><span id="captureIdPrefix">Current capture: </span><span class="mono" id="captureId">No active capture</span></div>
 
         <button id="forceExportBtn" class="btn btn-export" title="Finalize the open capture now and send everything buffered">
           Force export
@@ -56,9 +62,6 @@
 
         <div class="links">
           <a id="viewCacheLink" class="cache-link" href="#" title="Open the cache page: every capture kept on this device, with retry and download">View capture cache</a>
-          <div class="set-default-row">
-            <button id="setDefaultPassive" class="btn-set-default" title="Which tab the popup shows when it opens">Open this tab first</button>
-          </div>
         </div>
       </div>
 
@@ -87,10 +90,6 @@
           <button id="stopBtn" class="btn btn-active-stop" title="Finish this journey and save it">Stop capture</button>
           <div class="active-note">Passive tracking pauses while a journey records.</div>
         </div>
-
-        <div class="set-default-row">
-          <button id="setDefaultActive" class="btn-set-default" title="Which tab the popup shows when it opens">Open this tab first</button>
-        </div>
       </div>
     </main>
     <!-- Settings (collapsible) -->
@@ -102,20 +101,12 @@
           <input id="settingsBackendUrl" type="text" class="settings-input"
                  placeholder="http://localhost:8001">
         </label>
-        <label for="settingsApiKey" class="settings-label" title="Identifies this browser to the backend">API key</label>
-        <div class="settings-readout-row">
-          <span id="apiKeyMasked" class="settings-readout mono"></span>
-          <button id="apiKeyChangeBtn" class="btn-text" type="button">Change key</button>
-        </div>
-        <div id="apiKeyEdit" class="hidden">
+        <label class="settings-label" for="settingsApiKey" title="Identifies this browser to the backend">
+          API key
           <input id="settingsApiKey" type="text" class="settings-input mono"
-                 placeholder="Paste the key (cmp_…)" autocomplete="off" spellcheck="false">
-          <div id="settingsError" class="settings-error hidden" role="alert"></div>
-          <div class="apikey-edit-actions">
-            <button id="apiKeyCancelBtn" class="btn-text" type="button">Cancel</button>
-            <button id="apiKeyRemoveBtn" class="btn-text btn-text-danger hidden" type="button">Remove key</button>
-          </div>
-        </div>
+                 placeholder="cmp_…" autocomplete="off" spellcheck="false">
+        </label>
+        <div id="settingsError" class="settings-error hidden" role="alert"></div>
         <label class="settings-label" title="Name stored with each capture so you can tell devices apart">
           Device label
           <input id="settingsDeviceLabel" type="text" class="settings-input"

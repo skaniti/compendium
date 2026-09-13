@@ -8,6 +8,9 @@
  * innerHTML insertion. Data source is user's own chrome.storage.local.
  */
 
+import { formatRange } from './modules/format.js';
+import { readCacheIndex, readCacheEntry, readAllCacheEntries } from './modules/export.js';
+
 // =============================================================================
 // DOM refs
 // =============================================================================
@@ -46,12 +49,14 @@ async function loadAllData() {
     // Service worker may not be running
   }
 
-  // Read persisted data directly from storage
-  const stored = await chrome.storage.local.get(['pendingExports', 'exportCache']);
+  // pendingExports still lives directly in storage.local; the finalized
+  // history is the lightweight cacheIndex -- readCacheIndex() migrates the
+  // legacy exportCache array lazily if this is the first read since upgrade.
+  const stored = await chrome.storage.local.get('pendingExports');
   const pendingExports = stored.pendingExports || [];
-  const exportCache = stored.exportCache || [];
+  const index = await readCacheIndex();
 
-  return { activeCapture, pendingExports, exportCache };
+  return { activeCapture, pendingExports, index };
 }
 
 // =============================================================================
@@ -123,27 +128,58 @@ const BADGE_TITLES = {
   failed: 'Not delivered yet; retries every minute while the backend is reachable'
 };
 
-function renderCaptureCard(captureData, source, extra = {}) {
+/**
+ * Renders the <details class="session-card"> shell shared by the active
+ * capture card and every History card.
+ *
+ * `info` is a plain bag -- { captureId, kind, startedAt, endedAt, pageCount }
+ * -- NOT the full captureData; History cards are built from cacheIndex
+ * summaries and never carry pages/events. `bodyHtml` is the already-known
+ * page table (active capture: rendered synchronously from the live session)
+ * or `null` for a History card, whose body is loaded lazily on first open
+ * (see loadHistoryBody) -- in that case a "Loading…" placeholder renders now
+ * and `data-body-state="empty"` marks it for the accordion listener to fill.
+ */
+function renderCaptureCard(info, source, extra = {}, bodyHtml = null) {
   const badgeClass = { active: 'badge-live', failed: 'badge-failed', delivered: 'badge-delivered' }[source];
   const badgeLabel = { active: 'LIVE', failed: 'FAILED', delivered: 'DELIVERED' }[source];
   const badgeTitle = BADGE_TITLES[source];
   const cardClass = `source-${source}`;
 
-  const pages = captureData.pages || [];
-  const captureId = captureData.captureId || 'unknown';
-  const pageCount = pages.length;
+  const captureId = info.captureId || 'unknown';
+  const pageCount = info.pageCount || 0;
+  const lazy = bodyHtml === null;
 
-  // Time label dispatch:
+  // Second summary line: "<range> · <cache-time>". Range comes from the
+  // ISO startedAt/endedAt (finalized captures); the still-live capture only
+  // has startTime (epoch ms, resolved by the caller) and no end yet, which
+  // formatRange renders with a trailing "…". Cache-time label dispatch:
   //   DELIVERED + deliveredAt -> "delivered Xm ago" (preferred when known)
   //   FAILED  + cachedAt      -> "cached Xm ago"   (no delivery time exists)
-  //   active                  -> no time label
-  //   delivered w/o deliveredAt (pre-feature legacy) -> no time label
-  let metaExtra = '';
+  //   active                  -> no cache-time label
+  //   delivered w/o deliveredAt (pre-feature legacy) -> no cache-time label
+  const rangeText = formatRange(info.startedAt, info.endedAt);
+
+  let cacheTimeText = '';
   if (source === 'delivered' && extra.deliveredAt) {
-    metaExtra = `<span class="cache-time">delivered ${escapeHtml(timeAgo(extra.deliveredAt))}</span>`;
+    cacheTimeText = `delivered ${timeAgo(extra.deliveredAt)}`;
   } else if (source === 'failed' && extra.cachedAt) {
-    metaExtra = `<span class="cache-time">cached ${escapeHtml(timeAgo(extra.cachedAt))}</span>`;
+    cacheTimeText = `cached ${timeAgo(extra.cachedAt)}`;
   }
+
+  let metaExtra = '';
+  if (rangeText && cacheTimeText) {
+    metaExtra = `<span class="cache-time">${escapeHtml(rangeText)} · ${escapeHtml(cacheTimeText)}</span>`;
+  } else if (rangeText || cacheTimeText) {
+    metaExtra = `<span class="cache-time">${escapeHtml(rangeText || cacheTimeText)}</span>`;
+  }
+
+  // "journey" tag distinguishes an active/journey capture from the far more
+  // common passive one; kept out of the delivery badge (LIVE/FAILED/
+  // DELIVERED already uses that slot for delivery state).
+  const kindTag = info.kind === 'active'
+    ? '<span class="kind-tag" title="Recorded as an active journey">journey</span>'
+    : '';
 
   let actions = '';
   if (source === 'failed') {
@@ -153,18 +189,21 @@ function renderCaptureCard(captureData, source, extra = {}) {
     actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}" title="Save this capture's raw JSON to disk">Download JSON</button>`;
   }
 
-  return `<details class="session-card ${cardClass}">
+  const body = lazy ? '<p class="empty-state">Loading…</p>' : bodyHtml;
+  const bodyStateAttr = lazy ? ' data-body-state="empty"' : '';
+
+  return `<details class="session-card ${cardClass}" data-capture-id="${escapeAttr(captureId)}"${bodyStateAttr}>
     <summary>
       <span class="badge ${badgeClass}" title="${badgeTitle}">${badgeLabel}</span>
       <span class="card-id">
-        <span class="session-name">${escapeHtml(captureId)}</span>
+        <span class="session-name">${kindTag}${escapeHtml(captureId)}</span>
         ${metaExtra}
       </span>
       <span class="card-count">${pageCount} page${pageCount !== 1 ? 's' : ''}</span>
       <span class="card-actions">${actions}</span>
     </summary>
     <div class="card-body">
-      ${renderPageTable(pages)}
+      ${body}
     </div>
   </details>`;
 }
@@ -185,38 +224,100 @@ function renderActiveCapture(session) {
     });
   }
 
-  const display = { ...session, pages };
-  activeContainer.innerHTML = renderCaptureCard(display, 'active');
+  const info = {
+    captureId: session.captureId || 'unknown',
+    kind: session.kind,
+    startedAt: session.startedAt ?? session.startTime,
+    endedAt: session.endedAt,
+    pageCount: pages.length
+  };
+  activeContainer.innerHTML = renderCaptureCard(info, 'active', {}, renderPageTable(pages));
 }
 
-function renderHistory(entries, pendingSet) {
-  if (!entries || entries.length === 0) {
+const MONTH_NAMES_FULL = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Sort/group key for a history summary: startedAt (ISO) when present,
+// falling back to cachedAt (epoch ms) -- mirrors the fallback used for the
+// rendered date range itself. Guards against either being unparseable: an
+// invalid startedAt falls back to cachedAt, and if that's invalid too this
+// returns an invalid Date -- callers (renderHistory) sort those last and
+// skip the month heading for them, since there's no date to group by.
+function entryDate(summary) {
+  const d = new Date(summary.startedAt);
+  if (!isNaN(d)) return d;
+  return new Date(summary.cachedAt);
+}
+
+function hasValidDate(summary) {
+  return !isNaN(entryDate(summary));
+}
+
+function monthHeading(summary) {
+  const d = entryDate(summary);
+  return `${MONTH_NAMES_FULL[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function renderSummaryCard(summary, pendingSet) {
+  const source = pendingSet.has(summary.captureId) ? 'failed' : 'delivered';
+  return renderCaptureCard(
+    {
+      captureId: summary.captureId,
+      kind: summary.kind,
+      startedAt: summary.startedAt,
+      endedAt: summary.endedAt,
+      pageCount: summary.pageCount
+    },
+    source,
+    { cachedAt: summary.cachedAt, deliveredAt: summary.deliveredAt }
+  );
+}
+
+function renderHistory(index, pendingSet) {
+  if (!index || index.length === 0) {
     historyContainer.innerHTML = '<p class="empty-state-title">Nothing finalized yet.</p><p class="empty-state-hint">The live capture closes after 60 minutes without browsing, or when you use Force export in the popup. It appears here as delivered once the server confirms it, or as failed with a retry if it could not be sent.</p>';
     return;
   }
-  historyContainer.innerHTML = entries
-    .map(e => {
-      const captureData = e.captureData || e.sessionData;
-      const source = pendingSet.has(captureData.captureId) ? 'failed' : 'delivered';
-      return renderCaptureCard(captureData, source, {
-        cachedAt: e.cachedAt,
-        deliveredAt: e.deliveredAt,
-      });
-    })
-    .join('');
+
+  // cacheIndex is stored oldest-first (writeExportCache pushes new summaries
+  // onto the end) -- render newest-first, with a month heading inserted
+  // before the first card of each calendar month. Each card's body is a
+  // lazy placeholder until opened (see setupAccordion's lazy loader).
+  // Entries with no resolvable date (startedAt and cachedAt both
+  // unparseable) are sorted last and rendered with no month heading.
+  const dated = index.filter(hasValidDate);
+  const undated = index.filter(s => !hasValidDate(s));
+  const newestFirst = [...dated].sort((a, b) => entryDate(b) - entryDate(a));
+
+  let html = '';
+  let lastHeading = null;
+  for (const summary of newestFirst) {
+    const heading = monthHeading(summary);
+    if (heading !== lastHeading) {
+      html += `<h3 class="month-heading">${escapeHtml(heading)}</h3>`;
+      lastHeading = heading;
+    }
+    html += renderSummaryCard(summary, pendingSet);
+  }
+  for (const summary of undated) {
+    html += renderSummaryCard(summary, pendingSet);
+  }
+  historyContainer.innerHTML = html;
 }
 
 function updateSummary(data, pendingSet) {
   const counts = [];
   if (data.activeCapture) counts.push('1 active');
 
-  const cachedIds = data.exportCache.map(e => (e.captureData || e.sessionData).captureId);
+  const cachedIds = data.index.map(s => s.captureId);
   const failed = cachedIds.filter(id => pendingSet.has(id)).length;
   const delivered = cachedIds.length - failed;
   if (failed > 0) counts.push(`${failed} failed`);
   if (delivered > 0) counts.push(`${delivered} delivered`);
 
-  const total = (data.activeCapture ? 1 : 0) + data.exportCache.length;
+  const total = (data.activeCapture ? 1 : 0) + data.index.length;
   summaryEl.textContent = total === 0
     ? 'No captures in history'
     : `${total} capture${total !== 1 ? 's' : ''}: ${counts.join(', ')}`;
@@ -232,7 +333,7 @@ async function refresh() {
     const data = await loadAllData();
     const pendingSet = new Set(data.pendingExports.map(p => p.captureId));
     renderActiveCapture(data.activeCapture);
-    renderHistory(data.exportCache, pendingSet);
+    renderHistory(data.index, pendingSet);
     updateSummary(data, pendingSet);
 
     // Store for download
@@ -297,7 +398,7 @@ async function retryExport(captureId, btn) {
   }
 }
 
-function collectAllCaptures(data) {
+async function collectAllCaptures(data) {
   const files = [];
 
   if (data.activeCapture) {
@@ -314,10 +415,15 @@ function collectAllCaptures(data) {
     });
   }
 
-  for (const e of data.exportCache) {
+  // Bulk-reads every finalized capture's full entry in one pass -- the only
+  // point in the cache viewer where all of history's page text is loaded at
+  // once, which is exactly what "Download all" needs.
+  const entries = await readAllCacheEntries();
+  for (const entry of entries) {
+    const captureId = entry.captureData.captureId || entry.captureData.sessionId || 'unknown';
     files.push({
-      name: `cached_${(e.captureData || e.sessionData).captureId || (e.captureData || e.sessionData).sessionId || 'unknown'}.json`,
-      data: e.captureData || e.sessionData
+      name: `cached_${captureId}.json`,
+      data: entry.captureData
     });
   }
 
@@ -332,7 +438,7 @@ async function downloadAllAsZip() {
   downloadAllBtn.textContent = 'Building ZIP...';
 
   try {
-    const files = collectAllCaptures(data);
+    const files = await collectAllCaptures(data);
     if (files.length === 0) return;
 
     const zip = new MiniZip();
@@ -367,25 +473,105 @@ document.addEventListener('click', (e) => {
 
   const downloadBtn = e.target.closest('.download-btn');
   if (downloadBtn) {
-    const { captureId } = downloadBtn.dataset;
-    const data = refresh._lastData;
-    if (!data) return;
-
-    // History is rendered from exportCache regardless of delivery state.
-    // The filename keeps the `cached_` prefix to stay compatible with the
-    // backfill script's filename-based classifier (see
-    // scripts/backfill_extension_zip.py::classify).
-    const entry = data.exportCache.find(e => (e.captureData || e.sessionData).captureId === captureId);
-    const captureData = entry?.captureData || entry?.sessionData;
-
-    if (captureData) {
-      downloadJson(captureData, `cached_${captureId}.json`);
-    }
+    downloadSingleCapture(downloadBtn.dataset.captureId, downloadBtn);
   }
 });
 
+// History cards no longer carry the full captureData in the rendered page --
+// only the lightweight summary. Download reads the one entry it needs
+// on-click rather than the caller having to load it up front. The filename
+// keeps the `cached_` prefix to stay compatible with the backfill script's
+// filename-based classifier (see scripts/backfill_extension_zip.py::classify).
+async function downloadSingleCapture(captureId, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing...';
+
+  let entry;
+  try {
+    entry = await readCacheEntry(captureId);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = original;
+    throw err;
+  }
+
+  if (!entry) {
+    // Evicted (TTL/cap) since the list was rendered -- flash "Not cached"
+    // for a couple seconds instead of silently restoring the button, so the
+    // click has visible feedback beyond the console warning.
+    console.warn(`[Cache] Download failed: ${captureId} is no longer cached`);
+    btn.textContent = 'Not cached';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = original;
+    }, 2000);
+    return;
+  }
+
+  downloadJson(entry.captureData, `cached_${captureId}.json`);
+  btn.disabled = false;
+  btn.textContent = original;
+}
+
 refreshBtn.addEventListener('click', refresh);
 downloadAllBtn.addEventListener('click', downloadAllAsZip);
+
+// =============================================================================
+// Accordion -- only one capture card expanded at a time (per container)
+// =============================================================================
+
+// <details class="session-card"> `toggle` events don't bubble in every
+// engine version, so this listens in the CAPTURE phase, which fires
+// regardless of bubbling. Native keyboard behaviour (Enter/Space toggling
+// the focused <summary>) is untouched -- this only reacts after a card
+// opens, closing any other open card in the same container.
+//
+// `lazy: true` (historyContainer only) additionally fills in a card's body
+// the first time it's opened: History cards render with a "Loading…"
+// placeholder and `data-body-state="empty"` (see renderCaptureCard) since
+// the summary they're built from never carries page text.
+function setupAccordion(container, { lazy = false } = {}) {
+  container.addEventListener('toggle', (e) => {
+    const opened = e.target;
+    if (!(opened instanceof HTMLDetailsElement)) return;
+    if (!opened.classList.contains('session-card') || !opened.open) return;
+
+    for (const other of container.querySelectorAll('details.session-card[open]')) {
+      if (other !== opened) other.open = false;
+    }
+
+    if (lazy && opened.dataset.bodyState === 'empty') {
+      loadHistoryBody(opened);
+    }
+  }, true);
+}
+
+// Fetches one capture's full entry and swaps it into the already-open
+// card's body. `data-body-state` guards against re-fetching on every open
+// (close/reopen keeps the loaded body) and against a double-fire loading
+// the same card twice.
+async function loadHistoryBody(cardEl) {
+  cardEl.dataset.bodyState = 'loading';
+  const captureId = cardEl.dataset.captureId;
+  const bodyEl = cardEl.querySelector('.card-body');
+
+  try {
+    const entry = await readCacheEntry(captureId);
+    if (!entry) {
+      bodyEl.innerHTML = '<p class="empty-state">No longer cached</p>';
+    } else {
+      bodyEl.innerHTML = renderPageTable(entry.captureData.pages);
+    }
+    cardEl.dataset.bodyState = 'loaded';
+  } catch (err) {
+    bodyEl.innerHTML = `<p class="empty-state">Failed to load: ${escapeHtml(err.message)}</p>`;
+    cardEl.dataset.bodyState = 'empty';
+  }
+}
+
+setupAccordion(historyContainer, { lazy: true });
+setupAccordion(activeContainer);
 
 
 // =============================================================================

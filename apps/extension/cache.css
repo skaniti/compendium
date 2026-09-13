@@ -223,6 +223,19 @@ p.empty-state {
   margin-top: 6px;
 }
 
+/* Month grouping heading, inserted before the first card of each calendar
+   month in the (newest-first) History list. */
+.month-heading {
+  font-size: 12px;
+  color: var(--c-muted);
+  letter-spacing: 0.02em;
+  margin: 18px 0 6px;
+}
+
+.month-heading:first-child {
+  margin-top: 0;
+}
+
 /* =============================================================================
    Session cards (Active capture card + History rows)
    Both are rendered as a native <details class="session-card ..."> by
@@ -311,6 +324,22 @@ p.empty-state {
   white-space: nowrap;
 }
 
+/* "journey" tag on the rare active/journey capture -- passive is the
+   unlabeled default, so this only ever appears for kind === 'active'. */
+.kind-tag {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border-strong);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 6px;
+}
+
 .card-count {
   font-size: 12px;
   color: var(--c-muted);
@@ -393,6 +422,18 @@ p.empty-state {
   color: var(--c-text-soft);
   border-bottom: 1px solid var(--c-border);
   overflow-wrap: anywhere;
+}
+
+/* "#" column -- fixed narrow width, right-aligned, never wraps (two-digit
+   page numbers were wrapping under the shared overflow-wrap:anywhere rule
+   above). Wrapping stays on the Title column only. */
+.page-table td:first-child {
+  width: 2.5em;
+  min-width: 2.5em;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-align: right;
+  color: var(--c-faint);
 }
 
 .page-table a {

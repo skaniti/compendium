@@ -12,8 +12,30 @@ const {
   exportPassiveCapture,
   exportActiveCapture,
   ensureFlushAlarm,
-  clearFlushAlarm
+  clearFlushAlarm,
+  writeExportCache,
+  markDelivered,
+  ensureCacheV2,
+  readCacheIndex,
+  readCacheEntry,
+  readAllCacheEntries
 } = await import('../modules/export.js');
+
+function capture(id, overrides = {}) {
+  return {
+    captureId: id,
+    startedAt: '2026-09-09T00:00:00.000Z',
+    endedAt: '2026-09-09T00:01:00.000Z',
+    pages: [{ url: 'https://example.test', title: 'Example' }],
+    events: [],
+    trivial: false,
+    ...overrides
+  };
+}
+
+function legacyCacheEntry(id, cachedAt, deliveredAt = null) {
+  return { captureData: capture(id), cachedAt, deliveredAt };
+}
 
 const EMPTY_FLUSH = { attempted: 0, delivered: 0, remaining: 0, stop: null, lastError: null };
 
@@ -34,6 +56,261 @@ test('ensureFlushAlarm / clearFlushAlarm: call through to chrome.alarms', () => 
 
   clearFlushAlarm();
   assert.deepEqual(shim.alarms.cleared, [CONFIG.FLUSH_ALARM_NAME]);
+});
+
+// ── Cache v2 (storage split) ─────────────────────────────────────────────────
+
+test('writeExportCache: creates a full entry + a matching index summary', async () => {
+  shim.reset();
+  const captureData = capture('w1');
+
+  await writeExportCache(captureData);
+
+  const entry = shim.storage.get('cache:w1');
+  assert.deepEqual(entry.captureData, captureData);
+  assert.equal(entry.deliveredAt, null);
+  assert.equal(typeof entry.cachedAt, 'number');
+
+  const index = shim.storage.get('cacheIndex');
+  assert.equal(index.length, 1);
+  assert.deepEqual(index[0], {
+    captureId: 'w1',
+    kind: 'passive',
+    cachedAt: entry.cachedAt,
+    deliveredAt: null,
+    startedAt: captureData.startedAt,
+    endedAt: captureData.endedAt,
+    pageCount: 1,
+    trivial: false
+  });
+});
+
+test('writeExportCache: index summary kind is "active" only when captureData.kind is "active"', async () => {
+  shim.reset();
+  await writeExportCache({ ...capture('w2'), kind: 'active' });
+
+  const [summary] = shim.storage.get('cacheIndex');
+  assert.equal(summary.kind, 'active');
+});
+
+test('writeExportCache: never rewrites entries that stay -- only appends + prunes', async () => {
+  shim.reset();
+  await writeExportCache(capture('w3'));
+  const firstEntry = shim.storage.get('cache:w3');
+
+  await writeExportCache(capture('w4'));
+
+  assert.equal(shim.storage.get('cache:w3'), firstEntry); // same object identity: untouched
+  assert.equal(shim.storage.get('cacheIndex').length, 2);
+});
+
+test('writeExportCache: TTL-expired entries are pruned -- entry key removed, summary dropped', async () => {
+  shim.reset();
+  const staleCachedAt = Date.now() - CONFIG.EXPORT_CACHE_TTL_MS - 1000;
+  const staleCapture = capture('stale1');
+  shim.storage.set('cache:stale1', { captureData: staleCapture, cachedAt: staleCachedAt, deliveredAt: null });
+  shim.storage.set('cacheIndex', [{
+    captureId: 'stale1',
+    kind: 'passive',
+    cachedAt: staleCachedAt,
+    deliveredAt: null,
+    startedAt: staleCapture.startedAt,
+    endedAt: staleCapture.endedAt,
+    pageCount: 1,
+    trivial: false
+  }]);
+
+  await writeExportCache(capture('fresh1'));
+
+  assert.equal(shim.storage.get('cache:stale1'), undefined);
+  assert.deepEqual(shim.storage.get('cacheIndex').map(s => s.captureId), ['fresh1']);
+});
+
+test('writeExportCache: caps at EXPORT_CACHE_MAX_ENTRIES, dropping the oldest beyond the cap', async () => {
+  shim.reset();
+  const now = Date.now();
+  const seedIndex = [];
+  for (let i = 0; i < CONFIG.EXPORT_CACHE_MAX_ENTRIES; i++) {
+    const id = `cap${i}`;
+    const c = capture(id);
+    const cachedAt = now - (CONFIG.EXPORT_CACHE_MAX_ENTRIES - i);
+    shim.storage.set(`cache:${id}`, { captureData: c, cachedAt, deliveredAt: null });
+    seedIndex.push({
+      captureId: id,
+      kind: 'passive',
+      cachedAt,
+      deliveredAt: null,
+      startedAt: c.startedAt,
+      endedAt: c.endedAt,
+      pageCount: 1,
+      trivial: false
+    });
+  }
+  shim.storage.set('cacheIndex', seedIndex);
+
+  await writeExportCache(capture('overflow'));
+
+  const index = shim.storage.get('cacheIndex');
+  assert.equal(index.length, CONFIG.EXPORT_CACHE_MAX_ENTRIES);
+  assert.equal(index[index.length - 1].captureId, 'overflow');
+  assert.equal(index[0].captureId, 'cap1'); // cap0 was the oldest -- dropped
+  assert.equal(shim.storage.get('cache:cap0'), undefined);
+  assert.ok(shim.storage.get('cache:cap1'));
+});
+
+test('markDelivered: sets deliveredAt on both the entry and its index summary', async () => {
+  shim.reset();
+  await writeExportCache(capture('m1'));
+
+  await markDelivered('m1');
+
+  const entry = shim.storage.get('cache:m1');
+  assert.equal(typeof entry.deliveredAt, 'number');
+
+  const [summary] = shim.storage.get('cacheIndex');
+  assert.equal(summary.deliveredAt, entry.deliveredAt);
+});
+
+test('markDelivered: idempotent -- a second call does not overwrite an existing deliveredAt', async () => {
+  shim.reset();
+  await writeExportCache(capture('m2'));
+  await markDelivered('m2');
+  const firstDeliveredAt = shim.storage.get('cache:m2').deliveredAt;
+
+  await markDelivered('m2');
+
+  assert.equal(shim.storage.get('cache:m2').deliveredAt, firstDeliveredAt);
+  assert.equal(shim.storage.get('cacheIndex')[0].deliveredAt, firstDeliveredAt);
+});
+
+test('markDelivered: no-op when the entry is missing (evicted or never cached)', async () => {
+  shim.reset();
+  await markDelivered('missing');
+  assert.equal(shim.storage.get('cache:missing'), undefined);
+  assert.equal(shim.storage.get('cacheIndex'), undefined);
+});
+
+// ── Serialization (writeExportCache / markDelivered race) ──────────────────
+
+test('writeExportCache + markDelivered interleaved without awaiting still land both changes', async () => {
+  shim.reset();
+  // Kicked off back-to-back with no `await` in between -- without
+  // serialization, markDelivered's read-modify-write of `cacheIndex` could
+  // interleave with writeExportCache's own read-modify-write and one would
+  // clobber the other's change on write-back.
+  const p1 = writeExportCache(capture('race1'));
+  const p2 = markDelivered('race1');
+  await Promise.all([p1, p2]);
+
+  const entry = shim.storage.get('cache:race1');
+  assert.ok(entry, 'entry should exist');
+  assert.equal(typeof entry.deliveredAt, 'number');
+
+  const index = shim.storage.get('cacheIndex');
+  const summary = index.find(s => s.captureId === 'race1');
+  assert.ok(summary, 'index should contain the new summary');
+  assert.equal(summary.deliveredAt, entry.deliveredAt);
+});
+
+test('readCacheIndex: empty when nothing is cached', async () => {
+  shim.reset();
+  assert.deepEqual(await readCacheIndex(), []);
+});
+
+test('readCacheEntry: returns the full entry, or null when missing', async () => {
+  shim.reset();
+  await writeExportCache(capture('r1'));
+
+  const entry = await readCacheEntry('r1');
+  assert.equal(entry.captureData.captureId, 'r1');
+  assert.equal(await readCacheEntry('nope'), null);
+});
+
+test('readAllCacheEntries: returns one entry per index summary, skipping any missing', async () => {
+  shim.reset();
+  await writeExportCache(capture('a1'));
+  await writeExportCache(capture('a2'));
+  shim.storage.delete('cache:a1'); // simulate an entry evicted out from under the index
+
+  const entries = await readAllCacheEntries();
+  assert.deepEqual(entries.map(e => e.captureData.captureId), ['a2']);
+});
+
+test('ensureCacheV2 (via readCacheIndex): migrates a legacy exportCache array into entries + index, then removes it', async () => {
+  shim.reset();
+  const now = Date.now();
+  shim.storage.set('exportCache', [
+    legacyCacheEntry('leg1', now - 3000),
+    legacyCacheEntry('leg2', now - 2000, now - 1000),
+    legacyCacheEntry('leg3', now - 1000)
+  ]);
+
+  const index = await readCacheIndex();
+
+  assert.equal(index.length, 3);
+  assert.deepEqual(index.map(s => s.captureId), ['leg1', 'leg2', 'leg3']);
+  assert.equal(shim.storage.get('exportCache'), undefined);
+
+  const entry2 = shim.storage.get('cache:leg2');
+  assert.equal(entry2.deliveredAt, now - 1000);
+  assert.equal(index[1].deliveredAt, now - 1000);
+});
+
+test('ensureCacheV2: a second call is a no-op once migrated', async () => {
+  shim.reset();
+  shim.storage.set('exportCache', [legacyCacheEntry('once1', Date.now())]);
+
+  await readCacheIndex();
+  const afterFirst = shim.storage.get('cacheIndex');
+
+  await ensureCacheV2();
+  const afterSecond = shim.storage.get('cacheIndex');
+
+  assert.equal(afterFirst, afterSecond); // untouched: same array reference
+  assert.equal(afterSecond.length, 1);
+});
+
+test('ensureCacheV2: skips legacy ids already present in the index (no duplicates)', async () => {
+  shim.reset();
+  const now = Date.now();
+  shim.storage.set('cacheIndex', [{
+    captureId: 'dup1',
+    kind: 'passive',
+    cachedAt: now - 500,
+    deliveredAt: null,
+    startedAt: capture('dup1').startedAt,
+    endedAt: capture('dup1').endedAt,
+    pageCount: 1,
+    trivial: false
+  }]);
+  shim.storage.set('exportCache', [
+    legacyCacheEntry('dup1', now - 500),
+    legacyCacheEntry('new1', now - 100)
+  ]);
+
+  const index = await readCacheIndex();
+
+  assert.deepEqual(index.map(s => s.captureId), ['dup1', 'new1']);
+});
+
+test('ensureCacheV2: migrates a legacy element shaped { sessionData, cachedAt } (pre-captureData rename)', async () => {
+  shim.reset();
+  const now = Date.now();
+  const legacyCapture = capture('sess1');
+  shim.storage.set('exportCache', [
+    { sessionData: legacyCapture, cachedAt: now - 5000 }
+  ]);
+
+  const index = await readCacheIndex();
+
+  assert.equal(index.length, 1);
+  assert.equal(index[0].captureId, 'sess1');
+  assert.equal(shim.storage.get('exportCache'), undefined);
+
+  const entry = shim.storage.get('cache:sess1');
+  assert.deepEqual(entry.captureData, legacyCapture);
+  assert.equal(entry.cachedAt, now - 5000);
+  assert.equal(entry.deliveredAt, null);
 });
 
 // ── flushPendingExports ──────────────────────────────────────────────────────
@@ -176,6 +453,21 @@ test('flushPendingExports: alarm is cleared once the queue fully drains', async 
 
   assert.equal(result.remaining, 0);
   assert.deepEqual(shim.alarms.cleared, [CONFIG.FLUSH_ALARM_NAME]);
+});
+
+test('flushPendingExports: delivering a buffered item also marks its v2 cache entry + index summary delivered', async () => {
+  shim.reset();
+  await writeExportCache(capture('flush-mark'));
+  shim.storage.set('pendingExports', [{ captureId: 'flush-mark' }]);
+  fetchQueue([{ status: 200, json: {} }]);
+
+  const result = await flushPendingExports();
+  assert.equal(result.delivered, 1);
+
+  const entry = await readCacheEntry('flush-mark');
+  assert.equal(typeof entry.deliveredAt, 'number');
+  const index = await readCacheIndex();
+  assert.equal(index.find(s => s.captureId === 'flush-mark').deliveredAt, entry.deliveredAt);
 });
 
 test('flushPendingExports: stored invalid API key stops the pass as "auth" without ever calling fetch', async () => {
@@ -328,6 +620,21 @@ test('retrySingleExport: unknown captureId returns not_found', async () => {
   const result = await retrySingleExport('missing');
 
   assert.deepEqual(result, { success: false, delivery: 'not_found' });
+});
+
+test('retrySingleExport: delivering also marks its v2 cache entry + index summary delivered', async () => {
+  shim.reset();
+  await writeExportCache(capture('retry-mark'));
+  shim.storage.set('pendingExports', [{ captureId: 'retry-mark' }]);
+  fetchQueue([{ status: 200, json: {} }]);
+
+  const result = await retrySingleExport('retry-mark');
+  assert.equal(result.success, true);
+
+  const entry = await readCacheEntry('retry-mark');
+  assert.equal(typeof entry.deliveredAt, 'number');
+  const index = await readCacheIndex();
+  assert.equal(index.find(s => s.captureId === 'retry-mark').deliveredAt, entry.deliveredAt);
 });
 
 test('retrySingleExport: stored invalid API key returns backend_error and never leaks the key', async () => {

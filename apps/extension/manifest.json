@@ -9,7 +9,8 @@
     "webNavigation",
     "bookmarks",
     "alarms",
-    "scripting"
+    "scripting",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -25,8 +26,8 @@
     "default_popup": "popup.html",
     "default_title": "Compendium Capture",
     "default_icon": {
-      "16": "icons/icon-16.png",
-      "32": "icons/icon-32.png"
+      "16": "icons/action-16.png",
+      "32": "icons/action-32.png"
     }
   },
   "background": {

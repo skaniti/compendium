@@ -31,6 +31,13 @@ DOT_COLOR = (0x6E, 0x85, 0xA9, 255)
 MASTER = 1024
 SIZES = [128, 96, 48, 32, 16]
 
+# Toolbar action icon, written under distinct filenames (action-*.png rather
+# than reusing icon-16/32.png). Chrome has been observed keeping a stale
+# toolbar icon after a temporary-reload of the extension even though
+# about:extensions shows the new artwork -- an image cache keyed by URL/path.
+# New filenames sidestep that cache instead of trying to bust it.
+ACTION_SIZES = [16, 32]
+
 SQUARE_MARGIN_FRAC = 0.04   # margin from canvas edge to the square backdrop
 CORNER_RADIUS_FRAC = 0.22   # of target size
 BORDER_BASELINE_SIZE = 128  # "1px-equivalent border ... at 128"
@@ -86,6 +93,14 @@ def main():
         path = os.path.join(HERE, f'icon-{size}.png')
         icon.save(path, 'PNG')
         print(f"  icon-{size}.png -> {size}x{size}px, {os.path.getsize(path)} bytes")
+
+    print(f"Generating {len(ACTION_SIZES)} toolbar action icon(s) (same mark, cache-bust filenames)")
+    for size in ACTION_SIZES:
+        icon = render_icon(size)
+        path = os.path.join(HERE, f'action-{size}.png')
+        icon.save(path, 'PNG')
+        print(f"  action-{size}.png -> {size}x{size}px, {os.path.getsize(path)} bytes")
+
     print("Done.")
 
 

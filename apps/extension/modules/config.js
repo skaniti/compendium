@@ -91,19 +91,24 @@ export function buildHeaders(config) {
 }
 
 const MASK_BULLET = '•'; // •
-const MASK_BULLET_COUNT = 8;
+const MASK_BULLET_MAX = 24;
 
 /**
  * Render a stored API key as a masked readout for display -- never the raw
- * key. `cmp_` keys keep the 4-char prefix plus 3 more characters (7 total)
- * so a `cmp_` key is visually recognizable; any other key shows only its
- * first 3 characters. Always followed by 8 bullet characters, regardless of
- * the real key's length.
+ * key. The masked text IS the settings field's value (there's no separate
+ * readout/edit toggle), so it must look like a plausible key rather than a
+ * fixed-width placeholder: `cmp_` keys keep the 4-char prefix plus 3 more
+ * characters (7 total) so a `cmp_` key is visually recognizable; any other
+ * key shows only its first 3 characters. The bullet run mirrors the real
+ * key's remaining length (capped at 24, so a very long key doesn't produce
+ * an unbounded run) -- a key shorter than the prefix is not padded out.
  */
 export function maskApiKey(key) {
   if (!key) return '';
   const prefixLen = key.startsWith('cmp_') ? 7 : 3;
-  return key.slice(0, prefixLen) + MASK_BULLET.repeat(MASK_BULLET_COUNT);
+  const prefix = key.slice(0, prefixLen);
+  const bulletCount = Math.min(Math.max(key.length - prefixLen, 0), MASK_BULLET_MAX);
+  return prefix + MASK_BULLET.repeat(bulletCount);
 }
 
 export const CONFIG = {
@@ -129,9 +134,18 @@ export const CONFIG = {
   MAX_CAPTURE_AGE_MS: 24 * 60 * 60 * 1000,
   TRIVIAL_THRESHOLD: 3,
 
-  // Export cache retention
-  EXPORT_CACHE_MAX_ENTRIES: 56,
-  EXPORT_CACHE_TTL_MS: 28 * 24 * 60 * 60 * 1000,
+  // Export cache retention. Sizing: a capture is ~100 KB and we observe
+  // ~9/week, so 52 weeks of history is ~9 * 52 * 100 KB =~ 47 MB -- well
+  // over Chrome's 10 MB storage.local default quota, hence
+  // "unlimitedStorage" in manifest.json's permissions. This is affordable
+  // under the v2 layout (modules/export.js) because retention is per-
+  // capture entries (`'cache:' + captureId`) plus one lightweight summary
+  // array (`cacheIndex`) -- a finalize never rewrites the whole history,
+  // and listing/rendering the History view never touches page text, only
+  // the index. EXPORT_CACHE_MAX_ENTRIES is a belt-and-braces cap (600 =~ 52
+  // weeks at ~9/week with headroom) independent of TTL.
+  EXPORT_CACHE_MAX_ENTRIES: 600,
+  EXPORT_CACHE_TTL_MS: 52 * 7 * 24 * 60 * 60 * 1000, // 52 weeks
 
   // Flush pacing (spec D4/D7): no Retry-After exists, so the client
   // self-paces via a per-pass cap and a periodic alarm.

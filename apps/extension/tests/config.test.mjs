@@ -23,12 +23,13 @@ test('CONFIG: RELEASE_NOTES_URL defaults empty', () => {
 
 // ── maskApiKey ───────────────────────────────────────────────────────────────
 
-test('maskApiKey: a cmp_ key keeps a 7-char prefix, then 8 bullets', () => {
-  assert.equal(maskApiKey('cmp_7f3abcdef123'), 'cmp_7f3••••••••');
+test('maskApiKey: a cmp_ key keeps a 7-char prefix, then (len - 7) bullets', () => {
+  // 'cmp_7f3abcdef123' is 16 chars -> 16 - 7 = 9 bullets
+  assert.equal(maskApiKey('cmp_7f3abcdef123'), 'cmp_7f3•••••••••');
 });
 
 test('maskApiKey: a short key (shorter than the prefix) is not padded out', () => {
-  assert.equal(maskApiKey('cmp_a'), 'cmp_a••••••••');
+  assert.equal(maskApiKey('cmp_a'), 'cmp_a');
 });
 
 test('maskApiKey: empty/undefined/null render as empty string', () => {
@@ -37,8 +38,14 @@ test('maskApiKey: empty/undefined/null render as empty string', () => {
   assert.equal(maskApiKey(null), '');
 });
 
-test('maskApiKey: a non-cmp_ key shows only a 3-char prefix, then 8 bullets', () => {
-  assert.equal(maskApiKey('abcdefgh'), 'abc••••••••');
+test('maskApiKey: a non-cmp_ key shows only a 3-char prefix, then (len - 3) bullets', () => {
+  // 'abcdefgh' is 8 chars -> 8 - 3 = 5 bullets
+  assert.equal(maskApiKey('abcdefgh'), 'abc•••••');
+});
+
+test('maskApiKey: bullet count caps at 24 for very long keys', () => {
+  const longKey = 'cmp_' + 'x'.repeat(40); // 44 chars -> 44 - 7 = 37, capped to 24
+  assert.equal(maskApiKey(longKey), 'cmp_xxx' + '•'.repeat(24));
 });
 
 // ── validateApiKey ───────────────────────────────────────────────────────────

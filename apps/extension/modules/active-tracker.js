@@ -84,7 +84,10 @@ export async function stopCapture() {
     startedAt: new Date(state.startTime).toISOString(),
     endedAt: new Date().toISOString(),
     pages: state.pages,
-    events: state.events
+    events: state.events,
+    // Stamped here (not only in exportActiveCapture) so the cache entry and
+    // its index summary know this was a journey; the backend ignores it.
+    kind: 'active'
   };
 
   // Write to retention cache BEFORE wiping state (parity with passive)

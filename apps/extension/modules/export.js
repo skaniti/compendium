@@ -5,8 +5,9 @@
  * Passive → POST /api/passive-captures
  * Active  → POST /api/captures
  *
- * Both kinds share the same durability machinery: exportCache ring first,
- * then a pendingExports queue flushed by flushPendingExports(). A flush pass
+ * Both kinds share the same durability machinery: the retention cache
+ * (writeExportCache, see "Cache storage (v2)" below) first, then a
+ * pendingExports queue flushed by flushPendingExports(). A flush pass
  * self-paces (spec D4): at most CONFIG.FLUSH_BATCH_MAX requests, stopping
  * early on 429 ('rate_limited'), 401/403 ('auth'), or a network/TypeError
  * ('offline') so the remaining queue stays intact and in order. There is no
@@ -22,6 +23,30 @@
  * PassiveCaptureInput model in apps/api/backend/models/capture.py, and
  * SessionData in
  * apps/android/app/src/main/java/dev/skaniti/compendium/model/SessionData.kt.
+ *
+ * ── Cache storage (v2) ───────────────────────────────────────────────────────
+ * Retention storage is split so a finalize never rewrites one big array, and
+ * listing the History view never loads any capture's page text:
+ *   - `cacheIndex`: an array of lightweight summaries, oldest-first --
+ *     { captureId, kind: 'active'|'passive', cachedAt, deliveredAt,
+ *       startedAt, endedAt, pageCount, trivial }. This is what cache.js
+ *     lists, sorts, and groups by month; it never carries `pages`/`events`.
+ *   - One full entry per capture under key `'cache:' + captureId` --
+ *     { captureData, cachedAt, deliveredAt }. Read individually
+ *     (readCacheEntry) when a History card is expanded, or in bulk
+ *     (readAllCacheEntries) for "Download all as ZIP".
+ * Retention (CONFIG.EXPORT_CACHE_TTL_MS, CONFIG.EXPORT_CACHE_MAX_ENTRIES) is
+ * enforced against the index on every writeExportCache() call: entries that
+ * age/cap out have their `cache:<id>` key removed; entries that stay are
+ * never rewritten.
+ * Migration: v1 stored a single `exportCache` array (one element per
+ * capture: `{ captureData, cachedAt, deliveredAt }`, or `{ sessionData,
+ * ... }` for older-still entries). ensureCacheV2() migrates it lazily and
+ * idempotently -- called at the top of writeExportCache/markDelivered/
+ * readCacheIndex/readCacheEntry -- splitting each legacy element into an
+ * entry + summary (skipping ids already in the index), then removing the
+ * legacy key. Cheap when there is nothing to migrate: one
+ * get(['exportCache']) and return.
  */
 
 import { CONFIG, getConfig, buildHeaders, validateApiKey } from './config.js';
@@ -81,37 +106,210 @@ export function clearFlushAlarm() {
 
 // ── Export Cache ─────────────────────────────────────────────────────────────
 
-export async function writeExportCache(captureData) {
-  const stored = await chrome.storage.local.get('exportCache');
-  const cache = stored.exportCache || [];
-  cache.push({ captureData, cachedAt: Date.now() });
+const CACHE_KEY_PREFIX = 'cache:';
 
-  const now = Date.now();
-  const pruned = cache
-    .filter(entry => now - entry.cachedAt < CONFIG.EXPORT_CACHE_TTL_MS)
-    .slice(-CONFIG.EXPORT_CACHE_MAX_ENTRIES);
-
-  await chrome.storage.local.set({ exportCache: pruned });
+function cacheKey(captureId) {
+  return CACHE_KEY_PREFIX + captureId;
 }
 
-// Stamp the matching exportCache entry with `deliveredAt` (epoch ms) so the
-// History view can show "delivered Xm ago." Idempotent: only writes if the
-// entry doesn't already have a deliveredAt. No-op if the entry has been
-// evicted (TTL/cap) since finalize.
-export async function markDelivered(captureId) {
-  const stored = await chrome.storage.local.get('exportCache');
-  const cache = stored.exportCache || [];
-  let changed = false;
-  for (const entry of cache) {
-    const cd = entry.captureData || entry.sessionData;
-    if (cd && cd.captureId === captureId && entry.deliveredAt == null) {
-      entry.deliveredAt = Date.now();
-      changed = true;
+// Every writeExportCache/markDelivered/ensureCacheV2 call below does a
+// read-modify-write against `cacheIndex` (and, for ensureCacheV2, the legacy
+// `exportCache` key too). Without serialization, two such calls kicked off
+// in the same tick without an `await` between them (e.g. a finalize's
+// writeExportCache racing a delivery's markDelivered) would each read the
+// same pre-write snapshot, and the later write-back clobbers the earlier
+// call's change. `cacheChain` forces every public entry point through in
+// FIFO call order, one at a time -- `fn`'s rejection is swallowed on the
+// chain itself (not on the promise returned to the caller) so one failed
+// mutation never permanently blocks every mutation queued after it.
+//
+// The public functions below call the "_...Unlocked" variant of
+// ensureCacheV2 directly (never the serialized `ensureCacheV2()` export)
+// while their own body is already running on the chain -- calling the
+// serialized wrapper from inside would deadlock, waiting on the very link
+// that's still executing.
+let cacheChain = Promise.resolve();
+function serialized(fn) {
+  const p = cacheChain.then(fn, fn);
+  cacheChain = p.catch(() => {});
+  return p;
+}
+
+// The lightweight record kept in `cacheIndex` -- everything the History list
+// needs to render, sort, and group WITHOUT loading the full entry (pages,
+// events). kind is read off captureData.kind, the same field exportCapture()
+// stamps for backend routing (absent/other = passive).
+function summaryOf(captureData, cachedAt, deliveredAt) {
+  return {
+    captureId: captureData.captureId,
+    kind: captureData.kind === 'active' ? 'active' : 'passive',
+    cachedAt,
+    deliveredAt: deliveredAt ?? null,
+    startedAt: captureData.startedAt,
+    endedAt: captureData.endedAt,
+    pageCount: captureData.pages ? captureData.pages.length : 0,
+    trivial: captureData.trivial
+  };
+}
+
+/**
+ * Lazily, idempotently migrate the legacy v1 `exportCache` array (see the
+ * header comment) into the v2 layout: one `cache:<id>` entry + one
+ * `cacheIndex` summary per legacy element. Ids already present in the index
+ * are skipped (so a partially-migrated or re-run pass never duplicates).
+ * Cheap when there's nothing to do -- a single get(['exportCache']) and
+ * return, no index read, no write.
+ *
+ * Called at the top of writeExportCache/markDelivered/readCacheIndex/
+ * readCacheEntry so every entry point sees the v2 layout regardless of
+ * which one runs first after an upgrade.
+ *
+ * Unlocked: writeExportCache/markDelivered call this directly, since their
+ * own bodies already hold the `cacheChain` slot (see `serialized` above).
+ * `ensureCacheV2()` below is the serialized entry point for everyone else
+ * (readCacheIndex/readCacheEntry, or a caller migrating on its own).
+ */
+async function _ensureCacheV2Unlocked() {
+  const legacyStored = await chrome.storage.local.get('exportCache');
+  const legacy = legacyStored.exportCache;
+  if (!legacy || legacy.length === 0) return;
+
+  const idxStored = await chrome.storage.local.get('cacheIndex');
+  const index = idxStored.cacheIndex || [];
+  const existingIds = new Set(index.map(s => s.captureId));
+
+  const writes = {};
+  const newSummaries = [];
+  for (const legacyEntry of legacy) {
+    const captureData = legacyEntry.captureData || legacyEntry.sessionData;
+    if (!captureData || existingIds.has(captureData.captureId)) continue;
+
+    const cachedAt = legacyEntry.cachedAt;
+    const deliveredAt = legacyEntry.deliveredAt ?? null;
+    writes[cacheKey(captureData.captureId)] = { captureData, cachedAt, deliveredAt };
+    newSummaries.push(summaryOf(captureData, cachedAt, deliveredAt));
+  }
+
+  writes.cacheIndex = [...index, ...newSummaries];
+  await chrome.storage.local.set(writes);
+  await chrome.storage.local.remove('exportCache');
+}
+
+export function ensureCacheV2() {
+  return serialized(_ensureCacheV2Unlocked);
+}
+
+/**
+ * Write a capture's full entry + index summary, then prune the index by TTL
+ * and count cap (spec: 52 weeks / CONFIG.EXPORT_CACHE_MAX_ENTRIES). Entries
+ * that stay are never rewritten -- only the new entry is set, and only
+ * dropped entries' `cache:<id>` keys are removed. The new entry and the
+ * pruned index land in one `chrome.storage.local.set()` call so a reader
+ * can never observe one without the other.
+ *
+ * Serialized against every other cache mutation -- see `serialized` above.
+ */
+export function writeExportCache(captureData) {
+  return serialized(() => _writeExportCacheUnlocked(captureData));
+}
+
+async function _writeExportCacheUnlocked(captureData) {
+  await _ensureCacheV2Unlocked();
+
+  const cachedAt = Date.now();
+  const idxStored = await chrome.storage.local.get('cacheIndex');
+  const index = idxStored.cacheIndex || [];
+  index.push(summaryOf(captureData, cachedAt, null));
+
+  const now = Date.now();
+  const notExpired = [];
+  const expired = [];
+  for (const summary of index) {
+    if (now - summary.cachedAt < CONFIG.EXPORT_CACHE_TTL_MS) {
+      notExpired.push(summary);
+    } else {
+      expired.push(summary);
     }
   }
-  if (changed) {
-    await chrome.storage.local.set({ exportCache: cache });
+
+  let kept = notExpired;
+  let overCap = [];
+  if (notExpired.length > CONFIG.EXPORT_CACHE_MAX_ENTRIES) {
+    const cut = notExpired.length - CONFIG.EXPORT_CACHE_MAX_ENTRIES;
+    overCap = notExpired.slice(0, cut);
+    kept = notExpired.slice(cut);
   }
+
+  await chrome.storage.local.set({
+    [cacheKey(captureData.captureId)]: { captureData, cachedAt, deliveredAt: null },
+    cacheIndex: kept
+  });
+
+  const dropped = [...expired, ...overCap];
+  if (dropped.length > 0) {
+    await chrome.storage.local.remove(dropped.map(s => cacheKey(s.captureId)));
+  }
+}
+
+// Stamp the matching cache entry (and its index summary) with `deliveredAt`
+// (epoch ms) so the History view can show "delivered Xm ago." Idempotent:
+// only writes if the entry doesn't already have a deliveredAt. No-op if the
+// entry has been evicted (TTL/cap) since finalize.
+//
+// Serialized against every other cache mutation -- see `serialized` above.
+export function markDelivered(captureId) {
+  return serialized(() => _markDeliveredUnlocked(captureId));
+}
+
+async function _markDeliveredUnlocked(captureId) {
+  await _ensureCacheV2Unlocked();
+
+  const key = cacheKey(captureId);
+  const stored = await chrome.storage.local.get(key);
+  const entry = stored[key];
+  if (!entry || entry.deliveredAt != null) return;
+
+  const deliveredAt = Date.now();
+  entry.deliveredAt = deliveredAt;
+  await chrome.storage.local.set({ [key]: entry });
+
+  const idxStored = await chrome.storage.local.get('cacheIndex');
+  const index = idxStored.cacheIndex || [];
+  const summary = index.find(s => s.captureId === captureId);
+  if (summary && summary.deliveredAt == null) {
+    summary.deliveredAt = deliveredAt;
+    await chrome.storage.local.set({ cacheIndex: index });
+  }
+}
+
+/** All history summaries, oldest-first (after lazily migrating v1 if needed). */
+export async function readCacheIndex() {
+  await ensureCacheV2();
+  const stored = await chrome.storage.local.get('cacheIndex');
+  return stored.cacheIndex || [];
+}
+
+/** One capture's full entry ({ captureData, cachedAt, deliveredAt }), or null. */
+export async function readCacheEntry(captureId) {
+  await ensureCacheV2();
+  const key = cacheKey(captureId);
+  const stored = await chrome.storage.local.get(key);
+  return stored[key] || null;
+}
+
+/**
+ * Every full entry for every summary currently in the index (used by
+ * "Download all as ZIP"). Entries missing from storage (evicted between the
+ * index read and this call) are silently skipped rather than surfaced as
+ * null holes.
+ */
+export async function readAllCacheEntries() {
+  const index = await readCacheIndex();
+  if (index.length === 0) return [];
+
+  const keys = index.map(s => cacheKey(s.captureId));
+  const stored = await chrome.storage.local.get(keys);
+  return index.map(s => stored[cacheKey(s.captureId)]).filter(Boolean);
 }
 
 // ── Capture Export (shared passive/active core) ─────────────────────────────
