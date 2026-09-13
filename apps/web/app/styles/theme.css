@@ -332,3 +332,145 @@ html, body {
 circle.page, use.star-spikes {
     color: var(--ink);
 }
+
+/* Almagest graph tuner (Task 4, dev-only; components/AlmagestTuner.tsx +
+   components/tuner/Slider.tsx). `position: fixed` (viewport-relative, not
+   #d3-graph-container-relative) for both the toggle pill and the panel --
+   #d3-graph-container clips its children at `overflow: hidden` (this
+   file's own comment above #d3-graph-container > svg), and a tall panel
+   would get cut off if anchored to it the way .d3-zoom-indicator is;
+   fixed positioning escapes that the same way #node-tooltip's comment in
+   GraphCanvas.tsx already established neither #d3-graph-container nor its
+   ancestors set a transform/filter that would trap a fixed descendant.
+   Compact, theme-aware chrome matching .sc-edge-chip's register above:
+   --bg/--ink/--border tokens, no external UI library. */
+.almagest-tuner-toggle {
+    position: fixed;
+    top: 56px;
+    right: 16px;
+    z-index: 20;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border, #444);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    color: var(--ink);
+    font: 600 12px Georgia, serif;
+    line-height: 1;
+    cursor: pointer;
+}
+.almagest-tuner {
+    position: fixed;
+    top: 92px;
+    right: 16px;
+    z-index: 20;
+    width: 300px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #444);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    color: var(--ink);
+    font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.almagest-tuner .tuner-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+.almagest-tuner .tuner-tabs {
+    display: flex;
+    gap: 4px;
+}
+.almagest-tuner .tuner-tab {
+    flex: 1;
+    padding: 3px 0;
+    border: 1px solid var(--border, #444);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+.almagest-tuner .tuner-tab[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.almagest-tuner .tuner-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+/* Slider.tsx's own row -- shared by both the per-tier sliders and the
+   frozen (advance-affecting) ones inside .tuner-frozen below. */
+.tuner-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 52px;
+    align-items: center;
+    gap: 6px;
+}
+.tuner-label {
+    font-size: 11px;
+    color: var(--ink);
+    opacity: 0.85;
+}
+.tuner-row input[type="range"] {
+    width: 100%;
+}
+.tuner-num {
+    width: 52px;
+    padding: 1px 3px;
+    border: 1px solid var(--border, #444);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+}
+.tuner-hint {
+    font-size: 10px;
+    opacity: 0.7;
+}
+.almagest-tuner .tuner-frozen {
+    padding-top: 6px;
+    border-top: 1px solid var(--border, #444);
+}
+.almagest-tuner .tuner-frozen summary {
+    font-weight: 600;
+    cursor: pointer;
+}
+.almagest-tuner .tuner-warning {
+    margin: 4px 0;
+    font-size: 11px;
+    opacity: 0.8;
+}
+.almagest-tuner .tuner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.almagest-tuner .tuner-actions button {
+    padding: 3px 8px;
+    border: 1px solid var(--border, #444);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+.almagest-tuner .tuner-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.almagest-tuner .tuner-switch[aria-checked="true"] {
+    background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.almagest-tuner .tuner-status {
+    margin: 0;
+    min-height: 14px;
+    font-size: 11px;
+    opacity: 0.85;
+}

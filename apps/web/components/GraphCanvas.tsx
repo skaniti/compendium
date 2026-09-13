@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api";
 import { patchPreferences } from "@/lib/preferences";
 import { useSession } from "./SessionProvider";
@@ -274,6 +275,21 @@ function isRoleToolingVisible(): boolean {
   const flag = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
   return flag === "1" || flag === "true";
 }
+
+// Almagest graph tuner (Task 4, dev-only): production safety hinges on
+// GraphCanvas.tsx never containing a top-level `import ... from
+// "./AlmagestTuner"` -- that component imports "@/lib/almagest/params",
+// which side-effect-loads the CommonJS glyph generator, and a static import
+// here would pull the whole thing into every client bundle regardless of
+// environment. `dynamic(() => import("./AlmagestTuner"), { ssr: false })`
+// is instead called from INSIDE this `development`-only ternary, so the
+// call -- and the chunk it produces -- is only ever reached at runtime when
+// NODE_ENV is "development"; a production build never executes this branch
+// and the browser never fetches that chunk. (GraphCanvas.test.tsx asserts
+// the no-static-import half of this directly by reading this file's own
+// source text.)
+const AlmagestTunerDev =
+  process.env.NODE_ENV === "development" ? dynamic(() => import("./AlmagestTuner"), { ssr: false }) : null;
 
 // Task group B (batch 03, spec decision C): resolves whatever saved tuner
 // profile should apply BEFORE first paint -- Next-native, no boot latch, no
@@ -1108,6 +1124,7 @@ export default function GraphCanvas() {
             </span>
           </div>
         )}
+        {AlmagestTunerDev ? <AlmagestTunerDev /> : null}
       </div>
       <div id="node-tooltip" className="node-tooltip" style={NODE_TOOLTIP_STYLE} />
     </>

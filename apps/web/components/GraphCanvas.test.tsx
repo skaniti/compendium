@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, waitFor, screen, act, fireEvent } from "@testing-library/react";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import GraphCanvas from "./GraphCanvas";
 import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
@@ -2007,6 +2010,44 @@ describe("GraphCanvas live palette recolor (Task A1-2 wave 8: wire vendor recolo
 
     expect(recolorMock).not.toHaveBeenCalled();
     expect(screen.getByTestId("theme-variant")).toHaveTextContent("Pink");
+  });
+});
+
+// Task 4 (Almagest graph tuner) mount rule: AlmagestTuner.tsx imports
+// "@/lib/almagest/params", which side-effect-loads the CommonJS glyph
+// generator -- a static `import ... from "./AlmagestTuner"` at the top of
+// this file would pull that into every client bundle regardless of
+// environment. GraphCanvas.tsx instead calls `next/dynamic(() =>
+// import("./AlmagestTuner"), { ssr: false })` from inside a
+// `process.env.NODE_ENV === "development"` ternary (see its own
+// AlmagestTunerDev const), so the chunk is only ever reached at runtime in
+// development.
+//
+// This is checked by reading GraphCanvas.tsx's own source text rather than
+// by rendering GraphCanvas and asserting no Almagest dialog appears: under
+// vitest, NODE_ENV is "test", so `AlmagestTunerDev` is already `null` and
+// nothing would render regardless of whether the import were static or
+// dynamic -- a render-based assertion would pass even if the mount rule
+// were violated (e.g. a static `import AlmagestTuner from "./AlmagestTuner"`
+// added above the ternary, with the ternary left choosing between it and
+// null). Reading the source is the only one of the two options the brief
+// offered that actually exercises the rule being protected.
+describe("GraphCanvas mount safety: AlmagestTuner stays out of the static import graph (Task 4)", () => {
+  it("has no top-level `import ... from \"./AlmagestTuner\"`", () => {
+    // `path.dirname(fileURLToPath(import.meta.url))` rather than
+    // `new URL(".", import.meta.url)` -- jsdom's global `URL` (this file's
+    // test environment) resolves a relative first argument against
+    // `window.location`, not the `file:` base string passed as the second
+    // argument, once any earlier test in this large suite has navigated
+    // jsdom's location away from its default -- confirmed by logging
+    // `new URL(".", import.meta.url).protocol` here, which came back
+    // "http:" pointed at localhost, not "file:". Converting the whole
+    // (correct, file://-scheme) `import.meta.url` to a path FIRST and then
+    // taking its dirname with plain `node:path` sidesteps jsdom's URL
+    // relative-resolution entirely.
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(path.join(here, "GraphCanvas.tsx"), "utf8");
+    expect(source).not.toMatch(/^\s*import\s[^;]*from\s+["']\.\/AlmagestTuner["'];?/m);
   });
 });
 
