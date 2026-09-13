@@ -10,14 +10,14 @@ function params(p?: AlmagestParams): AlmagestParams { return p ?? shippedParams(
 
 export function faceForPx(paintedPx: number, p?: AlmagestParams): TierName {
   const t = params(p).tiers;
-  // Vendor's almagestFace (d3-graph-vendor.js) uses `>= min - ALMAGEST_TIER_EPS`
-  // with ALMAGEST_TIER_EPS = 0.01, to absorb floating-point noise from
-  // `cssPx * currentZoomK`. Note 0.01 is exactly the literal gap used by this
-  // module's own breakpoint test (51.99 = 52 - 0.01), so replicating the
-  // vendor's eps *value* verbatim would swallow that boundary case into
-  // "Display" instead of "Mid". Keep the vendor's `>=` (boundary-inclusive)
-  // comparison shape, but use an eps only as large as needed to absorb actual
-  // float noise, not to widen the breakpoint by a whole hundredth of a pixel.
+  // This module is the single source for the tier breakpoint decision: the
+  // vendor's almagestFace (d3-graph-vendor.js) carries no epsilon or
+  // breakpoint copies of its own -- it calls faceForPx directly and paints
+  // whatever face comes back. `eps` absorbs float noise from
+  // `cssPx * currentZoomK` at the boundary; it is kept to 1e-6 rather than a
+  // coarser value (e.g. a whole hundredth of a pixel) because this module's
+  // own breakpoint test pins 51.99 = 52 - 0.01 as "Mid" -- a coarser eps
+  // would swallow that boundary case into "Display".
   const eps = 1e-6;
   if (paintedPx >= t.Display.min - eps) return "Display";
   if (paintedPx >= t.Mid.min - eps) return "Mid";

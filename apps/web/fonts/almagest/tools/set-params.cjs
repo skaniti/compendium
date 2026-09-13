@@ -85,7 +85,17 @@ module.exports = { applyParams: applyParams, readParams: readParams, applyToFile
 if (require.main === module) {
   var args = process.argv.slice(2);
   if (args.length !== 2) { process.stderr.write('usage: set-params.cjs <almagest-glyphs.cjs> <params.json>\n'); process.exit(2); }
-  var params = JSON.parse(fs.readFileSync(args[1], 'utf8'));
-  applyToFile(args[0], params);
-  process.stdout.write('set-params: wrote ' + args[0] + '\n');
+  // The bake route (app/api/dev/almagest/bake/route.ts) spawns this CLI and
+  // reads stderr verbatim as the 409 error body -- a thrown Error's message
+  // is already prefixed "set-params: ..." (see applyParams/applyToFile
+  // above), so on failure this writes just that message, not a stack dump,
+  // and exits non-zero.
+  try {
+    var params = JSON.parse(fs.readFileSync(args[1], 'utf8'));
+    applyToFile(args[0], params);
+    process.stdout.write('set-params: wrote ' + args[0] + '\n');
+  } catch (e) {
+    process.stderr.write(e.message + '\n');
+    process.exit(1);
+  }
 }

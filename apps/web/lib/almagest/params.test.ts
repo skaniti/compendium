@@ -22,6 +22,13 @@ describe("almagest params", () => {
     expect(v.tiers.Text.min).toBe(0);
     expect(v.tiers.Mid.min).toBeLessThan(v.tiers.Display.min);
   });
+  it("clamps Mid.min so Display.min never exceeds its own range max", () => {
+    const p = shippedParams();
+    const v = validateParams({ ...p, tiers: { ...p.tiers, Mid: { ...p.tiers.Mid, min: 120 } } });
+    expect(v.tiers.Mid.min).toBeLessThanOrEqual(PARAM_RANGES.tier.min.max - 1);
+    expect(v.tiers.Display.min).toBeLessThanOrEqual(PARAM_RANGES.tier.min.max);
+    expect(v.tiers.Display.min).toBeGreaterThan(v.tiers.Mid.min);
+  });
   it("validateParams throws on a wrong shape", () => {
     expect(() => validateParams({ frozen: {} })).toThrow();
     expect(() => validateParams(null)).toThrow();

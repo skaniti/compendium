@@ -58,6 +58,26 @@ function loadInitialParams(): AlmagestParams {
   return shippedParams();
 }
 
+// Set right before a post-bake `window.location.reload()` so the panel comes
+// back open (with the same draft, already restored from DRAFT_STORAGE_KEY)
+// instead of silently collapsing on the reader -- a bare reload would
+// otherwise throw away the fact that the panel was open mid-tune.
+const REOPEN_STORAGE_KEY = "compendium_almagest_reopen";
+
+function loadInitialOpen(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const flag = window.sessionStorage.getItem(REOPEN_STORAGE_KEY);
+    if (!flag) return false;
+    window.sessionStorage.removeItem(REOPEN_STORAGE_KEY);
+    return true;
+  } catch {
+    // sessionStorage unavailable -- fall back to collapsed, same as a
+    // fresh visit
+    return false;
+  }
+}
+
 // Keeps only the last few non-empty lines of a build log -- the panel's
 // status line is one row, not a console.
 function tailLines(text: string, n = 6): string {
@@ -69,7 +89,7 @@ interface BakeSuccess { ok: true; version: string; log: string }
 interface BakeFailure { error: string; log?: string }
 
 export default function AlmagestTuner() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(loadInitialOpen);
   const [tab, setTab] = useState<TierName>("Display");
   const [previewOn, setPreviewOn] = useState(false);
   const [params, setParams] = useState<AlmagestParams>(loadInitialParams);
@@ -143,12 +163,18 @@ export default function AlmagestTuner() {
     };
   }, []);
 
+  // Both setters route the next value through validateParams -- not just the
+  // debounced preview push -- so displayed state, the localStorage draft,
+  // and the preview are always the clamped/coerced values (range limits,
+  // integer `points`, the Display.min > Mid.min > Text.min = 0 breakpoint
+  // invariant), regardless of what a slider drag or a manually typed number
+  // input tries to set.
   function updateTier(key: keyof TierParams, value: number): void {
-    setParams((prev) => ({ ...prev, tiers: { ...prev.tiers, [tab]: { ...prev.tiers[tab], [key]: value } } }));
+    setParams((prev) => validateParams({ ...prev, tiers: { ...prev.tiers, [tab]: { ...prev.tiers[tab], [key]: value } } }));
   }
 
   function updateFrozen(key: keyof FrozenParams, value: number): void {
-    setParams((prev) => ({ ...prev, frozen: { ...prev.frozen, [key]: value } }));
+    setParams((prev) => validateParams({ ...prev, frozen: { ...prev.frozen, [key]: value } }));
   }
 
   function handleReset(): void {
@@ -177,6 +203,12 @@ export default function AlmagestTuner() {
       const data = (await res.json().catch(() => ({}))) as Partial<BakeSuccess & BakeFailure>;
       if (res.ok && data.ok) {
         setStatus(`Baked ${data.version}; reloading`);
+        try {
+          window.sessionStorage.setItem(REOPEN_STORAGE_KEY, "1");
+        } catch {
+          // best-effort; a reload without the flag just leaves the panel
+          // collapsed, same as before this feature
+        }
         window.location.reload();
       } else {
         const message = data.error ?? `bake failed (${res.status})`;
@@ -256,6 +288,10 @@ export default function AlmagestTuner() {
               Bake
             </button>
           </div>
+          <p className="tuner-bake-notice">
+            Rewrites fonts/almagest/tools/almagest-glyphs.cjs and the three TTFs under
+            public/fonts/almagest; commit both together.
+          </p>
           <p className="tuner-status" role="status">
             {status || (!previewAvailable ? "graph not ready" : "")}
           </p>

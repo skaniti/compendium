@@ -62,6 +62,11 @@ export function validateParams(input: unknown): AlmagestParams {
   // Breakpoint invariant: Display.min > Mid.min > Text.min = 0.
   tiers.Text.min = 0;
   if (tiers.Mid.min <= 0) tiers.Mid.min = 1;
+  // Mid.min must leave room below the tier's own range ceiling for
+  // Display.min = Mid.min + 1 to still land inside PARAM_RANGES.tier.min --
+  // without this, Mid.min at its own max (120) would force Display.min to
+  // 121, one past the slider's ceiling.
+  tiers.Mid.min = Math.min(tiers.Mid.min, PARAM_RANGES.tier.min.max - 1);
   if (tiers.Display.min <= tiers.Mid.min) tiers.Display.min = tiers.Mid.min + 1;
   return { frozen, tiers };
 }

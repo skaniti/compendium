@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import AlmagestTuner from "./AlmagestTuner";
-import { shippedParams, DRAFT_STORAGE_KEY } from "@/lib/almagest/params";
+import { shippedParams, PARAM_RANGES, DRAFT_STORAGE_KEY } from "@/lib/almagest/params";
+
+const REOPEN_STORAGE_KEY = "compendium_almagest_reopen";
 
 describe("AlmagestTuner", () => {
-  beforeEach(() => { localStorage.clear(); (window as unknown as { __d3SetAlmagestPreview?: unknown }).__d3SetAlmagestPreview = vi.fn(); vi.useFakeTimers(); });
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    (window as unknown as { __d3SetAlmagestPreview?: unknown }).__d3SetAlmagestPreview = vi.fn();
+    vi.useFakeTimers();
+  });
   afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
   it("is collapsed by default and opens from the Aa pill and Alt+A", () => {
@@ -55,5 +62,33 @@ describe("AlmagestTuner", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith("/api/dev/almagest/bake", expect.objectContaining({ method: "POST" }));
     expect(reload).toHaveBeenCalled();
+    expect(sessionStorage.getItem(REOPEN_STORAGE_KEY)).toBe("1");
+  });
+  it("reopens on first render when the post-bake reload flag is set, and clears it", () => {
+    sessionStorage.setItem(REOPEN_STORAGE_KEY, "1");
+    render(<AlmagestTuner />);
+    expect(screen.getByRole("dialog", { name: /almagest/i })).toBeTruthy();
+    expect(sessionStorage.getItem(REOPEN_STORAGE_KEY)).toBeNull();
+  });
+  it("clamps a tier param live: raising Mid's breakpoint above Display's keeps the invariant", () => {
+    render(<AlmagestTuner />);
+    fireEvent.click(screen.getByRole("button", { name: /almagest tuner/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Mid" }));
+    const midBreakpoint = screen.getByLabelText(/breakpoint px value/i) as HTMLInputElement;
+    fireEvent.change(midBreakpoint, { target: { value: String(PARAM_RANGES.tier.min.max) } });
+    const midValue = Number(midBreakpoint.value);
+    expect(midValue).toBeLessThanOrEqual(PARAM_RANGES.tier.min.max - 1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    const displayBreakpoint = screen.getByLabelText(/breakpoint px value/i) as HTMLInputElement;
+    const displayValue = Number(displayBreakpoint.value);
+    expect(displayValue).toBeGreaterThan(midValue);
+    expect(displayValue).toBeLessThanOrEqual(PARAM_RANGES.tier.min.max);
+
+    // The persisted draft reflects the same validated values, not the raw
+    // out-of-range input.
+    const draft = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY)!);
+    expect(draft.tiers.Mid.min).toBe(midValue);
+    expect(draft.tiers.Display.min).toBe(displayValue);
   });
 });

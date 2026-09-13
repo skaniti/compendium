@@ -468,6 +468,11 @@ circle.page, use.star-spikes {
 .almagest-tuner .tuner-switch[aria-checked="true"] {
     background: color-mix(in srgb, var(--ink) 16%, transparent);
 }
+.almagest-tuner .tuner-bake-notice {
+    margin: 0;
+    font-size: 10px;
+    opacity: 0.7;
+}
 .almagest-tuner .tuner-status {
     margin: 0;
     min-height: 14px;

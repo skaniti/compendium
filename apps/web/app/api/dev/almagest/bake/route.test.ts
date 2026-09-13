@@ -19,10 +19,14 @@ const TRACKED_SOURCE = path.join(APP_ROOT, "fonts/almagest/tools/almagest-glyphs
 const TRACKED_TTF_DIR = path.join(APP_ROOT, "public/fonts/almagest");
 const TIER_NAMES = ["Display", "Mid", "Text"];
 
-function makeRequest(body?: unknown): Request {
+// Default headers mark every request same-origin (Sec-Fetch-Site, sent by
+// every modern browser fetch) so existing tests exercise the route's actual
+// logic, not the origin gate -- the origin-gate tests below override this
+// explicitly per case.
+function makeRequest(body?: unknown, headers: Record<string, string> = {}): Request {
   return new Request("http://localhost/api/dev/almagest/bake", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin", ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
@@ -49,6 +53,37 @@ describe("POST /api/dev/almagest/bake", () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: string };
     expect(json.error).toBeTruthy();
+  });
+
+  it("returns 403 before doing anything else when Sec-Fetch-Site is cross-site", async () => {
+    // No NODE_ENV stub -- the origin gate must fire ahead of the dev-only
+    // 404 gate, so this rejects regardless of environment.
+    vi.resetModules();
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest({}, { "Sec-Fetch-Site": "cross-site" }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "same-origin only" });
+  });
+
+  it("returns 403 when Origin does not match the request host", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest({}, { "Sec-Fetch-Site": "cross-site", Origin: "http://evil.example" })
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "same-origin only" });
+  });
+
+  it("proceeds past the origin gate when Sec-Fetch-Site is same-origin", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+    const { POST } = await import("./route");
+    // An invalid body still reaches the 400 body-validation gate -- i.e. the
+    // request was not rejected at 403.
+    const res = await POST(makeRequest({ nonsense: true }, { "Sec-Fetch-Site": "same-origin" }));
+    expect(res.status).toBe(400);
   });
 
   it("rewrites a tmp source, builds tmp TTFs into a version sha, and leaves tracked files untouched", async () => {
@@ -94,6 +129,73 @@ describe("POST /api/dev/almagest/bake", () => {
     } finally {
       fs.rmSync(tmpSrcDir, { recursive: true, force: true });
       fs.rmSync(tmpOut, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 500 with a log and restores the source when the build fails", async () => {
+    const tmpSrcDir = fs.mkdtempSync(path.join(os.tmpdir(), "almagest-bake-src-"));
+    const tmpSource = path.join(tmpSrcDir, "almagest-glyphs.cjs");
+    fs.copyFileSync(TRACKED_SOURCE, tmpSource);
+    const previousText = fs.readFileSync(tmpSource, "utf8");
+
+    // A regular FILE (not a directory) as the build's --out target: build.cjs
+    // tries to fs.mkdirSync(dirname(ttfPath), { recursive: true }) into it,
+    // which throws EEXIST because a non-directory already occupies that
+    // path -- a reliable, environment-independent way to fail the build
+    // step without touching anything the route is supposed to protect.
+    const tmpOutParent = fs.mkdtempSync(path.join(os.tmpdir(), "almagest-bake-out-"));
+    const badOut = path.join(tmpOutParent, "not-a-directory");
+    fs.writeFileSync(badOut, "regular file, not a directory");
+
+    try {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ALMAGEST_SOURCE", tmpSource);
+      vi.stubEnv("ALMAGEST_BUILD_OUT", badOut);
+      vi.resetModules();
+      const { POST } = await import("./route");
+
+      const params = shippedParams();
+      params.frozen.rot = 44;
+      const res = await POST(makeRequest(params));
+      const json = (await res.json()) as { error?: string; log?: string };
+
+      expect(res.status).toBe(500);
+      expect(json.error).toBeTruthy();
+      expect(json.log).toBeTruthy();
+      // The rewrite happened (set-params succeeded) but the failed build
+      // must restore the pre-request text -- no half-baked source left
+      // behind for the next attempt.
+      expect(fs.readFileSync(tmpSource, "utf8")).toBe(previousText);
+    } finally {
+      fs.rmSync(tmpSrcDir, { recursive: true, force: true });
+      fs.rmSync(tmpOutParent, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 409 when a table literal cannot be located in the source", async () => {
+    const tmpSrcDir = fs.mkdtempSync(path.join(os.tmpdir(), "almagest-bake-src-"));
+    const tmpSource = path.join(tmpSrcDir, "almagest-glyphs.cjs");
+    const original = fs.readFileSync(TRACKED_SOURCE, "utf8");
+    const mangled = original.replace("var TIERS = {", "var TIERS_MANGLED = {");
+    expect(mangled).not.toBe(original); // sanity: the replace actually matched
+    fs.writeFileSync(tmpSource, mangled);
+
+    try {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ALMAGEST_SOURCE", tmpSource);
+      vi.resetModules();
+      const { POST } = await import("./route");
+
+      const res = await POST(makeRequest(shippedParams()));
+      const json = (await res.json()) as { error?: string };
+
+      expect(res.status).toBe(409);
+      expect(json.error).toMatch(/TIERS/);
+      // set-params never got to the write step, so the mangled source is
+      // untouched.
+      expect(fs.readFileSync(tmpSource, "utf8")).toBe(mangled);
+    } finally {
+      fs.rmSync(tmpSrcDir, { recursive: true, force: true });
     }
   });
 });
