@@ -1,0 +1,17 @@
+# Verified-fake / false-positive gitleaks findings from the batch-08a publish-flip
+# evidence gate. Each entry documents WHY it is ignored in results.md
+# (docs/project-plans/nextjs-migration/2026-09-14-005918-oss-readiness-publish-flip/results.md,
+# section "Scan evidence"). Never add an entry without a verified-fake justification there.
+
+# apps/extension/tests/config.test.mjs -- generic-api-key: a `cmp_...`-shaped demo API
+# key used only as an in-memory storage fixture in a unit test (saveConfig behavior).
+# Current-HEAD (dir/export scan, no commit prefix) line:
+apps/extension/tests/config.test.mjs:generic-api-key:135
+# Same fixture value at an earlier commit's line number (git-history scan):
+588ce6b0f65d0ce257ce629caa4ac37b702e5395:apps/extension/tests/config.test.mjs:generic-api-key:128
+
+# lib/graph/d3-graph-vendor.js (removed from HEAD; only present in history) --
+# sourcegraph-access-token: false positive against a git commit SHA quoted in a
+# vendoring-provenance comment ("Vendored VERBATIM from explorer ... HEAD <sha>"),
+# not a credential.
+99dfb7f9ad3a9e36c4b46ec692e63471ee332912:lib/graph/d3-graph-vendor.js:sourcegraph-access-token:4
