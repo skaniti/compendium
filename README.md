@@ -23,6 +23,8 @@ npm ci
 npm run demo
 ```
 
+A hosted instance runs at https://compendium.skaniti.dev; it is read-only for visitors.
+
 `npm run demo` boots a dependency-free stub backend (`apps/web/demo/server.mjs`)
 serving a curated demo compendium from static fixtures, plus the Next.js
 dev server pointed at it. The demo drops the user straight into the
@@ -171,23 +173,19 @@ headlessly via jsdom.
 
 ## Status
 
-This repo is mid-migration from an earlier Dash + FastAPI prototype into
-this Next.js frontend. Currently ported and working: the graph's
-surrounding chrome (diary/history, topic detail, header widgets) and the
-first slice of the streaming chat experience. The constellation graph
-itself (rendering, clustering, camera framing) is mid-port — functional,
-as the screenshots above show, but not yet feature-complete against the
-original.
+This repo is the successor to an earlier Dash + FastAPI prototype, ported
+surface by surface. Ported and live here: the app shell, the diary/history
+and topic-detail panels, the header widgets, the constellation graph (a
+vendored D3 port with supercluster nameplate layout, an original typeface,
+and a tunable layout), the streaming chat with source pills, and the
+auth/session/role mechanics. The FastAPI backend lives at `apps/api` and
+runs the hosted instance; the browser extension (`apps/extension`) and the
+Android collector (`apps/android`) ship from here too.
 
-The real FastAPI backend now lives here too, at `apps/api` (see "Full-stack
-quickstart (Docker)" above) — extracted born-clean from the predecessor
-project, with its own maintenance freeze in effect there. The browser
-extension (`apps/extension`) and Android collector (`apps/android`) have
-also landed here, born-clean from the predecessor project. Still to come:
-the internal dev/observability views (pipeline, data browser, prompts,
-logs, traces — ported in follow-up batches after the backend cutover),
-plus the operational tail — retiring the predecessor's Dash surface and
-standing up a deploy target for this repo.
+Still to come: the internal dev/observability views (pipeline, data
+browser, prompts, logs, traces, overview), a deploy target for this
+frontend, and retirement of the predecessor's Dash surface. The predecessor
+repo stays private.
 
 ## Known limitations
 
