@@ -1,7 +1,7 @@
 """Materialize the v1 demo dataset by ingesting the 59 curated URLs.
 
 Reads URLs from
-`docs/project-plans/_completed/2026-05-03-160117-demo-curation-v1/spec.md`,
+the 2026-05-03 demo-curation-v1 plan (private), spec.md,
 groups them by supercluster (4 captures), and runs each through the full
 production capture pipeline (Stage 0 fetch + RAG indexing + skip gate +
 content + cluster) under user_id 153 (`demo@traversal.local`).
@@ -45,7 +45,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Repo root (PROJECT_ROOT is apps/api, needed on sys.path for the `backend`
 # imports below) — only used to locate the v1 URL-list doc, which lives
-# outside apps/api under the repo-root `docs/project-plans` symlink.
+# in a private planning archive outside this repo.
 REPO_ROOT = PROJECT_ROOT.parent
 
 
@@ -68,10 +68,10 @@ logger = logging.getLogger(__name__)
 DEMO_USER_ID = 153
 DEMO_USER_EMAIL = "demo@traversal.local"
 
-# The doc lives in the private predecessor repo, reachable here only via
-# the gitignored `docs/project-plans` symlink (see repo-root CLAUDE.md) —
-# it moved to `_completed/` after the curation work finished; the path
-# below is stale-fixed to match (was missing that segment).
+# The doc lives in a private planning archive outside this repo, reachable
+# here only via a gitignored symlink — it moved to `_completed/` after the
+# curation work finished; the path below is stale-fixed to match (was
+# missing that segment).
 V1_DOC_PATH = (
     REPO_ROOT / "docs" / "project-plans" / "_completed"
     / "2026-05-03-160117-demo-curation-v1" / "spec.md"

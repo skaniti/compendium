@@ -6,7 +6,7 @@ detectors (S2/S3/S4/S6) with no LLM calls and hands the raw candidates to
 on raw S2 counts alone -- whether the signal is strong enough to justify a
 mini-model confirm step, and whether that confirm step in turn justifies
 enqueuing a full (Opus) run. See
-docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/spec.md,
+the 2026-07-19 dqbot-tier2-role-split plan (private), spec.md,
 "Sensor pass" section, for the design rationale.
 
 Three independent trip rules feed `tripped` (any one is enough):

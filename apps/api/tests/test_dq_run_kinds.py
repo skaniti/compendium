@@ -1,4 +1,4 @@
-"""dqBot Tier 2 run-kind dispatch (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+"""dqBot Tier 2 run-kind dispatch (the 2026-07-19 dqbot-tier2-role-split plan, private):
 dq_run_executor.execute_run dispatches on DQ_RUN_MODE + run_kind --
 
   - DQ_RUN_MODE=legacy: today's monolithic path (agent.investigate(

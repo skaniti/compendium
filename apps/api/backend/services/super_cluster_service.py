@@ -1391,7 +1391,7 @@ async def _verify_topic_members(
     prompt falsely rejects group-recall fits like 'Box Jellyfish and
     Cnidocytes' under zoology when applied outside carves). Prompt
     validated against the run-142 ground truth — see
-    docs/project-plans/2026-07-14-164302-sc-misfire-fix-design/.
+    the 2026-07-14 sc-misfire-fix-design plan (private).
     """
     payload = [
         {

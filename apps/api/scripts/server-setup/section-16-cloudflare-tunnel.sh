@@ -2,7 +2,7 @@
 #
 # section-16-cloudflare-tunnel.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 16
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 16
 # Installs cloudflared, runs `tunnel login` (interactive browser), creates the
 # `compendium-tunnel`, writes config.yml, creates the DNS route, installs
 # the systemd service.

@@ -71,8 +71,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
-    # Session expiry tuning (docs/project-plans/2026-09-09-125949-session-
-    # expiry-tuning/spec.md, decision D1, amended 2026-09-10): per-role
+    # Session expiry tuning (the 2026-09-09 session-expiry-tuning plan
+    # (private), spec D1, amended 2026-09-10): per-role
     # session policy. A "remembered" session (90-day refresh token, no idle
     # lapse; never available to the demo role) is granted server-side based
     # on the ingress path the request arrived over, NOT a client opt-in --
@@ -132,8 +132,8 @@ class Settings(BaseSettings):
     ``<model>@<text-contract>``, with cost events recorded as
     ``clustering_embedding``. Tunable via env var
     ``CLUSTERING_EMBEDDING_MODEL``. Introduced by the clustering-rethink
-    increment 1 (docs/project-plans/2026-07-08-180037-clustering-supercluster-
-    rethink/); flip to ``text-embedding-3-small`` after A/B validation via
+    increment 1 (the 2026-07-08 clustering-supercluster-rethink plan,
+    private); flip to ``text-embedding-3-small`` after A/B validation via
     ``evaluation/clustering/cluster_eval.py``."""
 
     clustering_umap_dims: int = 0
@@ -200,8 +200,8 @@ class Settings(BaseSettings):
     produces more 2-page semantic-thin clusters. Bumping to 3 (or higher)
     pushes the borderline content into either larger semantic neighborhoods
     or into the featured-singletons starfield, which reads cleaner on the
-    demo graph. See `docs/project-plans/_completed/2026-04-26-153441-retain-
-    skipped-pages-audit-log/plan.md` Finding 3 for the gate-permissiveness x
+    demo graph. See the 2026-04-26 retain-skipped-pages-audit-log plan
+    (private), plan.md Finding 3, for the gate-permissiveness x
     cluster-size coupling rationale."""
 
     cluster_identity_enabled: bool = False

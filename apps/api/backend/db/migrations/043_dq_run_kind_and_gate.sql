@@ -1,5 +1,5 @@
 -- 043_dq_run_kind_and_gate.sql
--- dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+-- dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private):
 -- run_kind distinguishes zero-LLM sensor passes from filing full passes;
 -- gate_metrics stores signal-gate/adjudication telemetry; the signal_gate
 -- trigger marks gate-fired full runs. Historical rows were all full runs.

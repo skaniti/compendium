@@ -7,7 +7,7 @@ Each module exposes a single public function:
 ``recluster_run_id`` is Task 8's full-pass generation snapshot: an explicit
 id is used verbatim in the (S2/S3/S4/S6) membership queries, so a recluster
 completing mid-pass can't split findings across two generations (see
-docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/). ``None``
+the 2026-07-19 dqbot-tier2-role-split plan, private). ``None``
 resolves each user's latest completed recluster_run internally
 (back-compat for direct/manual invocation). S1/S5 accept the parameter for
 signature uniformity but ignore it -- neither is scoped to a recluster run.

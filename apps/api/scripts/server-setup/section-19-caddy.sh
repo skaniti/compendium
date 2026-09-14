@@ -2,8 +2,8 @@
 #
 # section-19-caddy.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 19
-# Amended: docs/project-plans/2026-09-09-125949-session-expiry-tuning/spec.md D6
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 19
+# Amended: the 2026-09-09 session-expiry-tuning plan (private), spec D6
 #          (Task 3) -- split the single shared listener into two, one per
 #          ingress edge, so the app can trust which edge a request arrived on.
 #
@@ -44,7 +44,7 @@
 #   sudo tailscale serve --bg --https=443 http://127.0.0.1:8051
 #   sudo systemctl stop caddy
 # Rollback -- keep Caddy, drop back to one shared listener: see
-#   infra-runbook.md (docs/project-plans/2026-09-09-125949-session-expiry-tuning/).
+#   infra-runbook.md (the 2026-09-09 session-expiry-tuning plan, private).
 
 set -euxo pipefail
 
@@ -226,7 +226,7 @@ echo "    sudo tailscale serve reset"
 echo "    sudo tailscale serve --bg --https=443 http://127.0.0.1:8051"
 echo "    sudo systemctl stop caddy"
 echo "  Keep Caddy, drop back to one shared listener: see infra-runbook.md"
-echo "  (docs/project-plans/2026-09-09-125949-session-expiry-tuning/)."
+echo "  (the 2026-09-09 session-expiry-tuning plan, private)."
 
 echo ""
 echo "DONE: section-19-caddy.sh"

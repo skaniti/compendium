@@ -9,7 +9,7 @@
 --   dedupe_fold            -- redundant rows of verified duplicate groups
 --                             (explicit id list in dq_junk_cleanup.py)
 -- Same drop/re-add pattern as migration 011 (which added 'dedup').
--- Design: docs/project-plans/2026-07-17-120945-dq-queue-executive-triage/
+-- Design: the 2026-07-17 dq-queue-executive-triage plan (private)
 
 ALTER TABLE pages DROP CONSTRAINT IF EXISTS pages_archive_reason_check;
 ALTER TABLE pages ADD CONSTRAINT pages_archive_reason_check CHECK (

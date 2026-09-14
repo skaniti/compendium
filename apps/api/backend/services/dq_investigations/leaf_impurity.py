@@ -12,7 +12,7 @@ Threshold provenance: the WS2 leaf-impurity audit (prod run 142, 97
 hand-labeled leaves) found min-pairwise-cosine-similarity to be the best
 cheap single-metric detector for MIXED vs PURE leaves -- precision 0.80,
 recall 0.63, F1 0.71 at a <= 0.19 threshold (see
-``docs/project-plans/2026-07-14-164302-sc-misfire-fix-design/artifacts/ws2_report.md``
+the 2026-07-14 sc-misfire-fix-design plan (private), WS2 report,
 section 2). That same audit found this signal to be *independent* of the
 supercluster-misfire mechanism (only 1 of 19 MIXED leaves in the audited run
 actually caused a downstream SC misfire) -- this investigation is a

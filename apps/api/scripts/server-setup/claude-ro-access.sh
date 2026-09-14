@@ -3,7 +3,7 @@
 # claude-ro-access.sh -- provision a structurally read-only server channel
 # for Claude Code (CC) on compendium-server.
 #
-# Plan: docs/project-plans/_completed/2026-06-09-214610-server-ro-access-local-mirror-backups/
+# Plan: the 2026-06-09 server-ro-access-local-mirror-backups plan (private),
 #       spec.md Part 1. Deliberately NOT named section-NN: those numbers map to
 #       the laptop-server-setup plan; this script belongs to a different plan.
 #

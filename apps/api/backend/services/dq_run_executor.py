@@ -5,7 +5,7 @@ backend.api.routers.dq_bot so the worker process can run it without importing
 the FastAPI app (the router pulls verify_api_key from backend.api.main). The
 in-memory abort registry is gone; abort is a DB flag polled here during streaming.
 
-dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private):
 `execute_run` now dispatches on `run_kind` -- `_execute_sensor_run` (zero-LLM
 structural detectors + the deterministic dq_gate, no persistence) vs
 `_execute_full_run` (detectors + gpt-4o-mini adjudication + Opus synthesis,

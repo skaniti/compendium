@@ -35,7 +35,7 @@
 -- unreferenced grant, not a security hole -- the allowlist is what the
 -- validator + prompts actually gate on.
 --
--- Design: docs/project-plans/2026-07-17-180456-dqbot-tier1-overrides/spec.md
+-- Design: the 2026-07-17 dqbot-tier1-overrides plan (private), spec.md
 
 -- == 1. dq_recommendations: action_payload + applied bookkeeping =======
 ALTER TABLE dq_recommendations

@@ -2,8 +2,8 @@
 #
 # section-20-backups.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 20
-#       docs/project-plans/_completed/2026-06-09-214610-server-ro-access-local-mirror-backups/
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 20
+#       the 2026-06-09 server-ro-access-local-mirror-backups plan (private),
 #         plan.md Phase 4 + spec.md ADDENDUM 2026-06-18 (CRR = Cloud Restic Repo)
 #
 # Sets up restic + a nightly cron backup for the single-stack deployment.

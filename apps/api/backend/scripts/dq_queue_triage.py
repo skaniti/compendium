@@ -2,7 +2,7 @@
 
 Reads the frozen manifest at ``backend/scripts/dq_triage_manifest.json``
 (provided by the orchestrator -- see
-``docs/project-plans/2026-07-17-120945-dq-queue-executive-triage/spec.md``
+the 2026-07-17 dq-queue-executive-triage plan (private), spec.md,
 for the full disposition rationale) and, for each entry:
 
   - ``recommendations[]``: ``{rec_id, obs_id, expected_prior_status, status,

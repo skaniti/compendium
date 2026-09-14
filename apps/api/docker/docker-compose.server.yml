@@ -13,7 +13,7 @@
 # compose, honcho-driven, single image). That file split at extraction:
 # this compose owns the backend half; the Dash half + postgres stay on a
 # modified copy of the OLD compose, still explorer-hosted, documented in
-# the private cutover runbook (docs/project-plans -- never copied here).
+# the private cutover runbook (never copied here).
 #
 # ── Required before `docker compose up` (see the runbook for exact values) ──
 #   Host shell env (sourced from ~/.secrets + a non-secret deploy .env,

@@ -1,6 +1,6 @@
 -- 036_cluster_identity_and_groups.sql
--- Batch B of the clustering rethink (docs/project-plans/2026-07-08-180037-
--- clustering-supercluster-rethink/plan-batch-B.md).
+-- Batch B of the clustering rethink (the 2026-07-08 clustering-supercluster-
+-- rethink plan (private), plan-batch-B.md).
 --
 -- 4a: cluster identity persistence — stable_id survives recluster runs
 -- (greedy Jaccard match on member page_content_ids); name_carried marks

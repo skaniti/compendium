@@ -3,7 +3,7 @@
 Reads the frozen manifest at
 ``backend/scripts/dq_rec_sweep_manifest_2026_07_17.json`` (provided by the
 orchestrator -- see
-``docs/project-plans/2026-07-17-193754-dq-pending-recs-vocab-sweep/spec.md``
+the 2026-07-17 dq-pending-recs-vocab-sweep plan (private), spec.md,
 for the full disposition rationale) and, for each entry:
 
   - ``recommendations[]``: ``{rec_id, expected_prior_status, disposition,

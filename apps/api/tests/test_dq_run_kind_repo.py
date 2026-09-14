@@ -1,5 +1,5 @@
 """Integration tests for dq_runs run_kind / gate_metrics (migration 043,
-dqBot Tier 2: docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/).
+dqBot Tier 2: the 2026-07-19 dqbot-tier2-role-split plan, private).
 
 Covers: enqueue's run_kind default/override, claim surfacing run_kind,
 set_gate_metrics + recent_sensor_metrics ordering, complete_run persisting

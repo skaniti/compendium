@@ -1,6 +1,6 @@
 """Unit tests for the gated clustering embedding upgrade (increment 1 of the
-clustering rethink — see docs/project-plans/2026-07-08-180037-clustering-
-supercluster-rethink/plan.md).
+clustering rethink — see the 2026-07-08 clustering-supercluster-rethink
+plan (private), plan.md).
 
 Covers: text recipe ctv2 selection order, versioned cache keying
 (<model>@<contract>), the candidate OpenAI path with a stubbed client (no

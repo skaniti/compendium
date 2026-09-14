@@ -1,7 +1,7 @@
 """Backfill split-rec action_payloads + re-key a dead-subject override.
 
 Companion to the runs 58-60 pre-annotation
-(``docs/project-plans/2026-07-19-132251-dq-runs-58-60-pre-annotation/``).
+(the 2026-07-19 dq-runs-58-60-pre-annotation plan, private).
 Two operations, both driven by the committed manifest
 ``dq_payload_backfill_manifest_2026_07_19.json``:
 

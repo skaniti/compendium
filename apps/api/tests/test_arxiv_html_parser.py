@@ -3,7 +3,7 @@
 Validates ``parse_ar5iv`` against frozen ar5iv renders. Fixtures live at
 ``tests/fixtures/arxiv/{paper_id}.html`` and were captured 2026-05-03 from
 ``https://ar5iv.labs.arxiv.org/html/{paper_id}``. Sizes match the round-2
-probe in ``docs/project-plans/2026-05-03-122329-arxiv-full-paper-extraction.md``
+probe in the 2026-05-03 arxiv-full-paper-extraction plan (private)
 (SimCSE 600 KB, PaLM 2 917 KB).
 """
 

@@ -13,7 +13,7 @@ Success is defined as receiving a `result` event with is_error=False --
 NOT by returncode or stderr heuristics. This structurally resolves the
 silent-success bug where empty-stderr non-zero exits triggered complete_run().
 
-See docs/project-plans/_completed/2026-04-20-dq-helper/design.md for design intent
+See the 2026-04-20 dq-helper plan (private), design.md, for design intent
 and the "Runtime architecture -- CC subprocess pattern" section of the
 implementation plan for invocation + parsing details.
 """
@@ -62,7 +62,7 @@ DQ_ALLOWED_TOOLS = "Bash Read Grep Glob"
 # synthesis prompt (survivors + adjudication summary + verdict history) is
 # much smaller (~40-80K tokens) but keeps the same selector for
 # consistency (Tier-2 spec decision 5,
-# docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/spec.md).
+# the 2026-07-19 dqbot-tier2-role-split plan (private), spec.md).
 # Runs off subscription billing under the current Anthropic ToS, so the
 # `[1m]` selector's cost is not the binding constraint -- it's insurance
 # against a future API-only-billing switch. Override via env var
@@ -437,7 +437,7 @@ class DQAgent:
 
         if synthesis:
             # Tier-2 role split (spec decision log,
-            # docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/spec.md):
+            # the 2026-07-19 dqbot-tier2-role-split plan (private), spec.md):
             # the executor already ran deterministic detection + gpt-4o-mini
             # adjudication upstream of this call. Opus's job here is
             # synthesis ONLY -- root-cause connection, fix drafting, veto,

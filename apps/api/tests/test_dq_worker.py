@@ -1,6 +1,6 @@
 """Worker loop: claim a queued run, pick the investigation set by trigger, execute.
 
-dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private):
 claimed rows now carry run_kind (sensor vs full); poll_once passes it
 straight through to dq_run_executor.execute_run, which owns the actual
 sensor/full dispatch. See test_poll_once_dispatches_by_claimed_run_kind."""

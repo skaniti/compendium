@@ -1,6 +1,6 @@
 """Unit tests for increment 2 of the clustering rethink: UMAP reduction branch
 and exposed HDBSCAN knobs (min_samples / selection method / selection epsilon).
-See docs/project-plans/2026-07-08-180037-clustering-supercluster-rethink/
+See the 2026-07-08 clustering-supercluster-rethink plan (private),
 plan-increment-2.md.
 """
 

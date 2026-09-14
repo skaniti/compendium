@@ -2,7 +2,7 @@
 #
 # section-13-nut.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 13
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 13
 # Automates 13.1 through 13.6 (NUT install + config + service start + verify)
 # and 13.8 (ntfy.sh notify script + upsmon.conf hook).
 #

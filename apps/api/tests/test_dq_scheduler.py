@@ -3,7 +3,7 @@
 investigations in-process. These are pure unit tests (no PG, no subprocess):
 we mock user_repo + dq_runs_repo and assert the enqueue/gating behavior.
 
-dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private):
 the recluster hook's enqueue call is gated by DQ_RUN_MODE (default "tier2"
 enqueues a sensor pass; "legacy" enqueues a full run, matching pre-Tier-2
 behavior) -- see test_recluster_enqueues_sensor_run_by_default_tier2 /
@@ -50,7 +50,7 @@ def test_weekly_skips_user_with_active_run():
 
 
 def test_recluster_enqueues_sensor_run_by_default_tier2(monkeypatch):
-    """dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/):
+    """dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private):
     with DQ_RUN_MODE unset (default "tier2"), the recluster hook enqueues a
     zero-LLM sensor pass, not a full run -- the sensor's own dq_gate decides
     whether a full run is warranted."""

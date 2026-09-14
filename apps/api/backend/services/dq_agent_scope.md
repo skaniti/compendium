@@ -244,7 +244,7 @@ its own to be a signal).
 leaves) found min-pairwise-cosine-similarity to be the best cheap
 single-metric detector for MIXED vs PURE leaves — precision 0.80, recall
 0.63, F1 0.71 at the 0.19 threshold (see
-`docs/project-plans/2026-07-14-164302-sc-misfire-fix-design/artifacts/ws2_report.md`
+the 2026-07-14 sc-misfire-fix-design plan (private), WS2 report,
 section 2). That audit also found this signal to be *independent* of the
 supercluster-misfire mechanism (only 1 of 19 MIXED leaves in the audited
 run actually caused a downstream SC misfire) — S6 is a standalone
@@ -281,7 +281,7 @@ the label alone; suppress if the prediction matches observation) now runs
 as the **Tier-2 adjudication band** — a batched `gpt-4o-mini` pass over
 member-evidence (full title/domain lists, not 5-outlier prose) that judges
 S2 and S4 candidates BEFORE Opus ever sees them (see
-`docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/spec.md`,
+the 2026-07-19 dqbot-tier2-role-split plan (private), spec.md,
 "Full pass phase 2 — adjudication"). S2 and S4 pre-detectors themselves no
 longer run the guard — they emit raw threshold candidates, unfiltered;
 adjudication is the sole rival-hypothesis gate ahead of Opus's synthesis
@@ -312,7 +312,7 @@ falling back to the stringified integer cluster id — flagged
 `{"identity": "missing"}` in `action_payload` — when `stable_id` is NULL
 (identity disabled, or a legacy/pre-036 row). The integer cluster id and
 current display name still ride along in `evidence` for readability. See
-`docs/project-plans/2026-07-17-180456-dqbot-tier1-overrides/spec.md`
+the 2026-07-17 dqbot-tier1-overrides plan (private), spec.md
 (sections S1, S4).
 
 ---

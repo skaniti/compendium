@@ -9,7 +9,7 @@ and performs NO LLM calls. The old per-candidate ``rival_hypothesis_guard``
 evidence) retired with this change; the rival-hypothesis check now runs
 upstream, batched, over richer child evidence in
 ``backend/services/dq_adjudicator.py`` (see
-``docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/`` for the
+the 2026-07-19 dqbot-tier2-role-split plan (private) for the
 Tier-2 role-split rationale). Each candidate carries a top-level
 ``children`` list (every child cluster's label) as that adjudicator's
 evidence.

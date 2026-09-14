@@ -20,8 +20,8 @@
 -- half-applied state. ON CONFLICT DO NOTHING keeps both INSERT steps
 -- idempotent.
 --
--- Design spec: docs/project-plans/_completed/2026-05-01-194021-dq-vocab-receipts/spec.md
--- Implementation plan: docs/project-plans/_completed/2026-05-01-194021-dq-vocab-receipts/plan.md
+-- Design spec: the 2026-05-01 dq-vocab-receipts plan (private), spec.md
+-- Implementation plan: the 2026-05-01 dq-vocab-receipts plan (private), plan.md
 
 -- == 1. Vocab table ==================================================
 CREATE TABLE IF NOT EXISTS dq_vocab_issue_types (

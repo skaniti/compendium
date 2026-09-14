@@ -4,7 +4,7 @@
 -- index serving find_similar — it cannot hold candidate embeddings of other
 -- dimensions (text-embedding-3-small = 1536). This table is the cache for the
 -- clustering pipeline's gated embedding upgrade (clustering-rethink increment
--- 1; see docs/project-plans/2026-07-08-180037-clustering-supercluster-rethink/).
+-- 1; see the 2026-07-08 clustering-supercluster-rethink plan, private).
 --
 -- model_key encodes BOTH the embedding model and the text-contract version
 -- that produced the input text (e.g. 'text-embedding-3-small@ctv2'), so a

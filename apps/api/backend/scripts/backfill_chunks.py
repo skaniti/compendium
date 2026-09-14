@@ -22,7 +22,7 @@ WHAT
 
   DEFAULT SCOPE = everything -- the substrate for the two-tier search (a default
   active-scoped search_compendium + an opt-in full_search over all chunks); see
-  docs/project-plans/_completed/2026-06-16-143832-two-tier-rag-search/.
+  the 2026-06-16 two-tier-rag-search plan (private).
 
   SEQUENCING: the all-statuses backfill is safe now that the default search is
   active-scoped (two-tier search shipped). --active-only remains a safe subset.

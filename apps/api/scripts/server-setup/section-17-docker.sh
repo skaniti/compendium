@@ -2,7 +2,7 @@
 #
 # section-17-docker.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 17
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 17
 # Installs Docker Engine + Compose plugin, adds user to docker group, enables
 # auto-start, runs hello-world verification.
 #

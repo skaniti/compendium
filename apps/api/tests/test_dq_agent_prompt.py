@@ -1,5 +1,5 @@
 """Tests for the dqBot Tier-2 synthesis-mode prompt rebuild (Task 7,
-docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/plan.md).
+the 2026-07-19 dqbot-tier2-role-split plan (private), plan.md).
 
 Covers `DQAgent._build_prompt(..., synthesis=True)` (the new Opus
 synthesis-only prompt: ADJUDICATED SURVIVORS + ADJUDICATION SUMMARY + YOUR

@@ -1,6 +1,6 @@
 """Unit tests for increment 3 of the clustering rethink: hybrid group discovery,
 topic mapping, and interest tiers (backend/services/supercluster_discovery.py).
-See docs/project-plans/2026-07-08-180037-clustering-supercluster-rethink/
+See the 2026-07-08 clustering-supercluster-rethink plan (private),
 plan-increment-3.md.
 """
 

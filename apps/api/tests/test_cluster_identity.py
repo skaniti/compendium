@@ -1,6 +1,6 @@
 """Unit tests for batch B 4a: cluster identity persistence (greedy Jaccard
-matching + stable_id/name carry-forward). See docs/project-plans/
-2026-07-08-180037-clustering-supercluster-rethink/plan-batch-B.md.
+matching + stable_id/name carry-forward). See the 2026-07-08
+clustering-supercluster-rethink plan (private), plan-batch-B.md.
 """
 
 import numpy as np

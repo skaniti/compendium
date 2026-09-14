@@ -1,6 +1,6 @@
 -- 044_refresh_tokens_remembered.sql
--- Session expiry tuning (docs/project-plans/2026-09-09-125949-session-
--- expiry-tuning/spec.md, decision D1, amended 2026-09-10): a "remembered"
+-- Session expiry tuning (the 2026-09-09 session-expiry-tuning plan
+-- (private), spec D1, amended 2026-09-10): a "remembered"
 -- refresh token (90-day expiry, no idle lapse, instead of the default
 -- 7-day/60-minute policy) is granted when the token is minted while the
 -- request's ingress verdict is tailnet-trusted -- not a client-supplied

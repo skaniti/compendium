@@ -2,7 +2,7 @@
 #
 # maintenance-quickcheck.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 22
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 22
 # Routine maintenance check -- run weekly or whenever you want a quick health-status.
 # Read-only; no changes made.
 #

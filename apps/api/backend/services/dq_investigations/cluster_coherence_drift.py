@@ -11,7 +11,7 @@ of its own and performs NO LLM calls. The old per-candidate
 5-outlier prose, no member evidence) retired with this change; the
 rival-hypothesis check now runs upstream, batched, over richer member
 evidence in ``backend/services/dq_adjudicator.py`` (see
-``docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/`` for the
+the 2026-07-19 dqbot-tier2-role-split plan (private) for the
 Tier-2 role-split rationale). Each candidate carries a top-level
 ``members`` list (title/domain/page_content_id for every member with a
 cached embedding, coherent and outlier alike) as that adjudicator's

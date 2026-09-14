@@ -2,7 +2,7 @@
 #
 # section-14-baseline.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 14
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 14
 # Captures a born-on-date hardware + performance snapshot to serve as the
 # comparison baseline for quarterly re-runs (section 22 maintenance cadence).
 #

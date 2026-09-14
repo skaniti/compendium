@@ -2,7 +2,7 @@
 #
 # section-18-app-stack.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 18
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 18
 # Stands up the single-stack Compendium deployment via docker compose.
 # ONE app, ONE postgres, two users (primary + demo) separated by user_id + role.
 #

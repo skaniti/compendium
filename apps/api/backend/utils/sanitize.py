@@ -68,7 +68,7 @@ def sanitize_prompt_input(
 # query. In a single-turn call, "previous instructions" can ONLY mean the
 # system prompt — the user has no prior instructions to override.
 #
-# See docs/project-plans/2026-04-06-security-reference.md for full rationale.
+# See the 2026-04-06 security-reference plan (private) for full rationale.
 # ---------------------------------------------------------------------------
 _AGENT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions",

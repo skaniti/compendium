@@ -25,7 +25,7 @@ Model choice:
     the difference is small. If quality regressions surface, swap back is
     a one-line change to MODEL_NAME below.
 
-See docs/project-plans/2026-04-08-rag-reranker.md for the original design
+See the 2026-04-08 rag-reranker plan (private) for the original design
 rationale.
 """
 

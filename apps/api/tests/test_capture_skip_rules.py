@@ -1,7 +1,7 @@
 """Stage-0 claude.ai app-chrome denylist + placeholder-persist policy.
 
 Covers the RC-A (claude.ai chrome junk) and RC-D (placeholder purge) fixes
-from docs/project-plans/2026-07-17-120945-dq-queue-executive-triage/:
+from the 2026-07-17 dq-queue-executive-triage plan (private):
 - backend/api/main.py: `_is_skip_url` gains a claude.ai chrome-path denylist
   (Stage-0, pre-LLM). `/chat/<uuid>` transcripts must stay capturable.
 - backend/process_captures.py: `_persist_single_page` archives results whose

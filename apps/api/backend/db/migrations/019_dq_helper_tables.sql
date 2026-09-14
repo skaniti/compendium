@@ -3,7 +3,7 @@
 -- ledger), recommendations (pending/approved/rejected inbox items), and runs
 -- (per-execution telemetry). All three tables carry row-level security so
 -- they behave correctly if the project is ever open-sourced as multi-tenant.
--- See docs/project-plans/_completed/2026-04-20-dq-helper/design.md for design intent.
+-- See the 2026-04-20 dq-helper plan (private), design.md, for design intent.
 
 -- ── dq_runs ──────────────────────────────────────────────────────────
 CREATE TABLE dq_runs (

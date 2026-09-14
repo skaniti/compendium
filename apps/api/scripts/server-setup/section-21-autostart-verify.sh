@@ -2,7 +2,7 @@
 #
 # section-21-autostart-verify.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 21
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 21
 # Enables auto-start for all services and verifies they come back after a reboot.
 #
 # Usage:

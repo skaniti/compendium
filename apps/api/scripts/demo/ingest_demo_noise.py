@@ -12,7 +12,7 @@ Usage:
 
     ~/.venvs/compendium-explorer/bin/python3 \\
         -m scripts.demo.ingest_demo_noise \\
-        --source-doc docs/project-plans/<phase-doc>.md \\
+        --source-doc <path-to-phase-doc>.md \\
         --capture-id-prefix demo_noise_phase1
 """
 

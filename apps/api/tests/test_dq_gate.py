@@ -3,7 +3,7 @@ that decides when a nightly sensor pass should fire an early full (Opus)
 run. Pure unit tests: dq_runs_repo, dq_observations_repo, and
 dq_adjudicator are all monkeypatched, no PG, no live LLM calls.
 
-See docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/spec.md
+See the 2026-07-19 dqbot-tier2-role-split plan (private), spec.md
 ("Sensor pass" section) and the Task 4 brief
 (.superpowers/sdd/task-4-brief.md) for the rules this module implements.
 """

@@ -1,7 +1,7 @@
 """Retention policy for skip-gate-archived pages (privacy carve-out).
 
 Implements the sensitive-content carve-out from the retain-skipped-pages
-design (docs/project-plans/_completed/2026-04-26-153441-retain-skipped-pages-audit-log/):
+design (the 2026-04-26 retain-skipped-pages-audit-log plan, private):
 skipped pages are retained as audit rows (url/title/domain/verdict survive),
 but when the skip looks sensitivity-driven the CONTENT must not be retained --
 no page_content link, no content_summary, extracted_text nulled.

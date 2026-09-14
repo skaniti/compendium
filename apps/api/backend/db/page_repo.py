@@ -1126,7 +1126,7 @@ def get_time_windows(
       2. ``to_char(p.visited_at AT TIME ZONE %s, ...)`` parameterized
          on user TZ (would need a TZ field on users + frontend detection
          of the browser's IANA TZ name like "America/New_York").
-    See docs/project-plans/_shelved/2026-04-19-local-time-followup/followup.md
+    See the 2026-04-19 local-time-followup plan (private), followup.md
 
     ``filter_node_id`` id-vocabulary contract (2026-07-17, rethink R7.2
     fix): a page-dot tap on the D3 canvas sends the GRAPH node id, which

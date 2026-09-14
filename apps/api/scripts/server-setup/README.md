@@ -1,6 +1,6 @@
 # Server-setup scripts
 
-Idempotent bash scripts that automate the scriptable portions of `docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md` sections 13-22.
+Idempotent bash scripts that automate the scriptable portions of the 2026-05-03 laptop-server-setup plan (private), plan.md, sections 13-22.
 
 ## Workflow per script
 

@@ -1,5 +1,5 @@
 """Verdict-history renderer for dqBot Tier 2
-(docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/).
+(the 2026-07-19 dqbot-tier2-role-split plan, private).
 
 Renders the user's accumulated approve/reject/dismiss verdicts on past
 dq_recommendations into one markdown block -- deterministic and

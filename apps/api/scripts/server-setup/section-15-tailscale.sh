@@ -2,7 +2,7 @@
 #
 # section-15-tailscale.sh
 #
-# Plan: docs/project-plans/_completed/2026-05-03-155517-laptop-server-setup/plan.md section 15
+# Plan: the 2026-05-03 laptop-server-setup plan (private), section 15
 # Installs Tailscale, brings it up (interactive OAuth via URL), sets hostname, verifies.
 #
 # Interactive: `sudo tailscale up` prints an auth URL and BLOCKS until you click

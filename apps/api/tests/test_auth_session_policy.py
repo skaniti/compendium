@@ -1,5 +1,5 @@
-"""Endpoint + unit tests for session-expiry-tuning Task 1 / 1b (docs/project-
-plans/2026-09-09-125949-session-expiry-tuning/spec.md, decisions D1 and D5,
+"""Endpoint + unit tests for session-expiry-tuning Task 1 / 1b
+(the 2026-09-09 session-expiry-tuning plan (private), spec.md, decisions D1 and D5,
 amended 2026-09-10: ``remembered`` is derived from the tailnet-ingress
 header Caddy sets, not a client-supplied ``remember`` opt-in).
 

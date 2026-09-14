@@ -11,7 +11,7 @@ Three independent operations, each a status flip -- never a DELETE:
       ``archive_reason = 'placeholder_no_content'``.
   (c) ``dedupe``: the exact hardcoded id list below (verified duplicate
       groups from the 2026-07-17 executive triage sweep; see
-      ``docs/project-plans/2026-07-17-120945-dq-queue-executive-triage/spec.md``)
+      the 2026-07-17 dq-queue-executive-triage plan (private), spec.md)
       -> ``archive_reason = 'dedupe_fold'``.
 
 Every operation is guarded by ``status = 'active' AND human_status IS

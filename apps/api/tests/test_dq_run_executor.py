@@ -1,6 +1,6 @@
 """execute_run: the runtime-agnostic run driver (investigate -> persist -> complete/fail).
 
-dqBot Tier 2 (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/)
+dqBot Tier 2 (the 2026-07-19 dqbot-tier2-role-split plan, private)
 split execute_run's dispatch on DQ_RUN_MODE + run_kind; this file's tests
 predate that split and all exercise the DQ_RUN_MODE=legacy path (the
 `fake_investigate` fakes below take `(trigger, investigations, on_event,

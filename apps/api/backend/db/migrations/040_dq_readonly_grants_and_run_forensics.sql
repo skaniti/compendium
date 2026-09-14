@@ -19,7 +19,7 @@
 -- Also adds dq_runs.failure_reason so fail_run() (see dq_runs_repo.py) has
 -- somewhere to persist *why* a run failed instead of discarding the reason.
 --
--- Design + audit: docs/project-plans/2026-07-17-111159-dqbot-tier0-repairs/spec.md
+-- Design + audit: the 2026-07-17 dqbot-tier0-repairs plan (private), spec.md
 
 -- == 1. Read-only role for SQL receipts (idempotent re-create) =========
 DO $$ BEGIN

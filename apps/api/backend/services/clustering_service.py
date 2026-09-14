@@ -7,8 +7,8 @@ Replaces per-capture LLM clustering (old Stage 4b) with a batch process that:
 4. Names clusters via gpt-4o-mini
 5. Writes clusters, page_clusters, and cluster_edges to PostgreSQL
 
-Key parameters are settings-driven since the clustering rethink (docs/
-project-plans/2026-07-08-180037-clustering-supercluster-rethink/):
+Key parameters are settings-driven since the clustering rethink
+(the 2026-07-08 clustering-supercluster-rethink plan, private):
 - Embedding model: settings.clustering_embedding_model (default
   all-MiniLM-L6-v2 = legacy SBERT; text-embedding-* = gated OpenAI path)
 - Reduction: settings.clustering_umap_dims (default 0 = off)
@@ -970,7 +970,7 @@ class ClusteringService:
         2000-word fallback below is dead code in practice and most pages
         embed on title + first ~50 words while the full extracted text
         (~10-30x more) sits unused in ``fetched_content``. Improving this is
-        the ctv3 follow-up (see docs/project-plans, sc-followups spec).
+        the ctv3 follow-up (see the private sc-followups spec).
         Pages without a summary would fall back to primary text capped at
         2000 words — text-embedding-3-small accepts 8k tokens, so that path
         truncates nothing (F2's claim holds only there). The URL-token

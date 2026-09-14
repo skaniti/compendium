@@ -3,7 +3,7 @@
 Reads the frozen manifest at
 ``backend/scripts/dq_vocab_manifest_2026_07_17.json`` (a frozen orchestrator
 judgment -- see
-``docs/project-plans/2026-07-17-193754-dq-pending-recs-vocab-sweep/spec.md``,
+the 2026-07-17 dq-pending-recs-vocab-sweep plan (private), spec.md,
 "Vocabulary sweep" section, for the full disposition rationale) and, for
 ``--user-id``, disposes every entry in this load-bearing order:
 

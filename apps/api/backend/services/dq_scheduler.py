@@ -25,7 +25,7 @@ SCHEDULED_RUNS_PREF_KEY = "enable_scheduled_runs"
 WEEKLY_JOB_ID = "dq_weekly_investigation"
 
 # dqBot Tier 2 rollout kill switch
-# (docs/project-plans/2026-07-19-131356-dqbot-tier2-role-split/): "legacy"
+# (the 2026-07-19 dqbot-tier2-role-split plan, private): "legacy"
 # restores today's enqueue + monolithic execute semantics exactly, both here
 # (the recluster hook enqueues a full run, matching pre-Tier-2 behavior) and
 # in dq_run_executor.execute_run (bypasses the sensor/full split entirely).
