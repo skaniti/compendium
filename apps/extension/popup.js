@@ -482,11 +482,9 @@ saveSettingsBtn.addEventListener('click', async () => {
     versionEl.href = `${CONFIG.RELEASE_NOTES_URL}#v${version}`;
     versionEl.target = '_blank';
     versionEl.rel = 'noopener';
-    versionEl.title = 'Release notes';
     versionEl.style.cursor = 'pointer';
   } else {
     versionEl.removeAttribute('href');
-    versionEl.title = 'Release notes page coming soon';
     versionEl.style.cursor = 'default';
   }
 }

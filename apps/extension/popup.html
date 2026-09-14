@@ -17,14 +17,14 @@
 
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <button class="tab tab-passive active" data-tab="passive" title="Passive capture of your browsing, finalized after 60 minutes idle (switch below turns it off)">
+      <button class="tab tab-passive active" data-tab="passive" title="Passive capture of your browsing, finalized after 60 minutes idle. Disable in settings">
         <span class="tab-dot dot-passive"></span>
         <span class="tab-text">
           <span class="tab-label">Passive</span>
           <span class="tab-caption" id="passiveCaption">Always tracking</span>
         </span>
       </button>
-      <button class="tab tab-active" data-tab="active" title="A journey you start and stop yourself">
+      <button class="tab tab-active" data-tab="active" title="Manual capture (use to curate captures if you don't want to enable passive tracking)">
         <span class="tab-dot dot-active"></span>
         <span class="tab-text">
           <span class="tab-label">Active</span>
@@ -36,24 +36,24 @@
     <main>
       <!-- Passive Tab Panel -->
       <div id="panelPassive" class="tab-panel">
-        <label class="switch-row" title="Turn passive tracking off if you only want to record journeys you start yourself">
+        <label class="switch-row">
           <span>Passive tracking</span>
           <input type="checkbox" id="passiveToggle" class="switch">
           <span class="switch-track"></span>
         </label>
 
         <div class="session-info">
-          <div class="stat" title="Pages recorded in the capture still open">
+          <div class="stat">
             <span id="passivePageCount" class="stat-value">0</span>
             <span class="stat-label">pages in this capture</span>
           </div>
-          <div class="stat" title="Captures finalized on this device">
+          <div class="stat">
             <span id="completedCount" class="stat-value">0</span>
             <span class="stat-label">captures completed</span>
           </div>
         </div>
 
-        <div class="session-id" title="Id of the capture still open; appears in the cache page"><span id="captureIdPrefix">Current capture: </span><span class="mono" id="captureId">No active capture</span></div>
+        <div class="session-id"><span id="captureIdPrefix">Current capture: </span><span class="mono" id="captureId">No active capture</span></div>
 
         <button id="forceExportBtn" class="btn btn-export" title="Finalize the open capture now and send everything buffered">
           Force export
@@ -68,47 +68,47 @@
 
       <!-- Active Tab Panel -->
       <div id="panelActive" class="tab-panel hidden">
-        <div id="journeyStatus" class="status-row" title="Whether a journey is currently recording">Ready to record</div>
+        <div id="journeyStatus" class="status-row">Ready to record</div>
 
         <div class="session-info">
-          <div class="stat" title="Pages visited in the journey now recording">
+          <div class="stat">
             <span id="activePageCount" class="stat-value">0</span>
             <span class="stat-label">pages in this journey</span>
           </div>
-          <div class="stat" title="Journeys finished on this device">
+          <div class="stat">
             <span id="journeyCount" class="stat-value">0</span>
             <span class="stat-label">journeys completed</span>
           </div>
         </div>
 
-        <div class="session-id" id="journeyIdLine" title="Id of the journey now recording; appears in the cache page">No journey recording</div>
+        <div class="session-id" id="journeyIdLine">No journey recording</div>
 
-        <button id="startBtn" class="btn btn-active-start" title="Begin recording a journey you can stop anytime">Start capture</button>
-        <button id="stopBtn" class="btn btn-active-stop hidden" title="Finish this journey and save it">Stop capture</button>
+        <button id="startBtn" class="btn btn-active-start" title="Begin recording a capture you can stop anytime">Start capture</button>
+        <button id="stopBtn" class="btn btn-active-stop hidden" title="Finish and save the current capture">Stop capture</button>
 
         <div id="journeyNote" class="active-note">Passive tracking continues until you start a journey.</div>
       </div>
     </main>
 
     <div class="links">
-      <a id="viewCacheLink" class="cache-link" href="#" title="Open the cache page: every capture kept on this device, with retry and download">View capture cache</a>
+      <a id="viewCacheLink" class="cache-link" href="#">View capture cache</a>
     </div>
     <!-- Settings (collapsible) -->
     <details class="settings-panel" open>
       <summary class="settings-toggle">Settings</summary>
       <div class="settings-body">
-        <label class="settings-label" title="Where captures are sent">
+        <label class="settings-label">
           Backend URL
           <input id="settingsBackendUrl" type="text" class="settings-input"
                  placeholder="http://localhost:8001">
         </label>
-        <label class="settings-label" for="settingsApiKey" title="Identifies this browser to the backend">
+        <label class="settings-label" for="settingsApiKey">
           API key
           <input id="settingsApiKey" type="text" class="settings-input mono"
                  placeholder="cmp_…" autocomplete="off" spellcheck="false">
         </label>
         <div id="settingsError" class="settings-error hidden" role="alert"></div>
-        <label class="settings-label" title="Name stored with each capture so you can tell devices apart">
+        <label class="settings-label">
           Device label
           <input id="settingsDeviceLabel" type="text" class="settings-input"
                  placeholder="e.g. Work laptop">
