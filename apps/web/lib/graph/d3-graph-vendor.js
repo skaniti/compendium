@@ -921,8 +921,8 @@
 //      plan, private): `renderScName` seam (text by default,
 //      generator path glyphs under a dev preview), tier breakpoints and
 //      SC_NAME_CHAR_WIDTH read from the generator, dev hook
-//      `__d3SetAlmagestPreview`. Batch A (2026-09-13-183006-graph-
-//      interaction-followups) adds a dev-only tier-tint debug aid on top
+//      `__d3SetAlmagestPreview`. Batch A (the 2026-09-13 graph-interaction-
+//      followups plan, private) adds a dev-only tier-tint debug aid on top
 //      (`__almagestTierTint`, dev hook `__d3SetAlmagestTierTint`).
 //
 // Graph interaction follow-ups (spec: the 2026-09-13 graph-interaction-
