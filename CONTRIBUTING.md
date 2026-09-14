@@ -9,8 +9,8 @@ response cadence is best-effort, not contractual.
 
 - Frontend only, zero setup: `npm ci && npm run demo` (see the README
   Quickstart). Everything runs against a static demo compendium.
-- Full stack: `docker compose up --build` (README, "Full-stack quickstart
-  (Docker)").
+- Full stack: `docker compose up --build` (README,
+  "Full-stack quickstart (Docker)").
 - Frontend against a backend you already run: `bash scripts/dev.sh`, which
   takes `BACKEND_URL` from the environment (default `http://localhost:8001`)
   and reads `BACKEND_DIR` from `apps/web/.env.local` (an exported
