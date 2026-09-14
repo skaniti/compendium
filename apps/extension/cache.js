@@ -112,21 +112,16 @@ function renderPageTable(pages) {
 
   return `<table class="page-table">
     <thead><tr>
-      <th title="Order the page was visited in">#</th>
-      <th title="Page title -- links to the page">Title</th>
-      <th title="Time spent on the page before leaving it">Dwell</th>
-      <th title="How the page was reached">Transition</th>
-      <th title="Extracted text length in characters (thousands)">Text</th>
+      <th>#</th>
+      <th>Title</th>
+      <th>Dwell</th>
+      <th>Transition</th>
+      <th>Text</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
-const BADGE_TITLES = {
-  active: 'Still recording',
-  delivered: 'Confirmed saved by the server',
-  failed: 'Not delivered yet; retries every minute while the backend is reachable'
-};
 
 /**
  * Renders the <details class="session-card"> shell shared by the active
@@ -143,7 +138,6 @@ const BADGE_TITLES = {
 function renderCaptureCard(info, source, extra = {}, bodyHtml = null) {
   const badgeClass = { active: 'badge-live', failed: 'badge-failed', delivered: 'badge-delivered' }[source];
   const badgeLabel = { active: 'LIVE', failed: 'FAILED', delivered: 'DELIVERED' }[source];
-  const badgeTitle = BADGE_TITLES[source];
   const cardClass = `source-${source}`;
 
   const captureId = info.captureId || 'unknown';
@@ -178,15 +172,15 @@ function renderCaptureCard(info, source, extra = {}, bodyHtml = null) {
   // common passive one; kept out of the delivery badge (LIVE/FAILED/
   // DELIVERED already uses that slot for delivery state).
   const kindTag = info.kind === 'active'
-    ? '<span class="kind-tag" title="Recorded as an active journey">journey</span>'
+    ? '<span class="kind-tag">journey</span>'
     : '';
 
   let actions = '';
   if (source === 'failed') {
-    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}" title="Send this capture to the backend again">Retry export</button>`;
+    actions += `<button class="btn btn-secondary btn-small retry-btn" data-capture-id="${escapeAttr(captureId)}">Retry export</button>`;
   }
   if (source !== 'active') {
-    actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}" title="Save this capture's raw JSON to disk">Download JSON</button>`;
+    actions += `<button class="btn btn-secondary btn-small download-btn" data-capture-id="${escapeAttr(captureId)}" data-source="${escapeAttr(source)}">Download JSON</button>`;
   }
 
   const body = lazy ? '<p class="empty-state">Loading…</p>' : bodyHtml;
@@ -194,7 +188,7 @@ function renderCaptureCard(info, source, extra = {}, bodyHtml = null) {
 
   return `<details class="session-card ${cardClass}" data-capture-id="${escapeAttr(captureId)}"${bodyStateAttr}>
     <summary>
-      <span class="badge ${badgeClass}" title="${badgeTitle}">${badgeLabel}</span>
+      <span class="badge ${badgeClass}">${badgeLabel}</span>
       <span class="card-id">
         <span class="session-name">${kindTag}${escapeHtml(captureId)}</span>
         ${metaExtra}

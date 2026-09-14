@@ -16,18 +16,18 @@
     </header>
 
     <div class="toolbar">
-      <span id="summary" class="summary" title="Active and finalized captures kept on this device">Loading...</span>
-      <button id="refreshBtn" class="btn btn-secondary" title="Reload capture and cache data from storage">Refresh</button>
-      <button id="downloadAllBtn" class="btn btn-primary" disabled title="Every cached capture as JSON, zipped">Download all as ZIP</button>
+      <span id="summary" class="summary">Loading...</span>
+      <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+      <button id="downloadAllBtn" class="btn btn-primary" disabled>Download all as ZIP</button>
     </div>
 
     <section id="activeSection" class="section">
-      <h2 class="section-title" title="The capture still being recorded; it finalizes after 60 minutes without browsing or on Force export">Active capture</h2>
+      <h2 class="section-title">Active capture</h2>
       <div id="activeContainer"><p class="empty-state">No active capture</p></div>
     </section>
 
     <section id="historySection" class="section">
-      <h2 class="section-title" title="Finalized captures kept on this device for 52 weeks">History</h2>
+      <h2 class="section-title">History</h2>
       <p class="section-hint">Finalized passive captures and journeys. Items awaiting retry are marked failed; everything else is confirmed delivered to the server.</p>
       <div id="historyContainer"><p class="empty-state-title">Nothing finalized yet.</p><p class="empty-state-hint">The live capture closes after 60 minutes without browsing, or when you use Force export in the popup. It appears here as delivered once the server confirms it, or as failed with a retry if it could not be sent.</p></div>
     </section>
