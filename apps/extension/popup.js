@@ -37,6 +37,7 @@ const pendingCountEl = document.getElementById('pendingCount');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const journeyStatusEl = document.getElementById('journeyStatus');
+const passiveStatusEl = document.getElementById('passiveStatus');
 const activePageCountEl = document.getElementById('activePageCount');
 const journeyCountEl = document.getElementById('journeyCount');
 const journeyIdLineEl = document.getElementById('journeyIdLine');
@@ -91,6 +92,24 @@ passiveToggleEl.addEventListener('change', () => {
 // Passive), rather than on every poll.
 let didInitialTabPick = false;
 
+
+// Row 1 of the Passive tab -- mirrors the Active tab's status row so both
+// panels have the same natural height. Shows when the open capture started.
+function formatClock(ms) {
+  const d = new Date(ms);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function updatePassiveStatusRow(status) {
+  if (status.passiveEnabled === false) {
+    passiveStatusEl.textContent = 'Tracking off';
+  } else if (status.passiveCaptureId && status.passiveStartTime) {
+    passiveStatusEl.textContent = `Capturing since ${formatClock(status.passiveStartTime)}`;
+  } else {
+    passiveStatusEl.textContent = 'No capture open';
+  }
+}
+
 async function updateStatus() {
   try {
     const status = await chrome.runtime.sendMessage({ action: 'getStatus' });
@@ -102,6 +121,7 @@ async function updateStatus() {
 
     // Passive
     passivePageCountEl.textContent = status.passivePageCount || 0;
+    updatePassiveStatusRow(status);
     completedCountEl.textContent = status.completedCount || 0;
 
     if (status.passiveCaptureId) {
@@ -147,13 +167,13 @@ async function updateStatus() {
 function setJourneyIdLine(id) {
   journeyIdLineEl.textContent = '';
   if (id) {
-    journeyIdLineEl.append('Current journey: ');
+    journeyIdLineEl.append('Current capture: ');
     const idSpan = document.createElement('span');
     idSpan.className = 'mono';
     idSpan.textContent = id;
     journeyIdLineEl.appendChild(idSpan);
   } else {
-    journeyIdLineEl.textContent = 'No journey recording';
+    journeyIdLineEl.textContent = 'No capture recording';
   }
 }
 
@@ -162,7 +182,7 @@ function showActiveReady() {
   stopBtn.classList.add('hidden');
   journeyStatusEl.textContent = 'Ready to record';
   setJourneyIdLine(null);
-  journeyNoteEl.textContent = 'Passive tracking continues until you start a journey.';
+  journeyNoteEl.textContent = 'Passive tracking continues until you start a capture.';
   activePageCountEl.textContent = 0;
   tabActive.classList.remove('recording');
   if (durationInterval) {
@@ -175,7 +195,7 @@ function showActiveRecording(startTime, pageCount, captureId) {
   startBtn.classList.add('hidden');
   stopBtn.classList.remove('hidden');
   setJourneyIdLine(captureId);
-  journeyNoteEl.textContent = 'Passive tracking pauses while a journey records.';
+  journeyNoteEl.textContent = 'Passive tracking pauses while a manual capture records.';
   activePageCountEl.textContent = pageCount || 0;
   tabActive.classList.add('recording');
 

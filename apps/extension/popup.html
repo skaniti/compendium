@@ -36,11 +36,7 @@
     <main>
       <!-- Passive Tab Panel -->
       <div id="panelPassive" class="tab-panel">
-        <label class="switch-row">
-          <span>Passive tracking</span>
-          <input type="checkbox" id="passiveToggle" class="switch">
-          <span class="switch-track"></span>
-        </label>
+        <div id="passiveStatus" class="status-row">No capture open</div>
 
         <div class="session-info">
           <div class="stat">
@@ -73,20 +69,20 @@
         <div class="session-info">
           <div class="stat">
             <span id="activePageCount" class="stat-value">0</span>
-            <span class="stat-label">pages in this journey</span>
+            <span class="stat-label">pages in this capture</span>
           </div>
           <div class="stat">
             <span id="journeyCount" class="stat-value">0</span>
-            <span class="stat-label">journeys completed</span>
+            <span class="stat-label">manual captures completed</span>
           </div>
         </div>
 
-        <div class="session-id" id="journeyIdLine">No journey recording</div>
+        <div class="session-id" id="journeyIdLine">No capture recording</div>
 
         <button id="startBtn" class="btn btn-active-start" title="Begin recording a capture you can stop anytime">Start capture</button>
         <button id="stopBtn" class="btn btn-active-stop hidden" title="Finish and save the current capture">Stop capture</button>
 
-        <div id="journeyNote" class="active-note">Passive tracking continues until you start a journey.</div>
+        <div id="journeyNote" class="active-note">Passive tracking continues until you start a capture.</div>
       </div>
     </main>
 
@@ -97,6 +93,11 @@
     <details class="settings-panel" open>
       <summary class="settings-toggle">Settings</summary>
       <div class="settings-body">
+        <label class="settings-label settings-switch-row">
+          Passive tracking
+          <input type="checkbox" id="passiveToggle" class="switch">
+          <span class="switch-track"></span>
+        </label>
         <label class="settings-label">
           Backend URL
           <input id="settingsBackendUrl" type="text" class="settings-input"

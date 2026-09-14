@@ -205,13 +205,14 @@ h1 {
    Passive Tab Panel
    ============================================================================= */
 
-/* Safety net for the row-mirroring above: 178px is the Passive panel's
-   height with #pendingNotice visible (its tallest realistic natural state --
-   measured in a headless-Chrome render of the popup), which
-   also covers the Active panel's constant height (row 5/#journeyNote is
-   never hidden there, unlike #exportStatus here). Without this, Passive
-   shrinks by ~22px whenever there's nothing pending, and Settings would jump
-   on every tab switch. */
+/* Safety net for the row-mirroring above: 178px is the Active panel's
+   constant natural height (status row + stats + id line + note row, none
+   of which are ever hidden -- measured in a headless-Chrome render of the
+   popup), which now also covers the Passive panel's tallest realistic
+   state (#pendingNotice visible, 151px -- the passive-tracking switch that
+   used to live here moved to Settings as .settings-switch-row). Without
+   this, Passive panel heights vary by whether a notice is showing, and
+   Settings would jump on every tab switch. */
 .tab-panel {
   display: block;
   min-height: 178px;
@@ -221,30 +222,11 @@ h1 {
    Passive tracking toggle -- a 30x18 switch styled from a checkbox
    ============================================================================= */
 
-/* Shared with .status-row (Active tab's row 1) so both tabs' first row
-   render at an identical height even though only .switch-row has a control
-   docked on the right -- see .status-row below. */
-.switch-row,
+/* Active tab's row 1. The passive-tracking switch used to live here as
+   .switch-row (mirrored by this rule's min-height) -- it now lives in
+   Settings as .settings-switch-row (see Settings Panel section below). */
 .status-row {
   min-height: 18px;
-}
-
-.switch-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: var(--c-muted);
-  margin-bottom: 8px;
-  padding-right: 38px;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* Active tab's row 1 -- mirrors .switch-row's box (font, color, spacing,
-   min-height) with no control on the right, so switching tabs doesn't
-   change this row's height. */
-.status-row {
   display: flex;
   align-items: center;
   font-size: 12px;
@@ -529,6 +511,21 @@ h1 {
   gap: 2px;
   font-size: 11px;
   color: var(--c-muted);
+}
+
+/* Passive-tracking switch, docked as the first settings row -- reuses
+   .settings-label's typography but lays out as a row (label left, switch
+   right) the same way .switch-row used to on the Passive panel: position
+   the row itself, pad out the width the switch needs, and let .switch /
+   .switch-track (unchanged) overlay on the right via right:0. */
+.settings-switch-row {
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  min-height: 18px;
+  padding-right: 38px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .settings-input {
