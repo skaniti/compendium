@@ -336,7 +336,7 @@ export async function readAllCacheEntries() {
  * @returns {Promise<{delivery: 'delivered'|'buffered', body: object|null, flush: object|null}>}
  */
 async function exportCapture(captureData) {
-  // Provenance stamp (spec: docs/project-plans/2026-06-10-185556-capture-provenance/).
+  // Provenance stamp (spec: the 2026-06-10 capture-provenance plan, private).
   // Applied at queue time so flushed retries carry it too; the backend drops
   // these fields harmlessly until migration 033 is deployed.
   const config = await getConfig();

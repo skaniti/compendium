@@ -36,7 +36,7 @@ function renderChar(ch, code) {
 
 /**
  * Validate an API key for the ByteString-safe header contract (spec:
- * docs/project-plans/nextjs-migration/2026-09-09-125414-extension-hardening/spec.md
+ * the 2026-09-09 extension-hardening plan (private), spec.md,
  * D1). Keys are `cmp_...` ASCII; every character must be printable ASCII
  * (U+0021-U+007E). An empty/missing key is valid (means "no key") -- it is
  * NOT the same failure class as a key containing an invalid character.
