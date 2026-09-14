@@ -1,55 +1,61 @@
-import rawGoldens from "./theme-goldens.json";
+import rawPalettes from "./palettes.json";
+import {
+  deriveGalaxyStops,
+  deriveSwatch,
+  deriveTokens,
+  type PaletteLibrary,
+  type Swatch,
+} from "./theme-derive";
 
-// Pure JSON lookup over the goldens exported from the Python source of truth
-// (see theme-goldens.json). No math/derivation here -- branch F1(a).
+// Tokens are derived once, at module load, from the two hand-picked hex
+// values per palette in palettes.json -- the TypeScript port of explorer's
+// theme.py (branch F1(b), 2026-09-14; derivation lives in theme-derive.ts).
+// theme-goldens.json, exported from that Python source, is a test-only
+// oracle: theme.test.ts and theme-derive.test.ts compare every value here
+// against it byte for byte. Nothing at runtime reads the goldens.
 
 export type PaletteVariant = string;
-
-export interface Swatch {
-  name: string;
-  primary: string;
-  highlight: string;
-  band_light: string;
-  band_mid: string;
-  band_dark: string;
-  ring: string;
-}
+export type { Swatch };
 
 interface VariantEntry {
   tokens: Record<string, string>;
   galaxy_stops: string[];
-  css_text: string;
 }
 
-interface Goldens {
-  active: string;
-  variants: Record<string, VariantEntry>;
-  swatches: Swatch[];
+const library = rawPalettes as PaletteLibrary;
+
+const PALETTE_NAMES = library.palettes.map((p) => p.name);
+
+const variants: Record<string, VariantEntry> = {};
+for (const p of library.palettes) {
+  variants[p.name] = {
+    tokens: deriveTokens(p.primary, p.highlight),
+    galaxy_stops: deriveGalaxyStops(p.primary, p.highlight),
+  };
 }
 
-// Widen the JSON module's inferred literal types (exact keys/values) to plain
-// string-indexed shapes so callers can look up by an arbitrary string.
-const goldens = rawGoldens as Goldens;
+const swatches: Swatch[] = library.palettes.map((p) =>
+  deriveSwatch(p.name, p.primary, p.highlight)
+);
 
-const PALETTE_NAMES = Object.keys(goldens.variants);
-
-// The goldens' server-rendered default variant (theme provider task needs this).
-export const DEFAULT_VARIANT: string = goldens.active;
+// The library's default palette (server-rendered variant; the theme provider
+// seeds from this).
+export const DEFAULT_VARIANT: string = library.active;
 
 export function getPaletteNames(): string[] {
   return [...PALETTE_NAMES];
 }
 
 function requireVariantEntry(variant: string): VariantEntry {
-  // Object.hasOwn, not `goldens.variants[variant]` truthiness: a
-  // caller-supplied key like "constructor" or "__proto__" resolves through
-  // the prototype chain to a real (truthy) value -- Object, Object.prototype
-  // -- so a bare `!entry` check would silently treat those as valid variants
-  // instead of falling back like any other unknown name.
-  if (!Object.hasOwn(goldens.variants, variant)) {
+  // Object.hasOwn, not `variants[variant]` truthiness: a caller-supplied key
+  // like "constructor" or "__proto__" resolves through the prototype chain
+  // to a real (truthy) value -- Object, Object.prototype -- so a bare
+  // `!entry` check would silently treat those as valid variants instead of
+  // falling back like any other unknown name.
+  if (!Object.hasOwn(variants, variant)) {
     throw new Error(`Unknown palette variant: "${variant}"`);
   }
-  return goldens.variants[variant];
+  return variants[variant];
 }
 
 export function getTokens(variant: string): Record<string, string> {
@@ -61,7 +67,7 @@ export function getGalaxyStops(variant: string): string[] {
 }
 
 export function getSwatches(): Swatch[] {
-  return goldens.swatches.map((swatch) => ({ ...swatch }));
+  return swatches.map((swatch) => ({ ...swatch }));
 }
 
 // Mirrors the Python `_resolve_palette`: strips a legacy trailing " Dark"

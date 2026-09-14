@@ -45,7 +45,7 @@ function seedTwoThemeRoots(): [HTMLStyleElement, HTMLStyleElement] {
 
 function runBootstrapScript(): void {
   // Test-only eval of a string this same test file's own build step
-  // produced (buildThemeBootstrapScript() over lib/theme-goldens.json) --
+  // produced (buildThemeBootstrapScript() over lib/theme.ts) --
   // not untrusted/external input. It returns a self-executing
   // `(function(){...})();` string; eval it directly so the test exercises
   // the exact code that ships in the <script> tag (the whole point of this

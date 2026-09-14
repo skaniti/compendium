@@ -555,9 +555,9 @@ for (const f of ['topics.json', 'exclusions.json', 'clustering-status.json', 'in
 // Step 8: me.json / preferences.json normalization
 // ---------------------------------------------------------------------------
 
-const themeGoldens = JSON.parse(readFileSync(path.join(REPO_ROOT, 'lib', 'theme-goldens.json'), 'utf8'));
-const DEFAULT_THEME = themeGoldens.active; // mirrors lib/theme.ts's DEFAULT_VARIANT
-if (!DEFAULT_THEME) fatal('lib/theme-goldens.json has no "active" variant');
+const paletteLibrary = JSON.parse(readFileSync(path.join(REPO_ROOT, 'lib', 'palettes.json'), 'utf8'));
+const DEFAULT_THEME = paletteLibrary.active; // mirrors lib/theme.ts's DEFAULT_VARIANT
+if (!DEFAULT_THEME) fatal('lib/palettes.json has no "active" palette');
 
 const DEFAULT_PREFERENCES = {
   theme: DEFAULT_THEME,

@@ -1,3 +1,10 @@
+// Golden-token test for the TypeScript derivation (F1(b)). theme-goldens.json
+// was exported from the Python source of truth (explorer
+// scripts/dev/export_theme_goldens.py over frontend/dash/utils/theme.py) and
+// is imported here only as the oracle: lib/theme.ts derives everything from
+// palettes.json at module load (see theme-derive.ts). Every comparison below
+// is byte-for-byte on purpose -- a one-hex-digit drift is a failure.
+
 import { describe, it, expect } from "vitest";
 import goldens from "./theme-goldens.json";
 import {
