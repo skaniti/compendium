@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     # Refused at startup in production -- see _check_production_secrets --
     # because it would make every public caller implicitly trusted.
     session_trust_missing_ingress: bool = False
+    # Development only: when True (the default), requests that carry no token
+    # resolve to the default dev user so a fresh checkout works without a
+    # login. Set DEV_AUTH_BYPASS=0 to exercise the real login, refresh and
+    # expiry paths locally; ignored outside environment=development, where the
+    # bypass never applies.
+    dev_auth_bypass: bool = True
 
     # ==========================================================================
     # User Identity (dev / bootstrap)

@@ -542,3 +542,26 @@ class TestValidatorRefusesTrustMissingIngressOutsideDevelopment:
             session_trust_missing_ingress=True,
         )
         assert s.session_trust_missing_ingress is True
+
+
+class TestDevAuthBypassSwitch:
+    """``DEV_AUTH_BYPASS=0`` turns off the development-mode default-user
+    bypass so the real login/refresh/expiry paths can be exercised locally
+    without leaving ``environment=development`` (which the ingress dev knob
+    requires). Outside development the bypass never applied anyway."""
+
+    def test_bypass_off_rejects_unauthenticated_requests_in_development(self, client, monkeypatch):
+        from backend.config.settings import settings
+
+        monkeypatch.setattr(settings, "environment", "development")
+        monkeypatch.setattr(settings, "dev_auth_bypass", False)
+        r = client.get("/api/auth/me")
+        assert r.status_code == 401
+
+    def test_bypass_on_resolves_default_user_in_development(self, client, monkeypatch):
+        from backend.config.settings import settings
+
+        monkeypatch.setattr(settings, "environment", "development")
+        monkeypatch.setattr(settings, "dev_auth_bypass", True)
+        r = client.get("/api/auth/me")
+        assert r.status_code != 401

@@ -218,7 +218,7 @@ async def verify_api_key(
             set_current_user_id(uid)
             return uid
 
-    if settings.is_development:
+    if settings.is_development and settings.dev_auth_bypass:
         uid = get_default_user_id()
         set_current_user_id(uid)
         return uid
