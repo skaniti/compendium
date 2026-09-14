@@ -205,13 +205,29 @@ h1 {
    Passive Tab Panel
    ============================================================================= */
 
+/* Safety net for the row-mirroring above: 178px is the Passive panel's
+   height with #pendingNotice visible (its tallest realistic natural state --
+   measured in a headless-Chrome render of the popup), which
+   also covers the Active panel's constant height (row 5/#journeyNote is
+   never hidden there, unlike #exportStatus here). Without this, Passive
+   shrinks by ~22px whenever there's nothing pending, and Settings would jump
+   on every tab switch. */
 .tab-panel {
   display: block;
+  min-height: 178px;
 }
 
 /* =============================================================================
    Passive tracking toggle -- a 30x18 switch styled from a checkbox
    ============================================================================= */
+
+/* Shared with .status-row (Active tab's row 1) so both tabs' first row
+   render at an identical height even though only .switch-row has a control
+   docked on the right -- see .status-row below. */
+.switch-row,
+.status-row {
+  min-height: 18px;
+}
 
 .switch-row {
   position: relative;
@@ -223,6 +239,17 @@ h1 {
   padding-right: 38px;
   cursor: pointer;
   user-select: none;
+}
+
+/* Active tab's row 1 -- mirrors .switch-row's box (font, color, spacing,
+   min-height) with no control on the right, so switching tabs doesn't
+   change this row's height. */
+.status-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-bottom: 8px;
 }
 
 .switch {
@@ -405,49 +432,6 @@ h1 {
    Active Tab Panel
    ============================================================================= */
 
-.active-status-text {
-  font-size: 12px;
-  color: var(--c-muted);
-  margin-bottom: 8px;
-}
-
-/* Recording indicator text row. The dot lives on the Active tab itself (see
-   .tab-active.recording .tab-dot above); .status-dot is kept in the DOM for
-   compatibility but not shown here to avoid a redundant second indicator.
-   Note: this selector must stay scoped to .status-dot specifically -- the
-   Active tab's permanent dot also carries a `dot-active` class (for its
-   colour rule) and would be hidden too if `.dot-active` were listed here. */
-.tracking-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.status-dot {
-  display: none;
-}
-
-.status-text {
-  font-size: 12px;
-  color: var(--c-muted);
-}
-
-.active-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.stat-value-active {
-  color: var(--c-text);
-}
-
-#duration {
-  font-family: var(--font-mono);
-}
-
 .btn-active-start {
   width: 100%;
   border: 1px solid var(--c-accent);
@@ -472,10 +456,18 @@ h1 {
   background: var(--c-surface);
 }
 
+/* Row 5 -- always shown (mirrors where #exportStatus sits in the Passive
+   panel, but unlike that row this one is never hidden). Forced to a single
+   line: at this column width the recording/idle copy sits close enough to
+   the edge that font-metric drift between platforms could wrap it, which
+   would grow this row and misalign Settings across tabs. */
 .active-note {
   font-size: 11px;
   color: var(--c-faint);
   margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* =============================================================================

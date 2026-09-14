@@ -34,7 +34,7 @@ import { isInternalUrl } from './modules/utils.js';
 import { recordPageVisit, recordCurrentPage, recordEvent } from './modules/tracker-core.js';
 import * as passive from './modules/passive-tracker.js';
 import * as active from './modules/active-tracker.js';
-import { flushPendingExports, retrySingleExport } from './modules/export.js';
+import { flushPendingExports, retrySingleExport, readCacheIndex } from './modules/export.js';
 
 // =============================================================================
 // Transition Metadata Bridge
@@ -341,7 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // would see each tracker's pre-restore in-memory defaults, not what
     // restoreState() loaded from chrome.storage.local (see header comment).
     ready.then(() => {
-      chrome.storage.local.get(['completedCaptures', 'pendingExports'], (data) => {
+      chrome.storage.local.get(['completedCaptures', 'pendingExports', 'completedJourneys'], (data) => {
         const ps = passive.getState();
         sendResponse({
           // Passive
@@ -353,8 +353,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           pendingExports: (data.pendingExports || []).length,
           // Active
           isTracking: active.isTracking(),
+          activeCaptureId: active.getState().captureId,
           activePageCount: active.getState().pages.length,
           activeStartTime: active.getState().startTime,
+          journeyCount: data.completedJourneys || 0,
           passiveEnabled
         });
       });
@@ -374,7 +376,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         passive.finalizeCapture();
         return active.startCapture();
       })
-      .then(() => sendResponse({ success: true }))
+      // Popup's Start-capture handler shows the recording row immediately
+      // (without waiting for a fresh getStatus poll -- there isn't one),
+      // so the new journey's id rides back on this response for row 3
+      // (#journeyIdLine) rather than being left blank until the next
+      // getStatus call.
+      .then(() => sendResponse({ success: true, captureId: active.getState().captureId }))
       .catch((err) => {
         console.warn('[Compendium] startCapture failed:', err);
         sendResponse({ success: false });
@@ -479,6 +486,25 @@ async function initialize() {
     passive.restoreState(),
     active.restoreState()
   ]);
+
+  // Seed the lifetime "journeys completed" counter (completedJourneys) once,
+  // the first time this build runs on a given install: count kind==='active'
+  // summaries already sitting in the cache index so existing users don't
+  // start back at 0. Every stopCapture() after this just increments the
+  // seeded value (see modules/active-tracker.js). Absence of the key is the
+  // seed condition, so this never re-counts on subsequent startups. Runs
+  // after restoreState() and never blocks it: a failure here only costs
+  // the seed (a later startup retries), never the tracker state.
+  try {
+    const { completedJourneys } = await chrome.storage.local.get('completedJourneys');
+    if (completedJourneys === undefined) {
+      const index = await readCacheIndex();
+      const seeded = index.filter(s => s.kind === 'active').length;
+      await chrome.storage.local.set({ completedJourneys: seeded });
+    }
+  } catch (err) {
+    console.warn('[Compendium] journeys-completed seed skipped:', err);
+  }
 
   // A capture can come back from restoreState() still open here when
   // passive tracking was switched off while the service worker was idle --

@@ -93,14 +93,21 @@ export async function stopCapture() {
   // Write to retention cache BEFORE wiping state (parity with passive)
   writeExportCache(captureData);
 
-  // Reset state before export
+  // Reset state before export -- synchronously after the guard flip, so a
+  // startCapture landing during the awaits below sees fresh state.
   state = createEmptyCapture();
   state.isTracking = false;
 
-  // Save as last capture for viewing, and clear active storage
+  // Lifetime journeys-completed counter (popup: "journeys completed").
+  // Seeded once at startup in background.js initialize() from the cache
+  // index's existing active-kind summaries, so upgrading users don't start
+  // back at 0 -- from here on it's a plain increment, folded into the same
+  // write that records the last capture and clears active storage.
+  const { completedJourneys } = await chrome.storage.local.get('completedJourneys');
   await chrome.storage.local.set({
     lastCapture: captureData,
-    activeCapture: null
+    activeCapture: null,
+    completedJourneys: (completedJourneys || 0) + 1
   });
 
   console.log(`[Journey] Capture stopped: ${captureData.captureId} (${captureData.pages.length} pages)`);

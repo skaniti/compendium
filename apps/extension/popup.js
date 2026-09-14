@@ -36,10 +36,11 @@ const pendingCountEl = document.getElementById('pendingCount');
 // Active panel
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const journeyReadyEl = document.getElementById('journeyReady');
-const journeyActiveEl = document.getElementById('journeyActive');
+const journeyStatusEl = document.getElementById('journeyStatus');
 const activePageCountEl = document.getElementById('activePageCount');
-const durationEl = document.getElementById('duration');
+const journeyCountEl = document.getElementById('journeyCount');
+const journeyIdLineEl = document.getElementById('journeyIdLine');
+const journeyNoteEl = document.getElementById('journeyNote');
 
 let durationInterval = null;
 
@@ -114,8 +115,9 @@ async function updateStatus() {
     }
 
     // Active
+    journeyCountEl.textContent = status.journeyCount || 0;
     if (status.isTracking) {
-      showActiveRecording(status.activeStartTime, status.activePageCount);
+      showActiveRecording(status.activeStartTime, status.activePageCount, status.activeCaptureId);
     } else {
       showActiveReady();
     }
@@ -134,9 +136,30 @@ async function updateStatus() {
 
 // ── Active UI ────────────────────────────────────────────────────────────────
 
+// Row 3 (#journeyIdLine) -- built with DOM calls rather than innerHTML so the
+// "Current journey: " label stays the ambient text color while the id itself
+// renders mono, mirroring the Passive panel's #captureIdPrefix/#captureId
+// split without needing two separately-toggled elements.
+function setJourneyIdLine(id) {
+  journeyIdLineEl.textContent = '';
+  if (id) {
+    journeyIdLineEl.append('Current journey: ');
+    const idSpan = document.createElement('span');
+    idSpan.className = 'mono';
+    idSpan.textContent = id;
+    journeyIdLineEl.appendChild(idSpan);
+  } else {
+    journeyIdLineEl.textContent = 'No journey recording';
+  }
+}
+
 function showActiveReady() {
-  journeyReadyEl.classList.remove('hidden');
-  journeyActiveEl.classList.add('hidden');
+  startBtn.classList.remove('hidden');
+  stopBtn.classList.add('hidden');
+  journeyStatusEl.textContent = 'Ready to record';
+  setJourneyIdLine(null);
+  journeyNoteEl.textContent = 'Passive tracking continues until you start a journey.';
+  activePageCountEl.textContent = 0;
   tabActive.classList.remove('recording');
   if (durationInterval) {
     clearInterval(durationInterval);
@@ -144,11 +167,13 @@ function showActiveReady() {
   }
 }
 
-function showActiveRecording(startTime, pageCount) {
-  journeyReadyEl.classList.add('hidden');
-  journeyActiveEl.classList.remove('hidden');
-  tabActive.classList.add('recording');
+function showActiveRecording(startTime, pageCount, captureId) {
+  startBtn.classList.add('hidden');
+  stopBtn.classList.remove('hidden');
+  setJourneyIdLine(captureId);
+  journeyNoteEl.textContent = 'Passive tracking pauses while a journey records.';
   activePageCountEl.textContent = pageCount || 0;
+  tabActive.classList.add('recording');
 
   if (durationInterval) clearInterval(durationInterval);
 
@@ -156,7 +181,7 @@ function showActiveRecording(startTime, pageCount) {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
-    durationEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    journeyStatusEl.textContent = `Recording, ${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   updateDuration();
@@ -167,16 +192,31 @@ function showActiveRecording(startTime, pageCount) {
 
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  await chrome.runtime.sendMessage({ action: 'startCapture' });
-  showActiveRecording(Date.now(), 0);
-  startBtn.disabled = false;
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'startCapture' });
+    if (!response || !response.success) {
+      await updateStatus();
+      return;
+    }
+    showActiveRecording(Date.now(), 0, response.captureId);
+    // Starting a journey finalizes the open passive capture; refresh the
+    // passive tiles too.
+    await updateStatus();
+  } finally {
+    startBtn.disabled = false;
+  }
 });
 
 stopBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
-  await chrome.runtime.sendMessage({ action: 'stopCapture' });
-  showActiveReady();
-  stopBtn.disabled = false;
+  try {
+    await chrome.runtime.sendMessage({ action: 'stopCapture' });
+    showActiveReady();
+    // Pull the incremented "journeys completed" count (and the rest).
+    await updateStatus();
+  } finally {
+    stopBtn.disabled = false;
+  }
 });
 
 // ── Force export ─────────────────────────────────────────────────────────────
