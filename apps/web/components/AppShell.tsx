@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import CompendiumLoader from "./CompendiumLoader";
 import Header from "./Header";
 import NavProvider from "./NavProvider";
+import PageZoomGuard from "./PageZoomGuard";
 import PanelGrid from "./PanelGrid";
 import PlainDemoBodyClass from "./PlainDemoBodyClass";
 import StarfieldProvider from "./StarfieldProvider";
@@ -103,6 +104,11 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           subtree (SessionProvider wraps this whole shell in
           app/layout.tsx). */}
       <PlainDemoBodyClass />
+      {/* PageZoomGuard: prevents Ctrl/Cmd+wheel (and touchpad pinch) from
+          page-zooming the browser anywhere in the app. Renders nothing --
+          the mechanism (why d3-zoom alone doesn't cover this) is documented
+          in that component's own header comment. */}
+      <PageZoomGuard />
       {/* TimeWindowProvider (Task 8-C2): wraps the SAME subtree as
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
