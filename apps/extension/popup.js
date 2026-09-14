@@ -22,7 +22,7 @@ const panelPassive = document.getElementById('panelPassive');
 const panelActive = document.getElementById('panelActive');
 
 // Passive panel
-const passiveStatusEl = document.getElementById('passiveStatus');
+const passiveCaptionEl = document.getElementById('passiveCaption');
 const passiveToggleEl = document.getElementById('passiveToggle');
 const passivePageCountEl = document.getElementById('passivePageCount');
 const completedCountEl = document.getElementById('completedCount');
@@ -64,10 +64,10 @@ tabActive.addEventListener('click', () => activateTab('active'));
 
 // ── Passive tracking toggle ──────────────────────────────────────────────────
 
-// Status text + the Passive tab's dot (dimmed via .off when tracking is off
-// -- see .tab-passive.off .tab-dot in popup.css).
+// Passive tab's caption + dot (dimmed via .off when tracking is off -- see
+// .tab-passive.off .tab-dot in popup.css).
 function updatePassiveUI(enabled) {
-  passiveStatusEl.textContent = enabled ? 'Always tracking' : 'Passive tracking is off';
+  passiveCaptionEl.textContent = enabled ? 'Always tracking' : 'Tracking off';
   tabPassive.classList.toggle('off', !enabled);
 }
 

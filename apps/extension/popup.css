@@ -72,7 +72,7 @@ body {
   color: var(--c-text);
   font-family: var(--font-sans);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.3;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -87,7 +87,7 @@ a:hover {
 }
 
 .container {
-  padding: 14px 14px 0;
+  padding: 10px 12px 0;
 }
 
 /* =============================================================================
@@ -98,7 +98,7 @@ header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 h1 {
@@ -129,16 +129,15 @@ h1 {
   border: 1px solid var(--c-border-strong);
   border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .tab {
   font: inherit;
-  font-size: 13px;
   color: var(--c-muted);
   background: none;
   border: 0;
-  padding: 8px 0;
+  padding: 6px 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -157,13 +156,33 @@ h1 {
   background: var(--c-surface-2);
 }
 
-/* Passive tab dot -- always visible; dimmed (not hidden) when the popup.js
-   `.off` class is set, i.e. the passiveEnabled toggle is off. */
+/* Label + caption, stacked. Each tab is always two lines tall now so
+   Passive/Active line up regardless of caption text length. */
+.tab-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  line-height: 1.15;
+}
+
+.tab-label {
+  font-size: 13px;
+}
+
+.tab-caption {
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* Both tab dots are always present -- colour (not presence) communicates
+   state, toggled by popup.js via the .off / .recording classes below. */
 .tab-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .dot-passive {
@@ -174,15 +193,12 @@ h1 {
   background: var(--c-faint);
 }
 
-/* Active tab dot -- CSS-drawn, shown only while a journey is recording
-   (popup.js toggles the .recording class in showActiveRecording/Ready) */
-.tab-active.recording::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.dot-active {
+  background: var(--c-faint);
+}
+
+.tab-active.recording .tab-dot {
   background: var(--c-failed);
-  display: inline-block;
 }
 
 /* =============================================================================
@@ -191,14 +207,6 @@ h1 {
 
 .tab-panel {
   display: block;
-}
-
-.status,
-.status-active {
-  font-size: 12px;
-  color: var(--c-muted);
-  margin-bottom: 14px;
-  text-align: center;
 }
 
 /* =============================================================================
@@ -211,7 +219,7 @@ h1 {
   align-items: center;
   font-size: 12px;
   color: var(--c-muted);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   padding-right: 38px;
   cursor: pointer;
   user-select: none;
@@ -270,19 +278,19 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .stat {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: 6px;
-  padding: 10px 12px 9px;
+  padding: 7px 10px 6px;
 }
 
 .stat-value {
   display: block;
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 500;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -293,13 +301,13 @@ h1 {
   display: block;
   font-size: 11px;
   color: var(--c-muted);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .session-id {
   font-size: 11px;
   color: var(--c-faint);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -317,7 +325,7 @@ h1 {
 .btn {
   font: inherit;
   font-size: 13px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 120ms ease;
@@ -343,7 +351,7 @@ h1 {
 .export-status {
   font-size: 12px;
   color: var(--c-muted);
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .export-warn {
@@ -362,9 +370,10 @@ h1 {
 .pending-notice {
   font-size: 12px;
   color: var(--c-muted);
-  margin-top: 10px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -381,9 +390,9 @@ h1 {
 /* Links row */
 .links {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin: 14px 0;
+  margin: 8px 0;
 }
 
 /* Cache link */
@@ -399,21 +408,23 @@ h1 {
 .active-status-text {
   font-size: 12px;
   color: var(--c-muted);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
-/* Recording indicator text row. The dot now lives on the Active tab itself
-   (see .tab-active.recording::before); .status-dot is kept in the DOM for
-   compatibility but not shown here to avoid a redundant second indicator. */
+/* Recording indicator text row. The dot lives on the Active tab itself (see
+   .tab-active.recording .tab-dot above); .status-dot is kept in the DOM for
+   compatibility but not shown here to avoid a redundant second indicator.
+   Note: this selector must stay scoped to .status-dot specifically -- the
+   Active tab's permanent dot also carries a `dot-active` class (for its
+   colour rule) and would be hidden too if `.dot-active` were listed here. */
 .tracking-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
-.status-dot,
-.dot-active {
+.status-dot {
   display: none;
 }
 
@@ -426,7 +437,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .stat-value-active {
@@ -473,14 +484,14 @@ h1 {
 
 .settings-panel {
   border-top: 1px solid var(--c-border);
-  margin: 14px -14px 0;
+  margin: 8px -12px 0;
 }
 
 .settings-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 6px 12px;
   font-size: 12px;
   color: var(--c-muted);
   cursor: pointer;
@@ -510,16 +521,16 @@ h1 {
 }
 
 .settings-body {
-  padding: 0 14px 14px;
+  padding: 0 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .settings-label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   font-size: 11px;
   color: var(--c-muted);
 }
@@ -532,7 +543,7 @@ h1 {
   color: var(--c-text);
   font: inherit;
   font-size: 12px;
-  padding: 7px 9px;
+  padding: 5px 9px;
 }
 
 .settings-input.invalid {
@@ -547,7 +558,7 @@ h1 {
   align-self: flex-start;
   font: inherit;
   font-size: 13px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 6px;
   border: 1px solid var(--c-border-strong);
   background: transparent;
@@ -601,4 +612,9 @@ summary:focus-visible {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* .tab-bar clips overflow, so keep the tab focus ring inside the bar */
+.tab:focus-visible {
+  outline-offset: -2px;
 }

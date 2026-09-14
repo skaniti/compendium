@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Compendium Capture</title>
+  <link rel="icon" href="icons/comet-on-dark-32.png" type="image/png">
+  <link rel="icon" href="icons/comet-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icons/comet-light.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -17,20 +20,23 @@
     <div class="tab-bar">
       <button class="tab tab-passive active" data-tab="passive" title="Passive capture of your browsing, finalized after 60 minutes idle (switch below turns it off)">
         <span class="tab-dot dot-passive"></span>
-        Passive
+        <span class="tab-text">
+          <span class="tab-label">Passive</span>
+          <span class="tab-caption" id="passiveCaption">Always tracking</span>
+        </span>
       </button>
       <button class="tab tab-active" data-tab="active" title="A journey you start and stop yourself">
-        Active
+        <span class="tab-dot dot-active"></span>
+        <span class="tab-text">
+          <span class="tab-label">Active</span>
+          <span class="tab-caption">Manual capture</span>
+        </span>
       </button>
     </div>
 
     <main>
       <!-- Passive Tab Panel -->
       <div id="panelPassive" class="tab-panel">
-        <div id="passiveStatus" class="status status-active">
-          Always tracking
-        </div>
-
         <label class="switch-row" title="Turn passive tracking off if you only want to record journeys you start yourself">
           <span>Passive tracking</span>
           <input type="checkbox" id="passiveToggle" class="switch">
