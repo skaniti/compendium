@@ -555,10 +555,14 @@ h1 {
 }
 
 .btn-settings-save {
-  align-self: flex-start;
+  /* Same footprint and centring as Force export; a hair more room above
+     than the 6px body gap so it does not sit tight on the last field. */
+  align-self: stretch;
+  width: 100%;
+  margin-top: 4px;
   font: inherit;
   font-size: 13px;
-  padding: 5px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   border: 1px solid var(--c-border-strong);
   background: transparent;
@@ -574,6 +578,7 @@ h1 {
 .settings-saved {
   font-size: 12px;
   color: var(--c-muted);
+  text-align: center;
 }
 
 .settings-error {

@@ -31,13 +31,13 @@
     },
     "theme_icons": [
       {
-        "light": "icons/comet-black-16.png",
-        "dark": "icons/comet-white-16.png",
+        "light": "icons/comet-white-16.png",
+        "dark": "icons/comet-black-16.png",
         "size": 16
       },
       {
-        "light": "icons/comet-black-32.png",
-        "dark": "icons/comet-white-32.png",
+        "light": "icons/comet-white-32.png",
+        "dark": "icons/comet-black-32.png",
         "size": 32
       }
     ]

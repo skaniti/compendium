@@ -29,8 +29,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Source artwork's native viewBox (both comet-dark.svg and comet-light.svg).
 const SVG_VIEWBOX = { width: 560, height: 532 };
 
-// Artwork occupies ~78% of the box, centred.
-const FIT_FRACTION = 0.78;
+// How much of the box the artwork's viewBox fills, centred. The artwork
+// already carries its own ~10% clear margin inside the 560x532 viewBox, so
+// the transparent toolbar icons use the full box (that built-in margin is
+// the only spacing, matching the browser's own toolbar icons); the boxed
+// variant adds a slim margin so the tail stays clear of the rounded edge.
+const FIT_TRANSPARENT = 1.0;
+const FIT_BOXED = 0.9;
 
 const DARK_BOX = {
   fill: '#18191A',
@@ -45,15 +50,15 @@ const DARK_BOX = {
 const ON_DARK_SIZES = [16, 32, 48, 96, 128];
 const TRANSPARENT_SIZES = [16, 32];
 
-/** Rasterize the comet artwork to fit within `targetSize * FIT_FRACTION`,
+/** Rasterize the comet artwork to fit within `targetSize * fitFraction`,
  * preserving aspect ratio. Density is chosen so librsvg rasterizes directly
  * near the final pixel size instead of rendering at the SVG's native 560px
  * width and blurring on downscale. */
-async function renderComet(svgFile, targetSize) {
+async function renderComet(svgFile, targetSize, fitFraction) {
   const svgPath = path.join(HERE, svgFile);
   const svg = readFileSync(svgPath);
 
-  const innerSide = Math.round(targetSize * FIT_FRACTION);
+  const innerSide = Math.round(targetSize * fitFraction);
   const scale = innerSide / SVG_VIEWBOX.width;
   const renderW = innerSide;
   const renderH = Math.max(1, Math.round(SVG_VIEWBOX.height * scale));
@@ -82,7 +87,7 @@ async function makeOnDark(size) {
   const boxSvg = roundedBoxSvg(size, cornerRadius, DARK_BOX.fill, DARK_BOX.border, borderW);
   const box = await sharp(boxSvg).png().toBuffer();
 
-  const { buffer, width, height } = await renderComet('comet-dark.svg', size); // white tail
+  const { buffer, width, height } = await renderComet('comet-dark.svg', size, FIT_BOXED); // white tail
   const left = Math.round((size - width) / 2);
   const top = Math.round((size - height) / 2);
 
@@ -90,7 +95,7 @@ async function makeOnDark(size) {
 }
 
 async function makeTransparent(svgFile, size) {
-  const { buffer, width, height } = await renderComet(svgFile, size);
+  const { buffer, width, height } = await renderComet(svgFile, size, FIT_TRANSPARENT);
   const left = Math.round((size - width) / 2);
   const top = Math.round((size - height) / 2);
 
