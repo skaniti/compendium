@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { lastView, publishView, subscribeView, type GraphView } from "./view-bus";
 
-// Batch B (spec docs/project-plans/2026-09-13-183006-graph-interaction-
-// followups/spec.md): the vendor's zoom handler -> Starfield.tsx pub/sub.
+// Batch B (spec: the 2026-09-13 graph-interaction-followups plan
+// (private), spec.md): the vendor's zoom handler -> Starfield.tsx pub/sub.
 // Pure module-state tests -- no DOM, no vendor, no React.
 
 function view(overrides: Partial<GraphView> = {}): GraphView {

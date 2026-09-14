@@ -902,8 +902,8 @@ describe("d3-graph-vendor render() settle lifecycle callbacks (header comment de
   });
 });
 
-// Graph interaction follow-ups, Batch B (spec docs/project-plans/2026-09-13-
-// 183006-graph-interaction-followups/spec.md; header comment delta #34):
+// Graph interaction follow-ups, Batch B (spec: the 2026-09-13 graph-
+// interaction-followups plan (private), spec.md; header comment delta #34):
 // onViewChange fires on every 'zoom' tick -- pan, wheel, __d3ZoomTo alike --
 // with the just-clamped transform plus the most recent fit's own transform.
 describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () => {

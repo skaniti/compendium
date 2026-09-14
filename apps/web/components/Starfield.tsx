@@ -21,8 +21,8 @@ declare global {
         },
       ): HTMLElement;
     };
-    // Batch B dev hook (spec docs/project-plans/2026-09-13-183006-graph-
-    // interaction-followups/spec.md) -- live-tunes the parallax factor
+    // Batch B dev hook (spec: the 2026-09-13 graph-interaction-followups
+    // plan (private), spec.md) -- live-tunes the parallax factor
     // applied below and re-applies the last published view immediately so
     // a dev can see the effect without waiting for the next pan tick.
     __d3SetStarfieldPanFactor?: (factor: number) => void;

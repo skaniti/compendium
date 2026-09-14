@@ -15,8 +15,8 @@ export interface SliderProps {
   onChange: (v: number) => void;
   disabled?: boolean;
   hint?: string;
-  // Batch A per-parameter reset (spec docs/project-plans/2026-09-13-183006-
-  // graph-interaction-followups/): both optional and only rendered together
+  // Batch A per-parameter reset (spec: the 2026-09-13 graph-interaction-
+  // followups plan, private): both optional and only rendered together
   // -- a caller that doesn't pass `onReset` gets today's row, unchanged.
   baseline?: number;
   onReset?: () => void;

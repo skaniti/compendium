@@ -866,8 +866,8 @@
 //      stranded if a real cycle happened to be mid-settle when the canvas
 //      raced into one of those domains.
 //
-// SC layout separation (spec docs/project-plans/2026-08-10-162433-sc-
-// layout-separation/spec.md; decisions 2026-08-10 + 2026-09-11):
+// SC layout separation (spec: the 2026-08-10 sc-layout-separation plan
+// (private), spec.md; decisions 2026-08-10 + 2026-09-11):
 //  32. Nameplates no longer leave their SC. (a) P3: SCALE_THRESHOLDS.scName
 //      k_min 1.00 -> 0.75 (TUNER_TYPO_VERSION 3 -> 4) and LOD-faded names
 //      get display:none like R6.1's icons. (b) applyScLayoutSeparation
@@ -917,16 +917,16 @@
 //      bbox (cloudBBox); fit bbox expanded symmetrically about the content
 //      center, so a one-sided exile can't push the nebula off-center at
 //      100% (Task 9).
-//  33. Almagest graph tuner (spec docs/project-plans/2026-09-13-143030-
-//      almagest-graph-tuner/): `renderScName` seam (text by default,
+//  33. Almagest graph tuner (spec: the 2026-09-13 almagest-graph-tuner
+//      plan, private): `renderScName` seam (text by default,
 //      generator path glyphs under a dev preview), tier breakpoints and
 //      SC_NAME_CHAR_WIDTH read from the generator, dev hook
 //      `__d3SetAlmagestPreview`. Batch A (2026-09-13-183006-graph-
 //      interaction-followups) adds a dev-only tier-tint debug aid on top
 //      (`__almagestTierTint`, dev hook `__d3SetAlmagestTierTint`).
 //
-// Graph interaction follow-ups (spec docs/project-plans/2026-09-13-183006-
-// graph-interaction-followups/spec.md; decision: controller, 2026-09-13),
+// Graph interaction follow-ups (spec: the 2026-09-13 graph-interaction-
+// followups plan (private), spec.md; decision: controller, 2026-09-13),
 // Batch B -- starfield parallax:
 //  34. `fitToContent` records the transform it just applied as
 //      `__fitTransform` (module var), INCLUDING the canvas center it fit
@@ -1089,8 +1089,8 @@ var __vendorExpandedGroups;
     // the pan-clamp (the "everything visible at the floor" expanded rect) --
     // keeping both derived from one constant keeps them in sync.
     var MIN_ZOOM_RATIO = 0.5;
-    // Delta #32: SC layout separation (spec docs/project-plans/2026-08-10-
-    // 162433-sc-layout-separation/spec.md). Budget = fraction of an SC's
+    // Delta #32: SC layout separation (spec: the 2026-08-10 sc-layout-
+    // separation plan, private). Budget = fraction of an SC's
     // scOverlayGeometry().maxReach (its fog reach, the closest thing to a
     // hull radius) that the post-settle correction may translate the whole
     // member-set by; measured in screen px at the 0.5x floor. Starting
@@ -1378,8 +1378,8 @@ var __vendorExpandedGroups;
     // its own copies of those numbers at all (grepped: nothing else in the
     // file read either name).
     var __almagestPreview = null;  // AlmagestParams while the dev tuner previews, else null
-    // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-
-    // followups/): dev-only debug aid, off by default and never set outside
+    // Batch A (spec: the 2026-09-13 graph-interaction-followups plan,
+    // private): dev-only debug aid, off by default and never set outside
     // the NODE_ENV-gated window.__d3SetAlmagestTierTint hook below --
     // removable in full by deleting this flag, TIER_TINT, the hook, and the
     // two renderScName reads of __almagestTierTint.
@@ -7618,8 +7618,8 @@ var __vendorExpandedGroups;
             __almagestPreview = params || null;
             if (svg && rawData) updateLabelScale(currentZoomK);  // redraws watermarks only
         };
-        // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-
-        // followups/): dev-only debug aid -- tints every SC nameplate by the
+        // Batch A (spec: the 2026-09-13 graph-interaction-followups plan,
+        // private): dev-only debug aid -- tints every SC nameplate by the
         // tier face it's currently painted in (Display/Mid/Text), so a dev
         // can see which breakpoint a given zoom level exercises. Off by
         // default and not persisted; redraws the same way the preview hook

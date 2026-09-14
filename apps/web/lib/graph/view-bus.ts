@@ -1,5 +1,5 @@
-// Graph interaction follow-ups, Batch B (spec docs/project-plans/2026-09-13-
-// 183006-graph-interaction-followups/spec.md): tiny pub/sub so the vendor's
+// Graph interaction follow-ups, Batch B (spec: the 2026-09-13 graph-
+// interaction-followups plan (private), spec.md): tiny pub/sub so the vendor's
 // zoom handler (lib/graph/d3-graph-vendor.js, plain JS, no React) can signal
 // the current pan/zoom transform to Starfield.tsx without either side
 // depending on the other's module shape. GraphCanvas.tsx wires the vendor's

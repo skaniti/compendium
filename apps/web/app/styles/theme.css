@@ -399,8 +399,8 @@ circle.page, use.star-spikes {
 .almagest-tuner .tuner-tab[aria-pressed="true"] {
     background: color-mix(in srgb, var(--ink) 16%, transparent);
 }
-/* Batch A tweak-count badges (spec docs/project-plans/2026-09-13-183006-
-   graph-interaction-followups/): AlmagestTuner.tsx renders this class on
+/* Batch A tweak-count badges (spec: the 2026-09-13 graph-interaction-
+   followups plan, private): AlmagestTuner.tsx renders this class on
    both a tier tab and the frozen <summary>, whichever has a nonzero
    diffFromBaseline count -- shared chrome, no per-host variant. */
 .tuner-tab-badge {
@@ -432,8 +432,8 @@ circle.page, use.star-spikes {
     color: var(--ink);
     opacity: 0.85;
 }
-/* Batch A tweak marker (spec docs/project-plans/2026-09-13-183006-graph-
-   interaction-followups/): a row whose value differs from the last-baked
+/* Batch A tweak marker (spec: the 2026-09-13 graph-interaction-followups
+   plan, private): a row whose value differs from the last-baked
    baseline gets a distinct label color and a leading dot, independent of
    the reset button's own disabled state (belt-and-suspenders -- either
    signal alone tells the user the row moved). */

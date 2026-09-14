@@ -36,7 +36,8 @@
  * Compendium loader -- mode-aware lifecycle controller + HTML template.
  *
  * Ported from the bundle's inline <script> at
- * docs/project-plans/2026-05-11-004203-demo-loader-integration/bundle-source/project/Compendium Loader.html
+ * the 2026-05-11 demo-loader-integration plan (private),
+ * bundle-source/project/Compendium Loader.html,
  * with additions for three-mode dispatch (first-run / return / replay)
  * per spec.md.
  *

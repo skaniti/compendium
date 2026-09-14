@@ -149,8 +149,8 @@ describe("Starfield", () => {
     expect(getMount().dataset.variant).toBe("hyperspace");
   });
 
-  // Batch B (spec docs/project-plans/2026-09-13-183006-graph-interaction-
-  // followups/spec.md): starfield parallax with the pan. lib/graph/
+  // Batch B (spec: the 2026-09-13 graph-interaction-followups plan
+  // (private), spec.md): starfield parallax with the pan. lib/graph/
   // view-bus.ts's publishView is called directly here (the same thing
   // components/GraphCanvas.tsx's onViewChange wiring does) -- no real
   // vendor render() involved, matching this file's existing "DOM side

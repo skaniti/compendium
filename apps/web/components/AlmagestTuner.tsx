@@ -47,8 +47,8 @@ function getPreviewFn(): PreviewFn | undefined {
   return (window as unknown as { __d3SetAlmagestPreview?: PreviewFn }).__d3SetAlmagestPreview;
 }
 
-// Batch A tint-by-tier debug aid (spec docs/project-plans/2026-09-13-183006-
-// graph-interaction-followups/): same window-hook-lookup shape as
+// Batch A tint-by-tier debug aid (spec: the 2026-09-13 graph-interaction-
+// followups plan, private): same window-hook-lookup shape as
 // getPreviewFn above, for the sibling __d3SetAlmagestTierTint hook.
 type TierTintFn = (on: boolean) => void;
 

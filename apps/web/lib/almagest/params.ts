@@ -75,8 +75,8 @@ export function paramsEqual(a: AlmagestParams, b: AlmagestParams): boolean {
   return toJSON(a) === toJSON(b);
 }
 
-// Batch A tweak markers (spec docs/project-plans/2026-09-13-183006-graph-
-// interaction-followups/): a small pure diff between the working draft and
+// Batch A tweak markers (spec: the 2026-09-13 graph-interaction-followups
+// plan, private): a small pure diff between the working draft and
 // the last-baked baseline (shippedParams() as loaded at page start), used
 // to mark rows/tabs/the frozen group/the footer that have moved since the
 // last bake. Per-key equality (not JSON string compare) so the result

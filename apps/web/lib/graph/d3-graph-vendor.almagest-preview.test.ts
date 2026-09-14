@@ -110,8 +110,8 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
 
 type W = Window & { __d3SetAlmagestPreview?: (p: unknown) => void; __d3SetAlmagestTierTint?: (on: boolean) => void };
 
-// Batch A tint-by-tier debug aid (spec docs/project-plans/2026-09-13-183006-
-// graph-interaction-followups/): jsdom's CSSStyleDeclaration normalizes a
+// Batch A tint-by-tier debug aid (spec: the 2026-09-13 graph-interaction-
+// followups plan, private): jsdom's CSSStyleDeclaration normalizes a
 // hex color assigned via .style.fill to "rgb(r, g, b)" when read back (the
 // same normalization d3's own .style() call goes through), so the expected
 // values are derived through the same round-trip rather than hardcoded as

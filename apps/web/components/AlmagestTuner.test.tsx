@@ -121,7 +121,7 @@ describe("AlmagestTuner", () => {
     expect(Number(stroke.value)).toBe(PARAM_RANGES.tier.stroke.min);
   });
 
-  // Batch A (spec docs/project-plans/2026-09-13-183006-graph-interaction-followups/)
+  // Batch A (spec: the 2026-09-13 graph-interaction-followups plan, private)
   it("the tint checkbox calls the tier-tint hook on and off", () => {
     const tint = (window as unknown as { __d3SetAlmagestTierTint: ReturnType<typeof vi.fn> }).__d3SetAlmagestTierTint;
     render(<AlmagestTuner />);

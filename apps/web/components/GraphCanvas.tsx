@@ -611,8 +611,8 @@ export default function GraphCanvas() {
         // comment for the suppression design.
         onRenderCycleStart: handleSettleVeilRaise,
         onSettleEnd: handleSettleVeilDrop,
-        // Batch B (spec docs/project-plans/2026-09-13-183006-graph-
-        // interaction-followups/spec.md): publishes every pan/zoom tick to
+        // Batch B (spec: the 2026-09-13 graph-interaction-followups plan
+        // (private), spec.md): publishes every pan/zoom tick to
         // lib/graph/view-bus.ts so components/Starfield.tsx can pan the
         // starfield mount at a parallax factor -- see that module's own
         // comment for why this is a plain pub/sub, not React state.

@@ -79,8 +79,8 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // (GraphCanvas.tsx never calls render() for those; see its own
     // comments for the equivalent wrapper-visible resolution).
     onSettleEnd?: () => void;
-    // Batch B (spec docs/project-plans/2026-09-13-183006-graph-interaction-
-    // followups/spec.md): fires on every 'zoom' tick -- pan, wheel, pinch,
+    // Batch B (spec: the 2026-09-13 graph-interaction-followups plan
+    // (private), spec.md): fires on every 'zoom' tick -- pan, wheel, pinch,
     // the zoom-indicator's +/- buttons, and __d3ZoomTo alike, every path
     // funnels through the same d3-zoom handler -- AFTER the vendor's own
     // manual pan clamp has already been applied to the transform, so x/y/k

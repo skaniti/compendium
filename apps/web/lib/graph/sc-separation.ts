@@ -1,6 +1,6 @@
 /**
- * SC layout separation geometry (vendor delta #32; spec
- * docs/project-plans/2026-08-10-162433-sc-layout-separation/spec.md).
+ * SC layout separation geometry (vendor delta #32; spec:
+ * the 2026-08-10 sc-layout-separation plan (private), spec.md).
  * Pure functions, no DOM. Screen-px footprints are estimated from the SAME
  * constants drawWatermarks paints with, evaluated at a zoom RATIO
  * (currentZoomK / fitZoom) -- the plate is screen-clamped by clampedScale, so
