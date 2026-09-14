@@ -125,8 +125,12 @@ async function updateStatus() {
     // Pending exports
     if (status.pendingExports > 0) {
       pendingCountEl.textContent = status.pendingExports;
-      pendingNoticeEl.classList.remove('hidden');
+      lastPendingCount = status.pendingExports;
+      // The pending notice shares one line with the export result; while the
+      // result is on screen the notice waits (restored when the timer ends).
+      if (!exportResultVisible) pendingNoticeEl.classList.remove('hidden');
     } else {
+      lastPendingCount = 0;
       pendingNoticeEl.classList.add('hidden');
     }
   } catch {
@@ -224,16 +228,27 @@ stopBtn.addEventListener('click', async () => {
 // Text/class composition lives in modules/export-status.js (DOM-free, unit
 // tested); this is just the DOM side -- render the composed result and run
 // the show/hide timer.
+// Delivery-status slot: the export result and the pending notice occupy the
+// same line (one is hidden while the other shows), so the panel height never
+// changes and the Settings panel below never moves.
+let exportResultVisible = false;
+let lastPendingCount = 0;
+
 function showExportResult(result) {
   const { text, cls } = composeExportResult(result);
 
   exportStatusEl.textContent = text;
+  exportStatusEl.title = text; // the line truncates with an ellipsis; hover shows all of it
   exportStatusEl.className = `export-status ${cls}`;
   exportStatusEl.classList.remove('hidden');
+  pendingNoticeEl.classList.add('hidden');
+  exportResultVisible = true;
 
   clearTimeout(showExportResult._timer);
   showExportResult._timer = setTimeout(() => {
     exportStatusEl.classList.add('hidden');
+    exportResultVisible = false;
+    if (lastPendingCount > 0) pendingNoticeEl.classList.remove('hidden');
   }, 8000);
 }
 
