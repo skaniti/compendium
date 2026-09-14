@@ -210,6 +210,8 @@ sets both flags for development with the role machinery enabled.
 - **Pushes are gated:** the `pre-push` hook refuses to push unless
   `ALLOW_PUSH=1` is set.
 - **Line endings:** LF repo-wide, enforced via `.gitattributes`.
+- **Contributing:** `CONTRIBUTING.md`; conduct in `CODE_OF_CONDUCT.md`;
+  vulnerability reports per `SECURITY.md`.
 
 ## License
 
