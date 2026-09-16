@@ -2,8 +2,8 @@
 
 ## Status
 
-Compendium is primarily a solo personal project. Pull requests are welcome;
-response cadence is best-effort, not contractual.
+Compendium is a solo personal project. Pull requests are welcome;
+response cadence is best-effort.
 
 ## Local development
 
