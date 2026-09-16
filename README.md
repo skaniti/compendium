@@ -32,7 +32,7 @@ populated app: graph, diary, topic detail, and chat are live from the first
 paint, under a single local identity with full control over the synthetic
 data. Demo mode exists to explore the app before committing to personal
 use; building a compendium from real browsing requires the backend and
-collectors, which arrive as the migration continues.
+collectors.
 
 ## Demo notes
 
@@ -103,14 +103,13 @@ Two things stay honest gaps:
 - **Chat needs your own key.** Every other surface reads from the database,
   but the chat agent calls out to an LLM live — set `OPENAI_API_KEY` (a
   sibling `.env` file next to `docker-compose.yml`, or export it before
-  `docker compose up`) to use it. Without a key, chat doesn't error or
-  crash: it responds in-band with "OpenAI API key not configured."
-  (streamed as a normal chat answer, zero cost/sources) — the rest of the
-  app is unaffected.
+  `docker compose up`) to use it. Without a key, chat responds in-band with
+  "OpenAI API key not configured." (streamed as a normal chat answer,
+  zero cost/sources) — the rest of the app is unaffected.
 - **Page-preview images 404.** The seed's `captured_assets` rows (image
   metadata) ship, but the underlying binary files and the route that would
   serve them don't yet — see `apps/api/data/demo-seed/README.md` for the
-  detail. Harmless; nothing else depends on it.
+  detail.
 
 Want to rebuild the corpus yourself from scratch instead of using the
 shipped seed (e.g. to add new pages, or verify the pipeline end-to-end)?
@@ -182,10 +181,9 @@ auth/session/role mechanics. The FastAPI backend lives at `apps/api` and
 runs the hosted instance; the browser extension (`apps/extension`) and the
 Android collector (`apps/android`) ship from here too.
 
-Still to come: the internal dev/observability views (pipeline, data
+Migration in progress: the internal dev/observability views (pipeline, data
 browser, prompts, logs, traces, overview), a deploy target for this
-frontend, and retirement of the predecessor's Dash surface. The predecessor
-repo stays private.
+frontend, and retirement of the predecessor's Dash surface.
 
 ## Known limitations
 
