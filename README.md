@@ -81,7 +81,7 @@ the demo account:
 - **Email:** `demo@traversal.local`
 - **Password:** `demo`
 
-(Both are `backend/scripts/bootstrap_user.py`'s own intentionally-public
+(Both are `apps/api/backend/scripts/bootstrap_user.py`'s own intentionally-public
 local-dev defaults, not secrets. A primary/admin account is also created
 from `BOOTSTRAP_EMAIL`/`BOOTSTRAP_PASSWORD` — override either pair, or set
 `BOOTSTRAP_DEMO_EMAIL`/`BOOTSTRAP_DEMO_PASSWORD`, via a `.env` file next to
@@ -116,9 +116,10 @@ shipped seed (e.g. to add new pages, or verify the pipeline end-to-end)?
 `apps/api/scripts/demo/ingest_demo_v1.py` runs the original 59-URL v1
 subset through the live capture pipeline by hand (fetch, LLM skip-gate,
 LLM summarization, embedding, clustering) — real `OPENAI_API_KEY` /
-`ANTHROPIC_API_KEY` spend, and it needs the private predecessor repo's
-`docs/project-plans` checked out alongside this one (see the script's own
-docstring) — not part of the compose stack.
+`ANTHROPIC_API_KEY` spend, and it needs the private predecessor repo
+reachable through the gitignored `docs/project-plans` symlink at this
+repo's root (see the comment above `V1_DOC_PATH` in the script) — not part
+of the compose stack.
 
 Ports: web on `:3000`, API on `:8001` (`:8001/docs` for the OpenAPI UI,
 `:8001/health` for a liveness check). Postgres is not published to the
