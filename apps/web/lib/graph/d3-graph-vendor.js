@@ -4080,8 +4080,13 @@ var __vendorExpandedGroups;
             // independent of the icon, so they tune separately.
             var iconScale = clampedScale(currentZoomK, 'scIcon');
             var nameScale = clampedScale(currentZoomK, 'scName');
-            var ICON_SIZE = BASE_SC_ICON_SIZE * iconScale;
-            var nameFontSize = BASE_SC_NAME_FONT_SIZE * nameScale;
+            // Delta #36: the canvas-derived plate-fit scale multiplies the
+            // BASE sizes (and the icon->name pad passed to renderScName
+            // below) so the whole plate scales down uniformly on small
+            // canvases; the fit-ratio bands (clampedScale) apply on top,
+            // unchanged, so zoom behavior around fit is exactly as before.
+            var ICON_SIZE = BASE_SC_ICON_SIZE * plateFitScale * iconScale;
+            var nameFontSize = BASE_SC_NAME_FONT_SIZE * plateFitScale * nameScale;
 
             // Parse viewBox for scaling
             var vbParts = (icon.viewBox || '0 0 24 24').split(' ');
@@ -4224,7 +4229,7 @@ var __vendorExpandedGroups;
                 // and paintedPx feed.
                 renderScName(g, lines, {
                     x: ICON_SIZE / 2,
-                    y: ICON_SIZE + SC_LABEL_TOP_PAD * iconScale,
+                    y: ICON_SIZE + SC_LABEL_TOP_PAD * plateFitScale * iconScale,
                     fontPx: nameFontSize,
                     paintedPx: nameFontSize * currentZoomK,
                     opacity: nameOpacity,
@@ -4693,10 +4698,12 @@ var __vendorExpandedGroups;
             Object.keys(byKw).forEach(function (kw) {
                 var cy = byKw[kw].y / byKw[kw].n;
                 var lines = wrapLabelLines(kw.slice(0, 36), SC_NAME_LINE_BUDGET).length;
-                var bottom = cy + BASE_SC_ICON_SIZE / 2 + SC_LABEL_TOP_PAD
-                    + lines * BASE_SC_NAME_FONT_SIZE * 1.3 + 8;
+                // Delta #36: plate padding in the same plate-fit scale the
+                // draw uses (still the pre-existing world-unit approximation).
+                var bottom = cy + BASE_SC_ICON_SIZE * plateFitScale / 2 + SC_LABEL_TOP_PAD * plateFitScale
+                    + lines * BASE_SC_NAME_FONT_SIZE * plateFitScale * 1.3 + 8;
                 if (bottom > maxY) maxY = bottom;
-                var top = cy - BASE_SC_ICON_SIZE / 2 - 8;
+                var top = cy - BASE_SC_ICON_SIZE * plateFitScale / 2 - 8;
                 if (top < minY) minY = top;
             });
         }
@@ -5149,9 +5156,12 @@ var __vendorExpandedGroups;
      *  at its own hardcoded 30px font, to an em advance. */
     function scFootprintParams() {
         return {
-            baseIconSize: BASE_SC_ICON_SIZE,
-            baseNameFontPx: BASE_SC_NAME_FONT_SIZE,
-            labelTopPad: SC_LABEL_TOP_PAD,
+            // Delta #36: pre-scaled by plateFitScale so plateFootprintAtRatio
+            // (sc-separation.ts) needs no new input -- ratio 1.0 there IS
+            // "the plate as painted at fit on this canvas".
+            baseIconSize: BASE_SC_ICON_SIZE * plateFitScale,
+            baseNameFontPx: BASE_SC_NAME_FONT_SIZE * plateFitScale,
+            labelTopPad: SC_LABEL_TOP_PAD * plateFitScale,
             lineBudget: SC_NAME_LINE_BUDGET,
             charAdvanceEm: SC_NAME_CHAR_WIDTH / 30,
             scIcon: SCALE_THRESHOLDS.scIcon,

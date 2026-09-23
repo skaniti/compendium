@@ -4,6 +4,7 @@ import type { IconEntry } from "@/lib/icons";
 import { createSimEngine } from "@/lib/graph/sim-layout";
 import type { MainToWorkerMessage, SimStartPayload, WorkerToMainMessage } from "@/lib/graph/sim-protocol";
 import { plateFootprintAtRatio, plateRect, rectsOverlap, segmentsCross } from "@/lib/graph/sc-separation";
+import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 
 // Delta #32 (vendor header comment) -- exercises the REAL vendor render()
 // pipeline in jsdom, same overall strategy as
@@ -662,10 +663,15 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // kExile ~1.06, comfortably above kFit ~0.30, observed empirically.
     sizeContainer(container, 800, 620);
     document.body.appendChild(container);
+    // Delta #36 (plate-fit scale): 800x620 has S = 620, 3% under the 640 REF,
+    // and this test's "exiled at fit" precondition is a narrow calibration of
+    // FULL-SIZE plates (kExile ~1.06 vs kFit ~0.30). Pin the scale to 1 here
+    // (620/600 clamps) so the calibration holds; the scale itself is covered
+    // by d3-graph-vendor.plate-fit.test.ts.
     render(
       container,
       crowdedPayload("cvg", 2, 4, "extraordinarily verbose supercluster keyword name here"),
-      { icons: iconsFor("cvg") },
+      { icons: iconsFor("cvg"), tunerSnapshot: { ...GRAPH_DEFAULTS, SC_PLATE_FIT_REF_PX: 600 } },
     );
     flushSettleChunks();
     const layout = (window as W).__d3ScLayout!()!;
@@ -734,10 +740,15 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     // observed kExile/kFit numbers (this test needs the identical
     // exiled-at-fit precondition, just checking symmetry instead of
     // containment).
+    // Delta #36 (plate-fit scale): 800x620 has S = 620, 3% under the 640 REF,
+    // and this test's "exiled at fit" precondition is a narrow calibration of
+    // FULL-SIZE plates (kExile ~1.06 vs kFit ~0.30). Pin the scale to 1 here
+    // (620/600 clamps) so the calibration holds; the scale itself is covered
+    // by d3-graph-vendor.plate-fit.test.ts.
     render(
       container,
       crowdedPayload("ctr", 2, 4, "extraordinarily verbose supercluster keyword name here"),
-      { icons: iconsFor("ctr") },
+      { icons: iconsFor("ctr"), tunerSnapshot: { ...GRAPH_DEFAULTS, SC_PLATE_FIT_REF_PX: 600 } },
     );
     flushSettleChunks();
     const layout = (window as W).__d3ScLayout!()!;

@@ -55,9 +55,9 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
 }
 /** Four single-cluster superclusters (>= 2 painted SCs is what makes the
  *  vendor build a __scLayout record at all). */
-function payload(prefix: string): GraphPayload {
+function payload(prefix: string, n = 4): GraphPayload {
   const nodes: GraphNode[] = []; const clusters: GraphCluster[] = []; const superClusters: GraphSuperCluster[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < n; i++) {
     const kw = `${prefix}-sc${i} extremely long supercluster name`; const cid = `${prefix}-c${i}`; const ids: string[] = [];
     for (let p = 0; p < 6; p++) {
       const id = `${prefix}-p${i}-${p}`; ids.push(id);
@@ -84,12 +84,12 @@ type W = Window & {
 };
 const FLOOR_RATIO = 12 / 22;
 
-async function mount(w: number, h: number, prefix: string, opts: { tunerSnapshot?: GraphDefaults } = {}) {
+async function mount(w: number, h: number, prefix: string, opts: { tunerSnapshot?: GraphDefaults } = {}, scCount = 4) {
   const { render, applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
   const container = document.createElement("div");
   sizeContainer(container, w, h);
   document.body.appendChild(container);
-  render(container, payload(prefix), { icons: iconsFor(prefix), ...opts });
+  render(container, payload(prefix, scCount), { icons: iconsFor(prefix), ...opts });
   flushSettleChunks();
   return { container, render, applyTunerOverrides };
 }
@@ -157,5 +157,80 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     // REF 300 would lift the laptop canvas to scale 1; a v4-stamped profile must be ignored for these keys
     await mount(771, 313, "stale", { tunerSnapshot: { ...GRAPH_DEFAULTS, TYPO_V: 4, SC_PLATE_FIT_REF_PX: 300 } });
     expect((window as W).__d3ScLayout!()!.plateFitScale).toBeCloseTo(FLOOR_RATIO, 6);
+  });
+
+  function fitZoomOf(): number { return (window as W).__d3GetZoomScaleExtent!()[1] / 4; }  // extent max = 4 * fit
+  function paintedNamePxAtFit(container: HTMLElement): number {
+    // <text class="supercluster-label" style="font-size: <world px>px"> (renderScName's text branch,
+    // active whenever the Almagest preview is off). World font px * k at fit = painted px.
+    const el = container.querySelector("text.supercluster-label") as SVGTextElement | null;
+    expect(el).not.toBeNull();
+    return parseFloat(el!.style.fontSize) * fitZoomOf();
+  }
+  function paintedIconPxAtFit(container: HTMLElement): number {
+    // icon path transform is scale(ICON_SIZE / viewBoxWidth); fixture viewBox is 24 wide
+    const p = container.querySelector("g.watermark path") as SVGPathElement | null;
+    expect(p).not.toBeNull();
+    const m = /scale\(([-\d.eE]+)\)/.exec(p!.getAttribute("transform") || "");
+    return parseFloat(m![1]) * 24 * fitZoomOf();
+  }
+
+  it("paints the name at the floor size at fit on the laptop-class canvas", async () => {
+    const { container } = await mount(771, 313, "pn");
+    expect(paintedNamePxAtFit(container)).toBeCloseTo(12, 1);
+  });
+
+  it("paints the name at the base size at fit on a large canvas (pixel parity)", async () => {
+    const { container } = await mount(1100, 850, "pb");
+    expect(paintedNamePxAtFit(container)).toBeCloseTo(22, 1);
+  });
+
+  it("paints the icon at BASE * floor at fit on the laptop-class canvas", async () => {
+    const { container } = await mount(771, 313, "pi");
+    expect(paintedIconPxAtFit(container)).toBeCloseTo(100 * FLOOR_RATIO, 1);
+  });
+
+  it("footprint params carry the scale so the estimator and the fit-inclusion loop follow", async () => {
+    await mount(771, 313, "fp");
+    const fp = (window as W).__d3ScLayout!()!.fpParams;
+    expect(fp.baseIconSize).toBeCloseTo(100 * FLOOR_RATIO, 6);
+    expect(fp.baseNameFontPx).toBeCloseTo(12, 6);
+    expect(fp.labelTopPad).toBeCloseTo(10 * FLOOR_RATIO, 6);
+  });
+
+  it("computeFitBBox's plate padding carries the scale (single SC: no separation pass, so fitToContent frames the raw bbox)", async () => {
+    // With ONE painted SC, applyScLayoutSeparation and remeasureScLayout both
+    // return early (they need >= 2 plates), so nothing shifts nodes and
+    // fitToContent frames computeFitBBox(nodes) directly; the zoom extent's
+    // max is 4 x that fit. The plate padding below the SC centroid is
+    // (icon/2 + pad + lines x 22 x 1.3) x plateFitScale + 8 world units. The
+    // prefix "b" is chosen so the 36-char slice keeps a fifth word ("b-sc0
+    // extremely long supercluster na" -> b-sc0 / extremely / long /
+    // supercluster / na = 5 lines with the 12-char budget), so it is 203 x s
+    // + 8: 211 at scale 1, ~119 at the 12/22 floor. The fog term for an
+    // SC-member cluster is max(maxDist x NEBULA_RADIUS_MULT, 380) x
+    // NEBULA_FIT_CORE, which is >= 304 under shipped constants and masks the
+    // padding at every scale; the two overrides below bring it to 152. So the
+    // PLATE sets maxY at scale 1 (211 > 152) and the FOG does at the floor
+    // (119 < 152): the bbox is shorter at the floor and fitZoom rises WITH
+    // the padding seam, and stays identical WITHOUT it (the multi-SC variant
+    // of this test could not tell, because scaled footprints also change the
+    // separation pass's node shifts).
+    const { applyTunerOverrides } = await mount(1100, 850, "b", {}, 1);
+    // Under shipped constants the SC-member fog floor (380 x 0.8 = 304 world
+    // units) exceeds the largest plate padding (211), masking the padding term
+    // at every scale. Two non-degenerate overrides make it observable: a
+    // radius multiplier of 1 so the 380 floor wins over maxDist x 9, and a fit
+    // core of 0.4 so the fog core is 152 -- between the plate's 211 at scale 1
+    // and ~119 at the floor. Overrides always rebuild from code defaults plus
+    // the partial, so the second call restates both fog keys.
+    applyTunerOverrides({ NEBULA_RADIUS_MULT: 1, NEBULA_FIT_CORE: 0.4 });
+    flushSettleChunks();
+    const fitAtOne = fitZoomOf();
+    expect(Number.isFinite(fitAtOne) && fitAtOne > 0).toBe(true);
+    applyTunerOverrides({ NEBULA_RADIUS_MULT: 1, NEBULA_FIT_CORE: 0.4, SC_PLATE_FIT_REF_PX: 1600 });  // 850/1600 = 0.53 -> floor 12/22
+    flushSettleChunks();
+    const fitAtFloor = fitZoomOf();
+    expect(fitAtFloor).toBeGreaterThan(fitAtOne * 1.01);
   });
 });

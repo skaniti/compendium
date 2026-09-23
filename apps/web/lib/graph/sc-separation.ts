@@ -4,10 +4,13 @@
  * Pure functions, no DOM. Screen-px footprints are estimated from the SAME
  * constants drawWatermarks paints with, evaluated at a zoom RATIO
  * (currentZoomK / fitZoom) -- the plate is screen-clamped by clampedScale, so
- * its screen size is a function of the ratio alone. The 0.5 floor
- * (MIN_ZOOM_RATIO) is the single binding constraint: screen separation grows
- * proportionally to k while footprints grow at most proportionally, so a
- * layout clear at the floor is clear at every zoom (spec, "monotonicity").
+ * its screen size is a function of the ratio alone. Since vendor delta #36
+ * the base sizes in FootprintParams arrive pre-multiplied by the
+ * canvas-derived plate-fit scale, so ratio 1.0 is the plate as painted at
+ * fit on the CURRENT canvas. The 0.5 floor (MIN_ZOOM_RATIO) is the single
+ * binding constraint: screen separation grows proportionally to k while
+ * footprints grow at most proportionally, so a layout clear at the floor is
+ * clear at every zoom (spec, "monotonicity").
  */
 
 export interface ScaleBand { k_min: number; k_max: number }
