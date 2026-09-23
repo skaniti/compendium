@@ -34,12 +34,16 @@ describe("GRAPH_DEFAULTS", () => {
     // P3 (sc-layout-separation spec, decision #1): names shrink with the
     // world below fit down to 0.75x instead of staying screen-constant.
     expect(GRAPH_DEFAULTS.SCALE_THRESHOLDS.scName).toEqual({ k_min: 0.75, k_max: 2.0 });
+    // Nameplate LOD fit scale (spec docs/project-plans/2026-09-23-151626-
+    // nameplate-lod-fit-scale/): sFit = clamp(min(w,h)/REF, FLOOR/22, 1).
+    expect(GRAPH_DEFAULTS.SC_PLATE_FIT_REF_PX).toBe(640);
+    expect(GRAPH_DEFAULTS.SC_NAME_FIT_FLOOR_PX).toBe(12);
   });
 });
 
 describe("tuner version stamps", () => {
-  it("TUNER_TYPO_VERSION is 4 (P3 scName k_min re-baseline, sc-layout-separation)", () => {
-    expect(TUNER_TYPO_VERSION).toBe(4);
+  it("TUNER_TYPO_VERSION is 5 (plate-fit scale keys, nameplate-lod-fit-scale)", () => {
+    expect(TUNER_TYPO_VERSION).toBe(5);
   });
 
   it("TUNER_FOG_VERSION is 2", () => {

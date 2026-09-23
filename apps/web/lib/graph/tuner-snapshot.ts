@@ -69,6 +69,8 @@ const TYPO_GATED_FLAT_KEYS: ReadonlyArray<keyof GraphDefaults> = [
   "BASE_SINGLETON_LABEL_FONT_SIZE",
   "SC_NAME_LOD_K_MIN",
   "SC_NAME_LOD_FADE_RANGE",
+  "SC_PLATE_FIT_REF_PX",
+  "SC_NAME_FIT_FLOOR_PX",
 ];
 
 // Keys gated on FOG_V -- dropped unless snap.FOG_V === TUNER_FOG_VERSION

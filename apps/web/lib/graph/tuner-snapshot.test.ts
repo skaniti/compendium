@@ -188,6 +188,17 @@ describe("resolveTunerSnapshot: version gating (port of applyTunerSnapshot)", ()
     expect(result.BASE_SC_ICON_SIZE).toBe(77);
   });
 
+  it("SC_PLATE_FIT_REF_PX / SC_NAME_FIT_FLOOR_PX are typo-gated: apply from a current profile, dropped from a stale one", () => {
+    const current = resolveTunerSnapshot(
+      withSlot1(fullSnapshot({ SC_PLATE_FIT_REF_PX: 800, SC_NAME_FIT_FLOOR_PX: 14 })), "1", makeStorage());
+    expect(current.SC_PLATE_FIT_REF_PX).toBe(800);
+    expect(current.SC_NAME_FIT_FLOOR_PX).toBe(14);
+    const stale = resolveTunerSnapshot(
+      withSlot1(fullSnapshot({ TYPO_V: TUNER_TYPO_VERSION - 1, SC_PLATE_FIT_REF_PX: 800, SC_NAME_FIT_FLOOR_PX: 14 })), "1", makeStorage());
+    expect(stale.SC_PLATE_FIT_REF_PX).toBeUndefined();
+    expect(stale.SC_NAME_FIT_FLOOR_PX).toBeUndefined();
+  });
+
   // Review fix round 1, finding F2: the table above only ever exercises
   // clLabel (typo-gated) and pageDot (ungated) of the 7 SCALE_THRESHOLDS
   // entries -- scIcon/scName/singletonLabel/groupLabel/scLabel never
