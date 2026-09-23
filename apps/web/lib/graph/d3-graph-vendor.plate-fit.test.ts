@@ -13,11 +13,13 @@ import type { GraphDefaults } from "@/lib/graph/constants";
 // getScreenCTM/getBBox stub rationale). jsdom has no .search-bar-wrapper,
 // so effectiveCanvasHeight(h) === h here: the laptop's measured 771x401
 // container (88px search reserve) is emulated as 771x313.
+let lastSimStart: SimStartPayload | null = null;
 class SyncFakeSimWorker {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   constructor(_scriptURL?: unknown, _options?: unknown) {}
   postMessage(message: MainToWorkerMessage): void {
     if (message.type !== "start") return;
+    lastSimStart = message as SimStartPayload;
     const engine = createSimEngine(message as SimStartPayload);
     this.emit({ type: "tick", positions: engine.snapshot() });
     if (engine.done) { this.emit({ type: "end", positions: engine.snapshot() }); return; }
@@ -53,7 +55,7 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
   el.getBoundingClientRect = () =>
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
-/** Four single-cluster superclusters (>= 2 painted SCs is what makes the
+/** `n` single-cluster superclusters (default 4) (>= 2 painted SCs is what makes the
  *  vendor build a __scLayout record at all). */
 function payload(prefix: string, n = 4): GraphPayload {
   const nodes: GraphNode[] = []; const clusters: GraphCluster[] = []; const superClusters: GraphSuperCluster[] = [];
@@ -96,6 +98,7 @@ async function mount(w: number, h: number, prefix: string, opts: { tunerSnapshot
 
 describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
   beforeEach(() => {
+    lastSimStart = null;
     vi.stubGlobal("Worker", SyncFakeSimWorker);
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     installTinyGeometryStubs();
@@ -220,8 +223,9 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     // Under shipped constants the SC-member fog floor (380 x 0.8 = 304 world
     // units) exceeds the largest plate padding (211), masking the padding term
     // at every scale. Two non-degenerate overrides make it observable: a
-    // radius multiplier of 1 so the 380 floor wins over maxDist x 9, and a fit
-    // core of 0.4 so the fog core is 152 -- between the plate's 211 at scale 1
+    // radius multiplier of 1 so the 380 floor is guaranteed to win over
+    // maxDist x MULT regardless of fixture spread, and a fit core of 0.4 so
+    // the fog core is 152 -- between the plate's 211 at scale 1
     // and ~119 at the floor. Overrides always rebuild from code defaults plus
     // the partial, so the second call restates both fog keys.
     applyTunerOverrides({ NEBULA_RADIUS_MULT: 1, NEBULA_FIT_CORE: 0.4 });
@@ -232,5 +236,29 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     flushSettleChunks();
     const fitAtFloor = fitZoomOf();
     expect(fitAtFloor).toBeGreaterThan(fitAtOne * 1.01);
+  });
+
+  it("the sim-start payload's footprint carries the plate-fit scale on a FIRST mount (worker seed sees the right plate size)", async () => {
+    // buildSimStartPayload embeds scFootprintParams() and runs in render()
+    // BEFORE the settle-time write sites, so without a write right before it
+    // the worker's Phase-1.5b seed would use scale 1 on a first mount (and
+    // the previous canvas's scale on a re-render).
+    await mount(771, 313, "seed");
+    expect(lastSimStart).not.toBeNull();
+    // scSeparation is optional on SimStartPayload's type; render() always
+    // populates it when >= 2 SCs are painted (this fixture's case), so cast
+    // through unknown rather than editing sim-protocol.ts for a test-only need.
+    const footprint = (lastSimStart as unknown as { scSeparation: { footprint: { baseIconSize: number; baseNameFontPx: number } } }).scSeparation.footprint;
+    expect(footprint.baseNameFontPx).toBeCloseTo(12, 6);
+    expect(footprint.baseIconSize).toBeCloseTo(100 * FLOOR_RATIO, 6);
+  });
+
+  it("the icon->name pad follows the plate-fit scale (name y offset at fit is 110 x scale painted px)", async () => {
+    // renderScName is called with y = ICON_SIZE + SC_LABEL_TOP_PAD * plateFitScale * iconScale
+    // (world units); at fit iconScale = 1 / fitZoom, so y * fitZoom = (100 + 10) * scale.
+    const { container } = await mount(771, 313, "pad");
+    const el = container.querySelector("text.supercluster-label") as SVGTextElement | null;
+    expect(el).not.toBeNull();
+    expect(parseFloat(el!.getAttribute("y") || "NaN") * fitZoomOf()).toBeCloseTo(110 * FLOOR_RATIO, 1);
   });
 });

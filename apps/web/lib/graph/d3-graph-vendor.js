@@ -1007,10 +1007,12 @@
 //      `plateFitScale = clamp(min(w, h) / SC_PLATE_FIT_REF_PX,
 //      SC_NAME_FIT_FLOOR_PX / BASE_SC_NAME_FONT_SIZE, 1)` (pure
 //      `plateFitScaleFor`; module var beside `fitZoom`) is written at the
-//      three places that know the canvas -- applyScLayoutSeparation,
-//      remeasureScLayout, fitToContent, all from the SAME search-bar-
-//      adjusted dims -- and multiplies the BASE plate sizes at three
-//      seams: drawWatermarks (icon, name, icon->name pad), scFootprintParams
+//      four places that know the canvas -- render() right before the
+//      sim-start payload is built (so the worker's Phase-1.5b seed sees it),
+//      applyScLayoutSeparation, remeasureScLayout, fitToContent, all from
+//      the SAME search-bar-adjusted dims -- and multiplies the BASE plate
+//      sizes at three seams: drawWatermarks (icon, name, icon->name pad),
+//      scFootprintParams
 //      (so sc-separation.ts's estimator, the separation pass, the exile
 //      pre-pass and the fit-inclusion loop follow with no signature change)
 //      and computeFitBBox's plate padding. clampedScale, the bands,
@@ -6302,6 +6304,13 @@ var __vendorExpandedGroups;
         if (!__simClient) {
             __simClient = createWorkerSim({ onTick: handleSimTick, onEnd: handleSimEnd });
         }
+        // Delta #36 (Task 4b): the sim-start payload embeds scFootprintParams(),
+        // which is pre-scaled by plateFitScale -- write the scale for THIS
+        // canvas first, or the worker's Phase-1.5b seed uses scale 1 on a
+        // first mount and the previous canvas's scale on a re-render (the
+        // settle-time write sites all run later). Same dims the settle path
+        // uses: width, search-bar-adjusted height.
+        plateFitScale = plateFitScaleFor(width, effectiveCanvasHeight(height));
         __simClient.start(buildSimStartPayload(nodes, clusters, validLinks, width, height));
 
         // Noise filter is now applied at render input (see render() entry),
