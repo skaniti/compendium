@@ -999,6 +999,28 @@
 //      per-click step feel. A genuine trackpad pinch's small per-tick
 //      deltaY rarely reaches the cap.
 //
+//  36. Nameplate LOD fit scale (spec docs/project-plans/2026-09-23-151626-
+//      nameplate-lod-fit-scale/, decided 2026-09-23): plates were
+//      fit-ratio-clamped to a FIXED 100px icon / 22px name at 100%
+//      regardless of canvas size, so a small canvas (laptop: 771x401
+//      container) shrank the nebula to fit fixed-px plates. Now
+//      `plateFitScale = clamp(min(w, h) / SC_PLATE_FIT_REF_PX,
+//      SC_NAME_FIT_FLOOR_PX / BASE_SC_NAME_FONT_SIZE, 1)` (pure
+//      `plateFitScaleFor`; module var beside `fitZoom`) is written at the
+//      three places that know the canvas -- applyScLayoutSeparation,
+//      remeasureScLayout, fitToContent, all from the SAME search-bar-
+//      adjusted dims -- and multiplies the BASE plate sizes at three
+//      seams: drawWatermarks (icon, name, icon->name pad), scFootprintParams
+//      (so sc-separation.ts's estimator, the separation pass, the exile
+//      pre-pass and the fit-inclusion loop follow with no signature change)
+//      and computeFitBBox's plate padding. clampedScale, the bands,
+//      MIN_ZOOM_RATIO, the 100% definition (k === fitZoom), frameWorldBBox,
+//      the interim clamp seed, the exile ring, leaders/dots and edge chips
+//      are untouched; other label classes are not scaled. Exposed on the
+//      `__scLayout` record (`plateFitScale`) for tests and the acceptance
+//      harness; REF/FLOOR are typo-gated tuner keys (TUNER_TYPO_VERSION 5),
+//      live-tunable via __d3ApplyTunerOverrides.
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -1305,6 +1327,7 @@ var __vendorExpandedGroups;
     }
 
     var fitZoom = 1;  // scale factor fitToContent applies; LOD thresholds derive from zoom / fitZoom
+    var plateFitScale = 1;  // delta #36: canvas-derived nameplate scale at fit; stays 1 until a canvas size is known
     var currentZoomK = 1;  // most recent zoom transform.k; used by updateLabelScale
     var zoomIndicatorPctEl = null;  // span inside the upper-right zoom indicator
     var edgeChipLayerEl = null;  // HTML overlay div holding the R6.2 edge chips
@@ -1367,6 +1390,30 @@ var __vendorExpandedGroups;
     var BASE_SC_LABEL_FONT_SIZE = 9;          // SC-member pill text
     var BASE_SC_ICON_SIZE = 100;              // SC watermark icon size (screen px at fit)
     var BASE_SC_NAME_FONT_SIZE = 22;          // SC name text under watermark
+    // Delta #36 (spec docs/project-plans/2026-09-23-151626-nameplate-lod-fit-
+    // scale/): plate size at fit tracks the CANVAS. The two BASE_SC_* values
+    // above are the FULL-SIZE ceiling -- any canvas whose smaller side is
+    // >= SC_PLATE_FIT_REF_PX paints exactly today's 100px icon / 22px name
+    // at 100%; smaller canvases scale both down together (one shared scale,
+    // so the plate keeps its proportions) until the name would drop below
+    // SC_NAME_FIT_FLOOR_PX painted, where the floor holds and the fit
+    // absorbs the rest, as it always did. Both tuner-exposed (typo-gated,
+    // TUNER_TYPO_VERSION 5). Other label classes are NOT scaled (decision
+    // record #4).
+    var SC_PLATE_FIT_REF_PX = 640;
+    var SC_NAME_FIT_FLOOR_PX = 12;
+    /** Delta #36: pure. `w`/`h` are the fit's own canvas dims -- `h` already
+     *  search-bar-adjusted by the caller (effectiveCanvasHeight), exactly the
+     *  pair fitToContent receives. Returns 1 for a degenerate canvas or a
+     *  floor at/above the base (nothing to scale). */
+    function plateFitScaleFor(w, h) {
+        if (!(w > 0) || !(h > 0)) return 1;
+        var floorRatio = BASE_SC_NAME_FONT_SIZE > 0 ? SC_NAME_FIT_FLOOR_PX / BASE_SC_NAME_FONT_SIZE : 0;
+        if (!(floorRatio < 1)) return 1;
+        var s = Math.min(w, h) / SC_PLATE_FIT_REF_PX;
+        if (!(s < 1)) return 1;
+        return s < floorRatio ? floorRatio : s;
+    }
     // Almagest optical tiers (theme.css @font-face; fonts/almagest/README.md
     // §3). Chosen by PAINTED px, not CSS px: SC names are screen-clamped via
     // scName, so painted = nameFontSize * currentZoomK. Metrics are frozen
@@ -1862,6 +1909,8 @@ var __vendorExpandedGroups;
             if (typeof snap.BASE_SINGLETON_LABEL_FONT_SIZE === 'number') BASE_SINGLETON_LABEL_FONT_SIZE = snap.BASE_SINGLETON_LABEL_FONT_SIZE;
             if (typeof snap.SC_NAME_LOD_K_MIN === 'number') SC_NAME_LOD_K_MIN = snap.SC_NAME_LOD_K_MIN;
             if (typeof snap.SC_NAME_LOD_FADE_RANGE === 'number') SC_NAME_LOD_FADE_RANGE = snap.SC_NAME_LOD_FADE_RANGE;
+            if (typeof snap.SC_PLATE_FIT_REF_PX === 'number') SC_PLATE_FIT_REF_PX = snap.SC_PLATE_FIT_REF_PX;
+            if (typeof snap.SC_NAME_FIT_FLOOR_PX === 'number') SC_NAME_FIT_FLOOR_PX = snap.SC_NAME_FIT_FLOOR_PX;
         }
         if (typeof snap.BASE_SC_ICON_SIZE === 'number') BASE_SC_ICON_SIZE = snap.BASE_SC_ICON_SIZE;
         if (typeof snap.ICON_LOD_FADE_START === 'number') ICON_LOD_FADE_START = snap.ICON_LOD_FADE_START;
@@ -4755,6 +4804,7 @@ var __vendorExpandedGroups;
 
     function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
         if (!nodes.length || !svg) return;
+        plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: same dims the fit uses
         // 2026-09-13 swoop fix: a fit is never a wheel gesture (settle,
         // resize, or an explicit refit -- the only three call sites below)
         // so the very next watermark draw should always SNAP, never glide.
@@ -5136,6 +5186,7 @@ var __vendorExpandedGroups;
         if (!nodes.length || !__mountedIcons || !currentData) return;
         var canvasW = ctx.width, canvasH = effectiveCanvasHeight(ctx.height);
         if (!(canvasW > 0) || !(canvasH > 0)) return;
+        plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
         var fp = scFootprintParams();
 
         var groups = {};
@@ -5277,6 +5328,7 @@ var __vendorExpandedGroups;
         var nodes = currentData.nodes || [];
         var clusters = currentData.clusters || [];
         if (!nodes.length) return;
+        plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
         var fp = scFootprintParams();
 
         var groups = {};
@@ -5477,6 +5529,7 @@ var __vendorExpandedGroups;
         });
         __scLayout = {
             kFit: kFit, kFloor: kFloor,
+            plateFitScale: plateFitScale,
             cloudCentroid: { x: cloudCx, y: cloudCy },
             cloudBBox: cloudBBox,
             contentBBox: contentBBox,
