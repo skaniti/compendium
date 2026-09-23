@@ -1012,16 +1012,15 @@
 //      applyScLayoutSeparation, remeasureScLayout, fitToContent, all from
 //      the SAME search-bar-adjusted dims -- and multiplies the BASE plate
 //      sizes at three seams: drawWatermarks (icon, name, icon->name pad),
-//      scFootprintParams
-//      (so sc-separation.ts's estimator, the separation pass, the exile
-//      pre-pass and the fit-inclusion loop follow with no signature change)
-//      and computeFitBBox's plate padding. clampedScale, the bands,
-//      MIN_ZOOM_RATIO, the 100% definition (k === fitZoom), frameWorldBBox,
-//      the interim clamp seed, the exile ring, leaders/dots and edge chips
-//      are untouched; other label classes are not scaled. Exposed on the
-//      `__scLayout` record (`plateFitScale`) for tests and the acceptance
-//      harness; REF/FLOOR are typo-gated tuner keys (TUNER_TYPO_VERSION 5),
-//      live-tunable via __d3ApplyTunerOverrides.
+//      scFootprintParams (so sc-separation.ts's estimator, the separation
+//      pass, the exile pre-pass and the fit-inclusion loop follow with no
+//      signature change) and computeFitBBox's plate padding. clampedScale,
+//      the bands, MIN_ZOOM_RATIO, the 100% definition (k === fitZoom),
+//      frameWorldBBox, the interim clamp seed, the exile ring, leaders/dots
+//      and edge chips are untouched; other label classes are not scaled.
+//      Exposed on the `__scLayout` record (`plateFitScale`) for tests and
+//      the acceptance harness; REF/FLOOR are typo-gated tuner keys
+//      (TUNER_TYPO_VERSION 5), live-tunable via __d3ApplyTunerOverrides.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1849,6 +1848,8 @@ var __vendorExpandedGroups;
             SINGLETON_LABEL_BASE_OPACITY: SINGLETON_LABEL_BASE_OPACITY,
             SC_NAME_LOD_K_MIN: SC_NAME_LOD_K_MIN,
             SC_NAME_LOD_FADE_RANGE: SC_NAME_LOD_FADE_RANGE,
+            SC_PLATE_FIT_REF_PX: SC_PLATE_FIT_REF_PX,
+            SC_NAME_FIT_FLOOR_PX: SC_NAME_FIT_FLOOR_PX,
             ICON_LOD_FADE_START: ICON_LOD_FADE_START,
             ICON_LOD_FADE_END: ICON_LOD_FADE_END,
             GROUP_CAPTION_LOD_K_MIN: GROUP_CAPTION_LOD_K_MIN,
@@ -3830,7 +3831,7 @@ var __vendorExpandedGroups;
                 // dominant-baseline="hanging" anchors y at the visual top of
                 // the glyph rather than the baseline, so the padding between
                 // icon bottom and label top stays exactly the caller's pad
-                // (SC_LABEL_TOP_PAD * iconScale) at any font size.
+                // (SC_LABEL_TOP_PAD * plateFitScale * iconScale) at any font size.
                 .attr('dominant-baseline', 'hanging')
                 // Use .style() not .attr() — inline style overrides the
                 // theme.css `.supercluster-label { font-size: 30px }` rule;

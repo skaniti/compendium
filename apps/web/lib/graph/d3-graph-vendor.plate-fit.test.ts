@@ -186,6 +186,7 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
   it("paints the name at the base size at fit on a large canvas (pixel parity)", async () => {
     const { container } = await mount(1100, 850, "pb");
     expect(paintedNamePxAtFit(container)).toBeCloseTo(22, 1);
+    expect(paintedIconPxAtFit(container)).toBeCloseTo(100, 1);
   });
 
   it("paints the icon at BASE * floor at fit on the laptop-class canvas", async () => {
@@ -245,10 +246,7 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     // the previous canvas's scale on a re-render).
     await mount(771, 313, "seed");
     expect(lastSimStart).not.toBeNull();
-    // scSeparation is optional on SimStartPayload's type; render() always
-    // populates it when >= 2 SCs are painted (this fixture's case), so cast
-    // through unknown rather than editing sim-protocol.ts for a test-only need.
-    const footprint = (lastSimStart as unknown as { scSeparation: { footprint: { baseIconSize: number; baseNameFontPx: number } } }).scSeparation.footprint;
+    const footprint = lastSimStart!.scSeparation!.footprint;
     expect(footprint.baseNameFontPx).toBeCloseTo(12, 6);
     expect(footprint.baseIconSize).toBeCloseTo(100 * FLOOR_RATIO, 6);
   });
@@ -260,5 +258,14 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     const el = container.querySelector("text.supercluster-label") as SVGTextElement | null;
     expect(el).not.toBeNull();
     expect(parseFloat(el!.getAttribute("y") || "NaN") * fitZoomOf()).toBeCloseTo(110 * FLOOR_RATIO, 1);
+  });
+
+  it("the sim-start payload's footprint is re-derived for a NEW canvas size on re-render (not the previous canvas's scale)", async () => {
+    const { container, render } = await mount(1100, 850, "rr");   // scale 1
+    expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(22, 6);
+    sizeContainer(container, 771, 313);
+    render(container, payload("rr"), { icons: iconsFor("rr") });   // same container, new size -> 12/22 floor
+    flushSettleChunks();
+    expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(12, 6);
   });
 });

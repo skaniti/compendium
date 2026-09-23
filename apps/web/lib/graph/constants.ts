@@ -136,7 +136,7 @@ export interface GraphDefaults {
 // saved snapshot against the CURRENT bare constant, not against this
 // module's own defaults object.
 // v4 (2026-09-11): scName k_min 1.00 -> 0.75 (P3, sc-layout-separation); v3-stamped profiles pinning 1.00 would silently undo it.
-// v5 (2026-09-23): plate-fit scale keys SC_PLATE_FIT_REF_PX / SC_NAME_FIT_FLOOR_PX added; BASE_SC_NAME_FONT_SIZE and scName now describe the full-size ceiling that sFit scales down, which v4 profiles tuned for screen-constant plates.
+// v5 (2026-09-23): plate-fit scale keys SC_PLATE_FIT_REF_PX / SC_NAME_FIT_FLOOR_PX added; BASE_SC_NAME_FONT_SIZE and scName now describe the full-size ceiling that sFit scales down, which v4 profiles tuned for screen-constant plates. BASE_SC_ICON_SIZE and the icon->name pad are ceilings too but stay ungated: a v4 profile's icon size still means "full-size icon", which is the intended reading.
 export const TUNER_TYPO_VERSION = 5;
 export const TUNER_FOG_VERSION = 2;
 

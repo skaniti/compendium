@@ -350,7 +350,7 @@ describe("resolveTunerSnapshot: version gating (port of applyTunerSnapshot)", ()
   });
 
   it("a full current-version profile round-trips every declared key group (integration check across the whole gate table)", () => {
-    const snap = fullSnapshot();
+    const snap = fullSnapshot({ SC_PLATE_FIT_REF_PX: 700, SC_NAME_FIT_FLOOR_PX: 13 });
     const result = resolveTunerSnapshot(withSlot1(snap), "1", makeStorage());
     expect(result).toMatchObject({
       BASE_LABEL_FONT_SIZE: 42,
@@ -360,6 +360,8 @@ describe("resolveTunerSnapshot: version gating (port of applyTunerSnapshot)", ()
       HULL_PADDING: 99,
       SC_PILL_SHAPE: "rectangle",
       SC_PILL_AUTOFIT: false,
+      SC_PLATE_FIT_REF_PX: 700,
+      SC_NAME_FIT_FLOOR_PX: 13,
     });
     // TYPO_V/FOG_V themselves are gate discriminators, not vendor render
     // state -- never forwarded into the output (the call-site merge lets
