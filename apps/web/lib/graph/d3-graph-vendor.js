@@ -999,8 +999,8 @@
 //      per-click step feel. A genuine trackpad pinch's small per-tick
 //      deltaY rarely reaches the cap.
 //
-//  36. Nameplate LOD fit scale (spec docs/project-plans/2026-09-23-151626-
-//      nameplate-lod-fit-scale/, decided 2026-09-23): plates were
+//  36. Nameplate LOD fit scale (the 2026-09-23 nameplate LOD fit-scale plan,
+//      private, decided 2026-09-23): plates were
 //      fit-ratio-clamped to a FIXED 100px icon / 22px name at 100%
 //      regardless of canvas size, so a small canvas (laptop: 771x401
 //      container) shrank the nebula to fit fixed-px plates. Now
@@ -1391,8 +1391,8 @@ var __vendorExpandedGroups;
     var BASE_SC_LABEL_FONT_SIZE = 9;          // SC-member pill text
     var BASE_SC_ICON_SIZE = 100;              // SC watermark icon size (screen px at fit)
     var BASE_SC_NAME_FONT_SIZE = 22;          // SC name text under watermark
-    // Delta #36 (spec docs/project-plans/2026-09-23-151626-nameplate-lod-fit-
-    // scale/): plate size at fit tracks the CANVAS. The two BASE_SC_* values
+    // Delta #36 (the 2026-09-23 nameplate LOD fit-scale plan, private):
+    // plate size at fit tracks the CANVAS. The two BASE_SC_* values
     // above are the FULL-SIZE ceiling -- any canvas whose smaller side is
     // >= SC_PLATE_FIT_REF_PX paints exactly today's 100px icon / 22px name
     // at 100%; smaller canvases scale both down together (one shared scale,

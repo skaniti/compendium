@@ -6,7 +6,7 @@ import type { MainToWorkerMessage, SimStartPayload, WorkerToMainMessage } from "
 import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 import type { GraphDefaults } from "@/lib/graph/constants";
 
-// Delta #36 (spec docs/project-plans/2026-09-23-151626-nameplate-lod-fit-scale/):
+// Delta #36 (the 2026-09-23 nameplate LOD fit-scale plan, private):
 // nameplates scale with the fit. Real vendor render() in jsdom, same
 // SyncFakeSimWorker / flushSettleChunks / tiny-geometry strategy as
 // d3-graph-vendor.sc-separation.test.ts (see that file's header for the

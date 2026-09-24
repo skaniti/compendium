@@ -84,8 +84,8 @@ export interface GraphDefaults {
   BASE_GROUP_LABEL_FONT_SIZE: number;
   BASE_SC_ICON_SIZE: number;
   BASE_SC_NAME_FONT_SIZE: number;
-  // Nameplate LOD fit scale (spec docs/project-plans/2026-09-23-151626-
-  // nameplate-lod-fit-scale/): the vendor computes
+  // Nameplate LOD fit scale (the 2026-09-23 nameplate LOD fit-scale plan,
+  // private): the vendor computes
   //   sFit = clamp(min(canvasW, canvasH_eff) / SC_PLATE_FIT_REF_PX,
   //                SC_NAME_FIT_FLOOR_PX / BASE_SC_NAME_FONT_SIZE, 1)
   // and multiplies BASE_SC_ICON_SIZE / BASE_SC_NAME_FONT_SIZE / the icon->
