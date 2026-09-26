@@ -56,4 +56,52 @@ describe("PUT /api/[...path]", () => {
     expect(init.headers.get("authorization")).toBe("Bearer test-token");
     expect(Buffer.from(init.body as ArrayBuffer).toString()).toBe(JSON.stringify(payload));
   });
+
+  it("forces identity accept-encoding upstream regardless of the client's header", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/topics/demo/icon", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "accept-encoding": "gzip, deflate, br, zstd",
+      },
+      body: JSON.stringify({ icon: "star" }),
+    });
+
+    await PUT(req, makeCtx(["topics", "demo", "icon"]));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+    expect(init.headers.get("accept-encoding")).toBe("identity");
+  });
+
+  it("strips upstream content-encoding and content-length from the proxied response", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const upstreamHeaders = new Headers({
+      "content-type": "application/json",
+      "content-encoding": "br",
+      "content-length": "123",
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200, headers: upstreamHeaders }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/topics/demo/icon", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ icon: "star" }),
+    });
+
+    const res = await PUT(req, makeCtx(["topics", "demo", "icon"]));
+
+    expect(res.headers.get("content-encoding")).toBeNull();
+    expect(res.headers.get("content-length")).toBeNull();
+    expect(res.headers.get("content-type")).toBe("application/json");
+  });
 });

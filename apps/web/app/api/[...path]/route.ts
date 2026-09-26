@@ -19,6 +19,14 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   const headers = new Headers(req.headers);
   for (const h of HOP_BY_HOP) headers.delete(h);
 
+  // Force identity upstream: production puts Cloudflare in front of the
+  // backend, and Cloudflare picks a compression scheme (zstd, among others)
+  // from whatever accept-encoding we forward. The Vercel Node runtime's
+  // fetch cannot decode zstd, so relaying the browser's negotiated encoding
+  // corrupts the body. Requesting identity keeps the upstream body
+  // uncompressed here; Vercel's edge compresses for the browser itself.
+  headers.set("accept-encoding", "identity");
+
   // Inject the Next-held JWT (set at login) if the caller didn't supply one.
   const token = (await cookies()).get("access_token")?.value;
   if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
@@ -38,6 +46,11 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   upstream.headers.forEach((v, k) => {
     if (!HOP_BY_HOP.has(k.toLowerCase())) outHeaders.set(k, v);
   });
+  // Never relay upstream's content-encoding/content-length: fetch may have
+  // already decoded a gzip/br body (making the header wrong), and with
+  // identity requested upstream they're unnecessary anyway.
+  outHeaders.delete("content-encoding");
+  outHeaders.delete("content-length");
   return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
 }
 
