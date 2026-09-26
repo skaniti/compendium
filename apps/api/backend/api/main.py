@@ -487,11 +487,19 @@ async def _pending_sweep_loop() -> None:
 
 
 # Create FastAPI app
+# Interactive docs stay on in development only (mig-06 Task 2, user ruling,
+# 2026-09-26): once the API gets its own public hostname (Cloudflare Tunnel
+# straight to FastAPI, no Dash proxy filtering the path space in front) these
+# three become directly reachable for the first time. Gating them here means
+# they're never mounted outside development, not merely 404'd after the fact.
 app = FastAPI(
     title="Compendium API",
     description="Generate journey summaries from browsing captures",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if settings.is_development else None,
+    redoc_url="/redoc" if settings.is_development else None,
+    openapi_url="/openapi.json" if settings.is_development else None,
 )
 
 # Configure CORS — uses settings.cors_origins (comma-separated or "*")
