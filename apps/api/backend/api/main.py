@@ -536,6 +536,17 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # ---------------------------------------------------------------------------
 _MAX_REQUEST_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Internal-only marker header: GET /api/pages/{pid}/preview sets this on its
+# response (both the 200 and the 404 ownership-gate branches -- see
+# get_archived_preview) to opt itself out of the default framing lockdown.
+# It's the one route designed to be embedded in the Next.js topic-detail
+# iframe (same-origin, via the Next proxy -- apps/web/components/
+# TopicDetail.tsx). security_middleware below recognizes the marker, swaps
+# in SAMEORIGIN + a matching CSP frame-ancestors directive, and strips the
+# marker itself so it never reaches the client. Every other route is
+# untouched and keeps DENY.
+_PREVIEW_FRAME_MARKER = "X-Preview-Allow-Frame"
+
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
@@ -546,10 +557,23 @@ async def security_middleware(request: Request, call_next):
 
     response = await call_next(request)
 
-    # Standard security headers (API server — no CSP needed)
+    # Standard security headers (API server — no CSP needed, except the
+    # archived-page preview route, handled below)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    if _PREVIEW_FRAME_MARKER in response.headers:
+        del response.headers[_PREVIEW_FRAME_MARKER]
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        existing_csp = response.headers.get("Content-Security-Policy")
+        if not existing_csp:
+            response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+        elif "frame-ancestors" not in existing_csp:
+            # Merge rather than clobber, in case the handler ever grows its
+            # own CSP directives.
+            response.headers["Content-Security-Policy"] = f"{existing_csp}; frame-ancestors 'self'"
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
     return response
 
 
@@ -2350,6 +2374,13 @@ async def get_archived_preview(pid: int, user_id: int = Depends(verify_api_key))
     Cache-Control/Pragma no-store headers are set on every outcome (200 and
     error alike), mirroring the Flask ``/__preview`` route at
     frontend/dash/app.py:1437.
+
+    Also sets the ``_PREVIEW_FRAME_MARKER`` header on every outcome, which
+    ``security_middleware`` (main.py) recognizes and swaps for
+    ``X-Frame-Options: SAMEORIGIN`` plus a ``Content-Security-Policy:
+    frame-ancestors 'self'`` -- this is the one route meant to be embedded
+    in the Next.js topic-detail iframe (same-origin, via the Next proxy);
+    every other route keeps the middleware's default ``DENY``.
     """
     from fastapi.responses import HTMLResponse
 
@@ -2358,6 +2389,7 @@ async def get_archived_preview(pid: int, user_id: int = Depends(verify_api_key))
     no_store_headers = {
         "Cache-Control": "no-store, no-cache, must-revalidate",
         "Pragma": "no-cache",
+        _PREVIEW_FRAME_MARKER: "1",
     }
 
     if not page_repo.page_content_owned_by_user(pid, user_id):

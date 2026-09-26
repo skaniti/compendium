@@ -217,6 +217,45 @@ class TestArchivedPreview:
         assert resp.headers["pragma"] == "no-cache"
 
 
+class TestArchivedPreviewFrameHeaders:
+    """This endpoint is embedded in the Next.js topic-detail iframe
+    (``apps/web/components/TopicDetail.tsx``, same-origin via the Next
+    proxy). ``security_middleware`` (main.py, ~line 545) stamps
+    ``X-Frame-Options: DENY`` on every response by default, which blocks
+    that framing outright even same-origin -- this route needs
+    ``SAMEORIGIN`` plus a matching ``Content-Security-Policy:
+    frame-ancestors 'self'`` instead, on every outcome (the 200 branch and
+    its 404 ownership-gate branch alike). Every other route must keep
+    DENY and get no CSP header at all (batch-06 deploy-flip Task 4 fix2)."""
+
+    def test_preview_200_carries_sameorigin_frame_headers(self, client):
+        tc, user = client
+        cap = _make_capture(user["id"])
+        content_id = _make_page_content_with_archive()
+        _link_page_to_content(
+            cap["id"], content_id, user["id"], "https://en.wikipedia.org/wiki/Black_hole"
+        )
+
+        resp = tc.get(f"/api/pages/{content_id}/preview")
+        assert resp.status_code == 200
+        assert resp.headers["x-frame-options"] == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in resp.headers["content-security-policy"]
+
+    def test_preview_404_branch_still_carries_sameorigin_frame_headers(self, client):
+        tc, _user = client
+        resp = tc.get("/api/pages/999999/preview")
+        assert resp.status_code == 404
+        assert resp.headers["x-frame-options"] == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in resp.headers["content-security-policy"]
+
+    def test_ordinary_route_keeps_deny_and_no_csp(self, client):
+        tc, _user = client
+        resp = tc.get("/health")
+        assert resp.status_code == 200
+        assert resp.headers["x-frame-options"] == "DENY"
+        assert "content-security-policy" not in resp.headers
+
+
 class TestArchivedPreviewAuth:
     def test_unauthed_request_rejected_in_prod_mode(self, monkeypatch):
         """Force production-mode auth -- the dev bypass (default in tests)
