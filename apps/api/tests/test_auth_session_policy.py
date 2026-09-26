@@ -565,3 +565,19 @@ class TestDevAuthBypassSwitch:
         monkeypatch.setattr(settings, "dev_auth_bypass", True)
         r = client.get("/api/auth/me")
         assert r.status_code != 401
+
+    def test_bypass_stays_inert_in_production_even_with_switch_on(self, client, monkeypatch):
+        """mig-06 Task 2, item D: the API is about to get its own public
+        hostname, so a request with no token must never resolve to the
+        default dev user outside development -- regardless of
+        ``dev_auth_bypass``, which exists only to be toggled locally while
+        staying in ``environment=development``. ``verify_api_key`` gates
+        the bypass on ``settings.is_development and settings.dev_auth_bypass``
+        (backend/api/main.py, ~line 221), so flipping the switch on while
+        ``environment=production`` must stay a no-op."""
+        from backend.config.settings import settings
+
+        monkeypatch.setattr(settings, "environment", "production")
+        monkeypatch.setattr(settings, "dev_auth_bypass", True)
+        r = client.get("/api/auth/me")
+        assert r.status_code == 401
