@@ -24,7 +24,9 @@ npm run demo
 ```
 
 A hosted instance runs at https://compendium.skaniti.dev; it is read-only for visitors.
-Sign in with the demo account: email `demo@traversal.local`, password `youniverse`.
+Sign in with the demo account: email `demo@traversal.local`, password `youniverse`
+(the hosted instance's own demo account; the Docker quickstart below bootstraps a
+separate demo login with its default password).
 
 `npm run demo` boots a dependency-free stub backend (`apps/web/demo/server.mjs`)
 serving a curated demo compendium from static fixtures, plus the Next.js
