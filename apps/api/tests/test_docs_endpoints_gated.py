@@ -9,55 +9,100 @@ be disabled whenever ``settings.environment != "development"`` and stay on
 in development (the existing local-dev workflow).
 
 ``docs_url``/``redoc_url``/``openapi_url`` are constructor kwargs on
-``FastAPI()`` -- baked into the ``app`` object at import time, not
-re-evaluated per request. To exercise both environments in one test
-session we reload ``backend.api.main`` after mutating the ``settings``
-singleton's ``environment`` attribute directly (same manual
-save/reload/restore pattern as
-``tests/test_dq_agent_prompt.py::test_default_model_constant_is_opus_1m``),
-then always reload once more in a ``finally`` block so the module-level
-``app`` singleton other test files already imported (via
-``from backend.api.main import app``, captured once at collection time)
-is never left in a mutated state for the rest of the session.
+``FastAPI()`` (``backend/api/main.py:495-503``) -- baked into the ``app``
+object once, at import time, not re-evaluated per request. To exercise
+both environments this file runs a small probe script in a **fresh
+subprocess** per environment, with real env vars (not a monkeypatched
+``settings`` attribute), rather than ``importlib.reload``-ing
+``backend.api.main`` in-process.
+
+Why not reload: ``importlib.reload`` re-executes ``app = FastAPI(...)``
+and ``limiter = Limiter(...)`` (line 522) against the SAME
+``sys.modules["backend.api.main"]`` entry every other already-collected
+test file bound ``app``/``limiter`` from at collection time. After a
+reload, ``main.app`` is a fresh object while every other file's ``app``
+reference still points at the original -- among other things, the
+autouse rate-limiter-reset fixture in ``conftest.py`` would reset the
+*new* app's limiter and never again the original's. A subprocess
+sidesteps this entirely: its own interpreter, its own ``sys.modules``,
+its own real ``Settings()`` construction -- exercising the actual
+production boot path end to end -- and it never touches this process's
+``backend.api.main``.
+
+No database connectivity is required: a bare ``TestClient(app)`` (no
+``with`` block) never runs the ASGI lifespan -- verified empirically
+against a real boot: the SBERT/reranker preload and startup DB sweep
+only fire once the lifespan context manager actually enters -- and none
+of ``/docs``/``/redoc``/``/openapi.json`` touch the database anyway.
 """
 
-import importlib
+import os
+import subprocess
+import sys
+from pathlib import Path
 
+_API_ROOT = Path(__file__).resolve().parents[1]
+
+_PROBE_SCRIPT = """
 from fastapi.testclient import TestClient
+from backend.api.main import app
 
-from backend.config.settings import settings
+client = TestClient(app)
+codes = [
+    client.get("/docs").status_code,
+    client.get("/redoc").status_code,
+    client.get("/openapi.json").status_code,
+]
+print(" ".join(str(c) for c in codes))
+"""
+
+# The three ``Settings._check_production_secrets`` validators
+# (``backend/config/settings.py:407-446``) a real ``ENVIRONMENT=production``
+# boot must satisfy, or the subprocess never gets far enough to serve a
+# request: a non-default ``JWT_SECRET_KEY``, an explicit (non-wildcard)
+# ``CORS_ORIGINS``, and ``SESSION_TRUST_MISSING_INGRESS=0`` -- this
+# machine's gitignored local ``.env`` sets that dev-only knob on for solo
+# local dev, and it would otherwise leak into the subprocess (env vars we
+# pass below take precedence over the dotenv file, but this key isn't one
+# of them unless listed here) and trip the same validator.
+_PROD_ENV = {
+    "JWT_SECRET_KEY": "test-only-probe-secret-never-used-elsewhere",
+    "CORS_ORIGINS": "https://compendium.example.test",
+    "SESSION_TRUST_MISSING_INGRESS": "0",
+}
 
 
-def _reload_main():
-    from backend.api import main
-
-    importlib.reload(main)
-    return main
+def _probe_docs_endpoints(environment: str, extra_env: dict[str, str]) -> tuple[int, int, int]:
+    """Boot ``backend.api.main`` in a fresh subprocess under ``environment``
+    (plus any validator-satisfying overrides) and return the
+    (docs, redoc, openapi) status codes it printed."""
+    env = {**os.environ, "ENVIRONMENT": environment, **extra_env}
+    result = subprocess.run(
+        [sys.executable, "-c", _PROBE_SCRIPT],
+        cwd=str(_API_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"probe subprocess exited {result.returncode}\n"
+        f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+    )
+    docs, redoc, openapi = (int(code) for code in result.stdout.strip().split())
+    return docs, redoc, openapi
 
 
 def test_docs_endpoints_404_outside_development():
-    original_env = settings.environment
-    settings.environment = "production"
-    try:
-        main = _reload_main()
-        client = TestClient(main.app)
-        assert client.get("/docs").status_code == 404
-        assert client.get("/redoc").status_code == 404
-        assert client.get("/openapi.json").status_code == 404
-    finally:
-        settings.environment = original_env
-        _reload_main()
+    docs, redoc, openapi = _probe_docs_endpoints("production", _PROD_ENV)
+    assert docs == 404
+    assert redoc == 404
+    assert openapi == 404
 
 
 def test_docs_endpoints_200_in_development():
-    original_env = settings.environment
-    settings.environment = "development"
-    try:
-        main = _reload_main()
-        client = TestClient(main.app)
-        assert client.get("/docs").status_code == 200
-        assert client.get("/redoc").status_code == 200
-        assert client.get("/openapi.json").status_code == 200
-    finally:
-        settings.environment = original_env
-        _reload_main()
+    docs, redoc, openapi = _probe_docs_endpoints("development", {})
+    assert docs == 200
+    assert redoc == 200
+    assert openapi == 200
