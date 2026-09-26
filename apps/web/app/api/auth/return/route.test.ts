@@ -186,21 +186,18 @@ describe("POST /api/auth/return", () => {
     );
   });
 
-  // D6 (session-expiry-tuning, 2026-09-10 amendment): the route relays
-  // whatever ingress verdict Caddy stamped on the inbound request, same as
-  // the caller's own (acting) Authorization it already forwards.
-  it("forwards the X-Compendium-Ingress header to the backend when the inbound request carries it", async () => {
+  // batch-06 deploy-flip fix wave: Vercel has no trusted edge in front of
+  // apps/web, so the route must NOT relay a client-supplied ingress header
+  // -- even the trusted-looking value -- to the backend.
+  it("does not forward the X-Compendium-Ingress header to the backend, even when the inbound request carries it", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = mockFetchResponse({ ok: true, json: async () => ({}) });
 
     await POST(makeReturnRequest({ [INGRESS_HEADER]: "tailnet" }));
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/auth/return-to-admin"),
-      expect.objectContaining({
-        headers: expect.objectContaining({ [INGRESS_HEADER]: "tailnet" }),
-      })
-    );
+    const call = fetchMock.mock.calls[0];
+    const headers = (call[1] as { headers: Record<string, string> }).headers;
+    expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
   });
 
   it("omits the X-Compendium-Ingress header from the backend call when the inbound request has none", async () => {

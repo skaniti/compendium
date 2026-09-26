@@ -1,38 +1,34 @@
 import { describe, expect, it } from "vitest";
 import { INGRESS_HEADER, ingressHeaders } from "./ingress";
 
-// D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): apps/web relays
-// the X-Compendium-Ingress header Caddy sets at the edge; it never sets or
-// invents a value. These pin the two forwarding cases the four auth routes
-// depend on (login/refresh/view-as/return route tests each build on this).
+// batch-06 deploy-flip fix wave: apps/web is fronted by Vercel, with no
+// trusted edge in front of it that could overwrite a client-supplied
+// header (the tailnet Caddy listener that used to do this never fronts
+// Vercel). ingressHeaders() must therefore NEVER read the inbound
+// request's header -- doing so would let any caller claim the
+// "remembered" trusted-refresh policy for itself. These pin that it
+// always returns {}, including the adversarial case: a request that
+// carries the header set to the trusted-looking value.
 
 describe("ingressHeaders", () => {
-  it("forwards the header when the inbound request carries it", () => {
+  it("returns {} even when the inbound request carries the header with the trusted-looking value", () => {
     const req = new Request("http://localhost/api/auth/login", {
       headers: { [INGRESS_HEADER]: "tailnet" },
     });
 
-    expect(ingressHeaders(req)).toEqual({ [INGRESS_HEADER]: "tailnet" });
+    expect(ingressHeaders(req)).toEqual({});
   });
 
-  it("forwards whatever value is present, without validating it (the API decides trust, not this helper)", () => {
+  it("returns {} regardless of the header's value -- it never reads the inbound request at all", () => {
     const req = new Request("http://localhost/api/auth/login", {
       headers: { [INGRESS_HEADER]: "public" },
     });
 
-    expect(ingressHeaders(req)).toEqual({ [INGRESS_HEADER]: "public" });
+    expect(ingressHeaders(req)).toEqual({});
   });
 
   it("returns {} when the inbound request has no ingress header", () => {
     const req = new Request("http://localhost/api/auth/login");
-
-    expect(ingressHeaders(req)).toEqual({});
-  });
-
-  it("returns {} (not a header with an empty value) when the header is present but empty", () => {
-    const req = new Request("http://localhost/api/auth/login", {
-      headers: { [INGRESS_HEADER]: "" },
-    });
 
     expect(ingressHeaders(req)).toEqual({});
   });
