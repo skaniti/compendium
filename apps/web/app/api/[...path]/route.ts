@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Streaming chat proxy vs. Vercel's per-function execution ceiling: 300s is
+// the Hobby-plan max under Fluid Compute per Vercel's docs (confirm accepted in the deploy log).
+export const maxDuration = 300;
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 const HOP_BY_HOP = new Set([
