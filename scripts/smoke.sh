@@ -14,32 +14,55 @@
 # Usage:
 #   SMOKE_EMAIL=<email> SMOKE_PASSWORD=<password> bash scripts/smoke.sh
 #
+# *** RUN THIS WITH THE PUBLIC DEMO ACCOUNT, NEVER YOUR OWN LOGIN. ***
+# Step 7's default gate deliberately reuses an already-revoked refresh
+# token against /api/auth/refresh to prove it's dead. That endpoint's
+# reuse-detection branch (auth_service.py's rotate_refresh_token) treats
+# a spent token as a possible theft and responds by revoking EVERY
+# active refresh token for that account -- so a run with a personal
+# login logs that account out of every device at its next token
+# rotation (~15 minutes later). The demo account is public/read-only,
+# so a revoke-all there only bounces anonymous demo sessions. If you
+# must run this against your own account, set SMOKE_SKIP_REVOCATION=1
+# first (see below) -- there is no way to check "the session is really
+# gone" without hitting that branch, so the fix here is this warning
+# plus an opt-out, not a different check.
+#
 # Env vars:
-#   SMOKE_BASE_URL       API base URL.
-#                         Default: https://compendium-api.skaniti.dev
-#   SMOKE_EMAIL           Login email/username. Required -- exported by the
-#                         caller's shell, never hardcoded here.
-#   SMOKE_PASSWORD        Login password. Required, same rule as above.
-#   SMOKE_STREAM_TIMEOUT  Seconds to wait for the first `data:` SSE line
-#                         from /api/agent/query-stream. Default: 30.
-#   SMOKE_QUESTION        The chat question sent to the stream step.
-#                         Default: a short question about the compendium
-#                         itself.
-#   SMOKE_SKIP_STREAM     Set to 1 to skip the query-stream step entirely
-#                         (it spends one LLM call otherwise). Default: 0.
+#   SMOKE_BASE_URL         API base URL.
+#                           Default: https://compendium-api.skaniti.dev
+#   SMOKE_EMAIL             Login email/username. Required -- exported by
+#                           the caller's shell, never hardcoded here.
+#   SMOKE_PASSWORD          Login password. Required, same rule as above.
+#   SMOKE_HTTP_TIMEOUT      Seconds before any single non-streaming HTTP
+#                           call gives up (curl --max-time). Default: 30.
+#                           Must be a positive integer.
+#   SMOKE_STREAM_TIMEOUT    Seconds to wait for the first `data:` SSE line
+#                           from /api/agent/query-stream. Default: 30.
+#                           Must be a positive integer.
+#   SMOKE_QUESTION          The chat question sent to the stream step.
+#                           Default: a short question about the compendium
+#                           itself.
+#   SMOKE_SKIP_STREAM       Set to 1 to skip the query-stream step entirely
+#                           (it spends one LLM call otherwise). Default: 0.
+#   SMOKE_SKIP_REVOCATION   Set to 1 to skip step 7's refresh-reuse check
+#                           (see the warning above) -- use this for any run
+#                           with a personal/admin account. Default: 0.
 #
 # Exit codes:
-#   2  usage/environment error (SMOKE_EMAIL/SMOKE_PASSWORD unset, or a
-#      required tool -- curl/jq/mktemp -- is missing). Not one of the
-#      seven numbered steps below; nothing has run yet.
-#   1  step 1  POST /api/auth/login             failed
-#   2  step 2  GET  /api/auth/me                 failed
-#   3  step 3  GET  /api/graph                   failed
-#   4  step 4  GET  /api/diary/windows           failed
-#   5  step 5  POST /api/agent/query-stream      failed
-#   6  step 6  POST /api/auth/logout             failed
-#   7  step 7  post-logout session-gone check    failed
-#   0  every step passed (or step 5 was skipped)
+#   64  usage/environment error: SMOKE_EMAIL/SMOKE_PASSWORD unset, a
+#       required tool (curl/jq/mktemp) missing, or SMOKE_HTTP_TIMEOUT /
+#       SMOKE_STREAM_TIMEOUT not a positive integer. Not one of the seven
+#       numbered steps below; nothing has run yet. (Chosen to avoid
+#       colliding with step 2's exit code -- see below.)
+#    1  step 1  POST /api/auth/login             failed
+#    2  step 2  GET  /api/auth/me                 failed
+#    3  step 3  GET  /api/graph                   failed
+#    4  step 4  GET  /api/diary/windows           failed
+#    5  step 5  POST /api/agent/query-stream      failed
+#    6  step 6  POST /api/auth/logout             failed
+#    7  step 7  post-logout session-gone check    failed
+#    0  every step passed (or steps 5/7 were skipped)
 #
 # The login endpoint is rate-limited (~5/minute, backend/api/main.py). This
 # script logs in exactly once per invocation and never retries login in a
@@ -48,7 +71,12 @@
 # Secrets discipline: SMOKE_PASSWORD, the access token, and the refresh
 # token are never printed and never written anywhere except inside a
 # mktemp -d directory that a trap removes on exit (success, failure, or
-# signal). The API itself authenticates via a JSON access token in the
+# signal). Beyond that: the access token and every request body that
+# carries a secret (the login body, the refresh-token body) never touch
+# curl's own argv either -- they're written to chmod-600 files under that
+# same directory and handed to curl via `-H @file`/`-d @file`, so they
+# don't show up in `ps`/`/proc/*/cmdline` on a shared machine while curl
+# is running. The API itself authenticates via a JSON access token in the
 # response body, not cookies (confirmed by reading backend/api/main.py's
 # login/me/logout handlers and backend/services/auth_service.py -- there
 # is no Set-Cookie anywhere in this API); a curl cookie jar is still
@@ -59,24 +87,39 @@
 set -euo pipefail
 
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-https://compendium-api.skaniti.dev}"
+SMOKE_HTTP_TIMEOUT="${SMOKE_HTTP_TIMEOUT:-30}"
 SMOKE_STREAM_TIMEOUT="${SMOKE_STREAM_TIMEOUT:-30}"
 SMOKE_QUESTION="${SMOKE_QUESTION:-What is this compendium about?}"
 SMOKE_SKIP_STREAM="${SMOKE_SKIP_STREAM:-0}"
+SMOKE_SKIP_REVOCATION="${SMOKE_SKIP_REVOCATION:-0}"
 
 if [[ -z "${SMOKE_EMAIL:-}" || -z "${SMOKE_PASSWORD:-}" ]]; then
   echo "usage: SMOKE_EMAIL=<email> SMOKE_PASSWORD=<password> [SMOKE_BASE_URL=...] bash scripts/smoke.sh" >&2
-  exit 2
+  exit 64
 fi
 
 for tool in curl jq mktemp; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "smoke.sh requires '$tool' on PATH" >&2
-    exit 2
+    exit 64
   fi
 done
 
+for _var in SMOKE_HTTP_TIMEOUT SMOKE_STREAM_TIMEOUT; do
+  _val="${!_var}"
+  if ! [[ "$_val" =~ ^[0-9]+$ ]] || [[ "$_val" -le 0 ]]; then
+    echo "usage: $_var must be a positive integer (got '$_val')" >&2
+    exit 64
+  fi
+done
+unset _var _val
+
 WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR"' EXIT
+# Also kills any still-running streaming curl (step 5) -- this trap fires
+# on normal exit, every `exit N` above, AND on SIGTERM/SIGINT (bash runs
+# the EXIT trap for signal-caused termination too), so a killed script
+# never leaves an orphaned background curl process behind.
+trap 'kill "${STREAM_PID:-}" 2>/dev/null || true; rm -rf "$WORKDIR"' EXIT
 
 COOKIE_JAR="$WORKDIR/cookies.txt"
 ACCESS_TOKEN_FILE="$WORKDIR/access_token"
@@ -120,17 +163,33 @@ now_ms() {
 # caught by testing against a closed port before this shipped); it only
 # replaces whatever curl printed if that output isn't a clean 3-digit
 # code.
+#
+# BODY and TOKEN are ordinary bash strings at the call site (unchanged
+# ergonomics for callers), but neither reaches curl via argv: each is
+# written to its own chmod-600 file under WORKDIR and handed to curl as
+# `-H @file`/`-d @file`, then the file is removed before this function
+# returns -- so a secret body (login password, refresh token) or the
+# bearer token is never visible in `ps`/`/proc/*/cmdline` while curl runs.
 http_request() {
   local method=$1 url=$2 body=$3 token=$4 outfile=$5
-  local args=(-sS --max-time 30 -o "$outfile" -w '%{http_code}' -X "$method" "$url" -c "$COOKIE_JAR" -b "$COOKIE_JAR")
+  local args=(-sS --max-time "$SMOKE_HTTP_TIMEOUT" -o "$outfile" -w '%{http_code}' -X "$method" "$url" -c "$COOKIE_JAR" -b "$COOKIE_JAR")
+  local header_file="" body_file=""
   if [[ -n "$token" ]]; then
-    args+=(-H "Authorization: Bearer $token")
+    header_file="$(mktemp "$WORKDIR/auth_header.XXXXXX")"
+    chmod 600 "$header_file"
+    printf 'Authorization: Bearer %s' "$token" > "$header_file"
+    args+=(-H "@$header_file")
   fi
   if [[ -n "$body" ]]; then
-    args+=(-H "Content-Type: application/json" -d "$body")
+    body_file="$(mktemp "$WORKDIR/body.XXXXXX")"
+    chmod 600 "$body_file"
+    printf '%s' "$body" > "$body_file"
+    args+=(-H "Content-Type: application/json" -d "@$body_file")
   fi
   local status
   status="$(curl "${args[@]}" 2>/dev/null)" || true
+  [[ -n "$header_file" ]] && rm -f "$header_file"
+  [[ -n "$body_file" ]] && rm -f "$body_file"
   if [[ ! "$status" =~ ^[0-9]{3}$ ]]; then
     status="000"
   fi
@@ -254,22 +313,43 @@ else
   T0=$(now_ms)
   STREAM_OUT="$WORKDIR/stream.out"
   STREAM_ERR="$WORKDIR/stream.err"
+  STREAM_STATUS_FILE="$WORKDIR/stream.status"
   : > "$STREAM_OUT"
-  QUERY_BODY="{\"query\":\"$(json_escape "$SMOKE_QUESTION")\"}"
+  : > "$STREAM_STATUS_FILE"
 
-  # Backgrounded directly (no subshell) so $! is curl's own PID.
-  # --max-time is a hard backstop in case the poll/kill loop below can't
-  # reach the process for any reason; the poll loop is what actually
-  # implements "wait up to N seconds for the first `data:` line, then
-  # abort" -- it kills curl the moment that line shows up rather than
-  # waiting for the whole SSE response (tokens + complete event) to
-  # finish.
+  # Auth header and query body go to chmod-600 files, not curl argv --
+  # same ps/proc-cmdline hygiene as http_request() (this call can't use
+  # that helper directly: it needs to background curl and poll its
+  # output, not wait for it to finish).
+  STREAM_AUTH_HEADER_FILE="$WORKDIR/stream_auth_header"
+  : > "$STREAM_AUTH_HEADER_FILE"
+  chmod 600 "$STREAM_AUTH_HEADER_FILE"
+  printf 'Authorization: Bearer %s' "$ACCESS_TOKEN" > "$STREAM_AUTH_HEADER_FILE"
+  STREAM_QUERY_BODY_FILE="$WORKDIR/stream_query_body.json"
+  : > "$STREAM_QUERY_BODY_FILE"
+  chmod 600 "$STREAM_QUERY_BODY_FILE"
+  printf '{"query":"%s"}' "$(json_escape "$SMOKE_QUESTION")" > "$STREAM_QUERY_BODY_FILE"
+
+  # Backgrounded directly (no subshell) so $! is curl's own PID. Body
+  # goes to -o (not shell redirection) so -w's status code can land on
+  # its own stdout, redirected separately into STREAM_STATUS_FILE --
+  # that only gets written once curl's request/response cycle actually
+  # completes (an early 429/401/5xx close writes it; a kill mid-stream,
+  # the success path below, does not -- there's nothing to capture in
+  # that case because a `data:` line already proved the request is a
+  # live 200). --max-time is a hard backstop in case the poll/kill loop
+  # below can't reach the process for any reason; the poll loop is what
+  # actually implements "wait up to N seconds for the first `data:`
+  # line, then abort" -- it kills curl the moment that line shows up
+  # rather than waiting for the whole SSE response (tokens + complete
+  # event) to finish.
   curl -sS -N --no-buffer --max-time "$((SMOKE_STREAM_TIMEOUT + 5))" \
+    -o "$STREAM_OUT" -w '%{http_code}' \
     -X POST "$SMOKE_BASE_URL/api/agent/query-stream" \
-    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "@$STREAM_AUTH_HEADER_FILE" \
     -H "Content-Type: application/json" \
-    -d "$QUERY_BODY" \
-    >> "$STREAM_OUT" 2>> "$STREAM_ERR" &
+    -d "@$STREAM_QUERY_BODY_FILE" \
+    > "$STREAM_STATUS_FILE" 2> "$STREAM_ERR" &
   STREAM_PID=$!
 
   FOUND=0
@@ -289,13 +369,40 @@ else
 
   kill "$STREAM_PID" 2>/dev/null || true
   wait "$STREAM_PID" 2>/dev/null || true
+  rm -f "$STREAM_AUTH_HEADER_FILE" "$STREAM_QUERY_BODY_FILE"
 
   T1=$(now_ms)
+
   if [[ "$FOUND" != "1" ]]; then
-    echo "FAIL step 5: no 'data:' line within ${SMOKE_STREAM_TIMEOUT}s" >&2
+    EARLY_STATUS="$(cat "$STREAM_STATUS_FILE" 2>/dev/null || true)"
+    FIRST_OUT_LINE="$(head -n1 "$STREAM_OUT" 2>/dev/null || true)"
+    echo "FAIL step 5: no 'data:' line within ${SMOKE_STREAM_TIMEOUT}s (http_status=${EARLY_STATUS:-<none captured -- still running at timeout>}, first output line: ${FIRST_OUT_LINE:-<empty>})" >&2
     attempt_logout_and_exit 5
   fi
-  echo "PASS step 5 ($((T1 - T0)) ms)"
+
+  # First data: frame must be a real answer/status/token frame, not one
+  # of the two shapes that mean the call "succeeded" at the HTTP layer
+  # while the agent itself never produced anything: an explicit error
+  # frame (query_stream/agent_query_stream's own exception handling,
+  # backend/services/agent.py + backend/api/main.py), or the
+  # not-configured fallback token frame emitted when no LLM client is
+  # wired up (backend/services/agent.py's query_stream, no OpenAI key).
+  FIRST_DATA_LINE="$(grep -m1 '^data:' "$STREAM_OUT" 2>/dev/null || true)"
+  FIRST_DATA_JSON="${FIRST_DATA_LINE#data:}"
+  FIRST_DATA_JSON="${FIRST_DATA_JSON# }"
+  FRAME_TYPE="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.type // empty' 2>/dev/null || true)"
+  FRAME_TEXT="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.text // empty' 2>/dev/null || true)"
+  FRAME_MESSAGE="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.message // empty' 2>/dev/null || true)"
+
+  if [[ "$FRAME_TYPE" == "error" ]]; then
+    echo "FAIL step 5: first SSE frame is an error frame (message: ${FRAME_MESSAGE:-<none>})" >&2
+    attempt_logout_and_exit 5
+  fi
+  if [[ "$FRAME_TEXT" == "OpenAI API key not configured." ]]; then
+    echo "FAIL step 5: first SSE frame reports the LLM client is not configured on this deployment" >&2
+    attempt_logout_and_exit 5
+  fi
+  echo "PASS step 5 ($((T1 - T0)) ms, first frame type=${FRAME_TYPE:-<unknown>})"
 fi
 
 # ---- step 6: logout -----------------------------------------------------------
@@ -330,6 +437,14 @@ echo "PASS step 6 ($((T1 - T0)) ms)"
 # gating) probe of the old access token is also printed so a reader can
 # see the stateless-JWT behavior directly instead of just trusting this
 # comment.
+#
+# BLAST RADIUS (see the warning at the top of this file): the
+# /api/auth/refresh call below deliberately reuses an already-revoked
+# refresh token. auth_service.py's rotate_refresh_token treats that as
+# reuse/theft and revokes EVERY active refresh token for the account
+# (auth_repo.revoke_all_user_tokens) -- not just this script's own
+# session. Fine for the public demo account; NOT fine for a personal
+# login, which is why this is skippable.
 
 echo "step 7: verify session revoked"
 T0=$(now_ms)
@@ -338,14 +453,19 @@ ME_AFTER_OUT="$WORKDIR/me-after-logout.json"
 ME_AFTER_STATUS="$(http_request GET "$SMOKE_BASE_URL/api/auth/me" "" "$ACCESS_TOKEN" "$ME_AFTER_OUT")"
 echo "  info: GET /api/auth/me with the pre-logout access token -> HTTP $ME_AFTER_STATUS (expected 200 until its own TTL elapses -- access tokens are not revoked at logout, see NOTE above; not part of the pass/fail gate)"
 
-REFRESH_CHECK_OUT="$WORKDIR/refresh-check.json"
-REFRESH_CHECK_BODY="{\"refresh_token\":\"$(json_escape "$REFRESH_TOKEN")\"}"
-STATUS="$(http_request POST "$SMOKE_BASE_URL/api/auth/refresh" "$REFRESH_CHECK_BODY" "" "$REFRESH_CHECK_OUT")"
-T1=$(now_ms)
-if [[ "$STATUS" != "401" ]]; then
-  echo "FAIL step 7: the revoked refresh token can still mint a new session (POST /api/auth/refresh returned HTTP $STATUS, expected 401)" >&2
-  exit 7
+if [[ "$SMOKE_SKIP_REVOCATION" == "1" ]]; then
+  echo "step 7: POST /api/auth/refresh revocation check -- SKIPPED (SMOKE_SKIP_REVOCATION=1)"
+else
+  echo "  WARNING: reusing the revoked refresh token below trips this API's reuse-detection branch, which revokes EVERY active refresh token for this account, not just this script's session. Run with the public demo account, or set SMOKE_SKIP_REVOCATION=1 for a personal/admin login. See the header of this script."
+  REFRESH_CHECK_OUT="$WORKDIR/refresh-check.json"
+  REFRESH_CHECK_BODY="{\"refresh_token\":\"$(json_escape "$REFRESH_TOKEN")\"}"
+  STATUS="$(http_request POST "$SMOKE_BASE_URL/api/auth/refresh" "$REFRESH_CHECK_BODY" "" "$REFRESH_CHECK_OUT")"
+  T1=$(now_ms)
+  if [[ "$STATUS" != "401" ]]; then
+    echo "FAIL step 7: the revoked refresh token can still mint a new session (POST /api/auth/refresh returned HTTP $STATUS, expected 401)" >&2
+    exit 7
+  fi
+  echo "PASS step 7 ($((T1 - T0)) ms)"
 fi
-echo "PASS step 7 ($((T1 - T0)) ms)"
 
 echo "SUMMARY: all smoke checks passed against $SMOKE_BASE_URL"
