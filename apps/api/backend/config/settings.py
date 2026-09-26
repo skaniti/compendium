@@ -443,6 +443,30 @@ class Settings(BaseSettings):
                 "public caller as tailnet-remembered."
             )
 
+        # batch-06 (deploy-flip fix wave), final review: session_ingress_
+        # trusted_value's shipped default is a known, non-secret string
+        # documented in .env.example -- fine for local dev, but the review
+        # found the client-supplied ingress header spoofable on public
+        # paths (apps/web's Next auth routes used to relay it verbatim --
+        # see apps/web/lib/ingress.ts's batch-06 fix -- and the tunnel path
+        # reaches the API directly). If a production deploy still shipped
+        # with the default active, any caller who could set the header
+        # directly would obtain the remembered/90-day, no-idle-lapse
+        # session. Hard-fail at startup outside development, same
+        # allow-list pattern as the checks above; compare against the
+        # field's own default rather than a hardcoded literal so this
+        # validator (and its error message) never needs to spell out the
+        # trusted value's string.
+        if (
+            self.environment != "development"
+            and self.session_ingress_trusted_value
+            == type(self).model_fields["session_ingress_trusted_value"].default
+        ):
+            raise ValueError(
+                "SESSION_INGRESS_TRUSTED_VALUE must be changed from its default "
+                "in production. Set a strong random value in your .env file."
+            )
+
         return self
 
     @property

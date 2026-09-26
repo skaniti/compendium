@@ -544,6 +544,77 @@ class TestValidatorRefusesTrustMissingIngressOutsideDevelopment:
         assert s.session_trust_missing_ingress is True
 
 
+class TestValidatorRefusesDefaultIngressTrustedValueOutsideDevelopment:
+    """batch-06 (deploy-flip fix wave), final review: with apps/web's Next
+    auth routes no longer relaying a client-supplied ingress header (see
+    apps/web/lib/ingress.ts), the header the API sees is either absent or
+    set by a genuinely trusted edge. But if the deploy still shipped with
+    ``session_ingress_trusted_value`` left at its default, ANY operator
+    error that let a caller set the header directly (e.g. a
+    misconfigured/absent edge in front of the API itself) would grant the
+    remembered/90-day session to that caller, since the default is a
+    known, non-secret string documented in .env.example -- not something
+    to compare against a hardcoded literal here, so this reads the
+    default off the field itself, same as the value must never be
+    hardcoded in a commit message or doc.
+
+    Same construction pattern as
+    ``TestValidatorRefusesTrustMissingIngressOutsideDevelopment`` above: a
+    fresh ``Settings(...)`` (the validator runs at construction), explicit
+    ``jwt_secret_key``/``cors_origins`` so the test stays hermetic against
+    whatever a local ``.env``/``~/.secrets`` happens to hold. Also pins
+    ``session_trust_missing_ingress=False`` explicitly -- this repo's
+    gitignored local ``apps/api/.env`` sets it to True for solo local dev
+    (see the module docstring/fixture above), which would otherwise trip
+    the *sibling* validator first and mask the one under test here.
+    """
+
+    def test_default_ingress_trusted_value_refused_in_production(self):
+        with pytest.raises(ValueError, match="SESSION_INGRESS_TRUSTED_VALUE"):
+            Settings(
+                environment="production",
+                jwt_secret_key="a-real-production-secret",
+                cors_origins="https://compendium.example.com",
+                session_trust_missing_ingress=False,
+                # session_ingress_trusted_value left at its default on purpose.
+            )
+
+    def test_default_ingress_trusted_value_refused_in_non_development_environment(
+        self,
+    ):
+        """Same allow-list-not-deny-list treatment as the sibling ingress
+        knob validator: a non-"production", non-"development" environment
+        string (staging, or a typo) must still be refused."""
+        with pytest.raises(ValueError, match="SESSION_INGRESS_TRUSTED_VALUE"):
+            Settings(
+                environment="staging",
+                jwt_secret_key="a-real-production-secret",
+                cors_origins="https://compendium.example.com",
+                session_trust_missing_ingress=False,
+            )
+
+    def test_non_default_ingress_trusted_value_allowed_in_production(self):
+        s = Settings(
+            environment="production",
+            jwt_secret_key="a-real-production-secret",
+            cors_origins="https://compendium.example.com",
+            session_trust_missing_ingress=False,
+            session_ingress_trusted_value="a-random-operator-chosen-value",
+        )
+        assert s.session_ingress_trusted_value == "a-random-operator-chosen-value"
+
+    def test_default_ingress_trusted_value_allowed_in_development(self):
+        s = Settings(
+            environment="development",
+            jwt_secret_key="a-real-production-secret",
+            cors_origins="https://compendium.example.com",
+        )
+        assert (
+            s.session_ingress_trusted_value
+            == Settings.model_fields["session_ingress_trusted_value"].default
+        )
+
+
 class TestDevAuthBypassSwitch:
     """``DEV_AUTH_BYPASS=0`` turns off the development-mode default-user
     bypass so the real login/refresh/expiry paths can be exercised locally

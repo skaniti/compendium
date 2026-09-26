@@ -56,19 +56,23 @@ codes = [
 print(" ".join(str(c) for c in codes))
 """
 
-# The three ``Settings._check_production_secrets`` validators
-# (``backend/config/settings.py:407-446``) a real ``ENVIRONMENT=production``
-# boot must satisfy, or the subprocess never gets far enough to serve a
+# The four ``Settings._check_production_secrets`` validators
+# (``backend/config/settings.py``) a real ``ENVIRONMENT=production`` boot
+# must satisfy, or the subprocess never gets far enough to serve a
 # request: a non-default ``JWT_SECRET_KEY``, an explicit (non-wildcard)
-# ``CORS_ORIGINS``, and ``SESSION_TRUST_MISSING_INGRESS=0`` -- this
-# machine's gitignored local ``.env`` sets that dev-only knob on for solo
-# local dev, and it would otherwise leak into the subprocess (env vars we
-# pass below take precedence over the dotenv file, but this key isn't one
-# of them unless listed here) and trip the same validator.
+# ``CORS_ORIGINS``, ``SESSION_TRUST_MISSING_INGRESS=0`` -- this machine's
+# gitignored local ``.env`` sets that dev-only knob on for solo local dev,
+# and it would otherwise leak into the subprocess (env vars we pass below
+# take precedence over the dotenv file, but this key isn't one of them
+# unless listed here) and trip the same validator -- and (batch-06,
+# deploy-flip fix wave) a non-default ``SESSION_INGRESS_TRUSTED_VALUE``,
+# since the local ``.env`` doesn't set that one at all and the subprocess
+# would otherwise inherit the class default and trip the new validator.
 _PROD_ENV = {
     "JWT_SECRET_KEY": "test-only-probe-secret-never-used-elsewhere",
     "CORS_ORIGINS": "https://compendium.example.test",
     "SESSION_TRUST_MISSING_INGRESS": "0",
+    "SESSION_INGRESS_TRUSTED_VALUE": "test-only-probe-ingress-value-never-used-elsewhere",
 }
 
 
