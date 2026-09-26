@@ -104,4 +104,34 @@ describe("PUT /api/[...path]", () => {
     expect(res.headers.get("content-length")).toBeNull();
     expect(res.headers.get("content-type")).toBe("application/json");
   });
+
+  // batch-06 (deploy-flip fix wave): the API ignores cookies entirely (it
+  // authenticates via the injected Bearer token), so forwarding the
+  // browser's own Cookie header upstream too is unnecessary exposure of
+  // both tokens over the same hop. The Authorization injection (from the
+  // Next-held access_token cookie via next/headers, a completely separate
+  // read from the inbound request's own Cookie header) must still happen.
+  it("strips the browser's cookie header before proxying, while still injecting the authorization header", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar("server-token") as never);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/topics/demo/icon", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        cookie: "access_token=browser-token; refresh_token=browser-refresh",
+      },
+      body: JSON.stringify({ icon: "star" }),
+    });
+
+    await PUT(req, makeCtx(["topics", "demo", "icon"]));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+    expect(init.headers.has("cookie")).toBe(false);
+    expect(init.headers.get("authorization")).toBe("Bearer server-token");
+  });
 });

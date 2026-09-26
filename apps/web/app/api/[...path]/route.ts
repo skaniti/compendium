@@ -31,6 +31,13 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   const token = (await cookies()).get("access_token")?.value;
   if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
 
+  // Proxy hygiene (batch-06 deploy-flip fix wave): the API authenticates
+  // via the Authorization header above and never reads cookies, so
+  // forwarding the browser's own Cookie header upstream too would send
+  // both the access and refresh tokens over the same hop for no reason --
+  // unnecessary exposure if the upstream leg is ever compromised or logged.
+  headers.delete("cookie");
+
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   const upstream = await fetch(url, {
     method: req.method,
