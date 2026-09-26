@@ -1,6 +1,6 @@
 # Compendium
 
-[CI](https://github.com/skaniti/compendium/actions/workflows/ci.yml)
+![CI](https://github.com/skaniti/compendium/actions/workflows/ci.yml/badge.svg)
 
 This project aims to turn curiosity-driven browsing into a topic-based
 knowledge compendium. Every page browsed gets filtered through a skip gate
