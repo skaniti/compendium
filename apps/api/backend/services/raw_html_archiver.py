@@ -20,7 +20,12 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 
-from backend.services.content_fetcher import _extract_wikipedia_title
+from backend.services.content_fetcher import ContentFetchError, _extract_wikipedia_title
+from backend.services.url_guard import (
+    MAX_REDIRECTS,
+    pinned_request_kwargs,
+    resolve_public_url_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +54,8 @@ async def archive_raw_html(url: str) -> RawHtmlArtifact | None:
     """Fetch source HTML for a captured URL, return gzipped.
 
     Returns None on any failure (timeout, non-HTML content-type, 4xx/5xx,
-    oversized body) so callers can treat archival as best-effort.
+    oversized body, a redirect chain landing on a non-public address) so
+    callers can treat archival as best-effort.
     """
     try:
         if _is_wikipedia(url):
@@ -140,16 +146,53 @@ def _rewritten_url(url: str) -> str:
 
 
 async def _fetch_generic(url: str) -> tuple[bytes, str]:
-    """GET the URL and return body bytes iff content-type is HTML-ish."""
+    """GET the URL and return body bytes iff content-type is HTML-ish.
+
+    Same defect class and same fix as content_fetcher.fetch_generic_content
+    (see url_guard.py's module docstring): redirects are followed MANUALLY,
+    bounded by MAX_REDIRECTS, so every hop is resolved, checked, and
+    fetched against its own pinned address rather than handing the
+    hostname back to httpx for a second, independent resolution. A
+    refusal raises UnsafeURLError; a chain longer than MAX_REDIRECTS or a
+    redirect with no Location raises ContentFetchError. Both are plain
+    Exception subclasses, so archive_raw_html's existing blanket
+    ``except Exception`` -> ``return None`` already covers them -- no new
+    failure mode for callers.
+    """
     fetch_url = _rewritten_url(url)
     if fetch_url != url:
         logger.info("raw_html URL rewrite: %s → %s", url, fetch_url)
+
+    # Keep-alive off, redirects manual: same rationale as
+    # content_fetcher.fetch_generic_content -- each hop connects by
+    # PINNED ADDRESS (url_guard.pinned_request_kwargs), and httpcore pools
+    # connections by (scheme, address, port) with no SNI in the key, so a
+    # reused connection across a cross-host redirect hop would skip the
+    # handshake -- and the certificate check -- for the new hostname.
     async with httpx.AsyncClient(
         timeout=_HTTP_TIMEOUT_SECS,
         headers={"User-Agent": _USER_AGENT},
-        follow_redirects=True,
+        follow_redirects=False,
+        limits=httpx.Limits(max_keepalive_connections=0),
     ) as client:
-        resp = await client.get(fetch_url)
+        current = fetch_url
+        for _ in range(MAX_REDIRECTS + 1):
+            pinned = await resolve_public_url_async(current)
+            pinned_url, headers, extensions = pinned_request_kwargs(pinned, {})
+            resp = await client.get(pinned_url, headers=headers, extensions=extensions)
+            if not resp.is_redirect:
+                break
+            location = resp.headers.get("location")
+            if not location:
+                raise ContentFetchError(
+                    f"raw_html fetcher: redirect with no Location header at {current}"
+                )
+            current = str(httpx.URL(current).join(location))
+        else:
+            raise ContentFetchError(
+                f"raw_html fetcher: more than {MAX_REDIRECTS} redirects from {url}"
+            )
+
         resp.raise_for_status()
     content_type = resp.headers.get("content-type", "text/html")
     if "html" not in content_type.lower():
