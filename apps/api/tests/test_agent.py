@@ -18,6 +18,8 @@ from backend.services.agent import (
     MAX_HISTORY_TOTAL_CHARS,
     MAX_HISTORY_TURN_CHARS,
     MAX_HISTORY_TURNS,
+    NARRATED_INTENT_NUDGE,
+    NARRATED_INTENT_PHRASES,
     AgentMessage,
     AgentResponse,
     AgentState,
@@ -27,6 +29,7 @@ from backend.services.agent import (
     SYSTEM_PROMPT,
     _extract_image_markers,
     _label_match_tier,
+    _narrates_intent,
     _persist_agent_cost_event,
     _prepare_history_messages,
     _tokenize,
@@ -1377,6 +1380,18 @@ def _final_answer_message(text: str = "the answer"):
     return msg
 
 
+def _tool_call_message(name: str = "search_compendium", arguments: str = '{"query": "q"}', call_id: str = "call_1"):
+    """A mocked planning-call message that requests one tool call."""
+    tc = MagicMock()
+    tc.id = call_id
+    tc.function.name = name
+    tc.function.arguments = arguments
+    msg = MagicMock()
+    msg.tool_calls = [tc]
+    msg.content = None
+    return msg
+
+
 def _mock_agent(user_id: int = 1) -> CompendiumAgent:
     """A CompendiumAgent wired for offline unit tests: no DB, no OpenAI."""
     agent = CompendiumAgent(user_id=user_id)
@@ -1739,3 +1754,234 @@ class TestEarlyReturnCompleteEventRedaction:
         complete = next(e for e in events if e["type"] == "complete")
         assert "total_cost_usd" in complete
         assert "tool_calls_made" in complete
+
+
+# =============================================================================
+# Task 7d (2026-09-26): narrated-intent guard.
+#
+# A chat pass on the demo corpus surfaced the model writing "let me check
+# that for you..." with NO tool call as its FINAL turn -- since a
+# no-tool-call assistant message is otherwise treated as done, the hedge
+# shipped as the answer. _narrates_intent() flags that message shape;
+# _react_loop() (query()) and the inline loop in query_stream() both force
+# one extra planning call with a nudge before letting such a message
+# become final.
+# =============================================================================
+
+
+class TestNarratesIntent:
+    """_narrates_intent: pure function, no LLM/DB."""
+
+    @pytest.mark.parametrize("phrase", NARRATED_INTENT_PHRASES)
+    def test_true_for_each_phrase_embedded_in_a_sentence(self, phrase):
+        sentence = f"Sure -- {phrase} the topic you asked about."
+        assert _narrates_intent(sentence) is True
+
+    @pytest.mark.parametrize("phrase", NARRATED_INTENT_PHRASES)
+    def test_true_case_insensitively(self, phrase):
+        sentence = f"Sure -- {phrase} the topic you asked about.".upper()
+        assert _narrates_intent(sentence) is True
+
+    def test_false_for_none_or_empty(self):
+        assert _narrates_intent(None) is False
+        assert _narrates_intent("") is False
+
+    def test_false_for_bare_greeting_reply(self):
+        greeting = (
+            "Hi! I'm your compendium's research librarian -- ask me about "
+            "any topic you've captured, or ask what's in here overall."
+        )
+        assert _narrates_intent(greeting) is False
+
+    def test_false_for_in_character_out_of_scope_reply(self):
+        out_of_scope = (
+            "That's outside what I can do here -- I'm a search agent over "
+            "the pages you've captured, with no web access or general "
+            "knowledge. I can name the topic areas you do have if that "
+            "helps."
+        )
+        assert _narrates_intent(out_of_scope) is False
+
+    def test_false_for_normal_grounded_answer_with_citation(self):
+        grounded = (
+            "Classifier-free guidance jointly trains one network on "
+            "conditional and unconditional objectives, then extrapolates "
+            "between them at sample time. See "
+            "[Diffusion Models](https://en.wikipedia.org/wiki/Diffusion_model)."
+        )
+        assert _narrates_intent(grounded) is False
+
+    def test_citation_marker_suppresses_an_otherwise_matching_phrase(self):
+        """A message can mention "checking" in passing and still be a real,
+        grounded answer -- the citation marker wins."""
+        text = (
+            "Let me check that against the source -- confirmed in "
+            "[Diffusion Models](https://en.wikipedia.org/wiki/Diffusion_model)."
+        )
+        assert _narrates_intent(text) is False
+
+
+class TestReactLoopNarratedIntentGuard:
+    """CompendiumAgent.query (via _react_loop)."""
+
+    @pytest.mark.asyncio
+    async def test_narrated_intent_then_tool_call_executes_after_nudge(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message("Let me search the compendium for that.")),
+                _FakeResponse(_tool_call_message()),
+                _FakeResponse(_final_answer_message("The answer, cited.")),
+            ]
+        )
+        with patch.object(
+            agent, "_execute_tool", new=AsyncMock(return_value="tool result")
+        ) as mock_exec, patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("current question")
+
+        create = agent._openai_client.chat.completions.create
+        assert create.call_count == 3
+        second_call_messages = create.call_args_list[1].kwargs["messages"]
+        assert any(
+            m["role"] == "system" and m.get("content") == NARRATED_INTENT_NUDGE
+            for m in second_call_messages
+        )
+        mock_exec.assert_awaited_once()
+        assert response.answer == "The answer, cited."
+
+    @pytest.mark.asyncio
+    async def test_narrated_intent_twice_ships_on_second_no_tool_call(self):
+        """Guard fires once per turn -- a second hedge (still no tool
+        call) after the nudge ships as the final answer instead of
+        nudging again."""
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message("One moment, let me look.")),
+                _FakeResponse(_final_answer_message("One moment, let me look.")),
+            ]
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("current question")
+
+        assert agent._openai_client.chat.completions.create.call_count == 2
+        assert response.answer == "One moment, let me look."
+
+    @pytest.mark.asyncio
+    async def test_greeting_no_narration_final_after_one_call(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            return_value=_FakeResponse(
+                _final_answer_message("Hi! Ask me about anything you've captured.")
+            )
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("hello")
+
+        assert agent._openai_client.chat.completions.create.call_count == 1
+        assert response.answer == "Hi! Ask me about anything you've captured."
+
+    @pytest.mark.asyncio
+    async def test_normal_grounded_final_answer_unaffected(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            return_value=_FakeResponse(_final_answer_message("A plain grounded answer."))
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("a fine question")
+
+        assert agent._openai_client.chat.completions.create.call_count == 1
+        assert response.answer == "A plain grounded answer."
+
+
+class TestQueryStreamNarratedIntentGuard:
+    """query_stream's inline loop mirrors _react_loop's guard exactly --
+    the task brief's 'keep both in step'."""
+
+    @pytest.mark.asyncio
+    async def test_narrated_intent_then_tool_call_then_streams_final_answer(self):
+        agent = _mock_agent()
+
+        async def fake_token_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock(delta=MagicMock(content="final answer"))]
+            yield chunk
+
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message("Let me check that for you.")),
+                _FakeResponse(_tool_call_message()),
+                _FakeResponse(_final_answer_message("grounded answer")),
+                fake_token_stream(),
+            ]
+        )
+        with patch.object(
+            agent, "_execute_tool", new=AsyncMock(return_value="tool result")
+        ) as mock_exec, patch(
+            "backend.services.agent.flush_trace_to_db", new=AsyncMock()
+        ), patch("backend.db.trends_repo.insert_cost_event"):
+            events = [e async for e in agent.query_stream("current question")]
+
+        create = agent._openai_client.chat.completions.create
+        assert create.call_count == 4
+        second_call_messages = create.call_args_list[1].kwargs["messages"]
+        assert any(
+            m["role"] == "system" and m.get("content") == NARRATED_INTENT_NUDGE
+            for m in second_call_messages
+        )
+        mock_exec.assert_awaited_once()
+        tokens = "".join(e["text"] for e in events if e["type"] == "token")
+        assert tokens == "final answer"
+        assert any(e["type"] == "complete" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_narrated_intent_twice_streams_on_second_no_tool_call(self):
+        agent = _mock_agent()
+
+        async def fake_token_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock(delta=MagicMock(content="hedge"))]
+            yield chunk
+
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message("One moment, I'll search.")),
+                _FakeResponse(_final_answer_message("One moment, I'll search.")),
+                fake_token_stream(),
+            ]
+        )
+        with patch("backend.services.agent.flush_trace_to_db", new=AsyncMock()), patch(
+            "backend.db.trends_repo.insert_cost_event"
+        ):
+            events = [e async for e in agent.query_stream("current question")]
+
+        # 2 planning calls (narrated -> nudge; narrated again -> ships) + 1
+        # streaming re-request = 3 total.
+        assert agent._openai_client.chat.completions.create.call_count == 3
+        assert any(e["type"] == "complete" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_greeting_no_narration_streams_immediately_one_planning_call(self):
+        agent = _mock_agent()
+
+        async def fake_token_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock(delta=MagicMock(content="hi there"))]
+            yield chunk
+
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message("Hi! Ask me about your compendium.")),
+                fake_token_stream(),
+            ]
+        )
+        with patch("backend.services.agent.flush_trace_to_db", new=AsyncMock()), patch(
+            "backend.db.trends_repo.insert_cost_event"
+        ):
+            events = [e async for e in agent.query_stream("hello")]
+
+        # ONE planning call (no narration -> no nudge) + 1 streaming
+        # re-request = 2 total.
+        assert agent._openai_client.chat.completions.create.call_count == 2
+        tokens = "".join(e["text"] for e in events if e["type"] == "token")
+        assert tokens == "hi there"

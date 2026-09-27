@@ -59,6 +59,59 @@ MAX_HISTORY_TURN_CHARS = 2000
 MAX_HISTORY_TOTAL_CHARS = 8000
 
 
+# Narrated-intent guard (Task 7d, 2026-09-26): a chat pass on the demo
+# corpus found the model writing "let me check that for you..." with NO
+# tool call as its final turn -- since query()/query_stream() treat a
+# no-tool-call assistant message as done, the hedge shipped as the answer.
+# _narrates_intent() flags that shape of message so the ReAct loop
+# (_react_loop for query(); the inline loop in query_stream()) can force
+# one extra planning round instead of streaming the hedge. Phrases live in
+# one tuple so tests can enumerate them; each is a literal (non-alternating)
+# fragment so a test can embed it directly into a sentence.
+NARRATED_INTENT_PHRASES: tuple[str, ...] = (
+    "let me search",
+    "let me check",
+    "let me look",
+    "let me see",
+    "one moment",
+    "i'll search",
+    "i will search",
+    "i'll check",
+    "i will check",
+    "i'll look",
+    "i will look",
+    "searching your compendium",
+    "searching the compendium",
+    "i can only search",
+)
+_NARRATED_INTENT_RE = re.compile("|".join(NARRATED_INTENT_PHRASES), re.IGNORECASE)
+
+# A markdown citation link ([Title](url)) -- a message that already carries
+# one is a grounded answer, not a narrated hedge, even if it happens to
+# contain a phrase like "I'll check" in passing.
+_CITATION_MARKER_RE = re.compile(r"\[[^\]\n]+\]\([^)\s]+\)")
+
+# Exact nudge text appended (system role, this turn only) when the guard
+# fires -- kept as one module constant so query() and query_stream() can
+# never drift to different wording for the same event.
+NARRATED_INTENT_NUDGE = (
+    "You described a search instead of performing one. Call "
+    "search_compendium now with the user's question."
+)
+
+
+def _narrates_intent(content: Optional[str]) -> bool:
+    """True if `content` announces a search/check instead of performing
+    one (see NARRATED_INTENT_PHRASES) -- UNLESS it already carries a
+    markdown citation marker, in which case it's a grounded answer, not a
+    hedge, regardless of incidental phrasing."""
+    if not content:
+        return False
+    if _CITATION_MARKER_RE.search(content):
+        return False
+    return bool(_NARRATED_INTENT_RE.search(content))
+
+
 # Regex for the M8 multimodal image markers embedded in chunk text by
 # fetch_wikipedia_content. Format: "[image: <thumb_url> | source: <full_url>]".
 # Markers are stripped from chunk text before showing it to the LLM (so the
@@ -810,6 +863,7 @@ class CompendiumAgent:
 
             # ReAct loop with streaming on the final answer
             query_start = time.perf_counter()
+            narrated_intent_guard_fired = False
             for i in range(state.max_iterations):
                 state.iterations = i + 1
                 messages = self._build_openai_messages(state)
@@ -868,6 +922,34 @@ class CompendiumAgent:
                 )
 
                 if not msg.tool_calls:
+                    # Narrated-intent hedge with no tool used yet this turn:
+                    # nudge once and force one more planning round instead
+                    # of streaming the hedge as the final answer.
+                    if (
+                        not narrated_intent_guard_fired
+                        and not state.tool_calls_log
+                        and _narrates_intent(msg.content)
+                    ):
+                        narrated_intent_guard_fired = True
+                        state.messages.append(
+                            AgentMessage(role="system", content=NARRATED_INTENT_NUDGE)
+                        )
+                        trace.add_span(
+                            span_type="llm_call",
+                            span_name=AGENT_MODEL,
+                            iteration=i + 1,
+                            inputs={"messages": messages},
+                            outputs={"content": msg.content},
+                            latency_ms=latency_ms,
+                            metadata={"phase": "narrated_intent_guard"},
+                        )
+                        logger.info(
+                            "agent iter %d: narrated-intent guard fired -- "
+                            "forcing another planning call",
+                            i + 1,
+                        )
+                        continue
+
                     # Final answer — re-request with streaming
                     _stream_start = time.perf_counter()
                     _stream_text_buf: list[str] = []
@@ -1043,6 +1125,7 @@ class CompendiumAgent:
     @traceable(name="CompendiumAgent._react_loop")
     async def _react_loop(self, state: AgentState) -> AgentState:
         """Iterate: call LLM → execute tools → repeat until done."""
+        narrated_intent_guard_fired = False
         for i in range(state.max_iterations):
             state.iterations = i + 1
 
@@ -1076,8 +1159,25 @@ class CompendiumAgent:
                 state.total_input_tokens += usage.prompt_tokens
                 state.total_output_tokens += usage.completion_tokens
 
-            # No tool calls → final answer
+            # No tool calls → final answer, UNLESS this is a narrated-intent
+            # hedge with no tool used yet this turn -- then nudge once and
+            # force one more planning round instead of shipping the hedge.
             if not msg.tool_calls:
+                if (
+                    not narrated_intent_guard_fired
+                    and not state.tool_calls_log
+                    and _narrates_intent(msg.content)
+                ):
+                    narrated_intent_guard_fired = True
+                    state.messages.append(
+                        AgentMessage(role="system", content=NARRATED_INTENT_NUDGE)
+                    )
+                    logger.info(
+                        f"Agent iteration {i+1}: narrated-intent guard fired "
+                        f"({latency_ms:.0f}ms) -- forcing another planning call"
+                    )
+                    continue
+
                 state.messages.append(AgentMessage(role="assistant", content=msg.content or ""))
                 logger.info(
                     f"Agent iteration {i+1}: final answer "
