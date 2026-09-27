@@ -2403,6 +2403,66 @@ async def get_archived_preview(pid: int, user_id: int = Depends(verify_api_key))
     return HTMLResponse(content=body, status_code=status, headers=no_store_headers)
 
 
+@app.get("/captured-assets/{rel:path}", tags=["Captures"])
+async def get_captured_asset(rel: str, user_id: int = Depends(verify_api_key)):
+    """Owner-gated file server for archived page-preview subresources.
+
+    Dash is today's only server of these files, reading straight off disk;
+    Dash retires at batch 08b, so this route is what replaces it. ``rel``
+    is ``captured_assets.file_path``, resolved against the assets base dir
+    the server compose mounts (``asset_archiver._BASE_ASSETS_DIR`` --
+    legacy rows look like ``<aa>/<sha>.<ext>``, post-migration-031 rows
+    ``user_<id>/<aa>/<sha>.<ext>``); archived preview HTML references
+    them as ``/captured-assets/<file_path>`` (see
+    ``preview_renderer._load_asset_map``).
+
+    Ownership is checked with one query before any file access: no
+    matching row, a NULL owner (an orphaned legacy row), or an owner that
+    isn't the caller all return the same 404 -- never 403 -- so a probing
+    path never learns whether the row exists at all (same rule as
+    ``GET /api/pages/{pid}/preview`` above). Auth arrives exactly like
+    every other API route, as a bearer token the Next.js route handler
+    injects (task 3b); this dependency never reads a cookie.
+    """
+    from fastapi.responses import FileResponse
+
+    from backend.services import asset_archiver
+
+    not_found = HTTPException(status_code=404, detail="Asset not found.")
+
+    # Path safety first, before any DB query -- empty, NUL-containing, or
+    # absolute paths are never valid file_path values.
+    if not rel or "\x00" in rel or Path(rel).is_absolute():
+        raise not_found
+
+    # Read the base dir at request time (not at import time) so tests can
+    # monkeypatch asset_archiver._BASE_ASSETS_DIR.
+    base_dir = asset_archiver._BASE_ASSETS_DIR
+    candidate = (base_dir / rel).resolve()
+    try:
+        candidate.relative_to(base_dir.resolve())
+    except ValueError:
+        # Not strictly inside the base dir -- catches "../" traversal
+        # (literal or already-decoded from a percent-encoded form).
+        raise not_found
+
+    row = page_repo.captured_asset_for_path(rel)
+    if row is None:
+        raise not_found
+    owner_id, content_type = row
+    if owner_id is None or owner_id != user_id:
+        raise not_found
+
+    if not candidate.is_file():
+        raise not_found
+
+    return FileResponse(
+        candidate,
+        media_type=content_type or "application/octet-stream",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
 @app.get("/api/pages/content", tags=["Captures"])
 async def get_page_content(url: str, user_id: int = Depends(verify_api_key)):
     """Page text content for the topic-detail panel (Dash parity).

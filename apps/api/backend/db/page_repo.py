@@ -1104,6 +1104,32 @@ def page_content_owned_by_user(page_content_id: int, user_id: int) -> bool:
             return bool(cur.fetchone()[0])
 
 
+def captured_asset_for_path(file_path: str) -> tuple[int | None, str] | None:
+    """Return (user_id, content_type) for the captured_assets row whose
+    file_path exactly matches, or None if there is no such row.
+
+    Backs the owner gate on ``GET /captured-assets/{rel:path}``
+    (backend/api/main.py): that route resolves and rejects any path
+    outside the assets base dir before ever reaching this query, so this
+    helper only answers "who owns this file, and what content-type should
+    it be served as" -- it does no path resolution itself. ``user_id`` may
+    be None for an orphaned legacy row (pre-dating migration 031's
+    backfill, or otherwise missing an owner); callers must treat a None
+    user_id exactly like a mismatched one and fail closed with a 404, the
+    same probing-proof rule as ``page_content_owned_by_user`` above.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT user_id, content_type FROM captured_assets WHERE file_path = %s",
+                (file_path,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    return (row[0], row[1])
+
+
 # ── Time-window queries (ported from PageStore) ────────────────────────
 
 
