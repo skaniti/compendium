@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
+import { proxyAttestHeaders } from "@/lib/proxy-attest";
 import {
   BACKEND_UNREACHABLE_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
@@ -29,7 +30,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     res = await fetch(`${BACKEND}/api/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...ingressHeaders(req) },
+      headers: { "Content-Type": "application/json", ...ingressHeaders(req), ...proxyAttestHeaders(req) },
       body: JSON.stringify({ email: body.email, password: body.password }),
     });
   } catch (err) {

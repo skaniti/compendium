@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { applySessionCookies, clearSessionCookies, parseSessionPolicy, REFRESH_TOKEN_COOKIE } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
+import { proxyAttestHeaders } from "@/lib/proxy-attest";
 
 export const runtime = "nodejs";
 
@@ -29,13 +30,13 @@ const inFlightRefreshes = new Map<string, Promise<RefreshResult>>();
 
 async function performBackendRefresh(
   refreshToken: string,
-  ingressHdrs: Record<string, string>
+  extraHdrs: Record<string, string>
 ): Promise<RefreshResult> {
   let res: Response;
   try {
     res = await fetch(`${BACKEND}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...ingressHdrs },
+      headers: { "Content-Type": "application/json", ...extraHdrs },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
   } catch (err) {
@@ -109,7 +110,14 @@ export async function POST(req: Request): Promise<Response> {
     // its own with its own ingress headers. Both callers are the same
     // browser/session (same refresh token), so in practice their ingress
     // verdicts match; documented here rather than silently assumed.
-    resultPromise = performBackendRefresh(refreshToken, ingressHeaders(req)).finally(() => {
+    // Task 7e (post-flip-closeout): proxyAttestHeaders(req) joins the same
+    // in-flight call for the same reason -- it's inert ({}) until
+    // BACKEND_PROXY_SECRET is configured, and once configured, concurrent
+    // callers on the same refresh_token are the same browser/session.
+    resultPromise = performBackendRefresh(refreshToken, {
+      ...ingressHeaders(req),
+      ...proxyAttestHeaders(req),
+    }).finally(() => {
       inFlightRefreshes.delete(refreshToken);
     });
     inFlightRefreshes.set(refreshToken, resultPromise);

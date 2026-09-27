@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { proxyAttestHeaders, stripInboundProxyAttestHeaders } from "@/lib/proxy-attest";
 
 // Same default-resolution convention as this constant used to have inline
 // in app/api/[...path]/route.ts before the extraction (batch post-flip
@@ -25,6 +26,13 @@ export async function proxyToBackend(req: Request, upstreamPath: string): Promis
 
   const headers = new Headers(req.headers);
   for (const h of HOP_BY_HOP) headers.delete(h);
+
+  // Task 7e (post-flip-closeout): strip any attest headers the browser
+  // supplied itself (it must never be able to claim its own rate-limit
+  // key), then set the trusted pair -- inert ({}) unless BACKEND_PROXY_
+  // SECRET is configured. See lib/proxy-attest.ts.
+  stripInboundProxyAttestHeaders(headers);
+  for (const [k, v] of Object.entries(proxyAttestHeaders(req))) headers.set(k, v);
 
   // Force identity upstream: production puts Cloudflare in front of the
   // backend, and Cloudflare picks a compression scheme (zstd, among others)

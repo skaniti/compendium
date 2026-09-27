@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
+import { proxyAttestHeaders } from "@/lib/proxy-attest";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,11 @@ export async function POST(req: Request): Promise<Response> {
     // caller's ingress verdict so the backend's session_policy response
     // (D1's view-as-demo row) is computed the same way as every other auth
     // route -- this route already forwards the caller's own Authorization.
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...ingressHeaders(req) };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...ingressHeaders(req),
+      ...proxyAttestHeaders(req),
+    };
     if (accessToken) headers.authorization = `Bearer ${accessToken}`;
     res = await fetch(`${BACKEND}/api/auth/view-as`, {
       method: "POST",

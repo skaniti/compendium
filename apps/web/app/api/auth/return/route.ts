@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
+import { proxyAttestHeaders } from "@/lib/proxy-attest";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function POST(req: Request): Promise<Response> {
     // D1/D4/D6 (session-expiry-tuning, 2026-09-10 amendment): relay the
     // caller's ingress verdict, same as the sibling view-as route -- this
     // route already forwards the caller's own (acting) Authorization.
-    const headers: Record<string, string> = { ...ingressHeaders(req) };
+    const headers: Record<string, string> = { ...ingressHeaders(req), ...proxyAttestHeaders(req) };
     if (accessToken) headers.authorization = `Bearer ${accessToken}`;
     res = await fetch(`${BACKEND}/api/auth/return-to-admin`, {
       method: "POST",

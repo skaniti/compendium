@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { proxyToBackend } from "./backend-proxy";
+import { PROXY_CLIENT_IP_HEADER, PROXY_SECRET_HEADER } from "./proxy-attest";
 
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
@@ -146,5 +147,63 @@ describe("proxyToBackend", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
     expect(init.headers.has("cookie")).toBe(false);
     expect(init.headers.get("authorization")).toBe("Bearer server-token");
+  });
+
+  // Task 7e (post-flip-closeout): proxyToBackend copies the inbound
+  // request's headers wholesale (new Headers(req.headers) above), so
+  // without an explicit strip a browser could set the attest headers
+  // itself and claim any rate-limit key it likes.
+  describe("proxy attest headers", () => {
+    const ORIGINAL_SECRET = process.env.BACKEND_PROXY_SECRET;
+
+    afterEach(() => {
+      if (ORIGINAL_SECRET === undefined) delete process.env.BACKEND_PROXY_SECRET;
+      else process.env.BACKEND_PROXY_SECRET = ORIGINAL_SECRET;
+    });
+
+    it("strips inbound attest headers even when BACKEND_PROXY_SECRET is unset", async () => {
+      delete process.env.BACKEND_PROXY_SECRET;
+      vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const req = new Request("http://localhost/api/topics/demo", {
+        headers: {
+          [PROXY_SECRET_HEADER]: "browser-supplied-secret",
+          [PROXY_CLIENT_IP_HEADER]: "9.9.9.9",
+        },
+      });
+
+      await proxyToBackend(req, "/api/topics/demo");
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+      expect(init.headers.has(PROXY_SECRET_HEADER)).toBe(false);
+      expect(init.headers.has(PROXY_CLIENT_IP_HEADER)).toBe(false);
+    });
+
+    it("strips a browser-supplied attest pair AND sets the real attested pair when the secret is configured", async () => {
+      process.env.BACKEND_PROXY_SECRET = "real-shared-secret";
+      vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const req = new Request("http://localhost/api/topics/demo", {
+        headers: {
+          [PROXY_SECRET_HEADER]: "browser-supplied-secret",
+          [PROXY_CLIENT_IP_HEADER]: "9.9.9.9",
+          "x-forwarded-for": "198.51.100.9",
+        },
+      });
+
+      await proxyToBackend(req, "/api/topics/demo");
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+      expect(init.headers.get(PROXY_SECRET_HEADER)).toBe("real-shared-secret");
+      expect(init.headers.get(PROXY_CLIENT_IP_HEADER)).toBe("198.51.100.9");
+    });
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
 import { INGRESS_HEADER } from "@/lib/ingress";
+import { PROXY_CLIENT_IP_HEADER, PROXY_SECRET_HEADER } from "@/lib/proxy-attest";
 import {
   BACKEND_UNREACHABLE_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
@@ -262,6 +263,75 @@ describe("POST /api/auth/login", () => {
     const call = fetchMock.mock.calls[0];
     const headers = (call[1] as { headers: Record<string, string> }).headers;
     expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
+  });
+
+  // Task 7e (post-flip-closeout): the login route builds its headers object
+  // from scratch (never spreads the inbound request's own headers), so a
+  // browser-supplied attest header can never reach the backend call --
+  // pinned here the same way the sibling ingress tests pin it. When
+  // BACKEND_PROXY_SECRET is configured, the real attested pair must be
+  // added instead.
+  describe("proxy attest headers", () => {
+    const ORIGINAL_SECRET = process.env.BACKEND_PROXY_SECRET;
+
+    afterEach(() => {
+      if (ORIGINAL_SECRET === undefined) delete process.env.BACKEND_PROXY_SECRET;
+      else process.env.BACKEND_PROXY_SECRET = ORIGINAL_SECRET;
+    });
+
+    it("never forwards a browser-supplied attest pair, even when BACKEND_PROXY_SECRET is unset", async () => {
+      delete process.env.BACKEND_PROXY_SECRET;
+      const jar = makeFakeCookieJar();
+      vi.mocked(cookies).mockResolvedValue(jar as never);
+      const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+      const fetchMock = mockFetchResponse({
+        ok: true,
+        json: async () => ({
+          access_token: accessToken,
+          refresh_token: "refresh-xyz",
+          user: { id: 1, email: "alice@example.com", name: "Alice" },
+        }),
+      });
+
+      await POST(
+        makeLoginRequest(
+          { email: "alice", password: "hunter2" },
+          { [PROXY_SECRET_HEADER]: "browser-supplied", [PROXY_CLIENT_IP_HEADER]: "9.9.9.9" }
+        )
+      );
+
+      const call = fetchMock.mock.calls[0];
+      const headers = (call[1] as { headers: Record<string, string> }).headers;
+      expect(Object.keys(headers)).not.toContain(PROXY_SECRET_HEADER);
+      expect(Object.keys(headers)).not.toContain(PROXY_CLIENT_IP_HEADER);
+    });
+
+    it("forwards the attested pair to the backend when BACKEND_PROXY_SECRET is configured", async () => {
+      process.env.BACKEND_PROXY_SECRET = "real-shared-secret";
+      const jar = makeFakeCookieJar();
+      vi.mocked(cookies).mockResolvedValue(jar as never);
+      const accessToken = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
+      const fetchMock = mockFetchResponse({
+        ok: true,
+        json: async () => ({
+          access_token: accessToken,
+          refresh_token: "refresh-xyz",
+          user: { id: 1, email: "alice@example.com", name: "Alice" },
+        }),
+      });
+
+      await POST(
+        makeLoginRequest(
+          { email: "alice", password: "hunter2" },
+          { "x-forwarded-for": "198.51.100.9" }
+        )
+      );
+
+      const call = fetchMock.mock.calls[0];
+      const headers = (call[1] as { headers: Record<string, string> }).headers;
+      expect(headers[PROXY_SECRET_HEADER]).toBe("real-shared-secret");
+      expect(headers[PROXY_CLIENT_IP_HEADER]).toBe("198.51.100.9");
+    });
   });
 
   it("sets the session_policy cookie from the backend's session_policy on success", async () => {
