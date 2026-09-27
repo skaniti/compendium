@@ -627,7 +627,7 @@ async def observability_middleware(request: Request, call_next):
 # =============================================================================
 # Health Check
 # =============================================================================
-@app.get("/health", tags=["Health"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])  # HEAD: uptime pingers
 async def health_check():
     """Health check endpoint with DB connectivity verification."""
     from backend.db.connection import get_conn
