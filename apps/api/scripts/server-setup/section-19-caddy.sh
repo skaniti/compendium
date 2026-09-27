@@ -6,6 +6,10 @@
 # Amended: the 2026-09-09 session-expiry-tuning plan (private), spec D6
 #          (Task 3) -- split the single shared listener into two, one per
 #          ingress edge, so the app can trust which edge a request arrived on.
+# Amended: the 2026-09-26 post-flip-closeout plan (private), Task 2a -- stamp
+#          the :8081 listener's ingress header with an operator secret read
+#          at run time instead of a hard-coded literal, and never trace or
+#          log that secret.
 #
 # Installs Caddy (official apt repo), writes /etc/caddy/Caddyfile with TWO
 # loopback listeners -- :8080 for Cloudflare Tunnel (public) and :8081 for
@@ -29,13 +33,35 @@
 # identity headers so a public caller can never inject them, even though
 # cloudflared itself would never send them.
 #
+# WHY the :8081 stamp is a secret, not the literal "tailnet" (2026-09-26):
+# a fixed literal is a value anyone could learn and replay if they ever found
+# a way to reach the loopback listener directly (a local process, a
+# misconfigured bind, etc). Stamping an operator secret instead --
+# SESSION_INGRESS_TRUSTED_VALUE, the SAME value the API reads from its own
+# env -- means the header only means "trusted tailnet request" if it matches
+# a value that never appears in this script, in the Caddyfile source under
+# version control, or in any log this script writes. This script resolves
+# the secret at run time (env, else the last matching line of
+# $HOME/.secrets) and wraps every place it touches the value in `set +x` so
+# it never appears in the script's own `-x` trace or its log file. Today
+# only `tailscale serve` traffic reaches Caddy at all -- cloudflared no
+# longer routes to Caddy :8080 (the Next.js frontend is on Vercel; the API's
+# public path is the tunnel straight to :8001) -- but the :8080 block and its
+# ingress stamp stay wired for whenever that changes.
+#
 # Order is deliberate: Caddy comes up + BOTH listeners are verified BEFORE
 # the ingress repointing, so the public + tailnet paths never route to a dead
 # or half-configured Caddy mid-script.
 #
 # Env override: APP_UPSTREAM_PORT (default 8051, Dash today). Once apps/web
 # fronts the host (batch 06), set this to that port -- see the batch-06 note
-# in infra-runbook.md alongside this plan.
+# in infra-runbook.md alongside this plan. SESSION_INGRESS_TRUSTED_VALUE is
+# required (env, or a matching line in $HOME/.secrets) -- see the secret
+# resolution section below; the script aborts without it. RENDER_ONLY=1
+# prints the rendered Caddyfile to stdout and exits before any privileged
+# step (no sudo/apt/systemctl, no log file under $HOME) -- used by
+# apps/api/tests/test_section19_caddy_render.py to check the rendered output
+# without touching a real server.
 #
 # Rollback -- full bypass (uninstall Caddy from the path entirely):
 #   sudo sed -i 's|service: http://localhost:8080|service: http://localhost:8051|' /etc/cloudflared/config.yml
@@ -48,13 +74,18 @@
 
 set -euxo pipefail
 
-LOGDIR="$HOME/server-setup-logs"
-mkdir -p "$LOGDIR"
-TS=$(date +%Y%m%d-%H%M%S)
-LOG="$LOGDIR/19-caddy-$TS.log"
-exec > >(tee -a "$LOG") 2>&1
+RENDER_ONLY="${RENDER_ONLY:-}"
 
-echo "section-19-caddy.sh start: $TS"
+if [[ -z "$RENDER_ONLY" ]]; then
+  LOGDIR="$HOME/server-setup-logs"
+  mkdir -p "$LOGDIR"
+  TS=$(date +%Y%m%d-%H%M%S)
+  LOG="$LOGDIR/19-caddy-$TS.log"
+  exec > >(tee -a "$LOG") 2>&1
+  echo "section-19-caddy.sh start: $TS"
+else
+  echo "section-19-caddy.sh start: RENDER_ONLY=1 (no sudo, no log file, no mutation)"
+fi
 
 # Upstream the app lives on. Dash today (8051); apps/web once batch 06 flips
 # the host -- bump via env (APP_UPSTREAM_PORT=<port> ./section-19-caddy.sh)
@@ -62,32 +93,61 @@ echo "section-19-caddy.sh start: $TS"
 APP_UPSTREAM_PORT="${APP_UPSTREAM_PORT:-8051}"
 echo "APP_UPSTREAM_PORT=$APP_UPSTREAM_PORT"
 
-# Public hostname used only by Step 8's end-to-end curl (same env-override
-# pattern as section-16's PUBLIC_HOSTNAME; unlike section-16 this one has a
-# safe placeholder default since Step 8 is a verification convenience, not
-# provisioning -- override via PUBLIC_HOSTNAME=<your-domain> if it differs).
-PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-compendium.example.com}"
+# Public hostname used only by Step 8's end-to-end curl. Empty by default
+# (2026-09-26: cloudflared no longer routes to Caddy; the public frontend is
+# on Vercel and the API's public path is the tunnel straight to :8001, so
+# there is nothing at a public hostname for Caddy to answer for). Override
+# via PUBLIC_HOSTNAME=<your-domain> only if that changes back.
+PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-}"
 echo "PUBLIC_HOSTNAME=$PUBLIC_HOSTNAME"
 
-# === Step 1: install Caddy via official apt repo ===
-if command -v caddy >/dev/null; then
-  echo "Caddy already installed: $(caddy version | head -1)"
-else
-  set +x  # quiet the apt-key dance trace
-  sudo apt-get update
-  sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-  sudo apt-get update
-  sudo apt-get install -y caddy
-  set -x
-  echo "Caddy installed: $(caddy version | head -1)"
+# === Secret resolution: SESSION_INGRESS_TRUSTED_VALUE (tailnet ingress stamp) ===
+# The :8081 (tailnet) listener stamps this value onto X-Compendium-Ingress so
+# the API can trust "this request came through Caddy's tailnet-only
+# listener" -- see the WHY paragraph above. The value is an operator secret
+# shared with the API's own env; it must never be hard-coded here or in the
+# Caddyfile this script writes, and it must never be traced or logged. Every
+# line below that touches the value runs under `set +x`.
+set +x
+_INGRESS_SECRET=""
+_INGRESS_SECRET_SRC=""
+if [[ -n "${SESSION_INGRESS_TRUSTED_VALUE:-}" ]]; then
+  _INGRESS_SECRET="$SESSION_INGRESS_TRUSTED_VALUE"
+  _INGRESS_SECRET_SRC="from env"
+elif [[ -r "$HOME/.secrets" ]]; then
+  # Do NOT source the file -- grep out only this one key, last match wins.
+  _line=$(grep '^SESSION_INGRESS_TRUSTED_VALUE=' "$HOME/.secrets" 2>/dev/null | tail -n1 || true)
+  if [[ -n "$_line" ]]; then
+    _raw="${_line#*=}"
+    # Strip one layer of matching single or double quotes, if present.
+    if [[ "$_raw" =~ ^\"(.*)\"$ ]]; then
+      _raw="${BASH_REMATCH[1]}"
+    elif [[ "$_raw" =~ ^\'(.*)\'$ ]]; then
+      _raw="${BASH_REMATCH[1]}"
+    fi
+    _INGRESS_SECRET="$_raw"
+    _INGRESS_SECRET_SRC="from ~/.secrets"
+  fi
 fi
 
-# === Step 2: write /etc/caddy/Caddyfile ===
+if [[ -z "$_INGRESS_SECRET" ]]; then
+  echo "ERROR: SESSION_INGRESS_TRUSTED_VALUE is not set (value withheld from this message)." >&2
+  echo "Supply it one of two ways:" >&2
+  echo "  1. env:           SESSION_INGRESS_TRUSTED_VALUE=<value> bash section-19-caddy.sh" >&2
+  echo "  2. \$HOME/.secrets: add a line  SESSION_INGRESS_TRUSTED_VALUE=<value>" >&2
+  exit 1
+fi
+
+echo "SESSION_INGRESS_TRUSTED_VALUE: set ($_INGRESS_SECRET_SRC), ${#_INGRESS_SECRET} chars"
+set -x
+
+# === Render Caddyfile content (shared by RENDER_ONLY and the real write below) ===
 # Unquoted heredoc delimiter (deliberate, unlike a static config): lets
-# $APP_UPSTREAM_PORT expand into both site blocks below.
-sudo tee /etc/caddy/Caddyfile <<CADDYFILE >/dev/null
+# $APP_UPSTREAM_PORT and $_INGRESS_SECRET expand into both site blocks.
+# Wrapped in `set +x` per the secret-hygiene note above -- an `-x` trace of
+# this assignment (or of printing it) would put the secret in the trace.
+set +x
+_CADDYFILE_CONTENT=$(cat <<CADDYFILE
 # /etc/caddy/Caddyfile
 # Two loopback listeners, split by ingress edge (session-expiry-tuning D6).
 #
@@ -96,7 +156,11 @@ sudo tee /etc/caddy/Caddyfile <<CADDYFILE >/dev/null
 #          X-Compendium-Ingress: public.
 # :8081 -- tailscale serve ingress (tailnet-only; Funnel is never enabled,
 #          so nothing but tailscaled can reach this port). Stamps
-#          X-Compendium-Ingress: tailnet.
+#          X-Compendium-Ingress with an operator secret shared with the
+#          API's own env (SESSION_INGRESS_TRUSTED_VALUE) -- NOT the literal
+#          word "tailnet" -- so the tailnet verdict cannot be forged by
+#          guessing a fixed string. This file is mode 0640 (root:caddy) so
+#          only root and the caddy group can read the stamped value.
 #
 # 'header_up FIELD VALUE' REPLACES any client-supplied value of FIELD before
 # the app sees it (it does not append); 'header_up -FIELD' deletes FIELD
@@ -138,10 +202,44 @@ sudo tee /etc/caddy/Caddyfile <<CADDYFILE >/dev/null
 	import access_log
 
 	reverse_proxy 127.0.0.1:$APP_UPSTREAM_PORT {
-		header_up X-Compendium-Ingress tailnet
+		header_up X-Compendium-Ingress $_INGRESS_SECRET
 	}
 }
 CADDYFILE
+)
+
+if [[ -n "$RENDER_ONLY" ]]; then
+  echo "$_CADDYFILE_CONTENT"
+  exit 0
+fi
+set -x
+
+# === Step 1: install Caddy via official apt repo ===
+if command -v caddy >/dev/null; then
+  echo "Caddy already installed: $(caddy version | head -1)"
+else
+  set +x  # quiet the apt-key dance trace
+  sudo apt-get update
+  sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+  sudo apt-get update
+  sudo apt-get install -y caddy
+  set -x
+  echo "Caddy installed: $(caddy version | head -1)"
+fi
+
+# === Step 2: write /etc/caddy/Caddyfile ===
+# Wrapped in `set +x` per the secret-hygiene note above -- an `-x` trace of
+# this write would put the rendered secret in the script's log file.
+set +x
+printf '%s\n' "$_CADDYFILE_CONTENT" | sudo tee /etc/caddy/Caddyfile >/dev/null
+set -x
+echo "Caddyfile written to /etc/caddy/Caddyfile"
+
+# === Step 2b: ownership + perms (the file now carries an operator secret) ===
+sudo chown root:caddy /etc/caddy/Caddyfile
+sudo chmod 0640 /etc/caddy/Caddyfile
 
 # === Step 3: validate config (fail fast on syntax errors) ===
 sudo caddy validate --config /etc/caddy/Caddyfile
@@ -197,11 +295,17 @@ LOOPBACK_8081_BYTES=$(curl -s -m 5 http://127.0.0.1:8081/ | wc -c)
 # fires too and appends a SECOND "0" line -- the resulting two-line value
 # breaks the `-lt` integer comparison below. wc's own "0" already covers the
 # failure case.
-PUBLIC_BYTES=$(curl -s -m 10 "https://$PUBLIC_HOSTNAME/" | wc -c) || PUBLIC_BYTES=0
 echo "loopback Caddy :8080 (public block)  -> $LOOPBACK_8080_BYTES bytes (expect ~50000+ for app page)"
 echo "loopback Caddy :8081 (tailnet block) -> $LOOPBACK_8081_BYTES bytes (expect ~50000+ for app page)"
-echo "public via CF ($PUBLIC_HOSTNAME) -> $PUBLIC_BYTES bytes (expect ~50000+ for app page)"
-if [[ "$LOOPBACK_8080_BYTES" -lt 1000 || "$LOOPBACK_8081_BYTES" -lt 1000 || "$PUBLIC_BYTES" -lt 1000 ]]; then
+if [[ -n "$PUBLIC_HOSTNAME" ]]; then
+  PUBLIC_BYTES=$(curl -s -m 10 "https://$PUBLIC_HOSTNAME/" | wc -c) || PUBLIC_BYTES=0
+  echo "public via CF ($PUBLIC_HOSTNAME) -> $PUBLIC_BYTES bytes (expect ~50000+ for app page)"
+else
+  PUBLIC_BYTES=""
+  echo "PUBLIC_HOSTNAME not set: the public path today is Vercel (apps/web) plus the API reached"
+  echo "directly on :8001 -- neither one reaches Caddy, so no public-path check applies here."
+fi
+if [[ "$LOOPBACK_8080_BYTES" -lt 1000 || "$LOOPBACK_8081_BYTES" -lt 1000 || ( -n "$PUBLIC_HOSTNAME" && "$PUBLIC_BYTES" -lt 1000 ) ]]; then
   echo "WARNING: one or more responses look empty -- check Caddyfile site blocks"
 fi
 echo ""
