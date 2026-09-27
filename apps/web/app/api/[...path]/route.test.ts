@@ -1,16 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
-import { PUT } from "./route";
+import { GET, PUT } from "./route";
 
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
-
-type Ctx = { params: Promise<{ path: string[] }> };
-
-function makeCtx(path: string[]): Ctx {
-  return { params: Promise.resolve({ path }) };
-}
 
 function makeFakeCookieJar(accessToken?: string) {
   return {
@@ -40,17 +34,17 @@ describe("PUT /api/[...path]", () => {
       body: JSON.stringify(payload),
     });
 
-    const res = await PUT(req, makeCtx(["topics", "demo", "icon"]));
+    const res = await PUT(req);
 
     expect(res.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
-    // Asserts the PATH/QUERY the proxy built, not the host -- route.ts's
-    // BACKEND const is read once at module-import time from
-    // process.env.BACKEND_URL (falling back to localhost:8001), so a literal
-    // full-URL assertion here would depend on whatever BACKEND_URL happened
-    // to be set to in the ambient environment this test runs under, rather
-    // than the proxying logic under test.
+    // Asserts the PATH/QUERY the proxy built, not the host -- BACKEND is
+    // read once at module-import time from process.env.BACKEND_URL
+    // (falling back to localhost:8001), so a literal full-URL assertion
+    // here would depend on whatever BACKEND_URL happened to be set to in
+    // the ambient environment this test runs under, rather than the
+    // proxying logic under test.
     expect(new URL(url).pathname).toBe("/api/topics/demo/icon");
     expect(init.method).toBe("PUT");
     expect(init.headers.get("authorization")).toBe("Bearer test-token");
@@ -73,7 +67,7 @@ describe("PUT /api/[...path]", () => {
       body: JSON.stringify({ icon: "star" }),
     });
 
-    await PUT(req, makeCtx(["topics", "demo", "icon"]));
+    await PUT(req);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
@@ -98,7 +92,7 @@ describe("PUT /api/[...path]", () => {
       body: JSON.stringify({ icon: "star" }),
     });
 
-    const res = await PUT(req, makeCtx(["topics", "demo", "icon"]));
+    const res = await PUT(req);
 
     expect(res.headers.get("content-encoding")).toBeNull();
     expect(res.headers.get("content-length")).toBeNull();
@@ -127,11 +121,69 @@ describe("PUT /api/[...path]", () => {
       body: JSON.stringify({ icon: "star" }),
     });
 
-    await PUT(req, makeCtx(["topics", "demo", "icon"]));
+    await PUT(req);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
     expect(init.headers.has("cookie")).toBe(false);
     expect(init.headers.get("authorization")).toBe("Bearer server-token");
+  });
+});
+
+describe("path building safety (fix round 1, review S1)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  // The old implementation built the upstream path by joining Next's
+  // catch-all params.path (each segment already decodeURIComponent'd by
+  // Next's route matcher). That let a decoded dot-segment collapse the
+  // upstream URL outside /api (still carrying the bearer), and let a
+  // decoded #/?/% truncate or rewrite the path the caller intended. The
+  // fix reads the upstream path from req.url's own (still percent-encoded)
+  // pathname and rejects anything that doesn't resolve under the /api/
+  // prefix.
+
+  it("preserves encoded reserved characters (%23, %3F, %25) verbatim in the upstream path", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/a%23b%3Fc%25d");
+    await GET(req);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new URL(url).pathname).toBe("/api/a%23b%3Fc%25d");
+  });
+
+  it("rejects with 404 (no fetch call) when an encoded dot-segment resolves outside the prefix", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar("test-token") as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    // The WHATWG URL parser treats "%2e%2e" as a double-dot path segment
+    // (per spec, not just literal ".."), so this already resolves to
+    // "/secret" -- outside the prefix -- by the time req.url reflects it.
+    const req = new Request("http://localhost/api/%2e%2e/secret");
+    const res = await GET(req);
+
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 404 (no fetch call) when the pathname doesn't start with the prefix", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar("test-token") as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/other/path");
+    const res = await GET(req);
+
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

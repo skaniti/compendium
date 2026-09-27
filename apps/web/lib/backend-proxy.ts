@@ -2,8 +2,10 @@ import { cookies } from "next/headers";
 
 // Same default-resolution convention as this constant used to have inline
 // in app/api/[...path]/route.ts before the extraction (batch post-flip
-// closeout, task 3b) -- nothing else in the workspace reads BACKEND_URL
-// directly, so this is the sole place that needs to stay in sync with it.
+// closeout, task 3b). Several other call sites (app/login/page.tsx, the
+// app/api/auth/*/route.ts handlers, lib/preferences.server.ts) define
+// their own equivalent BACKEND_URL fallback for their own purposes; this
+// one is just the constant the two proxy route handlers below share.
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 const HOP_BY_HOP = new Set([
   "host", "connection", "keep-alive", "transfer-encoding", "content-length",
