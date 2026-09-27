@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field
 from pythonjsonlogger import json as json_log
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+from backend.api.rate_limit_key import client_key
 from backend.config.settings import settings
 from backend.db import (
     annotation_repo,
@@ -518,8 +518,15 @@ app.add_middleware(
 
 # ---------------------------------------------------------------------------
 # Rate limiting (slowapi) — protects auth, agent, and capture endpoints
+#
+# Task 7e (post-flip-closeout): keyed on client_key rather than the raw
+# peer address -- behind the docker port map, every peer is the bridge
+# gateway, so get_remote_address alone puts every caller in one shared
+# bucket. client_key falls back to get_remote_address (today's behavior)
+# until RATE_LIMIT_TRUST_CF_HEADER / PROXY_SHARED_SECRET are configured --
+# see backend/api/rate_limit_key.py.
 # ---------------------------------------------------------------------------
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=client_key)
 app.state.limiter = limiter
 
 

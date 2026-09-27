@@ -99,6 +99,25 @@ class Settings(BaseSettings):
     # Refused at startup in production -- see _check_production_secrets --
     # because it would make every public caller implicitly trusted.
     session_trust_missing_ingress: bool = False
+    # Task 7e (post-flip-closeout): the api container is reached through a
+    # `127.0.0.1:8001:8000` docker port map, so uvicorn's peer address is
+    # always the docker bridge gateway for every request -- one rate-limit
+    # bucket shared by every caller regardless of who they actually are.
+    # Both knobs below are inert until explicitly set, so this lands safely
+    # ahead of any env configuration; see backend/api/rate_limit_key.py for
+    # the precedence they feed into.
+    rate_limit_trust_cf_header: bool = False
+    """When True, trust the `CF-Connecting-IP` header for rate-limit keying.
+    Only safe when Cloudflare is the sole ingress to the api and overwrites
+    this header on every request (the production tunnel deployment) --
+    production sets this to 1. Env var ``RATE_LIMIT_TRUST_CF_HEADER``."""
+
+    proxy_shared_secret: str = ""
+    """Shared secret the Next.js proxy (apps/web) presents via
+    `X-Compendium-Proxy-Secret` to attest the `X-Compendium-Client-Ip` header
+    it also sends. Empty (default) means the proxy-attested address is never
+    trusted, regardless of what either header claims. Env var
+    ``PROXY_SHARED_SECRET``."""
     # Development only: when True (the default), requests that carry no token
     # resolve to the default dev user so a fresh checkout works without a
     # login. Set DEV_AUTH_BYPASS=0 to exercise the real login, refresh and
