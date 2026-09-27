@@ -1802,6 +1802,39 @@ class TestNarratesIntent:
         )
         assert _narrates_intent(out_of_scope) is False
 
+    def test_false_for_out_of_scope_reply_using_i_can_only_search_wording(self):
+        """Fix round 1 (review-7d.md Q5, controller ruling): 'i can only
+        search' was dropped from NARRATED_INTENT_PHRASES because it matches
+        the in-character out-of-scope reply the prompt itself recommends
+        (v2/v3's Out-of-scope block: 'a search agent over the pages THEY
+        captured, with no web access ... offer the nearest thing you can
+        do'). This is the exact shape of reply that guidance produces --
+        it must NOT trip the guard."""
+        out_of_scope = (
+            "That's outside what I can do -- I'm a search agent over the "
+            "pages you captured, with no web access or general knowledge. "
+            "I can only search your compendium for a related topic if you "
+            "name one."
+        )
+        assert _narrates_intent(out_of_scope) is False
+
+    def test_true_for_the_2026_09_26_incident_phrasing(self):
+        """The actual failure this guard exists for: a hedge shipped as the
+        final turn on a plain corpus question, still caught after 'i can
+        only search' was dropped from the tuple."""
+        incident = "Let me check that for you and get back to you shortly."
+        assert _narrates_intent(incident) is True
+
+    def test_false_for_word_boundary_near_miss(self):
+        """Fix round 1 (review-7d.md Q4): 'one moment' must not match as a
+        bare substring inside unrelated words."""
+        assert _narrates_intent("someone momentous happened today.") is False
+
+    def test_true_for_curly_apostrophe_ill_search(self):
+        """Fix round 1 (review-7d.md Q4): a curly apostrophe ('I’ll
+        search...') must be recognized, not just the straight one."""
+        assert _narrates_intent("I’ll search the archives for that.") is True
+
     def test_false_for_normal_grounded_answer_with_citation(self):
         grounded = (
             "Classifier-free guidance jointly trains one network on "

@@ -16,6 +16,8 @@ These tests do NOT make LLM API calls -- prompt-structure and registry
 checks only.
 """
 
+import difflib
+
 from backend.prompts.templates import PROMPTS, get_prompt
 
 V2_TEMPLATE = PROMPTS["agent_system_v2"]["template"]
@@ -70,71 +72,50 @@ class TestAgentSystemV3AnsweringStyle:
         assert "[Page Title](URL)" in V3_TEMPLATE
 
 
-class TestAgentSystemV3StructuralDiffFromV2:
-    """v3 must be byte-identical to v2 everywhere except the Strategy
-    never-announce addition and the rewritten 'When answering' bullets --
-    pins that boundary so v3 cannot silently drift from v2 elsewhere.
+class TestAgentSystemV3ExactDiffFromV2:
+    """v3 must equal v2 line-for-line except an EXACT, pinned set of
+    inserted/replaced lines (fix round 1, review-7d.md W1: the prior
+    prefix/suffix/substring-presence assertion would still pass if an
+    extra line were inserted anywhere in the Strategy..Out-of-scope
+    region other than the intended six changed lines -- this pins the
+    unified diff itself so any other drift fails).
     """
 
-    def test_identical_before_strategy_section(self):
-        header = "Strategy (stop calling tools as soon as you can answer):"
-        v2_pre = V2_TEMPLATE.split(header, 1)[0]
-        v3_pre = V3_TEMPLATE.split(header, 1)[0]
-        assert v2_pre == v3_pre
+    # Generated via difflib.unified_diff(v2_lines, v3_lines, lineterm="")
+    # against the templates as shipped -- embedded verbatim, not
+    # recomputed, so this test actually catches drift instead of trivially
+    # re-deriving its own expectation from the current template.
+    EXPECTED_UNIFIED_DIFF = [
+        "--- ",
+        "+++ ",
+        "@@ -22,6 +22,7 @@",
+        " - get_page_detail: full content for a single page, by id (search results and cluster listings both carry ids). Use when a chunk preview is insufficient to answer.",
+        " ",
+        " Strategy (stop calling tools as soon as you can answer):",
+        "+Never announce a search or a check in prose -- \"let me look\", \"one moment\", \"I'll search\" and the like are forbidden as a final turn. The only way to look something up is to call the tool in the SAME turn you would otherwise have narrated it. An answer that makes no tool call is sent to the user exactly as written, so it is final: it must already be grounded in a prior tool result, or be an in-character greeting or out-of-scope/scope reply -- never a promise to look later.",
+        ' 1. Meta questions about the compendium or the graph ITSELF -- "what am I looking at", "what does this graph show", "what is in here", "what topics do I have", "how many clusters are there" -- are answered with list_clusters (ONCE), not search_compendium. Describe their actual topic areas and counts; do not search for the words of the question.',
+        " 2. Otherwise, call search_compendium ONCE with the user's query.",
+        " 3. Read the result markers (above) and synthesize the answer. Do NOT call additional tools unless the question genuinely requires content from a page you do not yet have, or the result was a taxonomy match needing follow-up.",
+        "@@ -29,9 +30,10 @@",
+        " 5. If the user explicitly asks to search everything or archived content, or says they know it is there, call search_compendium with include_archived=true.",
+        " ",
+        " When answering:",
+        "-- Cite compendium sources as [Page Title](URL).",
+        "+- Lead with the answer in the first sentence. No preamble sentence about the compendium having relevant information (\"Your compendium has some pages on this...\", \"I found some relevant results...\") -- state the answer, then support it.",
+        "+- Cite compendium sources as [Page Title](URL) as you use each one, not batched at the end.",
+        " - Label [archived], [low-confidence], and taxonomy-match results clearly per the marker guidance above; never present them as ordinary top-relevance hits.",
+        " - Ground every compendium claim in content actually returned by tools. Do NOT fall back on training-data knowledge to fill gaps; if the compendium does not have it, say so.",
+        "-- Be concise. Lead with the answer, then supporting detail.",
+        "+- No closing offer (\"let me know if you'd like more detail\", \"want me to look further?\") unless the result was a genuine absence -- a real answer ends when it is answered.",
+        " ",
+        " Out of scope: some questions are outside what you can do -- general knowledge, coding help, current events, math, anything unrelated to this person's captured browsing. Stay in character. Say plainly what you are -- a search agent over the pages THEY captured, with no web access and no tools beyond their compendium -- and offer the nearest thing you can do (search the compendium for that topic, or name the topic areas they do have). One or two sentences. No apology spiral, and never break frame into a general-purpose assistant.",
+    ]
 
-    def test_identical_from_out_of_scope_onward(self):
-        footer = "Out of scope:"
-        v2_post = V2_TEMPLATE.split(footer, 1)[1]
-        v3_post = V3_TEMPLATE.split(footer, 1)[1]
-        assert v2_post == v3_post
-
-    def test_numbered_strategy_steps_unchanged(self):
-        for step_text in (
-            '1. Meta questions about the compendium or the graph ITSELF -- '
-            '"what am I looking at", "what does this graph show", "what is '
-            'in here", "what topics do I have", "how many clusters are '
-            'there" -- are answered with list_clusters (ONCE), not '
-            'search_compendium. Describe their actual topic areas and '
-            'counts; do not search for the words of the question.',
-            "2. Otherwise, call search_compendium ONCE with the user's query.",
-            "3. Read the result markers (above) and synthesize the answer. "
-            "Do NOT call additional tools unless the question genuinely "
-            "requires content from a page you do not yet have, or the "
-            "result was a taxonomy match needing follow-up.",
-            '4. On a genuine absence (a diagnosed "No relevant matches" '
-            "with no taxonomy or low-confidence hit): optionally call "
-            "list_clusters ONCE to name the nearest topic areas the "
-            "user's compendium DOES cover, optionally reformulate the "
-            "query ONCE into a more specific multi-word phrasing and "
-            "search again, and only then tell the user the compendium has "
-            "nothing on the topic. You may then offer 1-2 authoritative "
-            "external starting points (e.g. a Wikipedia URL), clearly "
-            "labeled as external.",
-            "5. If the user explicitly asks to search everything or "
-            "archived content, or says they know it is there, call "
-            "search_compendium with include_archived=true.",
-        ):
-            assert step_text in V2_TEMPLATE
-            assert step_text in V3_TEMPLATE
-
-    def test_marker_and_grounding_bullets_unchanged(self):
-        for bullet in (
-            "Label [archived], [low-confidence], and taxonomy-match "
-            "results clearly per the marker guidance above; never present "
-            "them as ordinary top-relevance hits.",
-            "Ground every compendium claim in content actually returned "
-            "by tools. Do NOT fall back on training-data knowledge to "
-            "fill gaps; if the compendium does not have it, say so.",
-        ):
-            assert bullet in V2_TEMPLATE
-            assert bullet in V3_TEMPLATE
-
-    def test_when_answering_lead_bullet_actually_changed(self):
-        """Sanity check the diff isn't a no-op: v2's old lead bullet must
-        be gone from v3."""
-        old_bullet = "Be concise. Lead with the answer, then supporting detail."
-        assert old_bullet in V2_TEMPLATE
-        assert old_bullet not in V3_TEMPLATE
+    def test_unified_diff_matches_exactly(self):
+        v2_lines = V2_TEMPLATE.splitlines()
+        v3_lines = V3_TEMPLATE.splitlines()
+        actual = list(difflib.unified_diff(v2_lines, v3_lines, lineterm=""))
+        assert actual == self.EXPECTED_UNIFIED_DIFF
 
 
 class TestAgentSystemV3Description:

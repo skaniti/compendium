@@ -59,15 +59,23 @@ MAX_HISTORY_TURN_CHARS = 2000
 MAX_HISTORY_TOTAL_CHARS = 8000
 
 
-# Narrated-intent guard (Task 7d, 2026-09-26): a chat pass on the demo
-# corpus found the model writing "let me check that for you..." with NO
-# tool call as its final turn -- since query()/query_stream() treat a
-# no-tool-call assistant message as done, the hedge shipped as the answer.
-# _narrates_intent() flags that shape of message so the ReAct loop
-# (_react_loop for query(); the inline loop in query_stream()) can force
-# one extra planning round instead of streaming the hedge. Phrases live in
-# one tuple so tests can enumerate them; each is a literal (non-alternating)
-# fragment so a test can embed it directly into a sentence.
+# Narrated-intent guard (Task 7d, 2026-09-26; narrowed in fix round 1): a
+# chat pass on the demo corpus found the model writing "let me check that
+# for you..." with NO tool call as its final turn -- since query()/
+# query_stream() treat a no-tool-call assistant message as done, the hedge
+# shipped as the answer. _narrates_intent() flags that shape of message so
+# the ReAct loop (_react_loop for query(); the inline loop in
+# query_stream()) can force one extra planning round instead of streaming
+# the hedge. Phrases live in one tuple so tests can enumerate them; each is
+# a literal (non-alternating) fragment so a test can embed it directly into
+# a sentence. "i can only search" was deliberately dropped (fix round 1,
+# review-7d.md Q5/controller ruling): it also matches the in-character
+# out-of-scope reply v2/v3's own prompt recommends ("I can only search your
+# compendium for that topic"), which would force a wasted planning call on
+# an off-topic question -- the 2026-09-26 incident phrasing is still caught
+# by "let me check" / "one moment" etc. Straight AND curly ("'"/"'") "I'll"
+# apostrophes are both listed (fix round 1, review-7d.md Q4) since a model
+# can emit either.
 NARRATED_INTENT_PHRASES: tuple[str, ...] = (
     "let me search",
     "let me check",
@@ -75,16 +83,25 @@ NARRATED_INTENT_PHRASES: tuple[str, ...] = (
     "let me see",
     "one moment",
     "i'll search",
+    "i’ll search",
     "i will search",
     "i'll check",
+    "i’ll check",
     "i will check",
     "i'll look",
+    "i’ll look",
     "i will look",
     "searching your compendium",
     "searching the compendium",
-    "i can only search",
 )
-_NARRATED_INTENT_RE = re.compile("|".join(NARRATED_INTENT_PHRASES), re.IGNORECASE)
+# Word-bounded (fix round 1, review-7d.md Q4) so a phrase must appear as
+# whole words, not as a substring spanning unrelated words -- e.g. "one
+# moment" must not match inside "someone momentous". `\b` wraps the WHOLE
+# alternation (not each phrase individually -- `|` has lower precedence
+# than a bare `\b`, so it must be inside one non-capturing group).
+_NARRATED_INTENT_RE = re.compile(
+    r"\b(?:" + "|".join(NARRATED_INTENT_PHRASES) + r")\b", re.IGNORECASE
+)
 
 # A markdown citation link ([Title](url)) -- a message that already carries
 # one is a grounded answer, not a narrated hedge, even if it happens to
