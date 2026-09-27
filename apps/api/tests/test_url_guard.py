@@ -242,6 +242,8 @@ class TestRedirectRevalidation:
             with pytest.raises(UnsafeURLError, match="non-public"):
                 await fetch_generic_content("http://127.0.0.1:8001/api/logs")
 
+        assert issued == []
+
 
 # ---------------------------------------------------------------------------
 # Pinning: resolve_public_url returns the exact address it checked, and
@@ -254,16 +256,37 @@ from backend.services.url_guard import PinnedURL, pinned_request_kwargs, resolve
 
 
 class TestResolvePublicURL:
-    def test_returns_sorted_first_public_address(self):
+    def test_returns_first_address_in_resolver_order_not_sorted(self):
+        """getaddrinfo already applies the system's address-selection
+        policy -- pin its first answer, not a re-sort of the address
+        strings (a string sort would prefer any IPv6 address over IPv4
+        regardless of what the resolver/box actually prefers)."""
+        with patch(
+            "socket.getaddrinfo",
+            return_value=_resolves_to("1.1.1.1", "93.184.216.34"),
+        ):
+            pinned = resolve_public_url("https://multi.example.com/x")
+        assert pinned.address == "1.1.1.1"  # first in resolver order
+        assert pinned.host == "multi.example.com"
+        assert pinned.scheme == "https"
+        assert pinned.port is None
+
+    def test_second_address_pinned_when_it_is_first_in_resolver_order(self):
+        """Order, not value, decides -- swapping the answers swaps the pin."""
         with patch(
             "socket.getaddrinfo",
             return_value=_resolves_to("93.184.216.34", "1.1.1.1"),
         ):
             pinned = resolve_public_url("https://multi.example.com/x")
-        assert pinned.address == "1.1.1.1"  # sorted-first of the two
-        assert pinned.host == "multi.example.com"
-        assert pinned.scheme == "https"
-        assert pinned.port is None
+        assert pinned.address == "93.184.216.34"
+
+    def test_duplicate_answers_deduped_without_disturbing_order(self):
+        with patch(
+            "socket.getaddrinfo",
+            return_value=_resolves_to("93.184.216.34", "93.184.216.34", "1.1.1.1"),
+        ):
+            pinned = resolve_public_url("https://multi.example.com/x")
+        assert pinned.address == "93.184.216.34"
 
     def test_literal_ip_url_returns_itself(self):
         pinned = resolve_public_url("https://93.184.216.34:8443/x")
@@ -283,6 +306,22 @@ class TestResolvePublicURL:
         with patch("socket.getaddrinfo", return_value=_resolves_to("127.0.0.1")):
             with pytest.raises(UnsafeURLError, match="non-public address"):
                 resolve_public_url("http://sneaky.example.com/x")
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://example.com:99999/x",  # out of range
+            "http://example.com:abc/x",  # non-numeric
+        ],
+    )
+    def test_malformed_port_fails_closed_as_unsafe_url_error(self, url):
+        """urlparse(...).port raises a bare ValueError for these -- must
+        surface as UnsafeURLError so a caller's `except UnsafeURLError`
+        (e.g. the archiver's per-hop refusal handling) actually catches
+        it, instead of a different exception type escaping and dropping
+        a whole batch via gather(..., return_exceptions=True)."""
+        with pytest.raises(UnsafeURLError, match="invalid port"):
+            resolve_public_url(url)
 
 
 class TestPinnedRequestKwargs:
@@ -371,6 +410,25 @@ class TestPinnedRequestKwargs:
         pinned_request_kwargs(pinned, original)
         assert original == {"Accept": "*/*"}
 
+    def test_idn_host_is_ascii_encoded_in_host_and_sni(self):
+        """httpx sends header VALUES as raw ASCII (unlike the URL host,
+        which it IDNA-encodes itself) -- an IDN original hostname put
+        straight into Host previously raised UnicodeEncodeError at
+        request-build time."""
+        pinned = PinnedURL(
+            url="https://xn--mnchen-3ya.example/x",
+            host="münchen.example",
+            address="93.184.216.34",
+            port=None,
+            scheme="https",
+        )
+        url, headers, extensions = pinned_request_kwargs(pinned, {})
+        assert headers["Host"] == "xn--mnchen-3ya.example"
+        assert extensions["sni_hostname"] == "xn--mnchen-3ya.example"
+        # ASCII throughout -- would raise if handed to httpx as-is.
+        headers["Host"].encode("ascii")
+        assert url == "https://93.184.216.34/x"
+
 
 class TestFetcherPinning:
     """fetch_generic_content must fetch the address it checked, not a
@@ -424,6 +482,42 @@ class TestFetcherPinning:
         ):
             with pytest.raises(UnsafeURLError, match="non-public"):
                 await fetch_generic_content("https://rebind.example.com/start")
+
+
+class TestFetcherKeepAliveDisabled:
+    """httpcore pools connections by (scheme, address, port) with no SNI
+    in the key, and every hop here connects by PINNED ADDRESS, not
+    hostname -- so a redirect hop that happens to pin to the same
+    address:port as an earlier hop could reuse that hop's already
+    -verified TLS connection under a different hostname, skipping the
+    handshake (and the certificate check) the new hop's Host/SNI were
+    supposed to trigger. Keep-alive must be off. MockTransport bypasses
+    real pooling, so this asserts on the client's own construction
+    instead."""
+
+    @pytest.mark.asyncio
+    async def test_client_disables_keepalive(self):
+        captured_kwargs = []
+        real = httpx.AsyncClient
+
+        def spy(*args, **kwargs):
+            captured_kwargs.append(kwargs)
+            kwargs["transport"] = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, headers={"content-type": "text/html"}, text=_HTML
+                )
+            )
+            return real(*args, **kwargs)
+
+        with patch("socket.getaddrinfo", return_value=_PUBLIC), patch(
+            "httpx.AsyncClient", spy
+        ):
+            await fetch_generic_content("https://safe.example.com/page")
+
+        assert captured_kwargs, "AsyncClient was never constructed"
+        limits = captured_kwargs[0].get("limits")
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_keepalive_connections == 0
 
 
 # ---------------------------------------------------------------------------
@@ -512,3 +606,52 @@ class TestAssetArchiverPinning:
 
         assert result is None
         assert any("more than" in rec.message for rec in caplog.records)
+
+
+class TestArchiverKeepAliveDisabled:
+    """Same rationale as TestFetcherKeepAliveDisabled, for the client
+    archive_assets_for_page builds per host -- asserted through the real
+    call path (DB writes + the on-disk directory mocked out) since the
+    limits kwarg lives on a client constructed inside a closure that
+    isn't otherwise reachable from a test."""
+
+    @pytest.mark.asyncio
+    async def test_client_disables_keepalive(self, tmp_path):
+        import gzip
+
+        captured_kwargs = []
+        real = httpx.AsyncClient
+
+        def spy(*args, **kwargs):
+            captured_kwargs.append(kwargs)
+            kwargs["transport"] = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, content=b"\x89PNG", headers={"content-type": "image/png"}
+                )
+            )
+            return real(*args, **kwargs)
+
+        html = b'<html><body><img src="https://cdn.example.com/x.png"></body></html>'
+        gzipped = gzip.compress(html)
+
+        with patch("socket.getaddrinfo", return_value=_PUBLIC), patch.object(
+            asset_archiver, "_get_asset_id_by_source_url", return_value=None
+        ), patch.object(
+            asset_archiver, "_get_asset_id_by_sha", return_value=42
+        ), patch.object(
+            asset_archiver, "_link_assets_to_page"
+        ), patch.object(
+            asset_archiver, "_BASE_ASSETS_DIR", tmp_path
+        ), patch("httpx.AsyncClient", spy):
+            count = await asset_archiver.archive_assets_for_page(
+                page_content_id=1,
+                gzipped_html=gzipped,
+                base_url="https://cdn.example.com/page",
+                user_id=1,
+            )
+
+        assert count == 1
+        assert captured_kwargs, "AsyncClient was never constructed"
+        limits = captured_kwargs[0].get("limits")
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_keepalive_connections == 0

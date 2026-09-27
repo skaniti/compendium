@@ -202,10 +202,19 @@ async def archive_assets_for_page(
     async def _run_host(host: str, host_urls: list[str]) -> list[int]:
         # follow_redirects=False -- _ensure_asset follows redirects manually
         # so every hop can be guarded and pinned, same as the page fetcher.
+        # max_keepalive_connections=0 -- each hop connects by PINNED ADDRESS
+        # (url_guard.pinned_request_kwargs), not hostname, and httpcore
+        # pools connections by (scheme, address, port) with no SNI in the
+        # key. A redirect hop pinning to the same address:port as an
+        # earlier one in this same client could otherwise reuse that hop's
+        # already-verified TLS connection, skipping the handshake -- and
+        # the certificate check -- for the new hostname. A fresh
+        # connection per request closes that gap.
         async with httpx.AsyncClient(
             timeout=_DOWNLOAD_TIMEOUT_SECS,
             headers={"User-Agent": _USER_AGENT},
             follow_redirects=False,
+            limits=httpx.Limits(max_keepalive_connections=0),
         ) as client:
             asset_ids: list[int] = []
             for i, u in enumerate(host_urls):

@@ -1707,7 +1707,20 @@ async def fetch_generic_content(url: str) -> GenericPageContent:
     # so a public URL redirecting to 127.0.0.1 or 169.254.169.254 would sail
     # through a front-door check -- the classic bypass of guards applied only
     # to the URL the user submitted.
-    async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
+    #
+    # Keep-alive is disabled: httpcore pools connections by (scheme,
+    # address, port) with no SNI in the key, and each hop here connects by
+    # PINNED ADDRESS (see url_guard.pinned_request_kwargs), not hostname.
+    # A redirect hop whose hostname happens to pin to the same address:port
+    # as an earlier hop could otherwise reuse that hop's already-verified
+    # TLS connection, silently skipping the handshake -- and therefore the
+    # certificate check -- for the new hostname. A fresh connection per
+    # request closes that gap.
+    async with httpx.AsyncClient(
+        timeout=20.0,
+        follow_redirects=False,
+        limits=httpx.Limits(max_keepalive_connections=0),
+    ) as client:
         current = url
         for _ in range(MAX_REDIRECTS + 1):
             pinned = await resolve_public_url_async(current)

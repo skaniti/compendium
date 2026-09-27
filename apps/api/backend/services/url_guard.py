@@ -76,6 +76,18 @@ def _bracket_if_ipv6(host: str) -> str:
     return f"[{host}]" if ":" in host else host
 
 
+def _idna_host(host: str) -> str:
+    """ASCII-safe form of a hostname for use in a header value.
+
+    httpx IDNA-encodes the URL's own host but sends header VALUES as raw
+    ASCII, so an IDN original hostname put straight into ``Host`` raises
+    ``UnicodeEncodeError`` at request-build time. An IPv4/IPv6 literal or
+    an already-ASCII hostname round-trips through the ``idna`` codec
+    unchanged, so this is safe to call unconditionally.
+    """
+    return host.encode("idna").decode("ascii")
+
+
 def _unwrap(ip: ipaddress._BaseAddress) -> ipaddress._BaseAddress:
     """Collapse IPv4-mapped IPv6 to its IPv4 form.
 
@@ -105,11 +117,15 @@ def resolve_public_url(url: str) -> PinnedURL:
     """Raise UnsafeURLError unless ``url`` is http(s) on a public address;
     otherwise return the exact address validated, to fetch against directly.
 
-    Fails closed: an unparseable URL, a missing host, or a DNS failure all
-    raise rather than falling through to the fetch. When a host resolves
-    to several public addresses, returns the sorted-first one -- arbitrary
-    but deterministic, so the same host always pins to the same address
-    within a single process's resolver behaviour.
+    Fails closed: an unparseable URL, a missing host, a malformed port, or
+    a DNS failure all raise rather than falling through to the fetch. When
+    a host resolves to several public addresses, pins the FIRST one in
+    the resolver's own order -- not a re-sort. ``getaddrinfo`` already
+    applies the system's address-selection policy (RFC 6724 -- e.g.
+    IPv6-preferred where v6 egress actually exists); sorting the address
+    strings instead would silently prefer any IPv6 global address over
+    IPv4 regardless of what the resolver -- and the box's own routing --
+    actually prefers, hard-failing a dual-stack host from a v6-less box.
     """
     try:
         parsed = urlparse(url)
@@ -126,7 +142,14 @@ def resolve_public_url(url: str) -> PinnedURL:
     if not host:
         raise UnsafeURLError(f"no host in URL: {url!r}")
 
-    port = parsed.port
+    # parsed.port raises bare ValueError for an out-of-range or non-numeric
+    # port -- inside the try so it fails closed as UnsafeURLError like
+    # every other malformed-input case here, instead of escaping as a type
+    # a caller's `except UnsafeURLError` doesn't expect.
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise UnsafeURLError(f"invalid port in URL: {url!r}") from exc
 
     # A literal address needs no resolution -- and must not get any, since
     # getaddrinfo would happily echo it back and widen the code path.
@@ -144,13 +167,22 @@ def resolve_public_url(url: str) -> PinnedURL:
     except socket.gaierror as exc:
         raise UnsafeURLError(f"could not resolve host {host!r}") from exc
 
-    addresses = {info[4][0] for info in infos}
-    if not addresses:
+    # Preserve getaddrinfo's own order (see docstring) -- dedup without
+    # reordering, so "first" below means first-seen, not first-sorted.
+    ordered_addresses: list[str] = []
+    seen: set[str] = set()
+    for info in infos:
+        addr = info[4][0]
+        if addr not in seen:
+            seen.add(addr)
+            ordered_addresses.append(addr)
+
+    if not ordered_addresses:
         raise UnsafeURLError(f"host {host!r} resolved to nothing")
 
     # EVERY address must be public. A host with one public and one private
     # A-record is a rebinding primitive, so a single bad answer disqualifies.
-    for addr in addresses:
+    for addr in ordered_addresses:
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
@@ -158,7 +190,7 @@ def resolve_public_url(url: str) -> PinnedURL:
         if not _is_public(ip):
             raise UnsafeURLError(f"host {host!r} resolves to non-public address {addr}")
 
-    pinned_address = sorted(addresses)[0]
+    pinned_address = ordered_addresses[0]
     return PinnedURL(url=url, host=host, address=pinned_address, port=port, scheme=scheme)
 
 
@@ -181,14 +213,18 @@ def pinned_request_kwargs(pinned: PinnedURL, headers: dict) -> tuple[str, dict, 
       checked address (IPv6 bracketed), so the HTTP client connects
       directly to it and never re-resolves the hostname.
     - ``headers_with_host``: a copy of ``headers`` with ``Host`` set to the
-      original hostname (plus ``:port`` when the port is non-default for
-      the scheme), so a virtual-hosted origin still routes the request
-      correctly.
-    - ``extensions``: for https, ``{"sni_hostname": pinned.host}`` so TLS
+      original hostname, IDNA-encoded (plus ``:port`` when the port is
+      non-default for the scheme), so a virtual-hosted origin still routes
+      the request correctly and an IDN hostname doesn't raise at
+      request-build time (httpx sends header values as raw ASCII; see
+      ``_idna_host``).
+    - ``extensions``: for https, ``{"sni_hostname": <idna host>}`` so TLS
       certificate verification checks the ORIGINAL hostname rather than
       the address httpx is actually connecting to (httpx forwards this
       extension to httpcore, which uses it as the TLS ``server_hostname``
-      -- see httpcore's connection pool). Empty for http, which has no SNI.
+      -- see httpcore's connection pool). anyio IDNA-resolves this value
+      itself either way; encoding it here too is harmless and consistent
+      with the Host header. Empty for http, which has no SNI.
     """
     parsed = urlparse(pinned.url)
     netloc = _bracket_if_ipv6(pinned.address)
@@ -198,8 +234,9 @@ def pinned_request_kwargs(pinned: PinnedURL, headers: dict) -> tuple[str, dict, 
         (parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment)
     )
 
+    idna_host = _idna_host(pinned.host)
     default_port = {"http": 80, "https": 443}.get(pinned.scheme)
-    host_header = _bracket_if_ipv6(pinned.host)
+    host_header = _bracket_if_ipv6(idna_host)
     if pinned.port is not None and pinned.port != default_port:
         host_header = f"{host_header}:{pinned.port}"
 
@@ -208,7 +245,7 @@ def pinned_request_kwargs(pinned: PinnedURL, headers: dict) -> tuple[str, dict, 
 
     extensions: dict = {}
     if pinned.scheme == "https":
-        extensions["sni_hostname"] = pinned.host
+        extensions["sni_hostname"] = idna_host
 
     return pinned_url, headers_with_host, extensions
 
