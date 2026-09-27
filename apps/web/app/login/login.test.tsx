@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LoginPage from "./LoginPageClient";
+import { BACKEND_UNREACHABLE_MESSAGE } from "@/lib/login-messages";
 
 // Targets the extracted client half (dev-login recovery fix moved the
 // credential form out of app/login/page.tsx, now a server component that
@@ -131,6 +132,24 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // Task 7a (post-flip-closeout): the route now reports a backend outage
+  // (upstream 503, or a thrown fetch) with a distinct message instead of
+  // "Invalid credentials." -- confirm that exact text flows through to the
+  // alert and does not redirect, same shape as the existing failed-login
+  // test above.
+  it("surfaces a backend-unreachable error (503) in the alert, without redirecting", async () => {
+    mockFetch({ ok: false, status: 503, json: async () => ({ error: BACKEND_UNREACHABLE_MESSAGE }) });
+    render(<LoginPage />);
+
+    await userEvent.type(screen.getByLabelText(/email or username/i), "alice");
+    await userEvent.type(screen.getByLabelText(/password/i), "hunter2");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(await screen.findByText(BACKEND_UNREACHABLE_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByText(BACKEND_UNREACHABLE_MESSAGE)).toHaveAttribute("role", "alert");
+    expect(window.location.href).toBe("");
   });
 });
 

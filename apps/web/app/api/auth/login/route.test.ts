@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
 import { INGRESS_HEADER } from "@/lib/ingress";
+import {
+  BACKEND_UNREACHABLE_MESSAGE,
+  INVALID_CREDENTIALS_MESSAGE,
+  TOO_MANY_ATTEMPTS_MESSAGE,
+} from "@/lib/login-messages";
 
 // D2 correction #1 (batch 04 auth/session parity): the Slice-1 login route
 // discarded the backend's refresh_token entirely. This pins the fix
@@ -97,8 +102,96 @@ describe("POST /api/auth/login", () => {
     const body = (await res.json()) as { error: string };
 
     expect(res.status).toBe(401);
-    expect(body.error).toBe("Invalid credentials.");
+    expect(body.error).toBe(INVALID_CREDENTIALS_MESSAGE);
     expect(jar.get("access_token")).toBeUndefined();
+  });
+
+  it("on a 403, also returns 'Invalid credentials.' with the upstream status", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 403, json: async () => ({ error: "forbidden" }) });
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "wrong" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(403);
+    expect(body.error).toBe(INVALID_CREDENTIALS_MESSAGE);
+  });
+
+  // Task 7a (post-flip-closeout): during the batch-06 rollback rehearsal an
+  // upstream 503 surfaced as "Invalid credentials." -- a thrown fetch
+  // (connection refused, DNS, abort) and any upstream 5xx must instead
+  // report the outage distinctly, at a fixed 503 so the client only ever
+  // has one branch to handle. Console noise silenced the same way the
+  // component test suites do (e.g. TimeWindowProvider.test.tsx).
+  it("when the backend is unreachable (fetch throws), returns 503 with the unreachable message and logs it", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED")));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(503);
+    expect(body.error).toBe(BACKEND_UNREACHABLE_MESSAGE);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("on an upstream 503, returns a fixed 503 with the unreachable message (not the upstream body)", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 503, json: async () => ({ error: "boom" }) });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(503);
+    expect(body.error).toBe(BACKEND_UNREACHABLE_MESSAGE);
+    errSpy.mockRestore();
+  });
+
+  it("on an upstream 502, also returns 503 with the unreachable message (fixed status, not relayed)", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 502, json: async () => ({ error: "bad gateway" }) });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(503);
+    expect(body.error).toBe(BACKEND_UNREACHABLE_MESSAGE);
+    errSpy.mockRestore();
+  });
+
+  // The login rate limit (5/minute) is server-side truth the user should
+  // see, not a generic "Invalid credentials." -- distinct from other
+  // non-OK, non-5xx statuses (e.g. 422), which keep today's behaviour.
+  it("on an upstream 429 (login rate limit), returns 429 with the too-many-attempts message", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 429, json: async () => ({ error: "rate limited" }) });
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(429);
+    expect(body.error).toBe(TOO_MANY_ATTEMPTS_MESSAGE);
+  });
+
+  it("on any other non-OK status (e.g. 422), keeps today's behaviour: 'Invalid credentials.' with the upstream status", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    mockFetchResponse({ ok: false, status: 422, json: async () => ({ error: "unprocessable" }) });
+
+    const res = await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
+    const body = (await res.json()) as { error: string };
+
+    expect(res.status).toBe(422);
+    expect(body.error).toBe(INVALID_CREDENTIALS_MESSAGE);
   });
 
   // D1/D4 (session-expiry-tuning, 2026-09-10 amendment): the login form's
