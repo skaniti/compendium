@@ -425,3 +425,90 @@ class TestFetcherPinning:
             with pytest.raises(UnsafeURLError, match="non-public"):
                 await fetch_generic_content("https://rebind.example.com/start")
 
+
+# ---------------------------------------------------------------------------
+# Rebinding + pinning for the asset archiver: _ensure_asset downloads
+# user-page-referenced URLs (images, stylesheets) with NO guard before this
+# task. Same defect class as the page fetcher, same fix, own commit.
+# ---------------------------------------------------------------------------
+
+from backend.services import asset_archiver
+from backend.services.asset_archiver import _ensure_asset
+
+
+class TestAssetArchiverPinning:
+    @pytest.mark.asyncio
+    async def test_refused_hop_returns_none_and_logs_host_only(self, caplog):
+        def handler(request):
+            return httpx.Response(
+                302, headers={"location": "http://inward.example.com/secret.png"}
+            )
+
+        answers = iter([_PUBLIC, _resolves_to("127.0.0.1")])
+
+        def fake_getaddrinfo(host, *_args, **_kwargs):
+            return next(answers)
+
+        with patch("socket.getaddrinfo", side_effect=fake_getaddrinfo), patch.object(
+            asset_archiver, "_get_asset_id_by_source_url", return_value=None
+        ):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                with caplog.at_level("WARNING"):
+                    result = await _ensure_asset(
+                        client, "https://start.example.com/photo.png", user_id=1
+                    )
+
+        assert result is None
+        messages = [rec.message for rec in caplog.records]
+        assert any("inward.example.com" in m for m in messages)
+        # host-only logging -- the refused hop's path must not appear
+        assert not any("secret.png" in m for m in messages)
+
+    @pytest.mark.asyncio
+    async def test_pins_each_hop_of_a_redirect_chain(self):
+        seen = []
+
+        def handler(request):
+            seen.append(request)
+            if request.url.path == "/photo.png":
+                return httpx.Response(
+                    302, headers={"location": "https://cdn.example.com/final.png"}
+                )
+            return httpx.Response(
+                200, content=b"\x89PNG", headers={"content-type": "image/png"}
+            )
+
+        with patch("socket.getaddrinfo", return_value=_PUBLIC), patch.object(
+            asset_archiver, "_get_asset_id_by_source_url", return_value=None
+        ), patch.object(asset_archiver, "_get_asset_id_by_sha", return_value=42):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                result = await _ensure_asset(
+                    client, "https://start.example.com/photo.png", user_id=1
+                )
+
+        assert result == 42
+        assert len(seen) == 2
+        assert seen[0].headers["host"] == "start.example.com"
+        assert seen[1].headers["host"] == "cdn.example.com"
+        for req in seen:
+            assert req.url.host == "93.184.216.34"
+            assert req.extensions.get("sni_hostname") == req.headers["host"]
+
+    @pytest.mark.asyncio
+    async def test_too_many_redirects_returns_none(self, caplog):
+        def handler(request):
+            return httpx.Response(
+                302, headers={"location": "https://loop.example.com/x.png"}
+            )
+
+        with patch("socket.getaddrinfo", return_value=_PUBLIC), patch.object(
+            asset_archiver, "_get_asset_id_by_source_url", return_value=None
+        ):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                with caplog.at_level("WARNING"):
+                    result = await _ensure_asset(
+                        client, "https://loop.example.com/x.png", user_id=1
+                    )
+
+        assert result is None
+        assert any("more than" in rec.message for rec in caplog.records)

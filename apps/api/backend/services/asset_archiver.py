@@ -33,6 +33,12 @@ import httpx
 from bs4 import BeautifulSoup
 
 from backend.db.connection import get_conn
+from backend.services.url_guard import (
+    MAX_REDIRECTS,
+    UnsafeURLError,
+    pinned_request_kwargs,
+    resolve_public_url_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +200,12 @@ async def archive_assets_for_page(
     sem = asyncio.Semaphore(_MAX_CONCURRENCY)
 
     async def _run_host(host: str, host_urls: list[str]) -> list[int]:
+        # follow_redirects=False -- _ensure_asset follows redirects manually
+        # so every hop can be guarded and pinned, same as the page fetcher.
         async with httpx.AsyncClient(
             timeout=_DOWNLOAD_TIMEOUT_SECS,
             headers={"User-Agent": _USER_AGENT},
-            follow_redirects=True,
+            follow_redirects=False,
         ) as client:
             asset_ids: list[int] = []
             for i, u in enumerate(host_urls):
@@ -232,13 +240,52 @@ async def archive_assets_for_page(
 
 
 async def _ensure_asset(client: httpx.AsyncClient, url: str, user_id: int) -> int | None:
-    """Download one asset if not already stored; return its id or None."""
+    """Download one asset if not already stored; return its id or None.
+
+    These URLs come straight out of captured page HTML -- user-supplied,
+    same as the page itself -- so they get the same SSRF treatment as
+    fetch_generic_content: each redirect hop is resolved, checked, and
+    pinned (see backend/services/url_guard.py) rather than handing the
+    hostname back to httpx for a second, independent resolution.
+
+    A refusal (non-public hop, or a chain longer than MAX_REDIRECTS) is
+    logged at warning level with the hop's HOST ONLY, never the full URL
+    -- these are pages a user browsed, and the archiver's contract is
+    best-effort: one refused asset must never fail the page.
+    """
     existing = _get_asset_id_by_source_url(url, user_id)
     if existing is not None:
         return existing
 
+    current = url
+    resp: httpx.Response | None = None
     try:
-        resp = await client.get(url)
+        for _ in range(MAX_REDIRECTS + 1):
+            pinned = await resolve_public_url_async(current)
+            pinned_url, headers, extensions = pinned_request_kwargs(pinned, {})
+            resp = await client.get(pinned_url, headers=headers, extensions=extensions)
+            if not resp.is_redirect:
+                break
+            location = resp.headers.get("location")
+            if not location:
+                logger.warning(
+                    "asset fetch refused for host %s: redirect with no location",
+                    urlparse(current).hostname,
+                )
+                return None
+            current = str(httpx.URL(current).join(location))
+        else:
+            logger.warning(
+                "asset fetch refused for host %s: more than %d redirects",
+                urlparse(url).hostname,
+                MAX_REDIRECTS,
+            )
+            return None
+    except UnsafeURLError as e:
+        logger.warning("asset fetch refused for host %s: %s", urlparse(current).hostname, e)
+        return None
+
+    try:
         resp.raise_for_status()
     except Exception as e:
         logger.warning("asset fetch failed %s: %s", url, e)
