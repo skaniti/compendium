@@ -242,4 +242,186 @@ class TestRedirectRevalidation:
             with pytest.raises(UnsafeURLError, match="non-public"):
                 await fetch_generic_content("http://127.0.0.1:8001/api/logs")
 
-        assert issued == []
+
+# ---------------------------------------------------------------------------
+# Pinning: resolve_public_url returns the exact address it checked, and
+# pinned_request_kwargs builds a request that connects to THAT address
+# directly rather than handing the hostname back to httpx for a second,
+# independent resolution (the DNS-rebinding gap task 7c closes).
+# ---------------------------------------------------------------------------
+
+from backend.services.url_guard import PinnedURL, pinned_request_kwargs, resolve_public_url
+
+
+class TestResolvePublicURL:
+    def test_returns_sorted_first_public_address(self):
+        with patch(
+            "socket.getaddrinfo",
+            return_value=_resolves_to("93.184.216.34", "1.1.1.1"),
+        ):
+            pinned = resolve_public_url("https://multi.example.com/x")
+        assert pinned.address == "1.1.1.1"  # sorted-first of the two
+        assert pinned.host == "multi.example.com"
+        assert pinned.scheme == "https"
+        assert pinned.port is None
+
+    def test_literal_ip_url_returns_itself(self):
+        pinned = resolve_public_url("https://93.184.216.34:8443/x")
+        assert pinned.address == "93.184.216.34"
+        assert pinned.host == "93.184.216.34"
+        assert pinned.port == 8443
+        assert pinned.scheme == "https"
+
+    def test_port_and_scheme_preserved_for_resolved_host(self):
+        with patch("socket.getaddrinfo", return_value=_PUBLIC):
+            pinned = resolve_public_url("http://safe.example.com:8080/x")
+        assert pinned.port == 8080
+        assert pinned.scheme == "http"
+        assert pinned.host == "safe.example.com"
+
+    def test_still_rejects_non_public(self):
+        with patch("socket.getaddrinfo", return_value=_resolves_to("127.0.0.1")):
+            with pytest.raises(UnsafeURLError, match="non-public address"):
+                resolve_public_url("http://sneaky.example.com/x")
+
+
+class TestPinnedRequestKwargs:
+    def test_swaps_hostname_for_address(self):
+        pinned = PinnedURL(
+            url="https://safe.example.com/a/b?q=1",
+            host="safe.example.com",
+            address="93.184.216.34",
+            port=None,
+            scheme="https",
+        )
+        url, headers, extensions = pinned_request_kwargs(pinned, {"Accept": "*/*"})
+        assert url == "https://93.184.216.34/a/b?q=1"
+        assert headers["Host"] == "safe.example.com"
+        assert headers["Accept"] == "*/*"
+        assert extensions == {"sni_hostname": "safe.example.com"}
+
+    def test_http_has_no_sni_extension(self):
+        pinned = PinnedURL(
+            url="http://safe.example.com/x",
+            host="safe.example.com",
+            address="93.184.216.34",
+            port=None,
+            scheme="http",
+        )
+        _, headers, extensions = pinned_request_kwargs(pinned, {})
+        assert extensions == {}
+        assert headers["Host"] == "safe.example.com"
+
+    def test_non_default_port_kept_on_url_and_host_header(self):
+        pinned = PinnedURL(
+            url="https://safe.example.com:8443/x",
+            host="safe.example.com",
+            address="93.184.216.34",
+            port=8443,
+            scheme="https",
+        )
+        url, headers, _ = pinned_request_kwargs(pinned, {})
+        assert url == "https://93.184.216.34:8443/x"
+        assert headers["Host"] == "safe.example.com:8443"
+
+    def test_default_port_omitted_from_host_header(self):
+        pinned = PinnedURL(
+            url="https://safe.example.com:443/x",
+            host="safe.example.com",
+            address="93.184.216.34",
+            port=443,
+            scheme="https",
+        )
+        _, headers, _ = pinned_request_kwargs(pinned, {})
+        assert headers["Host"] == "safe.example.com"
+
+    def test_ipv6_address_bracketed_in_url(self):
+        pinned = PinnedURL(
+            url="https://safe.example.com/x",
+            host="safe.example.com",
+            address="2001:db8::1",
+            port=None,
+            scheme="https",
+        )
+        url, headers, _ = pinned_request_kwargs(pinned, {})
+        assert url == "https://[2001:db8::1]/x"
+        assert headers["Host"] == "safe.example.com"
+
+    def test_ipv6_original_host_bracketed_in_host_header(self):
+        pinned = PinnedURL(
+            url="https://[::1]/x",
+            host="::1",
+            address="::1",
+            port=None,
+            scheme="https",
+        )
+        _, headers, extensions = pinned_request_kwargs(pinned, {})
+        assert headers["Host"] == "[::1]"
+        assert extensions == {"sni_hostname": "::1"}
+
+    def test_does_not_mutate_caller_headers(self):
+        original = {"Accept": "*/*"}
+        pinned = PinnedURL(
+            url="https://safe.example.com/x",
+            host="safe.example.com",
+            address="93.184.216.34",
+            port=None,
+            scheme="https",
+        )
+        pinned_request_kwargs(pinned, original)
+        assert original == {"Accept": "*/*"}
+
+
+class TestFetcherPinning:
+    """fetch_generic_content must fetch the address it checked, not a
+    hostname httpx re-resolves -- a fake resolver that flips answers
+    between calls is the rebinding primitive this closes."""
+
+    @pytest.mark.asyncio
+    async def test_request_targets_pinned_address_with_host_and_sni(self):
+        seen_requests = []
+
+        def handler(request):
+            seen_requests.append(request)
+            return httpx.Response(
+                200, headers={"content-type": "text/html"}, text=_HTML
+            )
+
+        answers = iter([_PUBLIC, _resolves_to("127.0.0.1")])
+
+        def fake_getaddrinfo(host, *_args, **_kwargs):
+            return next(answers)
+
+        with patch("socket.getaddrinfo", side_effect=fake_getaddrinfo), patch(
+            "httpx.AsyncClient", _patched_client(handler)
+        ):
+            await fetch_generic_content("https://rebind.example.com/page")
+
+        assert len(seen_requests) == 1
+        req = seen_requests[0]
+        assert req.url.host == "93.184.216.34"  # the FIRST (checked) address
+        assert req.headers["host"] == "rebind.example.com"
+        assert req.extensions.get("sni_hostname") == "rebind.example.com"
+
+    @pytest.mark.asyncio
+    async def test_redirect_hop_resolving_to_loopback_still_blocked(self):
+        """Pinning closes the check/fetch window -- it does not skip the
+        per-hop check. A hop whose OWN resolution is non-public at the
+        time it's checked must still raise, exactly as before pinning."""
+
+        def handler(request):
+            return httpx.Response(
+                302, headers={"location": "http://inward.example.com/x"}
+            )
+
+        answers = iter([_PUBLIC, _resolves_to("127.0.0.1")])
+
+        def fake_getaddrinfo(host, *_args, **_kwargs):
+            return next(answers)
+
+        with patch("socket.getaddrinfo", side_effect=fake_getaddrinfo), patch(
+            "httpx.AsyncClient", _patched_client(handler)
+        ):
+            with pytest.raises(UnsafeURLError, match="non-public"):
+                await fetch_generic_content("https://rebind.example.com/start")
+

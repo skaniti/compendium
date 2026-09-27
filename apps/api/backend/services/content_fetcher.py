@@ -53,7 +53,11 @@ from tenacity import (
 from youtube_transcript_api import YouTubeTranscriptApi
 
 from backend.config.settings import settings
-from backend.services.url_guard import MAX_REDIRECTS, assert_public_url_async
+from backend.services.url_guard import (
+    MAX_REDIRECTS,
+    pinned_request_kwargs,
+    resolve_public_url_async,
+)
 
 
 # =============================================================================
@@ -1706,8 +1710,9 @@ async def fetch_generic_content(url: str) -> GenericPageContent:
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
         current = url
         for _ in range(MAX_REDIRECTS + 1):
-            await assert_public_url_async(current)
-            response = await client.get(current, headers=headers)
+            pinned = await resolve_public_url_async(current)
+            pinned_url, pinned_headers, extensions = pinned_request_kwargs(pinned, headers)
+            response = await client.get(pinned_url, headers=pinned_headers, extensions=extensions)
             if not response.is_redirect:
                 break
             location = response.headers.get("location")
