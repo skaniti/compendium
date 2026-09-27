@@ -14,11 +14,11 @@
 // under /api) because that's the exact URL pattern captured preview HTML
 // references (see demo/tools/capture-fixtures.mjs's module header) -- the
 // Next app's /api catch-all proxy does not forward it, so this is served
-// through a separate route instead: next.config.ts's `rewrites()` forwards
-// /captured-assets/* straight to BACKEND_URL, which is what actually gets
-// previews their images/styles when driven through the full app. Append new
-// routes to the SAME ordered `routes` array below rather than building a
-// second router.
+// through a separate route instead: app/captured-assets/[...path]/route.ts
+// forwards /captured-assets/* to BACKEND_URL with an injected bearer, which
+// is what actually gets previews their images/styles when driven through
+// the full app. Append new routes to the SAME ordered `routes` array below
+// rather than building a second router.
 //
 // Route-table discipline (read before adding a route): entries are checked
 // in array order, first match wins. Static/exact-path routes are listed

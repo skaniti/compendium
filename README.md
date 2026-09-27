@@ -109,9 +109,9 @@ Two things stay honest gaps:
   `docker compose up`) to use it. Without a key, chat responds in-band with
   "OpenAI API key not configured." (streamed as a normal chat answer,
   zero cost/sources) — the rest of the app is unaffected.
-- **Page-preview images 404.** The seed's `captured_assets` rows (image
-  metadata) ship, but the underlying binary files and the route that would
-  serve them don't yet — see `apps/api/data/demo-seed/README.md` for the
+- **Page-preview images 404.** The route that serves them exists; the
+  seed's `captured_assets` rows (image metadata) ship, but the underlying
+  binary files don't — see `apps/api/data/demo-seed/README.md` for the
   detail.
 
 Want to rebuild the corpus yourself from scratch instead of using the
@@ -152,8 +152,8 @@ headlessly via jsdom.
 - **API proxy:** `apps/web/app/api/[...path]/route.ts` forwards every
   `/api/*` call verbatim to whatever `BACKEND_URL` points at (injecting the
   auth cookie, streaming SSE through unbuffered), so the frontend never
-  talks to a backend host directly. `apps/web/next.config.ts` carries one
-  additional narrow rewrite for `/captured-assets/*` (page preview
+  talks to a backend host directly. `apps/web/app/captured-assets/[...path]/route.ts`
+  is the same proxy for `/captured-assets/*` (page preview
   images/stylesheets), which the backend serves outside the `/api` prefix.
 - **Demo backend:** `apps/web/demo/server.mjs`, a dependency-free Node HTTP
   server that answers the same endpoint contract from static fixtures under

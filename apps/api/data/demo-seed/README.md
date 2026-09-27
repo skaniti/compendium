@@ -43,10 +43,10 @@ attribution doc already covers.
 `captured_assets` rows (image/stylesheet metadata referenced by archived
 page HTML) ship in the seed, but their underlying binary files do not —
 those live on disk under `data/captures/assets/` in the source deployment
-and were never part of this export. There is also currently no backend
-route that serves `captured_assets` content by id. Net effect: the seeded
-demo's page-preview images will 404 in the compose stack. This is a known,
-harmless gap (the rest of the app — graph, diary, topic detail, clustering
-— is unaffected); closing it means both re-exporting the binaries and
-adding the serving route, tracked as follow-up work rather than blocking
-this task.
+and were never part of this export. The serving route exists as of the
+`/captured-assets/*` route-handler change (apps/web) — the gap left is
+just the binaries. Net effect: the seeded demo's page-preview images will
+404 in the compose stack. This is a known, harmless gap (the rest of the
+app — graph, diary, topic detail, clustering — is unaffected); closing it
+means re-exporting the binaries, tracked as follow-up work rather than
+blocking this task.
