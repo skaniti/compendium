@@ -15,6 +15,13 @@
 #   SMOKE_EMAIL=<email> SMOKE_PASSWORD=<password> bash scripts/smoke.sh
 #
 # *** RUN THIS WITH THE PUBLIC DEMO ACCOUNT, NEVER YOUR OWN LOGIN. ***
+#
+# *** NEVER SCHEDULE THIS SCRIPT (cron, a systemd timer, an uptime
+# monitor, or any other recurring runner). *** Step 7 revokes every live
+# demo session on each run (see the BLAST RADIUS note below) -- a
+# scheduled run repeatedly logs out every demo session on the account,
+# not just its own. Run it by hand, on demand, only.
+#
 # Step 7's default gate deliberately reuses an already-revoked refresh
 # token against /api/auth/refresh to prove it's dead. That endpoint's
 # reuse-detection branch (auth_service.py's rotate_refresh_token) treats
@@ -107,8 +114,8 @@ done
 
 for _var in SMOKE_HTTP_TIMEOUT SMOKE_STREAM_TIMEOUT; do
   _val="${!_var}"
-  if ! [[ "$_val" =~ ^[0-9]+$ ]] || [[ "$_val" -le 0 ]]; then
-    echo "usage: $_var must be a positive integer (got '$_val')" >&2
+  if ! [[ "$_val" =~ ^[1-9][0-9]*$ ]]; then
+    echo "usage: $_var must be a positive integer, no leading zeros (got '$_val')" >&2
     exit 64
   fi
 done
@@ -230,7 +237,7 @@ attempt_logout_and_exit() {
   exit "$code"
 }
 
-echo "smoke: base_url=$SMOKE_BASE_URL stream=$([[ "$SMOKE_SKIP_STREAM" == "1" ]] && echo skip || echo "timeout=${SMOKE_STREAM_TIMEOUT}s")"
+echo "smoke: base_url=$SMOKE_BASE_URL stream=$([[ "$SMOKE_SKIP_STREAM" == "1" ]] && echo skip || echo "timeout=${SMOKE_STREAM_TIMEOUT}s") revocation=$([[ "$SMOKE_SKIP_REVOCATION" == "1" ]] && echo skip || echo check)"
 
 # ---- step 1: login ----------------------------------------------------------
 
@@ -343,7 +350,7 @@ else
   # line, then abort" -- it kills curl the moment that line shows up
   # rather than waiting for the whole SSE response (tokens + complete
   # event) to finish.
-  curl -sS -N --no-buffer --max-time "$((SMOKE_STREAM_TIMEOUT + 5))" \
+  curl -sS --no-buffer --max-time "$((SMOKE_STREAM_TIMEOUT + 5))" \
     -o "$STREAM_OUT" -w '%{http_code}' \
     -X POST "$SMOKE_BASE_URL/api/agent/query-stream" \
     -H "@$STREAM_AUTH_HEADER_FILE" \
@@ -369,6 +376,7 @@ else
 
   kill "$STREAM_PID" 2>/dev/null || true
   wait "$STREAM_PID" 2>/dev/null || true
+  unset STREAM_PID
   rm -f "$STREAM_AUTH_HEADER_FILE" "$STREAM_QUERY_BODY_FILE"
 
   T1=$(now_ms)
@@ -390,6 +398,10 @@ else
   FIRST_DATA_LINE="$(grep -m1 '^data:' "$STREAM_OUT" 2>/dev/null || true)"
   FIRST_DATA_JSON="${FIRST_DATA_LINE#data:}"
   FIRST_DATA_JSON="${FIRST_DATA_JSON# }"
+  if ! printf '%s' "$FIRST_DATA_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    echo "FAIL step 5: first data frame is not a JSON object (${FIRST_DATA_JSON:0:80})" >&2
+    attempt_logout_and_exit 5
+  fi
   FRAME_TYPE="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.type // empty' 2>/dev/null || true)"
   FRAME_TEXT="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.text // empty' 2>/dev/null || true)"
   FRAME_MESSAGE="$(printf '%s' "$FIRST_DATA_JSON" | jq -r '.message // empty' 2>/dev/null || true)"

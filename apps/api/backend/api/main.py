@@ -2729,7 +2729,9 @@ async def register(request: Request, body: RegisterRequest):
 @app.post("/api/auth/login", tags=["Auth"])
 @limiter.limit("5/minute")
 async def login(request: Request, body: LoginRequest):
-    """Log in with email + password. Returns access token + sets refresh cookie.
+    """Log in with email + password. Returns access + refresh tokens in the JSON
+    body (no cookie is set here -- the Next.js login route stores them as
+    cookies on its side).
 
     ``body.email`` accepts an email OR a username (field name kept as
     ``email`` — same form contract as the Dash ``/__login`` route,
