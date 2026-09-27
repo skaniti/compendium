@@ -44,13 +44,40 @@ CF_CONNECTING_IP_HEADER = "CF-Connecting-IP"
 
 
 def _valid_ip_or_none(value: str | None) -> str | None:
+    """Return the canonical string form of `value` if it parses as an IP,
+    else None. Canonicalizing (rather than returning the raw header text)
+    means textually-distinct spellings of one address (upper/lower-case
+    IPv6 hex, non-compressed zero runs) share a rate-limit bucket -- fix
+    round 1, Note 3 (review-7e.md)."""
     if not value:
         return None
     try:
-        ip_address(value)
+        return str(ip_address(value))
     except ValueError:
         return None
-    return value
+
+
+def _secret_matches(presented: str, configured: str) -> bool:
+    """Constant-time compare that never raises.
+
+    `hmac.compare_digest` on two `str` requires BOTH to be pure ASCII and
+    raises `TypeError` otherwise. Starlette decodes header values as
+    latin-1, whose full byte range (0x00-0xFF) is a valid `str`, so a
+    presented header value with any high byte reaches here as a non-ASCII
+    `str` -- and would raise past this point, which slowapi re-raises,
+    500ing the request. Fix round 1, Finding 1 (review-7e.md): compare as
+    bytes instead (`compare_digest` on bytes never raises for content, only
+    for a type mismatch, which can't happen once both sides are encoded the
+    same way), and keep the try/except as a second, belt-and-suspenders
+    guard -- any exception here is treated as a mismatch, never propagated.
+    """
+    try:
+        return hmac.compare_digest(
+            presented.encode("utf-8", "surrogateescape"),
+            configured.encode("utf-8", "surrogateescape"),
+        )
+    except (TypeError, UnicodeError):
+        return False
 
 
 def client_key(request: Request) -> str:
@@ -58,7 +85,7 @@ def client_key(request: Request) -> str:
     secret = settings.proxy_shared_secret
     if secret:
         presented = request.headers.get(PROXY_SECRET_HEADER, "")
-        if hmac.compare_digest(presented, secret):
+        if _secret_matches(presented, secret):
             attested_ip = _valid_ip_or_none(request.headers.get(PROXY_CLIENT_IP_HEADER))
             if attested_ip is not None:
                 return attested_ip

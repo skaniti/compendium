@@ -89,6 +89,17 @@ class TestCloudflareHeader:
 
         assert client_key(req) == "2001:db8::1"
 
+    def test_ipv6_header_is_normalized_to_canonical_form(self, monkeypatch):
+        """Fix round 1, Note 3 (review-7e.md): a non-canonical spelling of
+        one address must land in the SAME bucket as its canonical form."""
+        configure(monkeypatch, trust_cf=True)
+        req = make_request(
+            headers={"CF-Connecting-IP": "2001:0DB8:0000:0000:0000:0000:0000:0001"},
+            peer="203.0.113.5",
+        )
+
+        assert client_key(req) == "2001:db8::1"
+
 
 class TestProxyAttestedAddress:
     def test_trusted_when_secret_matches_and_ip_valid(self, monkeypatch):
@@ -154,6 +165,37 @@ class TestProxyAttestedAddress:
         req = make_request(
             headers={
                 "X-Compendium-Proxy-Secret": "wrong-secret",
+                "X-Compendium-Client-Ip": "198.51.100.9",
+                "CF-Connecting-IP": "192.0.2.1",
+            },
+            peer="203.0.113.5",
+        )
+
+        assert client_key(req) == "192.0.2.1"
+
+    # Fix round 1, Finding 1 (review-7e.md): hmac.compare_digest on two
+    # `str` raises TypeError when either side is non-ASCII. Starlette
+    # decodes header values as latin-1, whose full byte range is a valid
+    # `str`, so a presented secret header with any high byte reached this
+    # exact case pre-fix -- slowapi re-raises past client_key, 500ing the
+    # request. Both rows below must fall through cleanly, no exception.
+    def test_non_ascii_presented_secret_falls_through_without_raising(self, monkeypatch):
+        configure(monkeypatch, proxy_secret=PROXY_SECRET)
+        req = make_request(
+            headers={
+                "X-Compendium-Proxy-Secret": "\x80\x81not-the-secret",
+                "X-Compendium-Client-Ip": "198.51.100.9",
+            },
+            peer="203.0.113.5",
+        )
+
+        assert client_key(req) == "203.0.113.5"
+
+    def test_non_ascii_presented_secret_falls_through_to_valid_cf_header(self, monkeypatch):
+        configure(monkeypatch, trust_cf=True, proxy_secret=PROXY_SECRET)
+        req = make_request(
+            headers={
+                "X-Compendium-Proxy-Secret": "\x80\x81not-the-secret",
                 "X-Compendium-Client-Ip": "198.51.100.9",
                 "CF-Connecting-IP": "192.0.2.1",
             },
