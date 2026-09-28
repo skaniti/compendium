@@ -3,3 +3,8 @@ if [ "${ALLOW_PUSH:-}" != "1" ]; then
   echo '  Re-run consciously with: ALLOW_PUSH=1 git push ...' >&2
   exit 1
 fi
+
+# Scan the outgoing commits (gitleaks + plan-path grep + identifier matrix).
+# Runs after the ALLOW_PUSH gate so a blocked push wastes no scan; fails
+# closed. Git's pre-push stdin (ref/sha lines) passes straight through.
+bash scripts/pre-push-scan.sh --hook
