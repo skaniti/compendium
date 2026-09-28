@@ -129,6 +129,30 @@ def _narrates_intent(content: Optional[str]) -> bool:
     return bool(_NARRATED_INTENT_RE.search(content))
 
 
+# Ungrounded-answer guard: a first reply that is long, uncited prose with no
+# tool call is a training-data answer to a corpus question. Same one-shot
+# forced-search mechanism (and shared fired-flag) as the narrated-intent guard.
+UNGROUNDED_ANSWER_MIN_CHARS = 400
+UNGROUNDED_ANSWER_NUDGE = (
+    "You answered without consulting the compendium. Every claim about the "
+    "user's captured pages must come from a tool result: call "
+    "search_compendium now with the user's question."
+)
+
+
+def _ungrounded_answer(content: Optional[str]) -> bool:
+    """True if `content` has no citation marker and is at least
+    UNGROUNDED_ANSWER_MIN_CHARS long (after strip). The v2/v3 prompts make
+    greeting and out-of-scope replies one or two sentences, while a
+    training-data answer to a corpus question is long prose; the length
+    floor separates them without a second LLM call."""
+    if not content:
+        return False
+    if _CITATION_MARKER_RE.search(content):
+        return False
+    return len(content.strip()) >= UNGROUNDED_ANSWER_MIN_CHARS
+
+
 # Regex for the M8 multimodal image markers embedded in chunk text by
 # fetch_wikipedia_content. Format: "[image: <thumb_url> | source: <full_url>]".
 # Markers are stripped from chunk text before showing it to the LLM (so the
@@ -880,7 +904,7 @@ class CompendiumAgent:
 
             # ReAct loop with streaming on the final answer
             query_start = time.perf_counter()
-            narrated_intent_guard_fired = False
+            grounding_guard_fired = False
             for i in range(state.max_iterations):
                 state.iterations = i + 1
                 messages = self._build_openai_messages(state)
@@ -939,17 +963,28 @@ class CompendiumAgent:
                 )
 
                 if not msg.tool_calls:
-                    # Narrated-intent hedge with no tool used yet this turn:
+                    # Narrated-intent hedge or long uncited answer with no tool used yet this turn:
                     # nudge once and force one more planning round instead
                     # of streaming the hedge as the final answer.
                     if (
-                        not narrated_intent_guard_fired
+                        not grounding_guard_fired
                         and not state.tool_calls_log
-                        and _narrates_intent(msg.content)
+                        and (
+                            _narrates_intent(msg.content)
+                            or _ungrounded_answer(msg.content)
+                        )
                     ):
-                        narrated_intent_guard_fired = True
+                        grounding_guard_fired = True
+                        _narrated = _narrates_intent(msg.content)
                         state.messages.append(
-                            AgentMessage(role="system", content=NARRATED_INTENT_NUDGE)
+                            AgentMessage(
+                                role="system",
+                                content=(
+                                    NARRATED_INTENT_NUDGE
+                                    if _narrated
+                                    else UNGROUNDED_ANSWER_NUDGE
+                                ),
+                            )
                         )
                         trace.add_span(
                             span_type="llm_call",
@@ -958,12 +993,19 @@ class CompendiumAgent:
                             inputs={"messages": messages},
                             outputs={"content": msg.content},
                             latency_ms=latency_ms,
-                            metadata={"phase": "narrated_intent_guard"},
+                            metadata={
+                                "phase": (
+                                    "narrated_intent_guard"
+                                    if _narrated
+                                    else "ungrounded_answer_guard"
+                                )
+                            },
                         )
                         logger.info(
-                            "agent iter %d: narrated-intent guard fired -- "
+                            "agent iter %d: %s guard fired -- "
                             "forcing another planning call",
                             i + 1,
+                            "narrated-intent" if _narrated else "ungrounded-answer",
                         )
                         continue
 
@@ -1142,7 +1184,7 @@ class CompendiumAgent:
     @traceable(name="CompendiumAgent._react_loop")
     async def _react_loop(self, state: AgentState) -> AgentState:
         """Iterate: call LLM → execute tools → repeat until done."""
-        narrated_intent_guard_fired = False
+        grounding_guard_fired = False
         for i in range(state.max_iterations):
             state.iterations = i + 1
 
@@ -1181,16 +1223,28 @@ class CompendiumAgent:
             # force one more planning round instead of shipping the hedge.
             if not msg.tool_calls:
                 if (
-                    not narrated_intent_guard_fired
+                    not grounding_guard_fired
                     and not state.tool_calls_log
-                    and _narrates_intent(msg.content)
+                    and (
+                        _narrates_intent(msg.content)
+                        or _ungrounded_answer(msg.content)
+                    )
                 ):
-                    narrated_intent_guard_fired = True
+                    grounding_guard_fired = True
+                    _narrated = _narrates_intent(msg.content)
                     state.messages.append(
-                        AgentMessage(role="system", content=NARRATED_INTENT_NUDGE)
+                        AgentMessage(
+                            role="system",
+                            content=(
+                                NARRATED_INTENT_NUDGE
+                                if _narrated
+                                else UNGROUNDED_ANSWER_NUDGE
+                            ),
+                        )
                     )
                     logger.info(
-                        f"Agent iteration {i+1}: narrated-intent guard fired "
+                        f"Agent iteration {i+1}: "
+                        f"{'narrated-intent' if _narrated else 'ungrounded-answer'} guard fired "
                         f"({latency_ms:.0f}ms) -- forcing another planning call"
                     )
                     continue

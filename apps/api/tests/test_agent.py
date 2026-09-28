@@ -20,6 +20,8 @@ from backend.services.agent import (
     MAX_HISTORY_TURNS,
     NARRATED_INTENT_NUDGE,
     NARRATED_INTENT_PHRASES,
+    UNGROUNDED_ANSWER_MIN_CHARS,
+    UNGROUNDED_ANSWER_NUDGE,
     AgentMessage,
     AgentResponse,
     AgentState,
@@ -33,6 +35,7 @@ from backend.services.agent import (
     _persist_agent_cost_event,
     _prepare_history_messages,
     _tokenize,
+    _ungrounded_answer,
 )
 from backend.utils.sanitize import PromptInjectionError
 
@@ -2018,3 +2021,187 @@ class TestQueryStreamNarratedIntentGuard:
         assert agent._openai_client.chat.completions.create.call_count == 2
         tokens = "".join(e["text"] for e in events if e["type"] == "token")
         assert tokens == "hi there"
+
+
+# =============================================================================
+# Ungrounded-answer guard: a long first reply with no citation and no tool
+# call is training-data prose, not a grounded answer. Same one-shot nudge
+# mechanism as the narrated-intent guard, sharing its fired-flag.
+# =============================================================================
+
+_LONG_UNGROUNDED = (
+    "Diffusion models are a class of generative models that learn to "
+    "reverse a gradual noising process. They were popularised by work on "
+    "denoising score matching and have since been applied to images, audio "
+    "and video generation with strong results across many benchmarks. The "
+    "training objective is usually a simple regression on the added noise, "
+    "which makes optimisation stable compared with adversarial approaches."
+)
+
+
+class TestUngroundedAnswer:
+    def test_true_for_long_prose_without_citation(self):
+        assert len(_LONG_UNGROUNDED) >= UNGROUNDED_ANSWER_MIN_CHARS
+        assert _ungrounded_answer(_LONG_UNGROUNDED) is True
+
+    def test_false_for_two_sentence_greeting(self):
+        assert _ungrounded_answer(
+            "Hi! I'm your compendium's research librarian -- ask me about "
+            "any topic you've captured, or ask what's in here overall."
+        ) is False
+
+    def test_false_for_two_sentence_out_of_scope(self):
+        assert _ungrounded_answer(
+            "That's outside what I can do here -- I'm a search agent over "
+            "the pages you've captured, with no web access. I can name the "
+            "topic areas you do have if that helps."
+        ) is False
+
+    def test_false_for_long_prose_with_citation(self):
+        text = _LONG_UNGROUNDED + " See [Diffusion](https://example.com/d)."
+        assert _ungrounded_answer(text) is False
+
+    def test_false_for_none_or_empty(self):
+        assert _ungrounded_answer(None) is False
+        assert _ungrounded_answer("") is False
+
+    def test_boundary(self):
+        assert _ungrounded_answer("a" * UNGROUNDED_ANSWER_MIN_CHARS) is True
+        assert _ungrounded_answer("a" * (UNGROUNDED_ANSWER_MIN_CHARS - 1)) is False
+
+
+def _has_system(messages, text):
+    return any(m["role"] == "system" and m.get("content") == text for m in messages)
+
+
+class TestReactLoopUngroundedAnswerGuard:
+    @pytest.mark.asyncio
+    async def test_ungrounded_then_tool_call_executes_after_nudge(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+                _FakeResponse(_tool_call_message()),
+                _FakeResponse(_final_answer_message("The answer, cited.")),
+            ]
+        )
+        with patch.object(
+            agent, "_execute_tool", new=AsyncMock(return_value="tool result")
+        ) as mock_exec, patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("current question")
+
+        create = agent._openai_client.chat.completions.create
+        assert create.call_count == 3
+        second = create.call_args_list[1].kwargs["messages"]
+        assert _has_system(second, UNGROUNDED_ANSWER_NUDGE)
+        assert not _has_system(second, NARRATED_INTENT_NUDGE)
+        mock_exec.assert_awaited_once()
+        assert response.answer == "The answer, cited."
+
+    @pytest.mark.asyncio
+    async def test_fires_once_then_ships(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+            ]
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            response = await agent.query("current question")
+
+        assert agent._openai_client.chat.completions.create.call_count == 2
+        assert response.answer == _LONG_UNGROUNDED
+
+    @pytest.mark.asyncio
+    async def test_narrated_and_long_uses_narrated_nudge(self):
+        agent = _mock_agent()
+        text = "Let me check that for you. " + _LONG_UNGROUNDED
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(text)),
+                _FakeResponse(_final_answer_message("done")),
+            ]
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            await agent.query("current question")
+
+        second = agent._openai_client.chat.completions.create.call_args_list[1].kwargs["messages"]
+        assert _has_system(second, NARRATED_INTENT_NUDGE)
+        assert not _has_system(second, UNGROUNDED_ANSWER_NUDGE)
+
+
+class TestQueryStreamUngroundedAnswerGuard:
+    @staticmethod
+    def _stream(text):
+        async def gen():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock(delta=MagicMock(content=text))]
+            yield chunk
+
+        return gen()
+
+    @pytest.mark.asyncio
+    async def test_ungrounded_then_tool_call_executes_after_nudge(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+                _FakeResponse(_tool_call_message()),
+                _FakeResponse(_final_answer_message("grounded answer")),
+                self._stream("final answer"),
+            ]
+        )
+        with patch.object(
+            agent, "_execute_tool", new=AsyncMock(return_value="tool result")
+        ) as mock_exec, patch(
+            "backend.services.agent.flush_trace_to_db", new=AsyncMock()
+        ), patch("backend.db.trends_repo.insert_cost_event"):
+            events = [e async for e in agent.query_stream("current question")]
+
+        create = agent._openai_client.chat.completions.create
+        assert create.call_count == 4
+        second = create.call_args_list[1].kwargs["messages"]
+        assert _has_system(second, UNGROUNDED_ANSWER_NUDGE)
+        assert not _has_system(second, NARRATED_INTENT_NUDGE)
+        mock_exec.assert_awaited_once()
+        assert "".join(e["text"] for e in events if e["type"] == "token") == "final answer"
+
+    @pytest.mark.asyncio
+    async def test_fires_once_then_streams(self):
+        agent = _mock_agent()
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+                _FakeResponse(_final_answer_message(_LONG_UNGROUNDED)),
+                self._stream("shipped"),
+            ]
+        )
+        with patch("backend.services.agent.flush_trace_to_db", new=AsyncMock()), patch(
+            "backend.db.trends_repo.insert_cost_event"
+        ):
+            events = [e async for e in agent.query_stream("current question")]
+
+        # 2 planning calls + 1 streaming re-request.
+        assert agent._openai_client.chat.completions.create.call_count == 3
+        assert any(e["type"] == "complete" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_narrated_and_long_uses_narrated_nudge(self):
+        agent = _mock_agent()
+        text = "Let me check that for you. " + _LONG_UNGROUNDED
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(_final_answer_message(text)),
+                _FakeResponse(_final_answer_message("done")),
+                self._stream("done"),
+            ]
+        )
+        with patch("backend.services.agent.flush_trace_to_db", new=AsyncMock()), patch(
+            "backend.db.trends_repo.insert_cost_event"
+        ):
+            _ = [e async for e in agent.query_stream("current question")]
+
+        second = agent._openai_client.chat.completions.create.call_args_list[1].kwargs["messages"]
+        assert _has_system(second, NARRATED_INTENT_NUDGE)
+        assert not _has_system(second, UNGROUNDED_ANSWER_NUDGE)
