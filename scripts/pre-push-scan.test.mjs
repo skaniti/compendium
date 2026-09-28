@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, existsSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+// Assembled at runtime so this file does not match the gate's own plan-path grep.
+const PLAN = "docs/project-" + "plans";
 const script = resolve(import.meta.dirname, "pre-push-scan.sh");
 const realGitleaks = spawnSync("bash", ["-c", "command -v gitleaks || ls ~/go/bin/gitleaks"], { encoding: "utf8" }).stdout.trim().split("\n")[0];
 const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8" });
@@ -61,14 +63,14 @@ test("missing gitleaks fails closed", () => {
 });
 
 test("plan-path citation in a tracked non-doc file refuses", () => {
-  const d = makeRepo({ "src/x.js": "// see docs/project-plans/foo\n" });
+  const d = makeRepo({ "src/x.js": `// see ${PLAN}/foo\n` });
   const r = run(d, { GITLEAKS_BIN: stubGitleaks(d, 0), SCAN_TERMS_FILE: terms(d) });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /plan-path citation/);
 });
 
 test("plan-path citation under docs/ is allowed", () => {
-  const d = makeRepo({ "docs/x.md": "docs/project-plans/foo\n" });
+  const d = makeRepo({ "docs/x.md": `${PLAN}/foo\n` });
   const r = run(d, { GITLEAKS_BIN: stubGitleaks(d, 0), SCAN_TERMS_FILE: terms(d) });
   assert.equal(r.status, 0, r.stderr);
 });
@@ -81,6 +83,55 @@ test("identifier term hit refuses; missing terms file fails closed", () => {
   const r2 = run(d, { GITLEAKS_BIN: stubGitleaks(d, 0), SCAN_TERMS_FILE: join(d, "absent") });
   assert.equal(r2.status, 1);
   assert.match(r2.stderr, /terms file missing/);
+});
+
+test("comments-only terms file fails closed", () => {
+  const d = makeRepo({ "a.txt": "hello\n" });
+  const f = join(d, "c.txt");
+  writeFileSync(f, "# only a comment\n\n");
+  const r = run(d, { GITLEAKS_BIN: stubGitleaks(d, 0), SCAN_TERMS_FILE: f });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /comments only/);
+});
+
+test("scan-ok marker suppresses only in test_url_guard.py", () => {
+  const line = "x = 'zz-private-marker'  # scan-ok: test-ip\n";
+  const other = makeRepo({ "src/other.py": line });
+  const r = run(other, { GITLEAKS_BIN: stubGitleaks(other, 0), SCAN_TERMS_FILE: terms(other) });
+  assert.equal(r.status, 1, "marker in another file must not suppress");
+  const allowed = makeRepo({ "apps/api/tests/test_url_guard.py": line });
+  const r2 = run(allowed, { GITLEAKS_BIN: stubGitleaks(allowed, 0), SCAN_TERMS_FILE: terms(allowed) });
+  assert.equal(r2.status, 0, r2.stderr);
+  const noMarker = makeRepo({ "apps/api/tests/test_url_guard.py": "x = 'zz-private-marker'\n" });
+  const r3 = run(noMarker, { GITLEAKS_BIN: stubGitleaks(noMarker, 0), SCAN_TERMS_FILE: terms(noMarker) });
+  assert.equal(r3.status, 1, "path alone must not suppress");
+});
+
+test("build-fixtures.mjs is suppressed only on lines 20 and 655", () => {
+  const mk = (n) => "x\n".repeat(n - 1) + "zz-private-marker\n";
+  for (const [n, want] of [[20, 0], [21, 1]]) {
+    const d = makeRepo({ "apps/web/demo/tools/build-fixtures.mjs": mk(n) });
+    const r = run(d, { GITLEAKS_BIN: stubGitleaks(d, 0), SCAN_TERMS_FILE: terms(d) });
+    assert.equal(r.status, want, `line ${n}: ${r.stderr}`);
+  }
+});
+
+test("--hook: multi-ref, deletion skipped, new branch, relative env paths", () => {
+  const d = makeRepo({ "a.txt": "hello\n" });
+  const sha = git(d, "rev-parse", "HEAD").trim();
+  const zero = "0".repeat(40);
+  const hook = (input) =>
+    spawnSync("bash", [script, "--hook"], { cwd: d, input, encoding: "utf8",
+      env: { ...process.env, GITLEAKS_BIN: "./gl-stub", SCAN_TERMS_FILE: "terms.txt" } });
+  stubGitleaks(d, 0); terms(d);
+  const multi = hook(`refs/heads/a ${sha} refs/heads/a ${zero}\nrefs/heads/b ${sha} refs/heads/b ${sha}\n`);
+  assert.equal(multi.status, 0, multi.stderr);
+  assert.equal((multi.stdout.match(/pre-push-scan: start/g) || []).length, 2);
+  assert.match(multi.stdout, /range=\[.* --not --remotes\]/); // new branch
+  const del = hook(`(delete) ${zero} refs/heads/gone ${sha}\n`);
+  assert.equal(del.status, 0);
+  assert.match(del.stdout, /nothing to scan/);
+  assert.doesNotMatch(del.stdout, /start/);
 });
 
 test("real gitleaks: planted fake key refused, clean input passes", { skip: !existsSync(realGitleaks) }, () => {
