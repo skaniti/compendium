@@ -30,6 +30,20 @@ it("clicking a header sorts by that column, toggles direction, and resets to pag
   await waitFor(() => expect(api.fetchPipelinePages).toHaveBeenLastCalledWith(50, 0, "domain", "desc"));
   expect(screen.getByRole("columnheader", { name: /^Domain/ })).toHaveAttribute("aria-sort", "descending");
 });
+it("Newest first resets to the default order and disables itself there", async () => {
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue(resp([row(1)], 120));
+  render(<PagesTable />);
+  await screen.findByText("Page 1");
+  const reset = screen.getByRole("button", { name: "Newest first" });
+  expect(reset).toBeDisabled();
+  expect(screen.getByRole("columnheader", { name: /^Domain/ })).toHaveAttribute("aria-sort", "none");
+  await userEvent.click(screen.getByRole("button", { name: /^Domain/ }));
+  await waitFor(() => expect(api.fetchPipelinePages).toHaveBeenLastCalledWith(50, 0, "domain", "asc"));
+  expect(reset).toBeEnabled();
+  await userEvent.click(reset);
+  await waitFor(() => expect(api.fetchPipelinePages).toHaveBeenLastCalledWith(50, 0, "created_at", "desc"));
+  expect(screen.getByRole("button", { name: "Newest first" })).toBeDisabled();
+});
 it("empty -> No pages found.", async () => {
   vi.mocked(api.fetchPipelinePages).mockResolvedValue(resp([], 0));
   render(<PagesTable />);

@@ -27,6 +27,7 @@ export default function PagesTable() {
     else { setSort(col); setDir("asc"); }
     setPage(0);
   }
+  const isDefault = sort === "created_at" && dir === "desc";
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
   return (
     <section>
@@ -56,6 +57,7 @@ export default function PagesTable() {
       )}
       {data && data.rows.length > 0 && (
         <div className="dev-pager">
+          <button type="button" disabled={isDefault} onClick={() => { setSort("created_at"); setDir("desc"); setPage(0); }}>Newest first</button>
           <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Prev</button>
           <span>page {page + 1} of {pageCount}</span>
           <button type="button" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>Next</button>

@@ -17,6 +17,13 @@ it("LineAreaChart draws a path and an area and hover titles", () => {
   expect(container.querySelectorAll("circle.chart-point")).toHaveLength(2);
   expect(container.querySelector("circle.chart-point title")?.textContent).toContain("33.3% 1/3");
 });
+it("LineAreaChart keeps first and last points inside the plot", () => {
+  const { container } = render(<LineAreaChart points={[1, 2, 3].map((n) => ({ x: d(`2026-08-0${n}`), y: 10, hover: "h" }))} yMax={110} yTicks={[0, 100]} />);
+  const innerW = 640 - 44 - 16;
+  const cx = Array.from(container.querySelectorAll("circle.chart-point")).map((c) => Number(c.getAttribute("cx")));
+  expect(cx[0]).toBeGreaterThan(0);
+  expect(cx[2]).toBeLessThan(innerW);
+});
 it("LineAreaChart shows always-on labels at <= 10 points and none above", () => {
   const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ x: d(`2026-08-${String(i + 1).padStart(2, "0")}`), y: 10 * i, hover: "h", labelTop: `${10 * i}%`, labelBottom: `${i}/10` }));
   const small = render(<LineAreaChart points={mk(10)} yMax={110} yTicks={[0, 100]} ySuffix="%" />);

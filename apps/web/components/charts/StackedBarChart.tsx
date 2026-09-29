@@ -4,7 +4,7 @@ export interface StackSeries { name: string; values: number[] }
 const LEGEND_W = 230; // fits a 35-char 10px monospace label (~210px) plus swatch
 export default function StackedBarChart({ days, series, height = 240, yTitle = "% of skips" }:
   { days: string[]; series: StackSeries[]; height?: number; yTitle?: string }) {
-  const [ref, width] = useContainerWidth(); const { innerW: fullW, innerH } = frame(width, height); const innerW = fullW - LEGEND_W;
+  const [ref, width] = useContainerWidth(); const { innerW: fullW, innerH } = frame(width, height); const innerW = Math.max(1, fullW - LEGEND_W);
   const x = xBand(days, innerW); const y = yLinear(100, innerH);
   const n = Math.max(series.length - 1, 1);
   // Dash gradient: i-th of n reasons -> lighter/desaturated variant of --highlight via opacity steps

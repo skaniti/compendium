@@ -339,7 +339,7 @@
   padding: 6px 10px; background: var(--surface); color: var(--panel-caption); border-bottom: 1px solid var(--border); }
 .dev-table td { padding: 5px 10px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--bg); color: var(--text); border-bottom: 1px solid var(--border); }
-.dev-table-wrap { overflow-x: auto; }
+.dev-table-wrap { overflow-x: auto; margin-bottom: 24px; }
 .dev-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 8px; font-size: 0.72rem; color: var(--panel-caption); }
 .dev-pager button { font: inherit; padding: 2px 8px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
 .dev-pager button:disabled { opacity: 0.4; }
