@@ -20,6 +20,9 @@ remind the user to commit them from an explorer session at milestones. Never
   `type: subject`, lowercase, <= 72 chars, no AI attribution of any kind
   (enforced by hooks).
 - No real user data in fixtures — synthetic or scrubbed only.
+- Next.js here may postdate your training data: before writing Next-specific
+  code, read the relevant guide in `node_modules/next/dist/docs/` (repo-root
+  `node_modules`, npm workspace) and heed deprecation notices.
 
 ## Dual-repo routing guard (check before implementing ANY request)
 

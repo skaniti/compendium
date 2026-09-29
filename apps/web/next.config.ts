@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
 
   // /captured-assets/* used to be a rewrite here; it's now served by
   // app/captured-assets/[...path]/route.ts, which can inject the bearer.
+
+  // Next 16.3+ `next dev` otherwise writes AGENTS.md + CLAUDE.md into this
+  // directory on every start. The pointer they carry (read the bundled
+  // node_modules/next/dist/docs/) lives in .claude/CLAUDE.md instead.
+  agentRules: false,
 };
 
 export default nextConfig;
