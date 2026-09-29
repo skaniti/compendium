@@ -3488,3 +3488,7 @@ async def override_topic_icon(
 from backend.api.routers import dq_bot as _dq_bot_router  # noqa: E402
 
 app.include_router(_dq_bot_router.router)
+
+from backend.api.routers import pipeline as _pipeline_router  # noqa: E402
+
+app.include_router(_pipeline_router.router)

@@ -1039,15 +1039,38 @@ def get_dedup_pair(archived_page_id: int) -> dict | None:
     return {"archived": archived, "canonical": canonical}
 
 
+RECENT_PAGES_SORT_COLUMNS = (
+    "title",
+    "domain",
+    "status",
+    "processing_depth",
+    "visited_at",
+    "created_at",
+)
+
+
 def get_recent_pages(
     user_id: int,
     limit: int = 50,
     offset: int = 0,
+    sort: str = "created_at",
+    direction: str = "desc",
 ) -> tuple[list[dict], int]:
-    """Paginated pages for a user, newest first.
+    """Paginated pages for a user (Pipeline dev view's All-pages table).
+
+    ``sort`` must be one of RECENT_PAGES_SORT_COLUMNS and ``direction`` one
+    of ``asc``/``desc`` -- both are validated HERE (allow-list, never
+    interpolated from caller input) and again at the route (422). NULLs sort
+    last in both directions; ``p.id DESC`` is the stable tiebreak so paging
+    never repeats or skips a row across pages.
 
     Returns (rows, total_count).
     """
+    if sort not in RECENT_PAGES_SORT_COLUMNS:
+        raise ValueError(f"unsupported sort column: {sort!r}")
+    if direction not in ("asc", "desc"):
+        raise ValueError(f"unsupported direction: {direction!r}")
+    order_sql = f"ORDER BY p.{sort} {direction.upper()} NULLS LAST, p.id DESC"  # allow-listed above
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1061,14 +1084,14 @@ def get_recent_pages(
             total = cur.fetchone()[0]
 
             cur.execute(
-                """
+                f"""
                 SELECT p.id, p.title, p.domain, p.status, p.processing_depth,
                        p.archive_reason, p.skip_reasoning,
                        p.visited_at, p.created_at
                 FROM pages p
                 JOIN captures c ON p.capture_id = c.id
                 WHERE c.user_id = %s
-                ORDER BY p.created_at DESC
+                {order_sql}
                 LIMIT %s OFFSET %s
                 """,
                 (user_id, limit, offset),
