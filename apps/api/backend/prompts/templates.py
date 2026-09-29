@@ -591,10 +591,10 @@ Out of scope: some questions are outside what you can do -- general knowledge, c
             " NARRATED_INTENT_PHRASES), which forces one extra tool-call "
             "round on the SAME hedge shape as a loop-level backstop -- "
             "this prompt is the instruction-level half of that fix. "
-            "settings.agent_system_prompt_version default stays \"v2\"; "
-            "flipping to \"v3\" is a no-deploy env-var change once the "
-            "12-question demo-regression measurement (task-7d-report.md) "
-            "supports it."
+            "Default since 2026-09-28: the 12-question demo-regression "
+            "measurement (scripts/agent_regression.py) showed v2 and v3 "
+            "level on tool use, with the loop guard closing the one gap; "
+            "flipping to \"v2\" is the no-deploy env-var rollback."
         ),
     },
     "agent_system_v4": {

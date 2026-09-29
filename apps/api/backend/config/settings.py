@@ -235,7 +235,7 @@ class Settings(BaseSettings):
     LLM-name only genuinely new clusters. Default off = legacy behavior
     (every run re-names everything). Env var ``CLUSTER_IDENTITY_ENABLED``."""
 
-    agent_system_prompt_version: str = "v2"
+    agent_system_prompt_version: str = "v3"
     """Selects the registry entry ``agent_system_{version}`` in
     ``backend/prompts/templates.py`` for ``CompendiumAgent``'s system
     prompt. "v1" is the corpus-and-tools framing shipped through
@@ -245,8 +245,12 @@ class Settings(BaseSettings):
     "what does this graph show") resolve to that graph instead of falling
     through to generic-assistant answers -- plus an in-character
     out-of-scope response for unrelated queries. Same tool/marker/citation
-    discipline in both. Env var ``AGENT_SYSTEM_PROMPT_VERSION`` -- flipping
-    to "v1" is the no-deploy rollback."""
+    discipline in both. "v3" (default since 2026-09-28) forbids narrating
+    a search instead of calling the tool and tightens the answer style;
+    "v4" is an opt-in variant with stricter inline-citation rules that
+    measured only marginally better at higher tool-call cost. Env var
+    ``AGENT_SYSTEM_PROMPT_VERSION`` -- flipping to "v2" is the no-deploy
+    rollback."""
 
     cluster_naming_prompt_version: str = "v1a"
     """Selects the registry entry ``cluster_naming_{version}`` in
