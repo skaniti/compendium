@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { extractEvents, HISTORY_SEND_TURNS, streamAgentQuery } from "./agent-stream";
+import { extractEvents, streamAgentQuery } from "./agent-stream";
 import * as api from "./api";
 
 // D3 (session-expiry-tuning): streamAgentQuery's recovery attempt is gated
@@ -51,17 +51,14 @@ describe("streamAgentQuery request body", () => {
     expect(sentBody(fetchMock)).toEqual({ query: "follow-up", history });
   });
 
-  it("sends at most the last HISTORY_SEND_TURNS turns", async () => {
+  it("sends the whole history it is given (the builder owns the budget)", async () => {
     const fetchMock = stubFetchOk();
     const history = Array.from({ length: 14 }, (_, i) => ({
       role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
       content: `t${i}`,
     }));
     await streamAgentQuery("q", {}, undefined, history);
-    const sent = sentBody(fetchMock).history;
-    expect(sent).toHaveLength(HISTORY_SEND_TURNS);
-    expect(sent[0].content).toBe("t4");
-    expect(sent[sent.length - 1].content).toBe("t13");
+    expect(sentBody(fetchMock).history).toEqual(history);
   });
 });
 

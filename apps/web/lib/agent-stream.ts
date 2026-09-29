@@ -1,6 +1,7 @@
 import type { AgentEvent, CompleteEvent } from "./types";
 import { recoverSession, redirectToLogin } from "./api";
 import { sessionMayResume } from "./session-policy-client";
+import type { HistoryTurn } from "./chat-history";
 
 /**
  * Pure: pull complete SSE events out of an accumulated text buffer.
@@ -28,23 +29,13 @@ export interface StreamHandlers {
   onComplete?: (event: CompleteEvent) => void;
 }
 
-// One prior turn sent as conversation context -- the backend's HistoryTurn
-// wire contract (role user|assistant, non-empty content). The backend caps
-// and sanitizes; this is just the shape.
-export interface HistoryTurn {
-  role: "user" | "assistant";
-  content: string;
-}
-
-// Dash parity (search_stream.js HISTORY_SEND_TURNS): the backend keeps the
-// last 10 turns, so sending more is wasted bytes.
-export const HISTORY_SEND_TURNS = 10;
+export type { HistoryTurn };
 
 function fetchAgentStream(query: string, history: HistoryTurn[], signal?: AbortSignal): Promise<Response> {
   // `history` is context distinct from `query` -- the current question is
   // never in both. Omitted entirely when empty so a fresh conversation
   // sends the same body it always did.
-  const body = history.length > 0 ? { query, history: history.slice(-HISTORY_SEND_TURNS) } : { query };
+  const body = history.length > 0 ? { query, history } : { query };
   return fetch("/api/agent/query-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

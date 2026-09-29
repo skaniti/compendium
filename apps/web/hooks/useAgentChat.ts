@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { streamAgentQuery, type HistoryTurn } from "@/lib/agent-stream";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { streamAgentQuery } from "@/lib/agent-stream";
+import { buildHistory, type Exchange, type HistoryTurn } from "@/lib/chat-history";
 import { frameCitedClusters } from "@/lib/graph/chat-interop";
 import type { CompleteEvent } from "@/lib/types";
 
@@ -51,6 +52,62 @@ export interface Turn {
   id: number;
   user: string;
   assistant: AssistantMessage;
+  // Rebuilt from sessionStorage after a reload: text only (no sources,
+  // trace or images), rendered with .search-msg-restored.
+  restored?: boolean;
+}
+
+// Dash parity (search_stream.js HISTORY_STORAGE_KEY / HISTORY_MAX_TURNS).
+export const HISTORY_STORAGE_KEY = "compendium-search-history";
+export const HISTORY_MAX_TURNS = 40;
+
+interface StoredTurn {
+  user: string;
+  assistant: { text: string; done: boolean; status: string };
+  restored: boolean;
+}
+
+function isWellFormedStored(t: unknown): t is StoredTurn {
+  const o = t as StoredTurn | null;
+  return (
+    !!o &&
+    typeof o.user === "string" &&
+    o.user.length > 0 &&
+    !!o.assistant &&
+    typeof o.assistant.text === "string" &&
+    o.assistant.text.length > 0
+  );
+}
+
+// Every storage access is fail-open: a full/disabled sessionStorage must
+// never break the live chat, only its persistence.
+function loadStored(): { turns: StoredTurn[]; nextId: number } {
+  try {
+    const raw = sessionStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return { turns: [], nextId: 0 };
+    const parsed = JSON.parse(raw) as { turns?: unknown; nextId?: unknown };
+    const turns = Array.isArray(parsed.turns) ? parsed.turns.filter(isWellFormedStored) : [];
+    const nextId = typeof parsed.nextId === "number" ? parsed.nextId : 0;
+    return { turns, nextId: Math.max(nextId, turns.length) };
+  } catch {
+    return { turns: [], nextId: 0 };
+  }
+}
+
+function saveStored(turns: StoredTurn[], nextId: number): void {
+  try {
+    sessionStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify({ turns, nextId }));
+  } catch {
+    // quota / disabled
+  }
+}
+
+function removeStored(): void {
+  try {
+    sessionStorage.removeItem(HISTORY_STORAGE_KEY);
+  } catch {
+    // disabled
+  }
 }
 
 export interface UseAgentChat {
@@ -63,15 +120,16 @@ export interface UseAgentChat {
   clear: () => void;
 }
 
-// Prior exchanges as HistoryTurn pairs, oldest first. A turn contributes
-// only when its answer finished cleanly with text (done, no error).
+// Prior exchanges as the recency-weighted HistoryTurn window (see
+// lib/chat-history.ts), oldest first. A turn contributes only when its
+// answer finished cleanly with text (done, no error).
 export function historyFromTurns(turns: Turn[]): HistoryTurn[] {
-  const out: HistoryTurn[] = [];
+  const exchanges: Exchange[] = [];
   for (const t of turns) {
     if (!t.assistant.done || t.assistant.error || !t.assistant.text.trim() || !t.user.trim()) continue;
-    out.push({ role: "user", content: t.user }, { role: "assistant", content: t.assistant.text });
+    exchanges.push({ user: t.user, assistant: t.assistant.text });
   }
-  return out;
+  return buildHistory(exchanges);
 }
 
 export function useAgentChat(): UseAgentChat {
@@ -82,6 +140,20 @@ export function useAgentChat(): UseAgentChat {
   const [input, setInput] = useState("");
   const nextIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  // Finished turns mirrored to sessionStorage, and a generation bumped by
+  // clear() so a straggling completion can't persist into a cleared chat.
+  const storedRef = useRef<StoredTurn[]>([]);
+  const generationRef = useRef(0);
+
+  // Restore after mount (not in the initial state) so SSR and the first
+  // client render agree.
+  useEffect(() => {
+    const { turns: stored, nextId } = loadStored();
+    if (stored.length === 0 || turnsRef.current.length > 0) return;
+    storedRef.current = stored;
+    nextIdRef.current = Math.max(nextIdRef.current, nextId);
+    setTurns(stored.map((t, i) => ({ id: i, user: t.user, assistant: { ...t.assistant }, restored: true })));
+  }, []);
 
   // Id-addressed update: only the turn whose id matches is touched: every
   // other turn (completed answers from earlier sends, in particular)
@@ -135,6 +207,7 @@ export function useAgentChat(): UseAgentChat {
     // cancelled turn has no answer worth replaying.
     const history = historyFromTurns(turnsRef.current);
 
+    const generation = generationRef.current;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
@@ -148,6 +221,13 @@ export function useAgentChat(): UseAgentChat {
           },
           onComplete: (meta) => {
             updateAssistant(id, (a) => ({ ...a, text: buffer, done: true, status: "", meta }));
+            if (generation === generationRef.current && buffer.trim()) {
+              storedRef.current = [
+                ...storedRef.current,
+                { user: query, assistant: { text: buffer, done: true, status: "" }, restored: true },
+              ].slice(-HISTORY_MAX_TURNS);
+              saveStored(storedRef.current, nextIdRef.current);
+            }
             // Task group C (C1, cluster-cite framing): port of
             // search_stream.js's `if (metadata && metadata.cluster_ids) {
             // highlightClusters(metadata.cluster_ids); }` (:831-832) --
@@ -201,6 +281,9 @@ export function useAgentChat(): UseAgentChat {
   // above.
   const clear = useCallback(() => {
     abortRef.current?.abort();
+    generationRef.current++;
+    storedRef.current = [];
+    removeStored();
     setTurns([]);
   }, []);
 

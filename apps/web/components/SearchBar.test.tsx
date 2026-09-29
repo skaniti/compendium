@@ -68,6 +68,23 @@ describe("SearchBar", () => {
     // the pre-existing "example.com" hostname assertions above).
     __resetGraphCacheForTest();
     mockSession();
+    sessionStorage.clear();
+  });
+
+  it("renders a restored turn text-only with .search-msg-restored and no sources row", async () => {
+    sessionStorage.setItem(
+      "compendium-search-history",
+      JSON.stringify({
+        nextId: 1,
+        turns: [{ user: "old q", assistant: { text: "**old** a", done: true, status: "" }, restored: true }],
+      }),
+    );
+    const { container } = render(<SearchBar />);
+    await waitFor(() => expect(container.querySelector(".search-msg-restored")).toBeInTheDocument());
+    expect(container.querySelector(".search-msg-user-text")).toHaveTextContent("old q");
+    expect(container.querySelector(".search-msg-restored strong")).toHaveTextContent("old");
+    expect(container.querySelector(".chat-sources-row")).not.toBeInTheDocument();
+    expect(container.querySelector(".search-msg-restored details")).not.toBeInTheDocument();
   });
 
   it("renders streamed tokens then the final markdown + sources", async () => {

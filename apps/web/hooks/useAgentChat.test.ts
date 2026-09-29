@@ -20,7 +20,10 @@ import * as chatInterop from "@/lib/graph/chat-interop";
 // prior exchanges to streamAgentQuery as history (Dash parity; the port
 // used to send only the query).
 describe("useAgentChat history", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
 
   const complete = {
     type: "complete" as const, sources: [], cluster_ids: [], images: [],
@@ -89,7 +92,10 @@ describe("useAgentChat history", () => {
 });
 
 describe("useAgentChat clear()", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
 
   it("resets turns but leaves input untouched", async () => {
     vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
@@ -147,7 +153,10 @@ describe("useAgentChat clear()", () => {
 });
 
 describe("useAgentChat transcript persistence (chat parity fix 1)", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
 
   it("keeps a completed turn in `turns` when a second send starts, addressed by its own id", async () => {
     const streamSpy = vi
@@ -197,7 +206,10 @@ describe("useAgentChat transcript persistence (chat parity fix 1)", () => {
 // chat-interop module. frameCitedClusters' own union/frame/absent-module
 // logic is covered independently in lib/graph/chat-interop.test.ts.
 describe("useAgentChat cluster-cite framing (C1)", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
 
   it("calls frameCitedClusters with the complete event's cluster_ids once the turn completes", async () => {
     const frameSpy = vi.spyOn(chatInterop, "frameCitedClusters").mockResolvedValue(undefined);
@@ -253,5 +265,129 @@ describe("useAgentChat cluster-cite framing (C1)", () => {
 
     await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
     expect(result.current.turns[0]?.assistant.error).toBeUndefined();
+  });
+});
+
+describe("useAgentChat rolling history + reload persistence", () => {
+  const KEY = "compendium-search-history";
+  const complete = {
+    type: "complete" as const, sources: [], cluster_ids: [], images: [],
+    tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+  };
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
+
+  async function sendOne(result: { current: ReturnType<typeof useAgentChat> }, q: string) {
+    act(() => result.current.setInput(q));
+    await act(async () => {
+      await result.current.send();
+    });
+  }
+
+  it("a long conversation still carries a condensed trace of the first exchange", async () => {
+    const long = "Opening fact one. " + "filler words ".repeat(200);
+    const spy = vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.(long);
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    for (let i = 0; i < 14; i++) await sendOne(result, i === 0 ? "the very first question" : `question ${i}`);
+    const history = spy.mock.calls[13][3]!;
+    expect(history[0]).toEqual({ role: "user", content: "the very first question" });
+    expect(history[1].role).toBe("assistant");
+    expect(history[1].content.startsWith("Opening fact one.")).toBe(true);
+    expect(history.reduce((s, t) => s + t.content.length, 0)).toBeLessThanOrEqual(7500);
+  });
+
+  it("restores turns from sessionStorage on mount, marked restored, and feeds them into history", async () => {
+    sessionStorage.setItem(
+      KEY,
+      JSON.stringify({
+        nextId: 1,
+        turns: [{ user: "old q", assistant: { text: "old a", done: true, status: "" }, restored: true }],
+      }),
+    );
+    const spy = vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("new a");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    await waitFor(() => expect(result.current.turns).toHaveLength(1));
+    expect(result.current.turns[0]).toMatchObject({ user: "old q", restored: true });
+    expect(result.current.turns[0].assistant).toMatchObject({ text: "old a", done: true });
+    await sendOne(result, "new q");
+    expect(spy.mock.calls[0][3]).toEqual([
+      { role: "user", content: "old q" },
+      { role: "assistant", content: "old a" },
+    ]);
+    expect(new Set(result.current.turns.map((t) => t.id)).size).toBe(2);
+  });
+
+  it("ignores corrupt stored data", async () => {
+    sessionStorage.setItem(KEY, "{not json");
+    const { result } = renderHook(() => useAgentChat());
+    expect(result.current.turns).toEqual([]);
+  });
+
+  it("persists a completed turn, caps at 40, and does not persist errored turns", async () => {
+    const spy = vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("ans");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    await sendOne(result, "q0");
+    let stored = JSON.parse(sessionStorage.getItem(KEY)!);
+    expect(stored.turns).toEqual([
+      { user: "q0", assistant: { text: "ans", done: true, status: "" }, restored: true },
+    ]);
+    expect(stored.nextId).toBe(1);
+
+    spy.mockImplementationOnce(async () => {
+      throw new Error("boom");
+    });
+    await sendOne(result, "bad");
+    stored = JSON.parse(sessionStorage.getItem(KEY)!);
+    expect(stored.turns).toHaveLength(1);
+
+    for (let i = 1; i < 45; i++) await sendOne(result, `q${i}`);
+    stored = JSON.parse(sessionStorage.getItem(KEY)!);
+    expect(stored.turns).toHaveLength(40);
+    expect(stored.turns[39].user).toBe("q44");
+    expect(stored.turns[0].user).toBe("q5");
+  });
+
+  it("clear() removes the key", async () => {
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("ans");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    await sendOne(result, "q");
+    expect(sessionStorage.getItem(KEY)).not.toBeNull();
+    act(() => result.current.clear());
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("a throwing sessionStorage does not break send", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("ans");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    await sendOne(result, "q");
+    expect(result.current.turns[0].assistant).toMatchObject({ text: "ans", done: true });
+    act(() => result.current.clear());
+    expect(result.current.turns).toEqual([]);
   });
 });

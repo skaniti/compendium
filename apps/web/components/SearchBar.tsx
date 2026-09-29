@@ -62,12 +62,6 @@ function renderToolDefinition(tool: AgentTool) {
 //
 // Deliberately NOT ported (out of scope for this slice -- see Dash's own
 // comments on _render_search_bar and search_stream.js):
-//   - sessionStorage persistence of chat history + the
-//     restored-from-sessionStorage .search-msg-restored rendering it pairs
-//     with (search_stream.js's restoreHistory()/pushHistoryTurn()). The
-//     #search-clear-btn control itself IS ported below (clears in-memory
-//     state); only the cross-reload persistence layer it also resets in
-//     Dash is out of scope here.
 //   - .chat-images-row -- a separate, not-yet-requested parity gap
 //     (unrelated to the batch-03 chat<->graph interop below).
 // Sources below (2026-07-28, chat parity fix 2) port makeSourceLink's
@@ -299,12 +293,12 @@ export default function SearchBar() {
               the assistantRow append, ~501-523 of search_stream.js).
               key={id} (not array index) since turns can only grow/reset,
               never reorder, and id is stable for a turn's whole lifetime. */}
-          {turns.map(({ id, user, assistant }) => (
+          {turns.map(({ id, user, assistant, restored }) => (
             <Fragment key={id}>
               <div className="search-msg-user">
                 <span className="search-msg-user-text">{user}</span>
               </div>
-              <div className="search-msg-assistant">
+              <div className={"search-msg-assistant" + (restored ? " search-msg-restored" : "")}>
                 {assistant.status && (
                   <div className="search-msg-status">
                     <span className="search-spinner" />
@@ -338,7 +332,7 @@ export default function SearchBar() {
                     SourcePill above. nodeIdByUrl mirrors Dash's own
                     url->node_id lookup built just above its loop
                     (search_stream.js ~716-720). */}
-                {assistant.meta && assistant.meta.sources.length > 0 && (
+                {!restored && assistant.meta && assistant.meta.sources.length > 0 && (
                   <div className="chat-sources-row">
                     <span className="chat-sources-label">sources:</span>
                     {(() => {
@@ -359,7 +353,7 @@ export default function SearchBar() {
                     acting-as-demo sessions, where adminContext is still
                     true here. An acting session therefore renders no
                     trace at all (same visible outcome as Dash). */}
-                {adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
+                {!restored && adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
                   <details>
                     <summary className="search-trace-summary">
                       Trace: {assistant.meta.iterations} iter, {assistant.meta.tool_calls_made.length} tools, $
