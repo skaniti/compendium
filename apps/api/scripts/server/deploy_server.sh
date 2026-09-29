@@ -52,6 +52,9 @@
 #
 # What this does NOT do:
 #   - git pull (run that first if you want to deploy latest).
+#   - deploy the frontend. Vercel builds it from the push to main; it goes
+#     live only on `vercel promote` (auto-assign of the production domain
+#     is off). The closing lines print this as a reminder.
 #   - touch the old postgres/Dash stack (still explorer-hosted; unaffected
 #     by this compose file).
 #   - hand off to diagnose_server.sh -- that script's checks (compendium-
@@ -189,5 +192,8 @@ echo "  Log:     $LOG_PATH"
 echo "  Health:  http://127.0.0.1:${API_HOST_PORT}/health"
 echo "  Stop:    docker compose -f $COMPOSE_FILE down"
 echo "  Logs:    docker compose -f $COMPOSE_FILE logs -f api"
+echo ""
+echo "  Reminder: this deployed the BACKEND only. Frontend changes build on"
+echo "  Vercel from the push to main but go live only after 'vercel promote'."
 
 exit 0
