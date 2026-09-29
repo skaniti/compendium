@@ -357,3 +357,10 @@
   cursor: pointer;
   text-align: left;
 }
+
+.chart { display: block; font-family: monospace; font-size: 10px; }
+.chart-grid { stroke: rgba(128,128,128,0.15); }
+.chart-tick, .chart-axis-title, .chart-legend { fill: var(--panel-caption); }
+.chart-axis-title { font-size: 11px; }
+.chart-seg-label { fill: var(--on-primary); font-size: 7px; font-weight: 700; }
+.chart-label-strong { fill: var(--text); font-weight: 700; font-size: 8px; }

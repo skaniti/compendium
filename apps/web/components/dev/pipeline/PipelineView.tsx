@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { fetchPipelineSummary } from "@/lib/api";
 import type { PipelineSummary } from "@/lib/types";
+import WindowedSections from "./WindowedSections";
 import StatusCards from "./StatusCards";
 import SkipGateConfigPanel from "./SkipGateConfigPanel";
 import DecisionBars from "./DecisionBars";
@@ -34,7 +35,7 @@ export default function PipelineView() {
             <DecisionBars summary={summary} />
           </>
         )}
-        {/* Task 6: <WindowedSections /> mounts here (archive health + skip trends) */}
+        <WindowedSections />
         <PagesTable />
       </div>
     </>
