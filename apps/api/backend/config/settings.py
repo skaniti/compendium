@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # ==========================================================================
     environment: str = "development"
     log_level: str = "INFO"
+    # When non-empty, the API also writes its JSON log lines to this file
+    # (0644, reopened on rotation). Empty = stdout only.
+    log_file_path: str = ""
     api_host: str = "0.0.0.0"
     api_port: int = 8001
 

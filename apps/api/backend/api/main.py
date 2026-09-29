@@ -60,13 +60,12 @@ except ImportError:
 
 
 # Configure structured JSON logging
-_log_handler = logging.StreamHandler()
-_log_handler.setFormatter(
-    json_log.JsonFormatter(
-        fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
-        rename_fields={"asctime": "timestamp", "levelname": "level"},
-    )
+_log_formatter = json_log.JsonFormatter(
+    fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+    rename_fields={"asctime": "timestamp", "levelname": "level"},
 )
+_log_handler = logging.StreamHandler()
+_log_handler.setFormatter(_log_formatter)
 
 # In-process ring buffer for the Live Log Stream dev page (see log_buffer.py).
 # Attached at root so every logger.info/.warning/.error in the codebase flows
@@ -80,6 +79,18 @@ _log_ring_buffer.setLevel(logging.DEBUG)  # capture finer than stdout for browse
 logging.root.handlers = [_log_handler, _log_ring_buffer]
 logging.root.setLevel(getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
+
+# Optional JSON file log (LOG_FILE_PATH), same formatter/level as stdout.
+# Failure to open logs a WARNING and continues on stdout only.
+from backend.api.log_file import attach_file_handler  # noqa: E402
+
+attach_file_handler(
+    logging.root,
+    settings.log_file_path,
+    _log_formatter,
+    logging.root.level,
+    warn_logger=logger,
+)
 
 # ---------------------------------------------------------------------------
 # Application metrics (in-memory counters for /metrics endpoint)

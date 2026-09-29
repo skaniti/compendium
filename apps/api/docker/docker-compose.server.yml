@@ -39,6 +39,13 @@
 #     under the container names this file assumes (compendium-postgres,
 #     and this service publishes itself as compendium-api for Dash to reach).
 #
+# ── File log ─────────────────────────────────────────────────────────────
+# The API also writes JSON log lines to /var/log/compendium-api/api.jsonl
+# (LOG_FILE_PATH), and the docker json-file log is size-bounded.
+# The host dir /var/log/compendium-ops/api is created by
+# scripts/server-setup/section-22-ops-journal.sh (group adm) so the
+# read-only user can read it; run that section before `up`.
+#
 # ── SEED_DEMO is hardcoded to "0" below, not parameterized ──────────────
 # This connects to the REAL database. apps/api/data/demo-seed/ was exported
 # FROM this exact deployment's demo account (user_id 153). The real hazard
@@ -65,6 +72,11 @@ services:
     image: compendium-api:server
     container_name: compendium-api
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       - compendium-net
     ports:
@@ -109,6 +121,7 @@ services:
       # are literals, not `${VAR}` passthroughs.
       RUN_MIGRATIONS: "1"
       SEED_DEMO: "0"
+      LOG_FILE_PATH: /var/log/compendium-api/api.jsonl
     volumes:
       # Secrets via ~/.secrets, matching the pre-extraction convention
       # (settings.py reads it directly; no .env file is mounted in
@@ -125,6 +138,8 @@ services:
       # clone-and-run stack's (compendium_hf_cache) so the two never collide
       # if ever run on the same host.
       - compendium_hf_cache_server:/root/.cache/huggingface
+      # JSON file log; host dir owned by section-22 (skaniti:adm 2750).
+      - /var/log/compendium-ops/api:/var/log/compendium-api
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 5s
