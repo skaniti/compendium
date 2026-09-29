@@ -4,6 +4,8 @@ import secrets
 
 import bcrypt
 
+from backend.api.audit_ctx import CLI, AuditCtx
+from backend.db import audit_repo
 from backend.db.connection import get_conn
 
 
@@ -39,7 +41,7 @@ def create_user(email: str, name: str | None = None) -> dict:
     }
 
 
-def rotate_api_key(email: str) -> dict | None:
+def rotate_api_key(email: str, audit_ctx: AuditCtx | None = None) -> dict | None:
     """Generate a fresh API key for an existing user, replacing the old one.
 
     The old key stops authenticating the instant this commits -- every
@@ -55,6 +57,8 @@ def rotate_api_key(email: str) -> dict | None:
 
     with get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT api_key_prefix FROM users WHERE email = %s", (email,))
+            old = cur.fetchone()
             cur.execute(
                 """
                 UPDATE users SET api_key_hash = %s, api_key_prefix = %s
@@ -67,6 +71,15 @@ def rotate_api_key(email: str) -> dict | None:
 
     if row is None:
         return None
+
+    ctx = audit_ctx or CLI
+    audit_repo.record(
+        "api_key.rotated",
+        subject_user_id=row[0],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"old_prefix": old[0] if old else None, "new_prefix": row[2]},
+    )
 
     return {
         "id": row[0],

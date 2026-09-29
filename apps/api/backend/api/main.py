@@ -22,10 +22,12 @@ from pythonjsonlogger import json as json_log
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
+from backend.api import audit_ctx as _audit_ctx
 from backend.api.rate_limit_key import client_key
 from backend.config.settings import settings
 from backend.db import (
     annotation_repo,
+    audit_repo,
     capture_repo,
     page_repo,
     tag_repo,
@@ -187,6 +189,7 @@ def _record_learning_gate_cost(lg_response, page_url: str | None = None) -> None
 
 
 async def verify_api_key(
+    request: Request,
     x_api_key: str | None = Header(None),
     authorization: str | None = Header(None),
 ) -> int:
@@ -229,6 +232,13 @@ async def verify_api_key(
         if user is not None:
             set_current_user_id(user["id"])
             return user["id"]
+        ctx = _audit_ctx.from_request(request)
+        audit_repo.record(
+            "api_key.auth_failed",
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"prefix": x_api_key[:8]},
+        )
 
     from fastapi import HTTPException
 
@@ -2749,11 +2759,19 @@ async def login(request: Request, body: LoginRequest):
     from backend.db import auth_repo as ar
     from backend.services import auth_service
 
+    ctx = _audit_ctx.from_request(request)
     user = ar.get_user_by_login(body.email)
-    if not user or not user.get("password_hash"):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not auth_service.verify_password(body.password, user["password_hash"]):
+    if not user or not user.get("password_hash") or not auth_service.verify_password(
+        body.password, user["password_hash"]
+    ):
+        # The submitted identifier is never stored; only whether it matched.
+        audit_repo.record(
+            "auth.login.failed",
+            subject_user_id=user["id"] if user else None,
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"known_identifier": bool(user)},
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Server-authoritative, amended 2026-09-10 (spec D1): "remembered" is
@@ -2768,6 +2786,14 @@ async def login(request: Request, body: LoginRequest):
     access_token = auth_service.create_access_token(user["id"], user["email"])
     refresh_token = auth_service.create_refresh_token(user["id"], remembered=remembered)
 
+    audit_repo.record(
+        "auth.login.ok",
+        actor_user_id=user["id"],
+        subject_user_id=user["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"role": role, "remembered": remembered},
+    )
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -2787,6 +2813,7 @@ class ViewAsRequest(BaseModel):
 
 @app.post("/api/auth/view-as", tags=["Auth"])
 async def view_as(
+    request: Request,
     body: ViewAsRequest,
     user_id: int = Depends(verify_api_key),
     claims: dict = Depends(get_current_claims),
@@ -2815,10 +2842,23 @@ async def view_as(
     from backend.db import auth_repo as ar
     from backend.services import auth_service
 
+    ctx = _audit_ctx.from_request(request)
+
+    def _denied(reason: str) -> None:
+        audit_repo.record(
+            "auth.viewas.denied",
+            actor_user_id=user_id,
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"reason": reason},
+        )
+
     if ar.get_role(user_id) != "admin":
+        _denied("not_admin")
         raise HTTPException(status_code=403, detail="Admin role required")
 
     if claims.get("acting_as_demo"):
+        _denied("already_viewing_as_demo")
         raise HTTPException(
             status_code=403, detail="Already viewing as demo; cannot nest"
         )
@@ -2827,6 +2867,7 @@ async def view_as(
         "demo@traversal.local"
     )
     if not demo or ar.get_role(demo["id"]) != "demo":
+        _denied("demo_account_unavailable")
         raise HTTPException(status_code=403, detail="Demo account unavailable")
 
     extra_claims: dict = {
@@ -2857,6 +2898,13 @@ async def view_as(
     # further admin re-check, undermining the short TTL above. The acting
     # session ends when the access token expires or return-to-admin is
     # called -- there is no renewal path.
+    audit_repo.record(
+        "auth.viewas.start",
+        actor_user_id=user_id,
+        subject_user_id=demo["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -2875,6 +2923,7 @@ async def view_as(
 
 @app.post("/api/auth/return-to-admin", tags=["Auth"])
 async def return_to_admin(
+    request: Request,
     user_id: int = Depends(verify_api_key),
     claims: dict = Depends(get_current_claims),
 ):
@@ -2916,6 +2965,14 @@ async def return_to_admin(
 
     access_token = auth_service.create_access_token(admin["id"], admin["email"])
 
+    ctx = _audit_ctx.from_request(request)
+    audit_repo.record(
+        "auth.viewas.stop",
+        actor_user_id=admin["id"],
+        subject_user_id=admin["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -2960,7 +3017,9 @@ async def refresh_token_endpoint(request: Request, body: RefreshRequest):
     from backend.services import auth_service
 
     result = auth_service.rotate_refresh_token(
-        body.refresh_token, auth_service.ingress_trusted(request.headers)
+        body.refresh_token,
+        auth_service.ingress_trusted(request.headers),
+        audit_ctx=_audit_ctx.from_request(request),
     )
     if result is None:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
@@ -2975,11 +3034,13 @@ async def refresh_token_endpoint(request: Request, body: RefreshRequest):
 
 
 @app.post("/api/auth/logout", tags=["Auth"])
-async def logout(body: LogoutRequest):
+async def logout(request: Request, body: LogoutRequest):
     """Revoke a refresh token."""
     from backend.services import auth_service
 
-    auth_service.revoke_refresh_token(body.refresh_token)
+    auth_service.revoke_refresh_token(
+        body.refresh_token, audit_ctx=_audit_ctx.from_request(request)
+    )
     return {"logged_out": True}
 
 

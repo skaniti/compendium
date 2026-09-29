@@ -2,13 +2,15 @@
 
 from datetime import datetime
 
+from backend.api.audit_ctx import CLI, AuditCtx
+from backend.db import audit_repo
 from backend.db.connection import get_conn
 
 
 # ── Password-based users ────────────────────────────────────────────────
 
 
-def set_password(user_id: int, password_hash: str) -> None:
+def set_password(user_id: int, password_hash: str, audit_ctx: AuditCtx | None = None) -> None:
     """Set (or update) a user's password hash."""
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -16,9 +18,17 @@ def set_password(user_id: int, password_hash: str) -> None:
                 "UPDATE users SET password_hash = %s WHERE id = %s",
                 (password_hash, user_id),
             )
+    ctx = audit_ctx or CLI
+    audit_repo.record(
+        "user.password_set",
+        subject_user_id=user_id,
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"via": "bootstrap"},
+    )
 
 
-def set_role(user_id: int, role: str) -> None:
+def set_role(user_id: int, role: str, audit_ctx: AuditCtx | None = None) -> None:
     """Set a user's permission role. Constrained to admin / demo / user
     by the CHECK on users.role (migration 029). Callers should use the
     bootstrap script as the canonical assignment site; ad-hoc calls
@@ -29,6 +39,14 @@ def set_role(user_id: int, role: str) -> None:
                 "UPDATE users SET role = %s WHERE id = %s",
                 (role, user_id),
             )
+    ctx = audit_ctx or CLI
+    audit_repo.record(
+        "user.role_set",
+        subject_user_id=user_id,
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"role": role},
+    )
 
 
 def get_role(user_id: int) -> str:

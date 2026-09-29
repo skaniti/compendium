@@ -6,8 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 import bcrypt
 
+from backend.api.audit_ctx import CLI, AuditCtx
 from backend.config.settings import settings
-from backend.db import auth_repo
+from backend.db import audit_repo, auth_repo
 
 
 # ── Password hashing ───────────────────────────────────────────────────
@@ -139,7 +140,9 @@ def ingress_trusted(headers) -> bool:
     return value == settings.session_ingress_trusted_value
 
 
-def rotate_refresh_token(raw_token: str, ingress_trusted: bool) -> tuple[str, str, dict] | None:
+def rotate_refresh_token(
+    raw_token: str, ingress_trusted: bool, audit_ctx: AuditCtx | None = None
+) -> tuple[str, str, dict] | None:
     """Validate a refresh token, revoke it, and issue new access + refresh.
 
     Returns ``(new_access_token, new_refresh_token, session_policy)`` or
@@ -159,6 +162,14 @@ def rotate_refresh_token(raw_token: str, ingress_trusted: bool) -> tuple[str, st
     # Already revoked (possible token reuse attack)
     if stored["revoked_at"] is not None:
         auth_repo.revoke_all_user_tokens(stored["user_id"])
+        ctx = audit_ctx or CLI
+        audit_repo.record(
+            "auth.refresh.reuse_detected",
+            subject_user_id=stored["user_id"],
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"revoked_all": True},
+        )
         return None
 
     # Expired
@@ -190,12 +201,32 @@ def rotate_refresh_token(raw_token: str, ingress_trusted: bool) -> tuple[str, st
     access = create_access_token(user["id"], user["email"])
     refresh = create_refresh_token(user["id"], remembered=remembered)
     policy = session_policy(role, remembered)
+    ctx = audit_ctx or CLI
+    audit_repo.record(
+        "auth.refresh.ok",
+        actor_user_id=user["id"],
+        subject_user_id=user["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"remembered": remembered},
+    )
     return access, refresh, policy
 
 
-def revoke_refresh_token(raw_token: str) -> None:
+def revoke_refresh_token(raw_token: str, audit_ctx: AuditCtx | None = None) -> None:
     """Revoke a single refresh token (logout)."""
-    auth_repo.revoke_refresh_token(_hash_token(raw_token))
+    token_hash = _hash_token(raw_token)
+    stored = auth_repo.get_refresh_token(token_hash)
+    auth_repo.revoke_refresh_token(token_hash)
+    if stored is not None:
+        ctx = audit_ctx or CLI
+        audit_repo.record(
+            "auth.logout",
+            actor_user_id=stored["user_id"],
+            subject_user_id=stored["user_id"],
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+        )
 
 
 # ── Session policy ─────────────────────────────────────────────────────
