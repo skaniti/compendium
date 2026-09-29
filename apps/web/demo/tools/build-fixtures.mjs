@@ -313,8 +313,33 @@ function buildPipelineFixtures() {
   console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages, ${perCapture.length} captures, ${days.length} skip-trend days`);
 }
 
+// Hygiene gate: hoisted so both the full build (Step 11) and --pipeline-only
+// run it over the whole committed output.
+function runHygieneGate() {
+  console.log('[build-fixtures] running hygiene gate...');
+  // Scoped to the COMMITTED output only: demo/fixtures/raw/ is gitignored
+  // infrastructure from Task 2 and legitimately still contains the
+  // contamination this script excises (that's the whole point -- Task 2
+  // captured it faithfully so Task 3 could excise it from the processed set).
+  // A literal `grep ... demo/fixtures/` would always find it in raw/ and could
+  // never pass; --exclude-dir=raw scopes the gate to what actually ships.
+  let hygieneHits = '';
+  try {
+    hygieneHits = execFileSync('grep', ['-rlE', '--exclude-dir=raw', 'skaniti|sravyakaniti|printables|claude\\.ai', OUT_DIR], { encoding: 'utf8' });
+  } catch (err) {
+    // grep exits 1 when there are no matches -- that's the PASS case.
+    if (err.status !== 1) fatal(`hygiene grep failed to run: ${err.message}`);
+    hygieneHits = '';
+  }
+  if (hygieneHits.trim().length > 0) {
+    fatal(`hygiene gate FAILED -- forbidden pattern found in:\n${hygieneHits}`);
+  }
+  console.log('[build-fixtures] hygiene gate PASSED (grep came back empty)');
+}
+
 if (PIPELINE_ONLY) {
   buildPipelineFixtures();
+  runHygieneGate();
   console.log('[build-fixtures] --pipeline-only: done (other fixtures untouched)');
   process.exit(0);
 }
@@ -705,25 +730,7 @@ console.log(`[build-fixtures] ATTRIBUTION.md written (${domains.length} domains,
 // Step 11: hygiene gate + diary sanity check
 // ---------------------------------------------------------------------------
 
-console.log('[build-fixtures] running hygiene gate...');
-// Scoped to the COMMITTED output only: demo/fixtures/raw/ is gitignored
-// infrastructure from Task 2 and legitimately still contains the
-// contamination this script excises (that's the whole point -- Task 2
-// captured it faithfully so Task 3 could excise it from the processed set).
-// A literal `grep ... demo/fixtures/` would always find it in raw/ and could
-// never pass; --exclude-dir=raw scopes the gate to what actually ships.
-let hygieneHits = '';
-try {
-  hygieneHits = execFileSync('grep', ['-rlE', '--exclude-dir=raw', 'skaniti|sravyakaniti|printables|claude\\.ai', OUT_DIR], { encoding: 'utf8' });
-} catch (err) {
-  // grep exits 1 when there are no matches -- that's the PASS case.
-  if (err.status !== 1) fatal(`hygiene grep failed to run: ${err.message}`);
-  hygieneHits = '';
-}
-if (hygieneHits.trim().length > 0) {
-  fatal(`hygiene gate FAILED -- forbidden pattern found in:\n${hygieneHits}`);
-}
-console.log('[build-fixtures] hygiene gate PASSED (grep came back empty)');
+runHygieneGate();
 
 const distinctWeeks = new Set(dayWindows.map((w) => isoWeekKey(parseIsoDateUTC(w.key))));
 console.log(`[build-fixtures] diary sanity: ${dayWindows.length} day windows spanning ${distinctWeeks.size} distinct ISO weeks`);
