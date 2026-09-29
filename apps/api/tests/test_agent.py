@@ -1026,6 +1026,93 @@ class TestFormatSearchResultsDedup:
         assert text.count("- [https://x.com/b]") == 1
 
 
+class TestSourcesForAnswer:
+    """Sources reflect what the answer cites, not everything retrieved."""
+
+    @staticmethod
+    def _state(urls):
+        state = AgentState()
+        state.sources_cited = list(urls)
+        return state
+
+    def test_cited_subset_in_answer_order(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b", "https://x.com/c"])
+        answer = "See [C](https://x.com/c) then [A](https://x.com/a)."
+        assert _sources_for_answer(state, answer) == ["https://x.com/c", "https://x.com/a"]
+
+    def test_bare_url_citation(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b"])
+        assert _sources_for_answer(state, "Read https://x.com/b.") == ["https://x.com/b"]
+
+    def test_duplicate_citations_collapse(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b"])
+        answer = "[A](https://x.com/a) and https://x.com/a and [A2](https://x.com/a)"
+        assert _sources_for_answer(state, answer) == ["https://x.com/a"]
+
+    def test_uncited_falls_back_to_tool_order(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/z", "https://x.com/a", "https://x.com/z"])
+        assert _sources_for_answer(state, "no links here") == ["https://x.com/z", "https://x.com/a"]
+
+    def test_cited_but_not_retrieved_dropped(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b"])
+        answer = "[Ext](https://other.example/p) and [B](https://x.com/b)"
+        assert _sources_for_answer(state, answer) == ["https://x.com/b"]
+
+    def test_only_unretrieved_cited_falls_back(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b"])
+        answer = "[Ext](https://other.example/p)"
+        assert _sources_for_answer(state, answer) == ["https://x.com/a", "https://x.com/b"]
+
+    def test_paren_url_in_markdown_link(self):
+        from backend.services.agent import _sources_for_answer
+
+        u = "https://en.wikipedia.org/wiki/Mercury_(planet)"
+        state = self._state(["https://x.com/a", u])
+        assert _sources_for_answer(state, f"See [Mercury]({u}).") == [u]
+
+    def test_paren_url_bare(self):
+        from backend.services.agent import _sources_for_answer
+
+        u = "https://en.wikipedia.org/wiki/Mercury_(planet)"
+        state = self._state(["https://x.com/a", u])
+        assert _sources_for_answer(state, f"See {u} for more.") == [u]
+
+    def test_prose_parenthesised_bare_url(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/c"])
+        assert _sources_for_answer(state, "as noted (https://x.com/c) here") == ["https://x.com/c"]
+
+    def test_bare_url_glued_to_emphasis(self):
+        from backend.services.agent import _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b"])
+        assert _sources_for_answer(state, "**https://x.com/a**") == ["https://x.com/a"]
+
+    def test_sources_detail_matches_sources_one_for_one(self):
+        from backend.services.agent import _build_sources_detail, _sources_for_answer
+
+        state = self._state(["https://x.com/a", "https://x.com/b", "https://x.com/c"])
+        state.source_page_ids = {"https://x.com/c": 3}
+        answer = "[C](https://x.com/c) [A](https://x.com/a)"
+        sources = _sources_for_answer(state, answer)
+        detail = _build_sources_detail(state, sources)
+        assert [d["url"] for d in detail] == sources == ["https://x.com/c", "https://x.com/a"]
+        assert detail[0]["page_id"] == 3
+
+
 class TestSourcesDetail:
     """P9-backend: complete-event sources payload carries page_id per
     source. P7 locate-glyph fix: it also carries node_id, the graph node

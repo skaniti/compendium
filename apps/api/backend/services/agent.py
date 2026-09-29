@@ -58,7 +58,7 @@ AGENT_QUERY_EVENT_TYPE = "agent_query"
 # _prepare_history_messages rather than at the route layer so both
 # /api/agent/query and .../query-stream get identical enforcement
 # regardless of caller.
-MAX_HISTORY_TURNS = 10
+MAX_HISTORY_TURNS = 60
 MAX_HISTORY_TURN_CHARS = 2000
 MAX_HISTORY_TOTAL_CHARS = 8000
 
@@ -298,9 +298,45 @@ def _persist_agent_cost_event(
         logger.warning("Failed to persist agent cost_event: %s", e)
 
 
-def _build_sources_detail(state: "AgentState") -> list[dict]:
+_MD_LINK_URL_RE = re.compile(
+    r"\[[^\]]*\]\(\s*<?(https?://(?:[^\s()<>]|\([^\s()<>]*\))+)>?[^)]*\)"
+)
+_BARE_URL_RE = re.compile(r"https?://(?:[^\s<>()\[\]\"'*]|\([^\s()]*\))+")
+
+
+def _urls_in_text(text: str) -> list[str]:
+    """URLs in ``text`` (markdown links and bare), first-appearance order, deduped."""
+    found: list[tuple[int, str]] = []
+    for m in _MD_LINK_URL_RE.finditer(text):
+        found.append((m.start(1), m.group(1)))
+    for m in _BARE_URL_RE.finditer(text):
+        found.append((m.start(), m.group(0).rstrip(".,;:!?*_")))
+    found.sort(key=lambda t: t[0])
+    out: list[str] = []
+    for _, u in found:
+        if u not in out:
+            out.append(u)
+    return out
+
+
+def _sources_for_answer(state: "AgentState", answer_text: str | None) -> list[str]:
+    """Sources to report for a finished answer, in a stable order.
+
+    The URLs the answer text cites (markdown link or bare URL, first-appearance
+    order, deduped) that a tool actually retrieved. If the answer cites none of
+    them, fall back to every retrieved URL in tool order (deduped).
+    """
+    retrieved: list[str] = []
+    for u in state.sources_cited:
+        if u not in retrieved:
+            retrieved.append(u)
+    cited = [u for u in _urls_in_text(answer_text or "") if u in retrieved]
+    return cited or retrieved
+
+
+def _build_sources_detail(state: "AgentState", urls: list[str] | None = None) -> list[dict]:
     """De-duped, first-seen-order {"url", "page_id", "node_id"} list from
-    AgentState.
+    AgentState (or, when ``urls`` is given, exactly those URLs in that order).
 
     Shared by AgentResponse (non-streaming) and the SSE complete event
     (streaming) so both surfaces expose the same page_id/node_id-carrying
@@ -308,7 +344,7 @@ def _build_sources_detail(state: "AgentState") -> list[dict]:
     see CompendiumAgent._cite_source).
     """
     seen: list[str] = []
-    for u in state.sources_cited:
+    for u in state.sources_cited if urls is None else urls:
         if u not in seen:
             seen.append(u)
     return [
@@ -564,7 +600,8 @@ def _prepare_history_messages(history: Optional[list[HistoryTurn]]) -> list["Age
     """P4: cap + sanitize prior chat turns into ReAct-loop messages.
 
     Defense in depth against an unbounded or hostile history payload
-    (last MAX_HISTORY_TURNS turns, each truncated to MAX_HISTORY_TURN_CHARS,
+    (last MAX_HISTORY_TURNS turns -- a safety net; the per-turn and total
+    char caps below are the real limit -- each truncated to MAX_HISTORY_TURN_CHARS,
     then oldest-first dropped while total content chars still exceed
     MAX_HISTORY_TOTAL_CHARS). Order is preserved throughout -- turns are
     only ever capped/truncated/dropped, never reordered -- so the caller
@@ -815,10 +852,11 @@ class CompendiumAgent:
         if not answer:
             answer = "I wasn't able to find a clear answer. Try rephrasing your question."
 
+        answer_sources = _sources_for_answer(state, answer)
         return AgentResponse(
             answer=answer,
-            sources=list(set(state.sources_cited)),
-            sources_detail=_build_sources_detail(state),
+            sources=answer_sources,
+            sources_detail=_build_sources_detail(state, answer_sources),
             images=state.images_cited,
             tool_calls_made=state.tool_calls_log,
             total_cost_usd=state.total_cost_usd,
@@ -1149,14 +1187,15 @@ class CompendiumAgent:
             # is logged inside flush_trace_to_db; never bubbles to the caller.
             trace.iterations = state.iterations
             trace.total_cost_usd = state.total_cost_usd
-            trace.sources_cited = list(set(state.sources_cited))
+            answer_sources = _sources_for_answer(state, trace.final_answer)
+            trace.sources_cited = list(answer_sources)
             trace.images_cited = state.images_cited
             trace.clusters_cited = list(set(state.clusters_cited))
 
             complete_event = {
                 "type": "complete",
-                "sources": list(set(state.sources_cited)),
-                "sources_detail": _build_sources_detail(state),
+                "sources": answer_sources,
+                "sources_detail": _build_sources_detail(state, answer_sources),
                 "cluster_ids": list(set(state.clusters_cited)),
                 "images": state.images_cited,
                 "tool_calls_made": state.tool_calls_log,
