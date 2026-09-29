@@ -10,7 +10,12 @@ from backend.db.connection import get_conn
 # ── Password-based users ────────────────────────────────────────────────
 
 
-def set_password(user_id: int, password_hash: str, audit_ctx: AuditCtx | None = None) -> None:
+def set_password(
+    user_id: int,
+    password_hash: str,
+    audit_ctx: AuditCtx | None = None,
+    via: str = "bootstrap",
+) -> None:
     """Set (or update) a user's password hash."""
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -24,7 +29,7 @@ def set_password(user_id: int, password_hash: str, audit_ctx: AuditCtx | None = 
         subject_user_id=user_id,
         origin_class=ctx.origin_class,
         client_key=ctx.client_key,
-        detail={"via": "bootstrap"},
+        detail={"via": via},
     )
 
 

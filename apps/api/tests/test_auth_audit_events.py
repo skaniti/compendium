@@ -162,6 +162,7 @@ def test_viewas_start_denied_stop(env, client):
     row = _last("auth.viewas.denied")
     assert row["actor_user_id"] == aid and row["subject_user_id"] is None
     assert row["detail"] == {"reason": "already_viewing_as_demo"}
+    _no_secret(row, nest)
 
     dh = {"Authorization": f"Bearer {demo_tok}"}
     r = client.post("/api/auth/return-to-admin", headers={**dh, **INGRESS})
@@ -179,6 +180,7 @@ def test_viewas_denied_not_admin_and_demo_unavailable(env, client):
     row = _last("auth.viewas.denied")
     assert row["actor_user_id"] == plain["id"]
     assert row["detail"] == {"reason": "not_admin"}
+    _no_secret(row, tok)
 
     auth_repo.set_role(env["demo"]["id"], "user")
     atok = auth_service.create_access_token(env["admin"]["id"], "admin@test.local")
@@ -193,6 +195,7 @@ def test_viewas_denied_not_admin_and_demo_unavailable(env, client):
     row = _last("auth.viewas.denied")
     assert row["actor_user_id"] == env["admin"]["id"]
     assert row["detail"] == {"reason": "demo_account_unavailable"}
+    _no_secret(row, atok)
 
 
 def test_api_key_auth_failed_only_for_presented_key(env, client):
@@ -232,3 +235,20 @@ def test_set_role_and_password(env):
     assert row["subject_user_id"] == uid and row["origin_class"] == "cli"
     assert row["detail"] == {"via": "bootstrap"}
     _no_secret(row, PW, hashed)
+
+
+def test_register_records_password_set_with_request_origin(env, client, monkeypatch):
+    monkeypatch.delenv("DISABLE_REGISTRATION", raising=False)
+    newpw = "np-" + "k3" * 6
+    r = client.post(
+        "/api/auth/register",
+        json={"email": "newbie@test.local", "password": newpw},
+        headers={settings.session_ingress_header: "public"},
+    )
+    assert r.status_code == 200
+    row = _last("user.password_set")
+    assert row["subject_user_id"] == r.json()["id"]
+    assert row["origin_class"] == "public"
+    assert row["client_hash"] is not None
+    assert row["detail"] == {"via": "register"}
+    _no_secret(row, newpw, "newbie@test.local")

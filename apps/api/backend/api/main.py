@@ -2734,7 +2734,12 @@ async def register(request: Request, body: RegisterRequest):
         raise HTTPException(status_code=409, detail="Email already registered")
 
     user = user_repo.create_user(body.email, name=body.name)
-    ar.set_password(user["id"], hash_password(body.password))
+    ar.set_password(
+        user["id"],
+        hash_password(body.password),
+        audit_ctx=_audit_ctx.from_request(request),
+        via="register",
+    )
 
     return {
         "id": user["id"],
