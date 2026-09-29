@@ -35,7 +35,7 @@
     "eslint-config-next": "^16.3.1",
     "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "d3-delaunay": "^6.0.4",
