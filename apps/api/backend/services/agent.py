@@ -48,6 +48,10 @@ def traceable(name: str):
 AGENT_MODEL = "gpt-4o-mini"
 MAX_ITERATIONS = 5
 MAX_TOOL_RESULT_CHARS = 2000
+# Chars of each tool result kept in the per-turn trace (tool_calls_made ->
+# the chat's collapsible Trace block). Cut results end with an ellipsis so
+# the UI can tell a truncated preview from a short result.
+TOOL_RESULT_PREVIEW_CHARS = 600
 AGENT_QUERY_EVENT_TYPE = "agent_query"
 
 # P4 conversation-history caps (defense in depth). Applied in
@@ -115,6 +119,14 @@ NARRATED_INTENT_NUDGE = (
     "You described a search instead of performing one. Call "
     "search_compendium now with the user's question."
 )
+
+
+def _result_preview(result: str) -> str:
+    """Trace preview of a tool result: the first TOOL_RESULT_PREVIEW_CHARS
+    chars, plus an ellipsis when that cut anything."""
+    if len(result) <= TOOL_RESULT_PREVIEW_CHARS:
+        return result
+    return result[:TOOL_RESULT_PREVIEW_CHARS] + "..."
 
 
 def _narrates_intent(content: Optional[str]) -> bool:
@@ -1062,7 +1074,7 @@ class CompendiumAgent:
                             "iteration": i + 1,
                             "tool": tc["name"],
                             "arguments": tc["arguments"],
-                            "result_preview": result[:200],
+                            "result_preview": _result_preview(result),
                         }
                     )
                     # Trace: full tool call (Tier 3 = full result, not preview).
@@ -1287,7 +1299,7 @@ class CompendiumAgent:
                         "iteration": i + 1,
                         "tool": tc["name"],
                         "arguments": tc["arguments"],
-                        "result_preview": result[:200],
+                        "result_preview": _result_preview(result),
                     }
                 )
                 logger.info(

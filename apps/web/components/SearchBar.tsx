@@ -71,9 +71,11 @@ function renderToolDefinition(tool: AgentTool) {
 //   - .chat-images-row -- a separate, not-yet-requested parity gap
 //     (unrelated to the batch-03 chat<->graph interop below).
 // Sources below (2026-07-28, chat parity fix 2) port makeSourceLink's
-// Dash's makeTraceEntry caps the tool-result preview at 300 chars and
-// marks the cut with an ellipsis (search_stream.js ~238).
-export const TRACE_PREVIEW_MAX_CHARS = 300;
+// Safety cap over the backend's own preview (TOOL_RESULT_PREVIEW_CHARS =
+// 600 chars plus an ellipsis in backend/services/agent.py); sits above it
+// so a backend-cut preview is never cut twice. Dash's makeTraceEntry did
+// the same at 300 (search_stream.js ~238).
+export const TRACE_PREVIEW_MAX_CHARS = 700;
 export function tracePreview(preview: string | undefined | null): string {
   const text = preview ?? "";
   return text.length > TRACE_PREVIEW_MAX_CHARS ? text.slice(0, TRACE_PREVIEW_MAX_CHARS) + "..." : text;

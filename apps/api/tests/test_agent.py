@@ -20,6 +20,7 @@ from backend.services.agent import (
     MAX_HISTORY_TURNS,
     NARRATED_INTENT_NUDGE,
     NARRATED_INTENT_PHRASES,
+    TOOL_RESULT_PREVIEW_CHARS,
     UNGROUNDED_ANSWER_MIN_CHARS,
     UNGROUNDED_ANSWER_NUDGE,
     AgentMessage,
@@ -35,6 +36,7 @@ from backend.services.agent import (
     _persist_agent_cost_event,
     _prepare_history_messages,
     _tokenize,
+    _result_preview,
     _ungrounded_answer,
 )
 from backend.utils.sanitize import PromptInjectionError
@@ -1770,6 +1772,20 @@ class TestEarlyReturnCompleteEventRedaction:
 # one extra planning call with a nudge before letting such a message
 # become final.
 # =============================================================================
+
+
+class TestResultPreview:
+    def test_short_result_is_kept_verbatim(self):
+        assert _result_preview("abc") == "abc"
+
+    def test_exact_limit_has_no_ellipsis(self):
+        text = "x" * TOOL_RESULT_PREVIEW_CHARS
+        assert _result_preview(text) == text
+
+    def test_longer_result_is_cut_with_an_ellipsis(self):
+        text = "y" * (TOOL_RESULT_PREVIEW_CHARS + 50)
+        preview = _result_preview(text)
+        assert preview == "y" * TOOL_RESULT_PREVIEW_CHARS + "..."
 
 
 class TestNarratesIntent:

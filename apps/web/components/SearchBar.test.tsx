@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import SearchBar from "./SearchBar";
+import SearchBar, { TRACE_PREVIEW_MAX_CHARS } from "./SearchBar";
 import * as stream from "@/lib/agent-stream";
 import * as SessionProviderModule from "@/components/SessionProvider";
 import * as apiModule from "@/lib/api";
@@ -710,8 +710,8 @@ describe("SearchBar", () => {
       expect(screen.queryByText(/^Trace:/)).not.toBeInTheDocument();
     });
 
-    it("trace entries use the ported Dash classes and cap the preview at 300 chars", async () => {
-      const long = "x".repeat(350);
+    it("trace entries use the ported Dash classes and cap the preview at TRACE_PREVIEW_MAX_CHARS", async () => {
+      const long = "x".repeat(TRACE_PREVIEW_MAX_CHARS + 50);
       mockSession({ role: "admin" });
       vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
         h.onComplete?.({
@@ -732,7 +732,7 @@ describe("SearchBar", () => {
       expect(container.querySelector(".search-trace-entry .search-trace-tool")).toHaveTextContent("search_compendium");
       expect(container.querySelector(".search-trace-args")).toHaveTextContent('args: {"query":"v"}');
       const result = container.querySelector(".search-trace-result");
-      expect(result?.textContent).toBe("x".repeat(300) + "...");
+      expect(result?.textContent).toBe("x".repeat(TRACE_PREVIEW_MAX_CHARS) + "...");
     });
 
     it("data-show-trace is 1 and the trace block renders for an admin viewer", async () => {
