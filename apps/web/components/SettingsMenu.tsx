@@ -126,7 +126,19 @@ export default function SettingsMenu({
       <div className="palette-grid" style={PALETTE_GRID_STYLE}>
         {/* THEME */}
         <div className="picker-section-header">
-          THEME: <span id="theme-active-name">{formatPaletteCaption(variant)}</span>
+          {/* suppressHydrationWarning: the server seeds `variant` from
+              /api/auth/preferences with the request's access_token cookie;
+              when that token is stale at SSR time (the client refreshes
+              it moments later) the seed read 401s, the server renders the
+              library default, and the client's first render reads the
+              persisted palette from localStorage instead -- a text-only
+              mismatch on this one span (seen 2026-09-28 as Brown vs Blue
+              in the dev overlay). React patches the text; the mount-time
+              preferences GET in ThemeProvider reconciles the rest. */}
+          THEME:{" "}
+          <span id="theme-active-name" suppressHydrationWarning>
+            {formatPaletteCaption(variant)}
+          </span>
         </div>
         <div className="palette-rows-wrapper">
           <div className="palette-row palette-row-dark" style={SWATCH_ROW_STYLE}>
