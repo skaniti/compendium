@@ -345,3 +345,15 @@
 .dev-pager button:disabled { opacity: 0.4; }
 .dev-sort-btn { all: unset; cursor: pointer; font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; }
 .dev-sort-btn:hover { color: var(--text); }
+
+.dev-empty-inline { padding: 8px 0; text-align: left; font-size: 0.72rem; }
+.dev-bar-pct { color: var(--panel-caption); font-size: 0.68rem; margin-left: 2px; }
+.dev-sort-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}

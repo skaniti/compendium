@@ -1,0 +1,31 @@
+import { render, screen } from "@testing-library/react";
+import { vi, it, expect, beforeEach } from "vitest";
+import * as api from "@/lib/api";
+import type { PipelineSummary } from "@/lib/types";
+import PipelineView, { PIPELINE_SUBTITLE } from "./PipelineView";
+vi.mock("@/lib/api");
+const summary = (total: number): PipelineSummary => ({
+  status_counts: { active: 1271, pending: 2, archived: 30 }, total_pages: total,
+  decisions: [], skip_methods: [], skip_gate_reasons: [],
+  skip_gate_config: { model: "m", temperature: 0, prompt_name: "p1", prompt: "x", tools: [] },
+});
+beforeEach(() => {
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [], total: 0, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
+});
+it("shows loading, then formatted status cards and the subtitle", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(1303));
+  render(<PipelineView />);
+  expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
+  expect(await screen.findByText("1,271")).toBeInTheDocument();
+  expect(screen.getByText(PIPELINE_SUBTITLE)).toBeInTheDocument();
+});
+it("renders an alert when the summary fails", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockRejectedValue(new Error("boom"));
+  render(<PipelineView />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+});
+it("shows No pages found. when total_pages is 0", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(0));
+  render(<PipelineView />);
+  expect((await screen.findAllByText("No pages found.")).length).toBeGreaterThan(0);
+});
