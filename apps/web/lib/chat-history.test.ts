@@ -4,6 +4,7 @@ import {
   HISTORY_ASSISTANT_MIN,
   HISTORY_CHAR_BUDGET,
   HISTORY_ELLIPSIS,
+  HISTORY_MAX_EXCHANGES,
   HISTORY_TURN_CAP,
   HISTORY_USER_MIN,
   type Exchange,
@@ -45,9 +46,10 @@ describe("buildHistory", () => {
   });
 
   it("cuts at a sentence boundary and appends the ellipsis", () => {
-    const text = "First sentence here. Second sentence goes on and on and on " + "y".repeat(400);
+    const first = "First sentence here" + " and it keeps going".repeat(8) + ".";
+    const text = first + " Second sentence goes on and on and on " + "y".repeat(400);
     const h = buildHistory([{ user: text, assistant: "a" }, { user: "q", assistant: "a" }]);
-    expect(h[0].content).toBe("First sentence here." + HISTORY_ELLIPSIS);
+    expect(h[0].content).toBe(first + HISTORY_ELLIPSIS);
   });
 
   it("falls back to a word boundary, then a hard cut", () => {
@@ -122,5 +124,21 @@ describe("buildHistory", () => {
     expect(h.map((t) => t.role)).toEqual(["user", "assistant", "user", "assistant"]);
     expect(h.every((t) => t.content.length > 0)).toBe(true);
     expect(HISTORY_TURN_CAP).toBe(2000);
+  });
+
+  it("caps at HISTORY_MAX_EXCHANGES, keeping the newest", () => {
+    const exs: Exchange[] = Array.from({ length: 40 }, (_, i) => ({ user: `q${i}`, assistant: `a${i}` }));
+    const h = buildHistory(exs);
+    expect(HISTORY_MAX_EXCHANGES).toBe(30);
+    expect(h).toHaveLength(60);
+    expect(h[0].content).toBe("q10");
+    expect(h[59].content).toBe("a39");
+  });
+
+  it("does not collapse to a stub on an early newline or sentence boundary", () => {
+    const c = buildHistory([{ user: "Title\n" + "x".repeat(1500), assistant: "r" }, { user: "q", assistant: "a" }])[0].content;
+    expect(c.length).toBe(HISTORY_USER_MIN);
+    const d = buildHistory([{ user: "Hi. " + "x".repeat(500), assistant: "r" }, { user: "q", assistant: "a" }])[0].content;
+    expect(d.length).toBe(HISTORY_USER_MIN);
   });
 });

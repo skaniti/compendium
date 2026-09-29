@@ -152,7 +152,7 @@ export function useAgentChat(): UseAgentChat {
     if (stored.length === 0 || turnsRef.current.length > 0) return;
     storedRef.current = stored;
     nextIdRef.current = Math.max(nextIdRef.current, nextId);
-    setTurns(stored.map((t, i) => ({ id: i, user: t.user, assistant: { ...t.assistant }, restored: true })));
+    setTurns(stored.map((t, i) => ({ id: i, user: t.user, assistant: { text: t.assistant.text, done: true, status: "" }, restored: true })));
   }, []);
 
   // Id-addressed update: only the turn whose id matches is touched: every

@@ -22,6 +22,9 @@ export const HISTORY_TURN_CAP = 2000;
 export const HISTORY_USER_MIN = 300;
 export const HISTORY_ASSISTANT_MIN = 160;
 export const HISTORY_ELLIPSIS = " …";
+// The backend keeps only the newest 60 turns (MAX_HISTORY_TURNS / 2 exchanges);
+// dropping here makes that explicit instead of a silent server-side cut.
+export const HISTORY_MAX_EXCHANGES = 30;
 
 // Condense `text` to at most `allowance` chars (ellipsis included): whole
 // text if it fits, else the last sentence boundary, then word boundary,
@@ -43,7 +46,8 @@ export function condense(text: string, allowance: number): string {
       break;
     }
   }
-  let cut = end > 0 ? text.slice(0, end).trimEnd() : "";
+  // Ignore a sentence/newline cut that keeps less than half the limit.
+  let cut = end >= limit / 2 ? text.slice(0, end).trimEnd() : "";
   if (!cut) {
     // Word cut only if it keeps at least half the limit; else hard cut.
     const sp = text.lastIndexOf(" ", limit);
@@ -73,6 +77,7 @@ export function buildHistory(exchanges: Exchange[]): HistoryTurn[] {
   let list = exchanges
     .map((e) => ({ user: e.user.trim(), assistant: e.assistant.trim() }))
     .filter((e) => e.user && e.assistant);
+  list = list.slice(-HISTORY_MAX_EXCHANGES);
 
   while (list.length > 0) {
     const n = list.length;

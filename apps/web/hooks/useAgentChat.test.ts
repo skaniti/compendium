@@ -325,6 +325,20 @@ describe("useAgentChat rolling history + reload persistence", () => {
     expect(new Set(result.current.turns.map((t) => t.id)).size).toBe(2);
   });
 
+  it("forces restored entries to done: true even if stored otherwise", async () => {
+    sessionStorage.setItem(
+      KEY,
+      JSON.stringify({
+        nextId: 1,
+        turns: [{ user: "q", assistant: { text: "a", done: false, status: "Thinking..." }, restored: true }],
+      }),
+    );
+    const { result } = renderHook(() => useAgentChat());
+    await waitFor(() => expect(result.current.turns).toHaveLength(1));
+    expect(result.current.turns[0].assistant).toEqual({ text: "a", done: true, status: "" });
+    expect(historyFromTurns(result.current.turns)).toHaveLength(2);
+  });
+
   it("ignores corrupt stored data", async () => {
     sessionStorage.setItem(KEY, "{not json");
     const { result } = renderHook(() => useAgentChat());
