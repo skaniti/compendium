@@ -317,6 +317,23 @@ async def verify_admin_context(
     return user_id
 
 
+async def require_admin_not_viewing(
+    user_id: int = Depends(verify_api_key),
+    claims: dict = Depends(get_current_claims),
+) -> int:
+    """Admin role required, and not inside a view-as-demo session.
+
+    Stricter than ``verify_admin_context``: a token carrying
+    ``acting_as_demo`` is an admin viewing as demo and must not see
+    admin-only tables such as the audit log.
+    """
+    from backend.db import auth_repo as ar
+
+    if ar.get_role(user_id) != "admin" or claims.get("acting_as_demo"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return user_id
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
@@ -690,6 +707,28 @@ async def get_metrics():
         "captures_processed": _captures_processed,
         "uptime_seconds": round(time.time() - _app_start_time, 1),
     }
+
+
+@app.get("/api/admin/audit-events", tags=["Admin"])
+async def list_audit_events(
+    limit: int = 100,
+    before_id: int | None = None,
+    event: str | None = None,
+    subject_user_id: int | None = None,
+    user_id: int = Depends(require_admin_not_viewing),
+):
+    """Audit rows newest first. Admin only, not available in view-as sessions.
+
+    ``limit`` is clamped to 1..500; page with ``before_id`` (the smallest id
+    already seen).
+    """
+    rows = audit_repo.list_events(
+        limit=limit, before_id=before_id, event=event, subject_user_id=subject_user_id
+    )
+    for row in rows:
+        if row.get("at") is not None:
+            row["at"] = row["at"].isoformat()
+    return {"events": rows}
 
 
 @app.get("/api/logs", tags=["Observability"])
