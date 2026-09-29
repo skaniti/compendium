@@ -71,6 +71,14 @@ function renderToolDefinition(tool: AgentTool) {
 //   - .chat-images-row -- a separate, not-yet-requested parity gap
 //     (unrelated to the batch-03 chat<->graph interop below).
 // Sources below (2026-07-28, chat parity fix 2) port makeSourceLink's
+// Dash's makeTraceEntry caps the tool-result preview at 300 chars and
+// marks the cut with an ellipsis (search_stream.js ~238).
+export const TRACE_PREVIEW_MAX_CHARS = 300;
+export function tracePreview(preview: string | undefined | null): string {
+  const text = preview ?? "";
+  return text.length > TRACE_PREVIEW_MAX_CHARS ? text.slice(0, TRACE_PREVIEW_MAX_CHARS) + "..." : text;
+}
+
 // plain .tag-pill.chat-source-pill markup + the "sources:" label
 // (search_stream.js ~161-188, ~699-713). Diverges from Dash's
 // makeSourceLink in one respect: the pill label stays hostname-only (no
@@ -355,11 +363,17 @@ export default function SearchBar() {
                       Trace: {assistant.meta.iterations} iter, {assistant.meta.tool_calls_made.length} tools, $
                       {(assistant.meta.total_cost_usd ?? 0).toFixed(4)} -- {assistant.meta.model}
                     </summary>
+                    {/* Port of Dash's makeTraceEntry (search_stream.js
+                        ~234-241): tool name in the accent monospace, args
+                        and the result preview as small pre blocks, the
+                        preview boxed on --surface, scroll-capped, and cut
+                        at 300 chars with an ellipsis. Styles live in
+                        search-bar.css under .search-trace-*. */}
                     {assistant.meta.tool_calls_made.map((tc, i) => (
-                      <div key={i} style={{ marginLeft: 10, fontSize: 12 }}>
-                        <code>{tc.tool}</code>
-                        <pre style={{ whiteSpace: "pre-wrap" }}>args: {JSON.stringify(tc.arguments)}</pre>
-                        <pre style={{ whiteSpace: "pre-wrap", opacity: 0.7 }}>{tc.result_preview}</pre>
+                      <div key={i} className="search-trace-entry">
+                        <span className="search-trace-tool">{tc.tool}</span>
+                        <pre className="search-trace-args">args: {JSON.stringify(tc.arguments)}</pre>
+                        <pre className="search-trace-result">{tracePreview(tc.result_preview)}</pre>
                       </div>
                     ))}
                   </details>

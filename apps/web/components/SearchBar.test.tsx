@@ -710,6 +710,31 @@ describe("SearchBar", () => {
       expect(screen.queryByText(/^Trace:/)).not.toBeInTheDocument();
     });
 
+    it("trace entries use the ported Dash classes and cap the preview at 300 chars", async () => {
+      const long = "x".repeat(350);
+      mockSession({ role: "admin" });
+      vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+        h.onComplete?.({
+          type: "complete",
+          sources: [],
+          cluster_ids: [],
+          images: [],
+          tool_calls_made: [{ iteration: 1, tool: "search_compendium", arguments: { query: "v" }, result_preview: long }],
+          total_cost_usd: 0.01,
+          iterations: 1,
+          model: "m",
+        });
+      });
+      const { container } = render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+      await waitFor(() => expect(screen.getByText(/^Trace:/)).toBeInTheDocument());
+      expect(container.querySelector(".search-trace-entry .search-trace-tool")).toHaveTextContent("search_compendium");
+      expect(container.querySelector(".search-trace-args")).toHaveTextContent('args: {"query":"v"}');
+      const result = container.querySelector(".search-trace-result");
+      expect(result?.textContent).toBe("x".repeat(300) + "...");
+    });
+
     it("data-show-trace is 1 and the trace block renders for an admin viewer", async () => {
       mockSession({ role: "admin" });
       mockCompleteWithTrace();

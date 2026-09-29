@@ -25,6 +25,14 @@ describe("renderMarkdown", () => {
   // tab -- both explicit `[title](url)` markdown links and bare URLs the
   // `linkify: true` option auto-links, since both routes render through
   // markdown-it's shared `link_open` rule.
+  // 2026-09-28: Dash rendered every in-answer [title](url) as a .tag-pill
+  // chip (search_stream.js parseInline); the port left them as bare anchors,
+  // which drew as browser-default blue underlines on the dark palettes.
+  it("in-answer links carry the tag-pill class", () => {
+    const html = renderMarkdown("see [Volcano](https://e.com/v) here");
+    expect(html).toMatch(/<a [^>]*class="tag-pill"[^>]*>Volcano<\/a>/);
+  });
+
   describe("in-answer links open in a new tab (item 3)", () => {
     it("an explicit [title](url) link carries target=_blank and rel=noreferrer", () => {
       const html = renderMarkdown("[x](https://e.com)");

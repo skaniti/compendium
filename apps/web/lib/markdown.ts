@@ -32,6 +32,11 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
   const relIdx = token.attrIndex("rel");
   if (relIdx < 0) token.attrPush(["rel", "noreferrer"]);
   else token.attrs![relIdx][1] = "noreferrer";
+  // Dash parity (search_stream.js parseInline): every in-answer link is a
+  // .tag-pill, the same chip the source row uses, not a browser-default
+  // blue underlined anchor -- which is unreadable on the dark palettes.
+  // `class` is in DOMPurify's default ALLOWED_ATTR, so it survives sanitize.
+  token.attrJoin("class", "tag-pill");
   return defaultLinkOpenRender(tokens, idx, options, env, self);
 };
 
