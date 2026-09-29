@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useAgentChat } from "./useAgentChat";
+import { historyFromTurns, useAgentChat } from "./useAgentChat";
 import * as stream from "@/lib/agent-stream";
 import * as chatInterop from "@/lib/graph/chat-interop";
 
@@ -16,6 +16,78 @@ import * as chatInterop from "@/lib/graph/chat-interop";
 // at the hook boundary, including the deliberate sane-deviation from Dash
 // (cancelling an in-flight stream before resetting state -- see clear()'s
 // own comment in useAgentChat.ts for why).
+// 2026-09-28: conversation continuity -- each send() passes the finished
+// prior exchanges to streamAgentQuery as history (Dash parity; the port
+// used to send only the query).
+describe("useAgentChat history", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  const complete = {
+    type: "complete" as const, sources: [], cluster_ids: [], images: [],
+    tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+  };
+
+  it("historyFromTurns keeps only finished, non-empty exchanges", () => {
+    const turns = [
+      { id: 0, user: "a", assistant: { text: "A", done: true, status: "" } },
+      { id: 1, user: "b", assistant: { text: "", done: true, status: "" } },
+      { id: 2, user: "c", assistant: { text: "C", done: true, status: "", error: "boom" } },
+      { id: 3, user: "d", assistant: { text: "D", done: false, status: "Thinking..." } },
+      { id: 4, user: "e", assistant: { text: "E", done: true, status: "" } },
+    ];
+    expect(historyFromTurns(turns)).toEqual([
+      { role: "user", content: "a" },
+      { role: "assistant", content: "A" },
+      { role: "user", content: "e" },
+      { role: "assistant", content: "E" },
+    ]);
+  });
+
+  it("the first send carries no history and the second carries the first exchange", async () => {
+    const spy = vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("answer one");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+
+    act(() => result.current.setInput("first"));
+    await act(async () => {
+      await result.current.send();
+    });
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    expect(spy.mock.calls[0][3]).toEqual([]);
+
+    act(() => result.current.setInput("second"));
+    await act(async () => {
+      await result.current.send();
+    });
+    expect(spy.mock.calls[1][0]).toBe("second");
+    expect(spy.mock.calls[1][3]).toEqual([
+      { role: "user", content: "first" },
+      { role: "assistant", content: "answer one" },
+    ]);
+  });
+
+  it("clear() empties the history sent by the next send", async () => {
+    const spy = vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onToken?.("x");
+      h.onComplete?.(complete);
+    });
+    const { result } = renderHook(() => useAgentChat());
+    act(() => result.current.setInput("first"));
+    await act(async () => {
+      await result.current.send();
+    });
+    await waitFor(() => expect(result.current.turns[0]?.assistant.done).toBe(true));
+    act(() => result.current.clear());
+    act(() => result.current.setInput("fresh"));
+    await act(async () => {
+      await result.current.send();
+    });
+    expect(spy.mock.calls[1][3]).toEqual([]);
+  });
+});
+
 describe("useAgentChat clear()", () => {
   beforeEach(() => vi.restoreAllMocks());
 

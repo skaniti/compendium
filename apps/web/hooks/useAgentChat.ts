@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { streamAgentQuery } from "@/lib/agent-stream";
+import { streamAgentQuery, type HistoryTurn } from "@/lib/agent-stream";
 import { frameCitedClusters } from "@/lib/graph/chat-interop";
 import type { CompleteEvent } from "@/lib/types";
 
@@ -63,8 +63,21 @@ export interface UseAgentChat {
   clear: () => void;
 }
 
+// Prior exchanges as HistoryTurn pairs, oldest first. A turn contributes
+// only when its answer finished cleanly with text (done, no error).
+export function historyFromTurns(turns: Turn[]): HistoryTurn[] {
+  const out: HistoryTurn[] = [];
+  for (const t of turns) {
+    if (!t.assistant.done || t.assistant.error || !t.assistant.text.trim() || !t.user.trim()) continue;
+    out.push({ role: "user", content: t.user }, { role: "assistant", content: t.assistant.text });
+  }
+  return out;
+}
+
 export function useAgentChat(): UseAgentChat {
   const [turns, setTurns] = useState<Turn[]>([]);
+  const turnsRef = useRef<Turn[]>([]);
+  turnsRef.current = turns;
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const nextIdRef = useRef(0);
@@ -113,6 +126,15 @@ export function useAgentChat(): UseAgentChat {
       rafId = requestAnimationFrame(flush);
     };
 
+    // Conversation continuity (port gap found 2026-09-28: Dash sent the
+    // last 10 turns as `history`; the port sent only the query, so every
+    // follow-up started cold). Snapshot the turns that exist BEFORE this
+    // send -- `turnsRef` mirrors state so this callback need not re-create
+    // on every turn -- and keep only finished, non-empty exchanges: the
+    // backend's HistoryTurn rejects empty content, and an errored or
+    // cancelled turn has no answer worth replaying.
+    const history = historyFromTurns(turnsRef.current);
+
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
@@ -142,6 +164,7 @@ export function useAgentChat(): UseAgentChat {
           },
         },
         ctrl.signal,
+        history,
       );
     } catch (err) {
       if ((err as Error).name === "AbortError") {

@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { extractEvents, streamAgentQuery } from "./agent-stream";
+import { extractEvents, HISTORY_SEND_TURNS, streamAgentQuery } from "./agent-stream";
 import * as api from "./api";
 
 // D3 (session-expiry-tuning): streamAgentQuery's recovery attempt is gated
@@ -18,6 +18,52 @@ function clearSessionCookies() {
   document.cookie = "session_policy=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
   document.cookie = "session_last_active=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 }
+
+// 2026-09-28: conversation continuity. Dash sent the last 10 finished turns
+// as `history` (search_stream.js HISTORY_SEND_TURNS); the port sent only the
+// query, so every follow-up started cold.
+describe("streamAgentQuery request body", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubFetchOk() {
+    const fetchMock = vi.fn(async () => new Response("", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+  function sentBody(fetchMock: ReturnType<typeof vi.fn>) {
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    return JSON.parse(init.body as string);
+  }
+
+  it("sends only {query} when there is no history", async () => {
+    const fetchMock = stubFetchOk();
+    await streamAgentQuery("q", {});
+    expect(sentBody(fetchMock)).toEqual({ query: "q" });
+  });
+
+  it("sends prior turns as history alongside the query", async () => {
+    const fetchMock = stubFetchOk();
+    const history = [
+      { role: "user" as const, content: "first" },
+      { role: "assistant" as const, content: "answer" },
+    ];
+    await streamAgentQuery("follow-up", {}, undefined, history);
+    expect(sentBody(fetchMock)).toEqual({ query: "follow-up", history });
+  });
+
+  it("sends at most the last HISTORY_SEND_TURNS turns", async () => {
+    const fetchMock = stubFetchOk();
+    const history = Array.from({ length: 14 }, (_, i) => ({
+      role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+      content: `t${i}`,
+    }));
+    await streamAgentQuery("q", {}, undefined, history);
+    const sent = sentBody(fetchMock).history;
+    expect(sent).toHaveLength(HISTORY_SEND_TURNS);
+    expect(sent[0].content).toBe("t4");
+    expect(sent[sent.length - 1].content).toBe("t13");
+  });
+});
 
 describe("extractEvents", () => {
   it("parses status, token, complete from standard \\n\\n framing", () => {

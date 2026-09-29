@@ -28,11 +28,27 @@ export interface StreamHandlers {
   onComplete?: (event: CompleteEvent) => void;
 }
 
-function fetchAgentStream(query: string, signal?: AbortSignal): Promise<Response> {
+// One prior turn sent as conversation context -- the backend's HistoryTurn
+// wire contract (role user|assistant, non-empty content). The backend caps
+// and sanitizes; this is just the shape.
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+// Dash parity (search_stream.js HISTORY_SEND_TURNS): the backend keeps the
+// last 10 turns, so sending more is wasted bytes.
+export const HISTORY_SEND_TURNS = 10;
+
+function fetchAgentStream(query: string, history: HistoryTurn[], signal?: AbortSignal): Promise<Response> {
+  // `history` is context distinct from `query` -- the current question is
+  // never in both. Omitted entirely when empty so a fresh conversation
+  // sends the same body it always did.
+  const body = history.length > 0 ? { query, history: history.slice(-HISTORY_SEND_TURNS) } : { query };
   return fetch("/api/agent/query-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(body),
     signal,
   });
 }
@@ -41,8 +57,9 @@ export async function streamAgentQuery(
   query: string,
   handlers: StreamHandlers,
   signal?: AbortSignal,
+  history: HistoryTurn[] = [],
 ): Promise<void> {
-  let res = await fetchAgentStream(query, signal);
+  let res = await fetchAgentStream(query, history, signal);
   if (!res.ok) {
     // Batch-04 fix-round bug: this talks to fetch directly (not apiFetch,
     // since it needs the raw stream body) so a post-lapse 401 here never
@@ -69,7 +86,7 @@ export async function streamAgentQuery(
       if (sessionMayResume(Date.now())) {
         const recovered = await recoverSession();
         if (recovered) {
-          res = await fetchAgentStream(query, signal);
+          res = await fetchAgentStream(query, history, signal);
           if (res.ok) return readAgentStream(res, handlers);
           if (res.status !== 401) {
             throw new Error(`Agent request failed: ${res.status} ${res.statusText}`);
