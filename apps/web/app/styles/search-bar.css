@@ -94,9 +94,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 6px 12px;
-  display: none;
-}
-.search-conversation.has-messages {
+  /* Always in the flex column, even with no turns: an empty conversation must
+     still absorb the free space above the input row so the row stays pinned to
+     the bottom of a tall bar (clear button / first expand). The minimized bar
+     hides it below. */
   display: block;
 }
 .search-bar.minimized .search-conversation {

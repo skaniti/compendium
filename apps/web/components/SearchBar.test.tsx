@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SearchBar, { TRACE_PREVIEW_MAX_CHARS, ChatImagesRow } from "./SearchBar";
@@ -419,6 +421,28 @@ describe("SearchBar", () => {
     await userEvent.click(tab);
     expect(bar).toHaveClass("minimized");
     expect(tab).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the empty conversation in the flex column when maximized so the input row stays at the bottom", async () => {
+    const { container } = render(<SearchBar />);
+    await userEvent.click(screen.getByRole("button", { name: /compendium search/i }));
+
+    const bar = container.querySelector("#search-bar")!;
+    const conv = container.querySelector("#search-conversation")!;
+    expect(bar).not.toHaveClass("minimized");
+    expect(conv).toBeInTheDocument();
+    expect(conv).not.toHaveClass("has-messages");
+
+    // jsdom does not load the stylesheet, so assert on the CSS source: the
+    // base rule must not hide the empty conversation (that removed the flex
+    // spacer and let the input row rise to the top); only the minimized bar
+    // may hide it.
+    const css = readFileSync(join(__dirname, "../app/styles/search-bar.css"), "utf8");
+    const base = css.match(/\n\.search-conversation\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(base).toMatch(/flex:\s*1/);
+    expect(base).not.toMatch(/display:\s*none/);
+    expect(css).not.toMatch(/\.search-conversation\.has-messages\s*\{[^}]*display/);
+    expect(css).toMatch(/\.search-bar\.minimized \.search-conversation\s*\{[^}]*display:\s*none\s*!important/);
   });
 
   it("auto-expands the bar when a query is sent while minimized", async () => {
