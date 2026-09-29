@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import SearchBar, { TRACE_PREVIEW_MAX_CHARS } from "./SearchBar";
+import SearchBar, { TRACE_PREVIEW_MAX_CHARS, ChatImagesRow } from "./SearchBar";
 import * as stream from "@/lib/agent-stream";
 import * as SessionProviderModule from "@/components/SessionProvider";
 import * as apiModule from "@/lib/api";
@@ -775,5 +775,255 @@ describe("SearchBar", () => {
 
       await waitFor(() => expect(screen.getByText(/^Trace:/)).toBeInTheDocument());
     });
+  });
+});
+
+describe("SearchBar chat polish round 2", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetGraphCacheForTest();
+    mockSession();
+    sessionStorage.clear();
+  });
+
+  async function askWithImages(images: { thumb_url: string; source_url?: string | null }[]) {
+    vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+      h.onComplete?.({
+        type: "complete", sources: ["https://example.com/x"], cluster_ids: [],
+        images, tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+      });
+    });
+    const utils = render(<SearchBar />);
+    await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(screen.getByText("sources:")).toBeInTheDocument());
+    return utils;
+  }
+
+  describe("images row (2b)", () => {
+    it("renders one anchor per image with the thumb src and source href, after the sources row", async () => {
+      const { container } = await askWithImages([
+        { thumb_url: "https://img.test/a.jpg", source_url: "https://img.test/full-a.jpg" },
+        { thumb_url: "https://img.test/b.jpg", source_url: "https://img.test/full-b.jpg" },
+      ]);
+      const row = container.querySelector(".chat-images-row") as HTMLElement;
+      expect(row).toBeInTheDocument();
+      expect(row.querySelector(".chat-images-label")).toHaveTextContent("images:");
+      const anchors = row.querySelectorAll("a");
+      expect(anchors).toHaveLength(2);
+      expect(anchors[0]).toHaveAttribute("href", "https://img.test/full-a.jpg");
+      expect(anchors[0]).toHaveAttribute("target", "_blank");
+      expect(anchors[0]).toHaveAttribute("rel", "noopener noreferrer");
+      expect(anchors[0]).toHaveAttribute("title", "Open full image");
+      const img = anchors[0].querySelector("img") as HTMLImageElement;
+      expect(img).toHaveAttribute("src", "https://img.test/a.jpg");
+      expect(img).toHaveAttribute("loading", "lazy");
+      expect(img).toHaveAttribute("alt", "");
+      const sources = container.querySelector(".chat-sources-row") as HTMLElement;
+      expect(sources.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("falls back to the thumb url when source_url is missing", async () => {
+      const { container } = await askWithImages([{ thumb_url: "https://img.test/a.jpg", source_url: null }]);
+      expect(container.querySelector(".chat-images-row a")).toHaveAttribute("href", "https://img.test/a.jpg");
+    });
+
+    it("caps the row at 6 images", async () => {
+      const many = Array.from({ length: 9 }, (_, i) => ({
+        thumb_url: `https://img.test/${i}.jpg`, source_url: `https://img.test/full-${i}.jpg`,
+      }));
+      const { container } = await askWithImages(many);
+      expect(container.querySelectorAll(".chat-images-row a")).toHaveLength(6);
+    });
+
+    it("is hidden when there are no images", async () => {
+      const { container } = await askWithImages([]);
+      expect(container.querySelector(".chat-images-row")).not.toBeInTheDocument();
+    });
+
+    it("is hidden for restored turns", async () => {
+      sessionStorage.setItem(
+        "compendium-search-history",
+        JSON.stringify({
+          nextId: 1,
+          turns: [{
+            user: "old q", restored: true,
+            assistant: { text: "a", done: true, status: "", meta: { sources: [], images: [{ thumb_url: "https://img.test/a.jpg", source_url: "https://img.test/f.jpg" }] } },
+          }],
+        }),
+      );
+      const { container } = render(<SearchBar />);
+      await waitFor(() => expect(container.querySelector(".search-msg-restored")).toBeInTheDocument());
+      expect(container.querySelector(".chat-images-row")).not.toBeInTheDocument();
+    });
+
+    it("renders no anchor for a javascript: source_url", async () => {
+      const { container } = await askWithImages([
+        { thumb_url: "https://img.test/a.jpg", source_url: "javascript:alert(1)" },
+      ]);
+      expect(container.querySelector(".chat-images-row")).not.toBeInTheDocument();
+      expect(container.querySelector("a[href^='javascript']")).not.toBeInTheDocument();
+    });
+
+    it("renders nothing for a data: thumb", async () => {
+      const { container } = await askWithImages([
+        { thumb_url: "data:image/svg+xml;base64,AAAA", source_url: "https://img.test/f.jpg" },
+      ]);
+      expect(container.querySelector(".chat-images-row")).not.toBeInTheDocument();
+      expect(container.querySelector("img")).not.toBeInTheDocument();
+    });
+
+    it("keeps the safe pairs and drops the unsafe one", async () => {
+      const { container } = await askWithImages([
+        { thumb_url: "https://img.test/a.jpg", source_url: "https://img.test/fa.jpg" },
+        { thumb_url: "https://img.test/b.jpg", source_url: "javascript:alert(1)" },
+      ]);
+      expect(container.querySelectorAll(".chat-images-row a")).toHaveLength(1);
+    });
+
+    it("does not render a source pill whose URL is javascript:", async () => {
+      vi.spyOn(stream, "streamAgentQuery").mockImplementation(async (_q, h) => {
+        h.onComplete?.({
+          type: "complete", sources: ["javascript:alert(1)", "https://example.com/ok"], cluster_ids: [],
+          images: [], tool_calls_made: [], total_cost_usd: 0, iterations: 1, model: "m",
+        });
+      });
+      const { container } = render(<SearchBar />);
+      await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
+      await userEvent.click(screen.getByRole("button", { name: "Search" }));
+      await waitFor(() => expect(screen.getByRole("link", { name: "example.com" })).toBeInTheDocument());
+      expect(container.querySelectorAll(".chat-source-pill")).toHaveLength(1);
+      expect(container.querySelector("a[href^='javascript']")).not.toBeInTheDocument();
+    });
+
+    it("hides an image's anchor when it fails to load", async () => {
+      const { container } = await askWithImages([
+        { thumb_url: "https://img.test/a.jpg", source_url: "https://img.test/fa.jpg" },
+        { thumb_url: "https://img.test/b.jpg", source_url: "https://img.test/fb.jpg" },
+      ]);
+      const imgs = container.querySelectorAll<HTMLImageElement>(".chat-images-row img");
+      fireEvent.error(imgs[0]);
+      const anchors = container.querySelectorAll<HTMLElement>(".chat-images-row a");
+      expect(anchors[0]).toHaveStyle({ display: "none" });
+      expect(anchors[1]).not.toHaveStyle({ display: "none" });
+    });
+  });
+
+  describe("agent internals labels (2d) and anchoring (2e)", () => {
+    const body = {
+      system_prompt: "sys",
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "search_compendium", description: "Search.",
+            parameters: { properties: { query: { type: "string", description: "text" } } },
+          },
+        },
+        { type: "function", function: { name: "list_clusters", description: "List." } },
+      ],
+    };
+
+    async function openPanel() {
+      mockSession({ role: "admin" });
+      vi.spyOn(apiModule, "apiFetch").mockResolvedValue(jsonResponse(body));
+      const utils = render(<SearchBar />);
+      await userEvent.click(screen.getByRole("button", { name: "Agent Internals" }));
+      await waitFor(() => expect(screen.getByText("search_compendium")).toBeInTheDocument());
+      return utils;
+    }
+
+    it("explains the boxes at the top of the tools section", async () => {
+      await openPanel();
+      expect(screen.getByText("Each box lists the arguments the agent can pass to that tool.")).toBeInTheDocument();
+    });
+
+    it("captions each tool's box with 'arguments'", async () => {
+      const { container } = await openPanel();
+      const tools = container.querySelectorAll("#agent-internals-panel details details");
+      expect(tools).toHaveLength(2);
+      tools.forEach((t) => expect(t.querySelector(".internals-tool-caption")).toHaveTextContent("arguments"));
+    });
+
+    it("shows '(takes no arguments)' for a tool without parameters", async () => {
+      const { container } = await openPanel();
+      const tools = container.querySelectorAll("#agent-internals-panel details details");
+      expect(tools[1].querySelector("pre")).toHaveTextContent("(takes no arguments)");
+      expect(tools[0].querySelector("pre")).toHaveTextContent("query: string");
+      expect(container.querySelector("#agent-internals-panel")).not.toHaveTextContent("(none)");
+    });
+
+    it("positions the panel from the gear button's rect when opened", async () => {
+      mockSession({ role: "admin" });
+      vi.spyOn(apiModule, "apiFetch").mockResolvedValue(jsonResponse(body));
+      const rect = (l: number, t: number, r: number, b: number) =>
+        ({ left: l, top: t, right: r, bottom: b, width: r - l, height: b - t, x: l, y: t, toJSON() {} }) as DOMRect;
+      const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        if (this.id === "agent-internals-btn") return rect(900, 700, 930, 728);
+        if (this.classList.contains("search-bar-wrapper")) return rect(8, 300, 1000, 760);
+        return rect(0, 0, 0, 0);
+      });
+      const { container } = render(<SearchBar />);
+      const panel = container.querySelector("#agent-internals-panel") as HTMLElement;
+      const wrapper = container.querySelector(".search-bar-wrapper") as HTMLElement;
+      expect(wrapper.contains(panel)).toBe(true);
+      await userEvent.click(screen.getByRole("button", { name: "Agent Internals" }));
+      // bottom = wrapper.bottom - gear.top + 8 ; right = wrapper.right - gear.right
+      await waitFor(() => expect(panel.style.bottom).toBe("68px"));
+      expect(panel.style.right).toBe("70px");
+      spy.mockRestore();
+    });
+  });
+});
+
+describe("ChatImagesRow (unit)", () => {
+  it("filters unsafe urls and caps at 6", () => {
+    const images = [
+      { thumb_url: "javascript:x", source_url: "https://a.test/f" },
+      { thumb_url: "https://a.test/1", source_url: "data:text/html,x" },
+      ...Array.from({ length: 8 }, (_, i) => ({ thumb_url: `https://a.test/t${i}`, source_url: null })),
+    ];
+    const { container } = render(<ChatImagesRow images={images} />);
+    expect(container.querySelectorAll("a")).toHaveLength(6);
+    expect(container.querySelector("a")).toHaveAttribute("href", "https://a.test/t0");
+  });
+  it("renders nothing for undefined images", () => {
+    const { container } = render(<ChatImagesRow images={undefined} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("internals panel re-measure on bar size change", () => {
+  it("updates bottom when the observed bar resizes while open", async () => {
+    vi.restoreAllMocks();
+    __resetGraphCacheForTest();
+    mockSession({ role: "admin" });
+    vi.spyOn(apiModule, "apiFetch").mockResolvedValue(jsonResponse({ system_prompt: "s", tools: [] }));
+    let cb: (() => void) | null = null;
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(f: () => void) { cb = f; }
+      observe() {}
+      disconnect = disconnect;
+    });
+    let gearTop = 100;
+    const rect = (l: number, t: number, r: number, b: number) =>
+      ({ left: l, top: t, right: r, bottom: b, width: r - l, height: b - t, x: l, y: t, toJSON() {} }) as DOMRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.id === "agent-internals-btn") return rect(900, gearTop, 930, gearTop + 28);
+      if (this.classList.contains("search-bar-wrapper")) return rect(8, 0, 1000, 760);
+      return rect(0, 0, 0, 0);
+    });
+    const { container, unmount } = render(<SearchBar />);
+    const panel = container.querySelector("#agent-internals-panel") as HTMLElement;
+    await userEvent.click(screen.getByRole("button", { name: "Agent Internals" }));
+    await waitFor(() => expect(panel.style.bottom).toBe("668px"));
+    gearTop = 700;
+    act(() => cb?.());
+    await waitFor(() => expect(panel.style.bottom).toBe("68px"));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(disconnect).toHaveBeenCalled();
+    unmount();
+    vi.unstubAllGlobals();
   });
 });

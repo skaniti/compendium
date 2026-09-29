@@ -13,14 +13,37 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // state only changes at the discrete start/end/snap transitions).
 //
 // Unlike usePanelResize's width (a persisted CSS custom property),
-// #search-bar's collapsed/expanded height isn't persisted -- Dash always
+// #search-bar's collapsed/expanded state isn't persisted -- Dash always
 // starts minimized on load (search_stream.js's attach(): "Start minimized"),
-// so this hook does the same and never reads/writes preferences.
+// so this hook does the same and never reads/writes preferences. Only the
+// dragged-open HEIGHT is remembered (ref + sessionStorage, see below), so
+// collapse -> expand returns to where the user dragged it.
 const MIN_BAR_HEIGHT_FALLBACK_PX = 50;
 const MAXIMIZED_HEIGHT_CAP_PX = 400;
 const MAXIMIZED_HEIGHT_VIEWPORT_FRACTION = 0.5;
 const MAX_DRAG_HEIGHT_VIEWPORT_FRACTION = 0.7; // matches search-bar.css's max-height: 70vh
 const SNAP_TO_MINIMIZED_SLACK_PX = 10;
+// The last dragged-open height survives collapse/expand (ref) and a reload in
+// the same tab (sessionStorage). Fail-open: storage may throw or be absent.
+const HEIGHT_STORAGE_KEY = "compendium-search-height";
+
+function readStoredHeight(): number | null {
+  try {
+    const raw = sessionStorage.getItem(HEIGHT_STORAGE_KEY);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredHeight(px: number): void {
+  try {
+    sessionStorage.setItem(HEIGHT_STORAGE_KEY, String(px));
+  } catch {
+    /* fail-open */
+  }
+}
 
 interface ActiveDrag {
   onMove: (ev: MouseEvent) => void;
@@ -31,19 +54,28 @@ export function useSearchBarResize() {
   const barRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<HTMLDivElement | null>(null);
   const activeDragRef = useRef<ActiveDrag | null>(null);
+  // null until a drag ends above the snap threshold (lazy-hydrated from storage).
+  const lastHeightRef = useRef<number | null>(null);
   // Dash's #search-bar starts with the .minimized class already applied
   // (attach() runs "Start minimized" unconditionally on load).
   const [maximized, setMaximized] = useState(false);
   const [resizing, setResizing] = useState(false);
 
+  const openHeight = useCallback((): number => {
+    if (lastHeightRef.current === null) lastHeightRef.current = readStoredHeight();
+    const remembered = lastHeightRef.current;
+    if (remembered === null) return getMaximizedHeightPx();
+    return Math.min(remembered, window.innerHeight * MAX_DRAG_HEIGHT_VIEWPORT_FRACTION);
+  }, []);
+
   const toggleMaximized = useCallback(() => {
     const bar = barRef.current;
     setMaximized((prev) => {
       const next = !prev;
-      if (bar) animateToHeight(bar, next ? getMaximizedHeightPx() : getMinBarHeight(bar));
+      if (bar) animateToHeight(bar, next ? openHeight() : getMinBarHeight(bar));
       return next;
     });
-  }, []);
+  }, [openHeight]);
 
   // search_stream.js's runStreamingQuery(): `if (bar && !isMaximized(bar))
   // setMaximized(bar, true);` -- expand-only (no-op if already maximized),
@@ -52,10 +84,10 @@ export function useSearchBarResize() {
     const bar = barRef.current;
     setMaximized((prev) => {
       if (prev) return prev;
-      if (bar) animateToHeight(bar, getMaximizedHeightPx());
+      if (bar) animateToHeight(bar, openHeight());
       return true;
     });
-  }, []);
+  }, [openHeight]);
 
   useEffect(() => {
     const bar = barRef.current;
@@ -94,6 +126,9 @@ export function useSearchBarResize() {
         if (currentH <= snapThreshold) {
           animateToHeight(bar!, getMinBarHeight(bar!));
           setMaximized(false);
+        } else {
+          lastHeightRef.current = currentH;
+          writeStoredHeight(currentH);
         }
       }
 

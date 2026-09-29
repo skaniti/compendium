@@ -63,8 +63,9 @@ export interface CompleteEvent {
   // sessions, so sources_detail (and cluster_ids above) survive redaction
   // and are visible to every caller regardless of role.
   sources_detail?: SourceDetail[];
-  // Shape per the backend's _extract_image_markers; rendering still deferred.
-  images?: { thumb_url: string; source_url: string }[];
+  // Shape per the backend's _extract_image_markers; rendered as the
+  // .chat-images-row under the sources row (max 6, Dash parity).
+  images?: { thumb_url: string; source_url?: string | null }[];
   // Optional: _redact_complete_event (backend/services/agent.py, P5)
   // strips both of these whenever get_role(user_id) != "admin". That
   // includes acting-as-demo sessions -- the acted-as row IS the demo

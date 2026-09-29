@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useSearchBarResize } from "@/hooks/useSearchBarResize";
 import { useGraph } from "@/hooks/useGraph";
@@ -37,13 +37,14 @@ function renderToolDefinition(tool: AgentTool) {
   const paramLines = Object.entries(params).map(
     ([name, spec]) => `  ${name}: ${spec.type ?? ""} — ${spec.description ?? ""}`
   );
-  const paramText = paramLines.length > 0 ? paramLines.join("\n") : "  (none)";
+  const paramText = paramLines.length > 0 ? paramLines.join("\n") : "  (takes no arguments)";
   return (
     <details key={func.name}>
       <summary style={{ fontFamily: "monospace", fontSize: "0.72rem" }}>{func.name}</summary>
       <p style={{ fontSize: "0.7rem", color: "var(--text)", opacity: 0.7, margin: "2px 0 2px 12px" }}>
         {func.description}
       </p>
+      <div className="internals-tool-caption">arguments</div>
       <pre>{paramText}</pre>
     </details>
   );
@@ -62,13 +63,24 @@ function renderToolDefinition(tool: AgentTool) {
 //
 // Deliberately NOT ported (out of scope for this slice -- see Dash's own
 // comments on _render_search_bar and search_stream.js):
-//   - .chat-images-row -- a separate, not-yet-requested parity gap
-//     (unrelated to the batch-03 chat<->graph interop below).
 // Sources below (2026-07-28, chat parity fix 2) port makeSourceLink's
 // Safety cap over the backend's own preview (TOOL_RESULT_PREVIEW_CHARS =
 // 600 chars plus an ellipsis in backend/services/agent.py); sits above it
 // so a backend-cut preview is never cut twice. Dash's makeTraceEntry did
 // the same at 300 (search_stream.js ~238).
+const MAX_CHAT_IMAGES = 6;
+
+/** URLs here come from tool results / the model, so only http(s) may reach an
+ * href or src (blocks javascript:/data: etc.). Returns null when unsafe. */
+function safeHref(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const p = new URL(u, "http://localhost").protocol;
+    return p === "http:" || p === "https:" ? u : null;
+  } catch {
+    return null;
+  }
+}
 export const TRACE_PREVIEW_MAX_CHARS = 700;
 export function tracePreview(preview: string | undefined | null): string {
   const text = preview ?? "";
@@ -140,8 +152,11 @@ function SourcePill({ url, nodeId }: { url: string; nodeId: string | null }) {
   const node = nodeId ? nodeById(nodeId) : undefined;
   const label = node?.label ?? hostnameLabel;
 
+  const href = safeHref(url);
+  if (!href) return null;
+
   const pill = (
-    <a href={url} target="_blank" rel="noreferrer" className="tag-pill chat-source-pill">
+    <a href={href} target="_blank" rel="noreferrer" className="tag-pill chat-source-pill">
       {label}
     </a>
   );
@@ -178,6 +193,43 @@ function SourcePill({ url, nodeId }: { url: string; nodeId: string | null }) {
   );
 }
 
+export function ChatImagesRow({
+  images,
+}: {
+  images: { thumb_url: string; source_url?: string | null }[] | undefined;
+}) {
+  const imgs = (images ?? [])
+    .map((im) => {
+      const thumb = safeHref(im.thumb_url);
+      // An absent source_url falls back to the thumb; a PRESENT but unsafe one
+      // drops the whole image.
+      const href = im.source_url ? safeHref(im.source_url) : thumb;
+      return thumb && href ? { thumb, href } : null;
+    })
+    .filter((im): im is { thumb: string; href: string } => im !== null)
+    .slice(0, MAX_CHAT_IMAGES);
+  if (imgs.length === 0) return null;
+  return (
+    <div className="chat-images-row">
+      <span className="chat-images-label">images:</span>
+      {imgs.map((im, i) => (
+        <a key={`${im.thumb}-${i}`} href={im.href} target="_blank" rel="noopener noreferrer" title="Open full image">
+          {/* eslint-disable-next-line @next/next/no-img-element -- remote thumbs that rot; next/image would need remotePatterns for arbitrary hosts */}
+          <img
+            src={im.thumb}
+            loading="lazy"
+            alt=""
+            onError={(e) => {
+              const a = e.currentTarget.parentElement;
+              if (a) a.style.display = "none";
+            }}
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 export default function SearchBar() {
   const { turns, busy, input, setInput, send, cancel, clear } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
@@ -194,6 +246,24 @@ export default function SearchBar() {
   const adminContext = role === "admin" || actingAsDemo;
 
   const [internalsOpen, setInternalsOpen] = useState(false);
+  // Panel pops up from the gear (not the top of the whole wrapper): the gear
+  // sits inside #search-bar (overflow:hidden), so the panel stays a sibling
+  // of the bar and takes its bottom/right offsets from the gear's rect,
+  // measured relative to the wrapper on open and on window resize.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const gearRef = useRef<HTMLButtonElement | null>(null);
+  const [panelPos, setPanelPos] = useState<{ bottom: number; right: number } | null>(null);
+  const measurePanelPos = useCallback(() => {
+    const wrap = wrapperRef.current;
+    const gear = gearRef.current;
+    if (!wrap || !gear) return;
+    const w = wrap.getBoundingClientRect();
+    const g = gear.getBoundingClientRect();
+    // Clamp so the panel (380px, capped at 90vw) never runs off the wrapper's left edge.
+    const panelW = Math.min(380, window.innerWidth * 0.9);
+    const right = Math.max(0, Math.min(Math.round(w.right - g.right), Math.round(w.width - panelW)));
+    setPanelPos({ bottom: Math.round(w.bottom - g.top + 8), right });
+  }, []);
   const [internals, setInternals] = useState<AgentInternals | null>(null);
   const [internalsLoading, setInternalsLoading] = useState(false);
   const [internalsError, setInternalsError] = useState<string | null>(null);
@@ -229,7 +299,22 @@ export default function SearchBar() {
       if (next && internals === null && !internalsLoading) void loadInternals();
       return next;
     });
-  }, [internals, internalsLoading, loadInternals]);
+    measurePanelPos();
+  }, [internals, internalsLoading, loadInternals, measurePanelPos]);
+
+  useEffect(() => {
+    if (!internalsOpen) return;
+    window.addEventListener("resize", measurePanelPos);
+    // The gear moves when the bar collapses/expands (it sits at the TOP of an
+    // empty conversation), so re-measure on any bar size change while open.
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measurePanelPos()) : null;
+    const bar = wrapperRef.current?.querySelector("#search-bar");
+    if (ro && bar) ro.observe(bar);
+    return () => {
+      window.removeEventListener("resize", measurePanelPos);
+      ro?.disconnect();
+    };
+  }, [internalsOpen, measurePanelPos]);
 
   // Defensive, not a Dash behavior to port: the panel's open state
   // (style.display) and its role gate (the `hidden` attribute) are
@@ -260,7 +345,7 @@ export default function SearchBar() {
   const hasMessages = turns.length > 0;
 
   return (
-    <div className="search-bar-wrapper">
+    <div className="search-bar-wrapper" ref={wrapperRef}>
       <button
         id="search-tab"
         type="button"
@@ -346,6 +431,13 @@ export default function SearchBar() {
                     })()}
                   </div>
                 )}
+
+                {/* Dash parity (search_stream.js ~740-795): up to 6 lazy
+                    thumbnails under the sources row, each linking to the
+                    full image; a thumb that fails to load (Wikimedia URLs
+                    rot) hides its own anchor. Not rendered for restored
+                    turns (no meta). */}
+                {!restored && <ChatImagesRow images={assistant.meta?.images} />}
 
                 {/* Guard on the DATA, not just adminContext: the backend
                     redacts tool_calls_made/total_cost_usd for any
@@ -438,6 +530,7 @@ export default function SearchBar() {
               unhides it for admin-context viewers, app.py:2807-2830). */}
           <button
             id="agent-internals-btn"
+            ref={gearRef}
             type="button"
             className="search-gear-btn"
             title="Agent Internals"
@@ -458,7 +551,10 @@ export default function SearchBar() {
       <div
         id="agent-internals-panel"
         className="internals-panel"
-        style={{ display: internalsOpen ? "block" : "none" }}
+        style={{
+          display: internalsOpen ? "block" : "none",
+          ...(panelPos ? { bottom: `${panelPos.bottom}px`, right: `${panelPos.right}px` } : null),
+        }}
         hidden={!adminContext}
       >
         <div className="internals-panel-inner">
@@ -499,6 +595,9 @@ export default function SearchBar() {
           </details>
           <details style={{ marginTop: 6 }}>
             <summary>Tools ({internals?.tools.length ?? 0})</summary>
+            <p className="internals-tools-note">
+              Each box lists the arguments the agent can pass to that tool.
+            </p>
             {internals?.tools.map((t) => renderToolDefinition(t))}
           </details>
         </div>

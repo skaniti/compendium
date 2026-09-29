@@ -139,6 +139,13 @@
 .search-msg-assistant-text a.tag-pill {
   text-decoration: none;
   display: inline-block;
+  /* Chat-scoped compact bold pill (2026-09-28); the global .tag-pill
+     (diary panel) is untouched. */
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  line-height: 1.35;
+  margin: 1px 2px;
 }
 .search-msg-assistant-text code {
   font-family: Consolas, Menlo, "Liberation Mono", monospace;
@@ -238,7 +245,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  gap: 4px 8px; /* the row gap owns all spacing between pills/glyph groups */
   color: var(--text-muted);
   font-size: 0.72rem;
 }
@@ -255,9 +262,13 @@
  * already matches makeSourceLink's inline value, so only the pill's
  * inter-pill spacing needs porting here (search_stream.js ~170-174).
  */
-.chat-source-pill {
+.chat-sources-row .chat-source-pill {
   text-decoration: none;
-  margin: 1px 2px 1px 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  line-height: 1.35;
+  margin: 0;
 }
 
 /* Source-pill locate glyph (P7): jumps to the cited page's node on the
@@ -276,9 +287,10 @@
 .chat-source-pill-group {
   display: inline-flex;
   align-items: center;
-  margin: 1px 2px 1px 0;
+  gap: 3px; /* keeps the locate glyph off its pill */
+  margin: 0;
 }
-.chat-source-pill-group .chat-source-pill {
+.chat-sources-row .chat-source-pill-group .chat-source-pill {
   margin: 0;
 }
 .chat-source-locate-btn {
@@ -299,6 +311,40 @@
 .chat-source-locate-btn:disabled {
   opacity: 0.25;
   cursor: not-allowed;
+}
+
+/* Images row (Dash parity, search_stream.js ~740-795 inline cssText). */
+.chat-images-row {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+.chat-images-label {
+  margin-right: 4px;
+  font-size: 0.7rem;
+  color: #fff;
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  align-self: center;
+}
+.chat-images-row a {
+  display: inline-block;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-muted, rgba(255, 255, 255, 0.1));
+}
+.chat-images-row img {
+  display: block;
+  max-height: 90px;
+  max-width: 140px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 /* ===== Input row ===== */
@@ -597,9 +643,21 @@
   bottom: calc(100% + 4px); /* sit above the search bar wrapper */
   right: 0;
   width: 380px;
-  max-width: 90%;
+  max-width: min(380px, 90vw);
   max-height: 50vh;
   z-index: 6;
+}
+.internals-tools-note,
+.internals-tool-caption {
+  font-size: 0.68rem;
+  color: var(--text);
+  opacity: 0.7;
+}
+.internals-tools-note {
+  margin: 4px 0 2px 8px;
+}
+.internals-tool-caption {
+  margin: 4px 0 0 12px;
 }
 .internals-panel-inner {
   background: var(--panel-bg);
