@@ -595,7 +595,7 @@ class TestMatchTaxonomy:
         assert "[id=103]" in result
         assert "Sourdough" not in result
 
-    def test_supercluster_hit_wires_cluster_and_source_bookkeeping(self):
+    def test_supercluster_hit_wires_cluster_bookkeeping_only(self):
         """Matched cluster ids must flow into the same bookkeeping the normal
         search path uses, so the frontend's cluster_ids graph highlighting
         works for taxonomy answers too."""
@@ -604,8 +604,10 @@ class TestMatchTaxonomy:
         agent._match_taxonomy("astronomy", state)
         assert "black_holes" in state.clusters_cited
         assert "exoplanets" in state.clusters_cited
-        assert "https://en.wikipedia.org/wiki/Black_hole" in state.sources_cited
-        assert state.source_page_ids["https://en.wikipedia.org/wiki/Black_hole"] == 101
+        # Member pages appear in the result text but are not recorded as
+        # sources (cluster listings would just duplicate the pills).
+        assert state.sources_cited == []
+        assert state.source_page_ids == {}
 
     def test_typo_tolerant_match(self):
         agent = self._agent()
@@ -1298,6 +1300,61 @@ class TestGetClusterInfoRanking:
         agent._pages_cache = []
         result = agent._tool_get_cluster_info("quantum chromodynamics")
         assert "not found" in result.lower()
+
+
+class TestClusterToolsDoNotRecordSources:
+    """Cluster tools list member pages in their RESULT TEXT (so the answer can
+    link them as pills) but must not record them as sources: the sources row
+    would just repeat the same pages."""
+
+    def _agent(self):
+        agent = CompendiumAgent(user_id=1)
+        agent._clusters_cache = [
+            {
+                "id": 1,
+                "cluster_slug": "astronomy_basics",
+                "cluster_name": "Astronomy Basics",
+                "super_cluster": "astronomy",
+                "page_ids": [101],
+            },
+            {
+                "id": 2,
+                "cluster_slug": "black_holes",
+                "cluster_name": "Black Holes",
+                "super_cluster": "astronomy",
+                "page_ids": [102],
+            },
+        ]
+        agent._pages_cache = [
+            {"id": 101, "url": "https://x.com/a", "title": "A"},
+            {"id": 102, "url": "https://x.com/b", "title": "B"},
+        ]
+        return agent
+
+    def test_get_cluster_info_leaf_lists_urls_but_records_no_sources(self):
+        agent = self._agent()
+        state = AgentState()
+        result = agent._tool_get_cluster_info("black holes", state)
+        assert "https://x.com/b" in result
+        assert state.sources_cited == []
+        assert state.source_page_ids == {}
+        assert state.source_node_ids == {}
+        assert state.clusters_cited == ["black_holes"]
+
+    def test_get_cluster_info_supercluster_lists_urls_but_records_no_sources(self):
+        agent = self._agent()
+        state = AgentState()
+        result = agent._tool_get_cluster_info("astronomy", state)
+        assert "Supercluster: astronomy" in result
+        assert "https://x.com/a" in result and "https://x.com/b" in result
+        assert state.sources_cited == []
+        assert state.source_page_ids == {}
+
+    def test_get_page_detail_still_records_source(self):
+        agent = self._agent()
+        state = AgentState()
+        agent._tool_get_page_detail(101, state)
+        assert state.sources_cited == ["https://x.com/a"]
 
 
 class TestGetPageDetailAnyStatusFallback:
@@ -2308,3 +2365,35 @@ class TestQueryStreamUngroundedAnswerGuard:
         second = agent._openai_client.chat.completions.create.call_args_list[1].kwargs["messages"]
         assert _has_system(second, NARRATED_INTENT_NUDGE)
         assert not _has_system(second, UNGROUNDED_ANSWER_NUDGE)
+
+
+class TestClusterOnlyAnswerHasNoSources:
+    """A turn whose only tool call is get_cluster_info returns empty sources
+    even when the answer links the member pages."""
+
+    @pytest.mark.asyncio
+    async def test_query_cluster_only_turn_sources_empty(self):
+        agent = _mock_agent()
+        agent._clusters_cache = [
+            {
+                "id": 1,
+                "cluster_slug": "black_holes",
+                "cluster_name": "Black Holes",
+                "super_cluster": None,
+                "page_ids": [1],
+            }
+        ]
+        answer = "Your Black Holes cluster has [A](https://x.com/a)."
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _FakeResponse(
+                    _tool_call_message("get_cluster_info", '{"cluster_name": "black holes"}')
+                ),
+                _FakeResponse(_final_answer_message(answer)),
+            ]
+        )
+        with patch("backend.db.trends_repo.insert_cost_event"):
+            resp = await agent.query("what is in black holes?")
+        assert "https://x.com/a" in resp.answer
+        assert resp.sources == []
+        assert resp.sources_detail == []

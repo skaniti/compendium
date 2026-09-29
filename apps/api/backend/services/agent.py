@@ -1527,16 +1527,13 @@ class CompendiumAgent:
         if title:
             state.source_node_ids[url] = _slugify(title)
 
-    def _collect_member_pages(
-        self, members: list[dict], cap: int, state: AgentState | None = None
-    ) -> tuple[list[str], int]:
+    def _collect_member_pages(self, members: list[dict], cap: int) -> tuple[list[str], int]:
         """Render up to `cap` page-listing lines across the given clusters.
 
-        Returns (lines, total_page_count). Citation bookkeeping runs over
-        ALL member pages regardless of the display cap -- matches
-        get_cluster_info's pre-existing precedent, where sources_cited /
-        clusters_cited drive graph highlighting for the whole matched
-        topic, not just the preview lines shown to the LLM.
+        Returns (lines, total_page_count). Member pages are NOT recorded as
+        sources: a cluster listing is structural, and the answer links the
+        pages it uses inline, so recording them would just repeat those
+        pages in the sources row.
         """
         pages = self._get_pages_cached()
         page_map = {p["id"]: p for p in pages}
@@ -1551,7 +1548,6 @@ class CompendiumAgent:
                 if len(lines) < cap:
                     title = p.get("title") or p.get("url", "Unknown")
                     lines.append(f"  - [id={pid}] {title} ({p.get('url', '')})")
-                self._cite_source(state, p.get("url"), pid, p.get("title"))
         return lines, total
 
     def _format_supercluster_lookup(
@@ -1562,7 +1558,7 @@ class CompendiumAgent:
         if state:
             for c in members:
                 state.clusters_cited.append(c["cluster_slug"])
-        page_lines, total = self._collect_member_pages(members, cap=10, state=state)
+        page_lines, total = self._collect_member_pages(members, cap=10)
         member_names = ", ".join(c["cluster_name"] for c in members)
         return (
             f"Supercluster: {label}\n"
@@ -1605,7 +1601,7 @@ class CompendiumAgent:
             if state:
                 for c in members:
                     state.clusters_cited.append(c["cluster_slug"])
-            page_lines, total = self._collect_member_pages(members, cap=10, state=state)
+            page_lines, total = self._collect_member_pages(members, cap=10)
             member_names = ", ".join(c["cluster_name"] for c in members)
             return (
                 f"Taxonomy match: your compendium has a supercluster named "
@@ -1631,7 +1627,7 @@ class CompendiumAgent:
 
         if state:
             state.clusters_cited.append(best_cluster["cluster_slug"])
-        page_lines, total = self._collect_member_pages([best_cluster], cap=10, state=state)
+        page_lines, total = self._collect_member_pages([best_cluster], cap=10)
         return (
             f"Taxonomy match: your compendium has a cluster named "
             f"'{best_cluster['cluster_name']}' (matched by topic name, not "
@@ -2114,7 +2110,6 @@ class CompendiumAgent:
             if p:
                 title = p.get("title") or p.get("url", "Unknown")
                 page_lines.append(f"  - [id={pid}] {title} ({p.get('url', '')})")
-                self._cite_source(state, p.get("url"), pid, p.get("title"))
 
         return (
             f"Cluster: {match['cluster_name']} (slug: {match['cluster_slug']})\n"
