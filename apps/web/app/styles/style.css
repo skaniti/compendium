@@ -460,6 +460,58 @@
     transform: translateX(calc(-100cqw + 100% + 2 * var(--bar-pad)));
 }
 
+/* Ported from explorer frontend/dash/assets/dev_views.css:3-49 (.dev-tab-btn). */
+.dev-tab-btn {
+    /* Same vertical icon+caption layout as the Dev/Graph toggle
+       (#dev-graph-toggle-btn) -- icon on top, caption below. Background
+       intentionally stays transparent (vs the toggle's accent fill) so
+       only ONE button on the bar reads as "active mode-switch action."
+       Width is flex:1 so all tabs together fill #header-dev-tabs and
+       stay equal-width. position:relative anchors the dq-bot-badge
+       overlay (top-right corner). */
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    /* 54 -> 76 (2026-07-13 header-scaling pass, ~1.405x with the header),
+       then 76 -> 82 (2026-07-13 tweak pass, item 1: dev-mode widgets are
+       widgets too, so .dev-tab-btn tracks --card-h's 67 -> 82 restore). */
+    height: 82px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--on-primary);
+    border-radius: 8px;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-family: inherit;
+    /* Vertical stack: icon on top, caption below -- matches the toggle's
+       .hbar-nav-icon + .hbar-nav-caption layout exactly. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.dev-tab-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+.dev-tab-btn.active {
+    background: var(--on-primary);
+    color: var(--accent);
+    font-weight: 600;
+    border-color: var(--on-primary);
+}
+/* When a dev tab is active, invert the icon stroke so the white-on-accent
+   icon stays visible after the button background flips to var(--on-primary). */
+.dev-tab-btn.active .hbar-nav-icon-img {
+    filter: invert(1);
+}
+
+/* Next: tabs and toggle are <a> links; tab icons are always shown (the
+   base .hbar-nav-icon-img is display:none for the toggle's mode swap). */
+.dev-tab-btn, #dev-graph-toggle-btn { text-decoration: none; }
+.dev-tab-btn .hbar-nav-icon-img { display: block; }
+
 /* ===== Graph-mode mini-cards (inside mode-switch-bar) =====
    Three compact cards (CLUSTERING / DATE RANGE / VIEW) that sit inside
    #header-graph-controls. Each card has an uppercase spaced label on top

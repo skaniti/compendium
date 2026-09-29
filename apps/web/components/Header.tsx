@@ -3,7 +3,10 @@
 import type { CSSProperties } from "react";
 import HeaderCards from "./HeaderCards";
 import SettingsMenu from "./SettingsMenu";
+import Link from "next/link";
+import DevTabs from "./dev/DevTabs";
 import { useSession } from "./SessionProvider";
+import { DevArrowsIcon, GraphGlyphIcon, visibleDevViews } from "@/lib/dev-views";
 
 // Mirrors app.py's .app-header inline style block (:1877-1899). Header grew
 // 84px -> 118px in the 2026-07-13 header-scaling pass; padding stays
@@ -82,8 +85,10 @@ const SIGN_OUT_BUTTON_STYLE: CSSProperties = {
   display: "block",
 };
 
-export default function Header() {
-  const { account } = useSession();
+export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
+  const { account, role, actingAsDemo } = useSession();
+  const firstDev = visibleDevViews(role, actingAsDemo)[0];
+  const toggleHref = mode === "graph" ? (firstDev?.href ?? "/dev/pipeline") : "/";
 
   async function handleSignOut(): Promise<void> {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -95,21 +100,26 @@ export default function Header() {
 
   return (
     <div className="app-header" style={APP_HEADER_STYLE}>
-      <div id="mode-switch-bar" className="mode-switch-bar mode-graph">
+      <div id="mode-switch-bar" className={`mode-switch-bar mode-${mode}`}>
         <div id="header-graph-controls" className="hbar-graph-widgets">
           <HeaderCards />
         </div>
-
-        {/* TODO(mig-01 task 5): dev/graph mode switching. Kept in the DOM
-            (structure + classes match app.py's _build_dev_menu) but hidden
-            until that task decides whether/how it ships. */}
-        <div className="dev-menu" style={{ display: "none" }}>
-          <button id="dev-graph-toggle-btn" className="header-nav-btn" type="button">
-            <div className="hbar-nav-icon" />
+        <DevTabs />
+        <div className="dev-menu">
+          <Link
+            id="dev-graph-toggle-btn"
+            className="header-nav-btn"
+            href={toggleHref}
+            title={mode === "graph" ? "Open the dev views" : "Back to the graph"}
+          >
+            <div className="hbar-nav-icon">
+              <DevArrowsIcon className="hbar-nav-icon-img hbar-nav-icon-dev" />
+              <GraphGlyphIcon className="hbar-nav-icon-img hbar-nav-icon-graph" />
+            </div>
             <span id="dev-menu-label" className="hbar-nav-caption">
-              Dev
+              {mode === "graph" ? "Dev" : "Graph"}
             </span>
-          </button>
+          </Link>
         </div>
       </div>
 

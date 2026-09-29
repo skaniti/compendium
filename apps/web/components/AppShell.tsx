@@ -18,6 +18,8 @@ interface AppShellProps {
   left?: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
+  mode?: "graph" | "dev";
+  children?: ReactNode;
 }
 
 // Server component: reads the signed-in user's persisted panel widths
@@ -25,7 +27,7 @@ interface AppShellProps {
 // inline style={_panel_width_style()} on .app-container at app.py:2010) so
 // there's no resize flash while the client hydrates. Unauthenticated /
 // backend-down falls back to the ported CSS's own 20% default, same as Dash.
-export default async function AppShell({ left, center, right }: AppShellProps) {
+export default async function AppShell({ left, center, right, mode = "graph", children }: AppShellProps) {
   // Independent backend reads (different response fields off the same
   // preferences row, but neither call depends on the other's result) --
   // run them concurrently rather than serializing two round-trips.
@@ -97,7 +99,9 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           app/styles/compendium-loader.css) -- rendered first so it's the
           first thing painted, though its own z-index (not DOM order) is
           what actually pins it above Header/PanelGrid. */}
-      <CompendiumLoader initialHasSeen={initialHasSeen} canPersist={canPersist} />
+      {mode === "graph" && (
+        <CompendiumLoader initialHasSeen={initialHasSeen} canPersist={canPersist} />
+      )}
       {/* PlainDemoBodyClass (Task 8-C2, deliverable 5): toggles .plain-demo
           on <body> for a direct demo login -- see that component's own
           comment. Renders nothing; mounted anywhere in SessionProvider's
@@ -108,13 +112,13 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
           page-zooming the browser anywhere in the app. Renders nothing --
           the mechanism (why d3-zoom alone doesn't cover this) is documented
           in that component's own header comment. */}
-      <PageZoomGuard />
+      {mode === "graph" && <PageZoomGuard />}
       {/* TimeWindowProvider (Task 8-C2): wraps the SAME subtree as
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
           future reader) share one context instance. */}
       <TimeWindowProvider>
-        <Header />
+        <Header mode={mode} />
         {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
             .app-header. #header-graph-controls animates its mode-swap via
             `transform`, which makes it a containing block for any
@@ -133,6 +137,9 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
             ancestor somewhere above them in the tree -- it doesn't need to
             construct or touch those nodes itself, same as PanelGrid (also
             "use client") already doesn't. */}
+        {mode === "dev" ? (
+          <main className="dev-view">{children}</main>
+        ) : (
         <NavProvider>
           <PanelGrid
             initialLeftWidth={panelLeftWidth}
@@ -143,6 +150,7 @@ export default async function AppShell({ left, center, right }: AppShellProps) {
             right={right}
           />
         </NavProvider>
+        )}
       </TimeWindowProvider>
     </StarfieldProvider>
   );
