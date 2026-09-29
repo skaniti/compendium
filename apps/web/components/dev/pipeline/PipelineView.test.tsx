@@ -10,12 +10,12 @@ const summary = (total: number): PipelineSummary => ({
   skip_gate_config: { model: "m", temperature: 0, prompt_name: "p1", prompt: "x", tools: [] },
 });
 beforeEach(() => {
-  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [], total: 0, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [{ id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, visited_at: null, created_at: null }], total: 1, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
 });
 it("shows loading, then formatted status cards and the subtitle", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(1303));
   render(<PipelineView />);
-  expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Loading…")).toHaveLength(2); // summary + table
   expect(await screen.findByText("1,271")).toBeInTheDocument();
   expect(screen.getByText(PIPELINE_SUBTITLE)).toBeInTheDocument();
 });
@@ -27,5 +27,8 @@ it("renders an alert when the summary fails", async () => {
 it("shows No pages found. when total_pages is 0", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(0));
   render(<PipelineView />);
-  expect((await screen.findAllByText("No pages found.")).length).toBeGreaterThan(0);
+  expect(await screen.findByText("No pages found.")).toBeInTheDocument();
+  await screen.findByText("Row page"); // table has a row, so the empty copy is the summary branch
+  expect(screen.getAllByText("No pages found.")).toHaveLength(1); // not DecisionBars' empty caption
+  expect(screen.queryByText("Page status")).not.toBeInTheDocument();
 });
