@@ -1,6 +1,5 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { SessionRole } from "@/components/SessionProvider";
-import PipelineView from "@/components/dev/pipeline/PipelineView";
 
 export type DevViewAccess = "any" | "admin";
 export interface DevViewDef {
@@ -9,7 +8,6 @@ export interface DevViewDef {
   href: string;
   access: DevViewAccess;
   Icon: () => ReactNode;
-  View: ComponentType;
 }
 
 // Glyph markup ported from explorer frontend/dash/app.py (_build_dev_menu /
@@ -64,7 +62,7 @@ export function GraphGlyphIcon({ className }: { className?: string }) {
 // Tab order = array order. Later sub-batches append (Data, Prompts, dqBot,
 // Logs (admin), Clusters, Traces (admin), Overview).
 export const DEV_VIEWS: DevViewDef[] = [
-  { id: "pipeline", label: "Pipeline", href: "/dev/pipeline", access: "any", Icon: PipelineIcon, View: PipelineView },
+  { id: "pipeline", label: "Pipeline", href: "/dev/pipeline", access: "any", Icon: PipelineIcon },
 ];
 
 export function findDevView(id: string): DevViewDef | undefined {
@@ -73,14 +71,16 @@ export function findDevView(id: string): DevViewDef | undefined {
 export function isPlainDemo(role: SessionRole | null, actingAsDemo: boolean): boolean {
   return role === "demo" && !actingAsDemo;
 }
+// ONE predicate for both the tab bar and the route gate: admin-only views are
+// visible to an admin or an admin acting as demo; null/user/plain demo never.
+export function canSeeAdminViews(role: SessionRole | null, actingAsDemo: boolean): boolean {
+  return role === "admin" || actingAsDemo;
+}
 export function visibleDevViews(
   role: SessionRole | null,
   actingAsDemo: boolean,
   views: DevViewDef[] = DEV_VIEWS,
 ): DevViewDef[] {
-  // Admin-only tabs show for an admin or an admin acting as demo; an unknown
-  // (null) role hides them too -- the spec's test pins this, and the backend
-  // remains the enforcement point either way.
-  const adminish = role === "admin" || actingAsDemo;
+  const adminish = canSeeAdminViews(role, actingAsDemo);
   return views.filter((v) => v.access === "any" || adminish);
 }

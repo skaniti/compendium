@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import AppShell from "@/components/AppShell";
-import { findDevView, isPlainDemo } from "@/lib/dev-views";
+import { canSeeAdminViews, findDevView } from "@/lib/dev-views";
 import { getInitialSessionRole } from "@/lib/preferences.server";
+import { DEV_VIEW_COMPONENTS } from "./views";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,9 @@ export default async function DevViewPage({ params }: { params: Promise<{ view: 
   const def = findDevView(view);
   if (!def) notFound();
   const { role, actingAsDemo } = await getInitialSessionRole();
-  if (def.access === "admin" && isPlainDemo(role, actingAsDemo)) notFound();
-  const View = def.View;
+  if (def.access === "admin" && !canSeeAdminViews(role, actingAsDemo)) notFound();
+  const View = DEV_VIEW_COMPONENTS[def.id];
+  if (!View) notFound();
   return (
     <AppShell mode="dev">
       <View />

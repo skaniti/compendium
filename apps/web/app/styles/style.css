@@ -507,6 +507,9 @@
     filter: invert(1);
 }
 
+/* Explorer set this inline on the container (app.py:582-590). */
+#header-dev-tabs.hbar-dev-tabs { display: flex; gap: 4px; align-items: center; }
+
 /* Next: tabs and toggle are <a> links; tab icons are always shown (the
    base .hbar-nav-icon-img is display:none for the toggle's mode swap). */
 .dev-tab-btn, #dev-graph-toggle-btn { text-decoration: none; }
