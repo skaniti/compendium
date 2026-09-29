@@ -6,7 +6,10 @@
 #
 #   bash scripts/dev.sh                     # backend (if found & down) + frontend
 #   FRONTEND_ONLY=1 bash scripts/dev.sh     # just the Next server (backend elsewhere)
-#   BACKEND_DIR=/path/to/backend bash scripts/dev.sh   # point at the backend repo
+#   BACKEND_DIR=/path/to/repo bash scripts/dev.sh      # legacy: start that repo's scripts/start_app.sh instead
+#
+# Cold-start backend: apps/api/scripts/dev_api.sh (default). BACKEND_DIR (env or
+# apps/web/.env.local) is now optional and legacy; when set, it wins.
 #
 # Logs -> logs/<timestamp>-{frontend,backend}.log (+ logs/latest.log). Ctrl+C stops all.
 set -uo pipefail
@@ -60,16 +63,24 @@ if [ "${FRONTEND_ONLY:-}" = "1" ]; then
   say "FRONTEND_ONLY=1 -> not starting the backend."
 elif backend_up; then
   say "backend already up at $BACKEND_URL"
+elif [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/apps/api/scripts/dev_api.sh" ]; then
+  say "starting backend from apps/api/scripts/dev_api.sh -> $BE_LOG"
+  ( cd "$ROOT" && bash apps/api/scripts/dev_api.sh ) >"$BE_LOG" 2>&1 &
+  PIDS+=("$!")
+  printf '[dev] waiting for backend '
+  for _ in $(seq 1 120); do backend_up && break; printf '.'; sleep 1; done; echo
+  backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $BE_LOG)"
 elif [ -n "${BACKEND_DIR:-}" ] && [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; then
-  say "starting backend from $BACKEND_DIR -> $BE_LOG"
+  say "starting legacy backend from $BACKEND_DIR -> $BE_LOG"
   ( cd "$BACKEND_DIR" && bash scripts/start_app.sh ) >"$BE_LOG" 2>&1 &
   PIDS+=("$!")
   printf '[dev] waiting for backend '
   for _ in $(seq 1 120); do backend_up && break; printf '.'; sleep 1; done; echo
   backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $BE_LOG)"
 else
-  say "WARN: backend is down and no BACKEND_DIR with scripts/start_app.sh was found."
-  say "      add BACKEND_DIR=/path/to/compendium-explorer to apps/web/.env.local, or run FRONTEND_ONLY=1."
+  say "WARN: backend is down and could not be started (apps/api/scripts/dev_api.sh missing,"
+  say "      or BACKEND_DIR is set but has no scripts/start_app.sh). BACKEND_DIR in"
+  say "      apps/web/.env.local is optional and legacy; unset it to use apps/api, or run FRONTEND_ONLY=1."
 fi
 
 # --- frontend: Next auto-picks a free port; we parse and print it ---
