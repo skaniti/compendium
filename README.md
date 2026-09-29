@@ -44,7 +44,10 @@ pages (Wikipedia, arXiv, GitHub, Stack Exchange, and a few others) spanning
 four topics — diffusion models, Greek/Roman mythology, electronics/Arduino,
 and cephalopods — respread across a plausible browsing timeline that stays
 "recent" no matter when the repo is cloned. Full source list and licensing
-notes: `apps/web/demo/fixtures/ATTRIBUTION.md`.
+notes: `apps/web/demo/fixtures/ATTRIBUTION.md`. The seed also carries a small
+synthetic archived/skipped population (temporary; see
+`apps/api/data/demo-seed/README.md`) so the Pipeline dev view has data, and
+`apps/web/demo/fixtures/pipeline/` is recorded from it.
 
 **Chat:** 12 question/answer runs from the live agent are recorded in
 `apps/web/demo/fixtures/chat/index.json`. The search bar at the bottom of the graph
@@ -173,6 +176,9 @@ headlessly via jsdom.
   Builds via the Gradle wrapper (`./gradlew assembleRelease`, producing an
   unsigned APK); release signing happens out-of-band — no keystore or
   signing config is committed.
+- **Dev views:** they live at `/dev/<view>` behind the header's Dev toggle;
+  the first ported view is Pipeline, backed by `/api/pipeline/*` and
+  `/api/analytics/archive-health`.
 
 ## Status
 
@@ -180,13 +186,13 @@ This repo is the successor to an earlier Dash + FastAPI prototype, ported
 surface by surface. Ported and live here: the app shell, the diary/history
 and topic-detail panels, the header widgets, the constellation graph (a
 vendored D3 port with supercluster nameplate layout, an original typeface,
-and a tunable layout), the streaming chat with source pills, and the
-auth/session/role mechanics. The FastAPI backend lives at `apps/api` and
+and a tunable layout), the streaming chat with source pills, the
+auth/session/role mechanics, and the Pipeline dev view (`/dev/pipeline`). The FastAPI backend lives at `apps/api` and
 runs the hosted instance; the browser extension (`apps/extension`) and the
 Android collector (`apps/android`) ship from here too.
 
-Migration in progress: the internal dev/observability views (pipeline, data
-browser, prompts, logs, traces, overview), a deploy target for this
+Migration in progress: the internal dev/observability views (data
+browser, prompts, logs, traces, overview, clusters, dqBot), a deploy target for this
 frontend, and retirement of the predecessor's Dash surface.
 
 ## Known limitations
