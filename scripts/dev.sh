@@ -11,7 +11,9 @@
 # Cold-start backend: apps/api/scripts/dev_api.sh (default). BACKEND_DIR (env or
 # apps/web/.env.local) is now optional and legacy; when set, it wins.
 #
-# Logs -> logs/<timestamp>-{frontend,backend}.log (+ logs/latest.log). Ctrl+C stops all.
+# Logs -> logs/<timestamp>-frontend.log (+ logs/latest.log); backend: logs/<timestamp>-api-dev.log
+# (+ logs/latest-api.log) from dev_api.sh, or -backend.log on the legacy BACKEND_DIR path.
+# Ctrl+C stops all.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,12 +66,12 @@ if [ "${FRONTEND_ONLY:-}" = "1" ]; then
 elif backend_up; then
   say "backend already up at $BACKEND_URL"
 elif [ -z "${BACKEND_DIR:-}" ] && [ -f "$ROOT/apps/api/scripts/dev_api.sh" ]; then
-  say "starting backend from apps/api/scripts/dev_api.sh -> $BE_LOG"
-  ( cd "$ROOT" && bash apps/api/scripts/dev_api.sh ) >"$BE_LOG" 2>&1 &
+  say "starting backend from apps/api/scripts/dev_api.sh -> $LOG_DIR/latest-api.log"
+  ( cd "$ROOT" && bash apps/api/scripts/dev_api.sh ) >/dev/null 2>&1 &
   PIDS+=("$!")
   printf '[dev] waiting for backend '
   for _ in $(seq 1 120); do backend_up && break; printf '.'; sleep 1; done; echo
-  backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $BE_LOG)"
+  backend_up && say "backend up at $BACKEND_URL" || say "WARN: backend not up after 120s (see $LOG_DIR/latest-api.log)"
 elif [ -n "${BACKEND_DIR:-}" ] && [ -f "$BACKEND_DIR/scripts/start_app.sh" ]; then
   say "starting legacy backend from $BACKEND_DIR -> $BE_LOG"
   ( cd "$BACKEND_DIR" && bash scripts/start_app.sh ) >"$BE_LOG" 2>&1 &

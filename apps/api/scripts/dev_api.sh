@@ -8,7 +8,9 @@
 # Env: API_PORT (8001), API_PYTHON (interpreter override),
 #      DB_WAIT=0 (skip postgres wait), DB_WAIT_HOST (127.0.0.1), DB_WAIT_PORT (5433).
 # Interpreter: $API_PYTHON, else ~/.venvs/compendium/bin/python3, else python3.
+# Postgres wait budget is 100s so it fits inside dev.sh's 120s backend poll.
 # Logs -> <repo>/logs/<timestamp>-api-dev.log (+ logs/latest-api.log symlink).
+# The launcher exec()s uvicorn (same pid); there is no "done" marker after exit.
 set -euo pipefail
 
 API_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,15 +28,15 @@ fi
 
 if [ "${DB_WAIT:-1}" != "0" ]; then
   host="${DB_WAIT_HOST:-127.0.0.1}"; dport="${DB_WAIT_PORT:-5433}"
-  say "waiting up to 60s for postgres at $host:$dport"
+  say "waiting up to 100s for postgres at $host:$dport"
   ok=0
-  for i in $(seq 1 60); do
+  for i in $(seq 1 100); do
     if (echo > "/dev/tcp/$host/$dport") 2>/dev/null; then ok=1; break; fi
     if [ $((i % 10)) -eq 0 ]; then say "still waiting for postgres (${i}s)"; fi
     sleep 1
   done
   if [ "$ok" -ne 1 ]; then
-    say "ERROR: postgres not reachable at $host:$dport after 60s (DB_WAIT=0 to skip)"
+    say "ERROR: postgres not reachable at $host:$dport after 100s (DB_WAIT=0 to skip)"
     exit 1
   fi
 fi
@@ -46,7 +48,7 @@ ln -sfn "$(basename "$LOG")" "$LOG_DIR/latest-api.log"
 say "start: $PY -m uvicorn backend.api.main:app on 127.0.0.1:$PORT -> $LOG"
 cd "$API_DIR"
 export PYTHONUNBUFFERED=1
-rc=0
-"$PY" -m uvicorn backend.api.main:app --host 127.0.0.1 --port "$PORT" "$@" 2>&1 | tee -a "$LOG" || rc=$?
-say "done (exit $rc)"
-exit "$rc"
+# exec: uvicorn takes over this pid, so a caller's $! (dev.sh) / systemd's MainPID
+# is uvicorn itself and killing it leaves no orphan. Nothing runs after exec, so
+# there is no "done" marker; uvicorn's own shutdown lines end the log.
+exec "$PY" -m uvicorn backend.api.main:app --host 127.0.0.1 --port "$PORT" "$@" > >(tee -a "$LOG") 2>&1
