@@ -1544,3 +1544,23 @@ describe("isEnvFlagOn (env-flag parsing: DEMO_ROLE_TOOLING / NEXT_PUBLIC_DEMO_RO
     expect(isEnvFlagOn(undefined)).toBe(false);
   });
 });
+
+describe("pipeline routes", () => {
+  const json = async (p: string) => (await get(p)).json();
+  it("serves summary, paged pages, skip trends, archive health", async () => {
+    expect((await json("/api/pipeline/summary")).status_counts).toEqual({ active: 158, pending: 4, archived: 90 });
+    // The router caps limit at 200; the recorded set (252) is served across pages.
+    const first = await json("/api/pipeline/pages?limit=200");
+    expect(first.total).toBe(252);
+    expect(first.rows).toHaveLength(200);
+    const rest = await json("/api/pipeline/pages?limit=200&offset=200");
+    expect(rest.rows).toHaveLength(52);
+    const byDomain = await json("/api/pipeline/pages?limit=5&sort=domain&dir=asc");
+    expect(byDomain.sort).toBe("domain");
+    const domains = byDomain.rows.map((r: { domain: string }) => r.domain);
+    expect(domains).toEqual([...domains].sort());
+    expect((await get("/api/pipeline/pages?sort=id")).status).toBe(422);
+    expect((await json("/api/pipeline/skip-trends?range=7d")).range).toBe("7d");
+    expect((await json("/api/analytics/archive-health?range=30d")).by_reason.length).toBeGreaterThan(0);
+  });
+});

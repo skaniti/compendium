@@ -22,6 +22,11 @@
 //     loudly (never silently ships a partial/contaminated set).
 //
 // Usage: node demo/tools/build-fixtures.mjs
+//        node demo/tools/build-fixtures.mjs --pipeline-only
+//   --pipeline-only rebuilds ONLY demo/fixtures/pipeline/ from raw/pipeline/,
+//   leaving every other committed fixture untouched. It reuses the anchor
+//   already recorded in the committed meta.json (instead of today) so the
+//   pipeline dates agree with the existing diary.
 
 import {
   mkdirSync,
@@ -40,6 +45,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const RAW_DIR = path.join(REPO_ROOT, 'demo', 'fixtures', 'raw');
 const OUT_DIR = path.join(REPO_ROOT, 'demo', 'fixtures');
+const PIPELINE_ONLY = process.argv.includes('--pipeline-only');
 
 function fatal(msg) {
   console.error(`\n[build-fixtures] FATAL: ${msg}\n`);
@@ -78,9 +84,9 @@ const OUTPUT_ENTRIES = [
   'graph-window-90.json', 'graph-window-365.json',
   'diary-day.json', 'diary-week.json', 'diary-month.json',
   'diary-filtered-day.json', 'diary-filtered-week.json', 'diary-filtered-month.json',
-  'nodes', 'pages', 'previews', 'members', 'assets', 'chat',
+  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline',
 ];
-for (const entry of OUTPUT_ENTRIES) {
+for (const entry of PIPELINE_ONLY ? ['pipeline'] : OUTPUT_ENTRIES) {
   rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
 }
 console.log('[build-fixtures] cleaned previous output');
@@ -219,8 +225,10 @@ function formatMonthLabel(monthKey) {
 // Anchor = today (UTC midnight), truncated to a date. meta.json records it;
 // Task 4's stub shifts every date it serves by (today - anchor) at runtime.
 const now = new Date();
-const anchor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-console.log(`[build-fixtures] anchor (build date): ${isoDateStr(anchor)}`);
+const anchor = PIPELINE_ONLY
+  ? parseIsoDateUTC(JSON.parse(readFileSync(path.join(OUT_DIR, 'meta.json'), 'utf8')).anchor)
+  : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+console.log(`[build-fixtures] anchor (${PIPELINE_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
 
 // Hand-written, deterministic cadence: no RNG, no Date.now()-seeded shuffle.
 // 14 active browsing days spread across a rolling 35-day window ending at
@@ -258,6 +266,58 @@ function buildWeightedCycle(days) {
   return cycle;
 }
 const DAY_CYCLE = buildWeightedCycle(ACTIVE_DAY_OFFSETS);
+
+// ---------------------------------------------------------------------------
+// Pipeline dev-view fixtures (recorded from seed + synthetic augment).
+// Same ACTIVE_DAY_OFFSETS cadence as the diary so the stub's pipeline charts
+// and its diary agree; skip-trends are RECOMPUTED from the respread pages
+// (mirrors trends_repo.get_daily_skip_rate / get_daily_skip_reasons).
+// A hoisted function so --pipeline-only can invoke it without the rest of
+// the build; it is called once from the normal flow (after Step 9) or from
+// the early-exit right after DAY_CYCLE is defined.
+// ---------------------------------------------------------------------------
+function buildPipelineFixtures() {
+  const timeOf = (iso, fallback = '12:00:00+00:00') => { const m = /T(.+)$/.exec(iso || ''); return m ? m[1] : fallback; };
+  const rawPipelinePages = readJson('pipeline', 'pages.json');
+  const pipelinePages = rawPipelinePages.rows.map((r, i) => {
+    const d = addDaysUTC(anchor, -DAY_CYCLE[i % DAY_CYCLE.length]);
+    return { ...r, created_at: `${isoDateStr(d)}T${timeOf(r.created_at)}`, visited_at: r.visited_at ? `${isoDateStr(d)}T${timeOf(r.visited_at)}` : null };
+  });
+  writeJson('pipeline/pages.json', { rows: pipelinePages, total: rawPipelinePages.total });
+  writeJson('pipeline/summary.json', readJson('pipeline', 'summary.json'));  // all-time counts: no dates inside
+
+  const rawHealth = readJson('pipeline', 'archive-health.json');
+  const perCapture = rawHealth.per_capture
+    .map((c, i) => { const d = addDaysUTC(anchor, -DAY_CYCLE[i % DAY_CYCLE.length]); return { ...c, started_at: `${isoDateStr(d)}T${timeOf(c.started_at)}` }; })
+    .sort((a, b) => (a.started_at < b.started_at ? -1 : 1));
+  writeJson('pipeline/archive-health.json', { ...rawHealth, per_capture: perCapture });
+
+  const byDay = new Map();
+  for (const r of pipelinePages) {
+    if (r.processing_depth === null) continue;                         // evaluated pages only
+    const day = r.created_at.slice(0, 10);
+    const e = byDay.get(day) || { total: 0, skipped: 0, reasons: new Map() };
+    e.total += 1;
+    if (r.processing_depth === 'skipped') { e.skipped += 1; if (r.skip_reasoning) e.reasons.set(r.skip_reasoning, (e.reasons.get(r.skip_reasoning) || 0) + 1); }
+    byDay.set(day, e);
+  }
+  const days = [...byDay.keys()].sort();
+  const reasonTotals = new Map();
+  for (const e of byDay.values()) for (const [k, v] of e.reasons) reasonTotals.set(k, (reasonTotals.get(k) || 0) + v);
+  const top5 = [...reasonTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
+  writeJson('pipeline/skip-trends.json', {
+    range: 'all',
+    skip_rate: days.map((day) => ({ day, total: byDay.get(day).total, skipped: byDay.get(day).skipped })),
+    skip_reasons: days.flatMap((day) => top5.filter((r) => byDay.get(day).reasons.has(r)).map((reason) => ({ day, reason, cnt: byDay.get(day).reasons.get(reason) }))),
+  });
+  console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages, ${perCapture.length} captures, ${days.length} skip-trend days`);
+}
+
+if (PIPELINE_ONLY) {
+  buildPipelineFixtures();
+  console.log('[build-fixtures] --pipeline-only: done (other fixtures untouched)');
+  process.exit(0);
+}
 
 // One synthetic date per graph node, seeded by its index in doc order
 // (position in the kept-nodes array). "Interior nodes get min of children":
@@ -594,6 +654,8 @@ console.log(`[build-fixtures] me.json / preferences.json normalized (theme=${DEF
 
 const rawClusteringStatus = readJson('clustering-status.json');
 writeJson('meta.json', { anchor: isoDateStr(anchor), runNumber: rawClusteringStatus.run_number });
+
+buildPipelineFixtures();
 
 // ---------------------------------------------------------------------------
 // Step 10: ATTRIBUTION.md

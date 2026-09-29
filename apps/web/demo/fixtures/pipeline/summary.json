@@ -1,0 +1,148 @@
+{
+  "status_counts": {
+    "active": 158,
+    "pending": 4,
+    "archived": 90
+  },
+  "total_pages": 252,
+  "decisions": [
+    {
+      "key": "processed",
+      "label": "Processed",
+      "count": 158,
+      "evaluated": true
+    },
+    {
+      "key": "skipped",
+      "label": "Skipped",
+      "count": 60,
+      "evaluated": true
+    },
+    {
+      "key": "other",
+      "label": "Other",
+      "count": 27,
+      "evaluated": false
+    },
+    {
+      "key": "pending",
+      "label": "Pending",
+      "count": 4,
+      "evaluated": false
+    },
+    {
+      "key": "trivial_capture",
+      "label": "Trivial Capture",
+      "count": 3,
+      "evaluated": false
+    }
+  ],
+  "skip_methods": [
+    {
+      "key": "skip_gate",
+      "label": "LLM skip gate",
+      "count": 40
+    },
+    {
+      "key": "domain_skip",
+      "label": "Domain filter",
+      "count": 20
+    },
+    {
+      "key": "placeholder_no_content",
+      "label": "placeholder_no_content",
+      "count": 10
+    },
+    {
+      "key": "dedup",
+      "label": "dedup",
+      "count": 6
+    },
+    {
+      "key": "app_chrome_junk",
+      "label": "app_chrome_junk",
+      "count": 5
+    },
+    {
+      "key": "dedupe_fold",
+      "label": "dedupe_fold",
+      "count": 4
+    },
+    {
+      "key": "trivial_capture",
+      "label": "Trivial capture",
+      "count": 3
+    },
+    {
+      "key": "manual_exclusion",
+      "label": "Manual exclusion",
+      "count": 2
+    }
+  ],
+  "skip_gate_reasons": [
+    {
+      "reason": "Domain skipped: en.wikipedia.org",
+      "count": 9
+    },
+    {
+      "reason": "User-specific page (profile, dashboard)",
+      "count": 5
+    },
+    {
+      "reason": "content-free stub",
+      "count": 5
+    },
+    {
+      "reason": "Marketplace / product / store listing",
+      "count": 5
+    },
+    {
+      "reason": "disambiguation page",
+      "count": 5
+    },
+    {
+      "reason": "error page",
+      "count": 5
+    },
+    {
+      "reason": "Domain skipped: arxiv.org",
+      "count": 5
+    },
+    {
+      "reason": "login wall",
+      "count": 5
+    },
+    {
+      "reason": "cookie consent redirect",
+      "count": 5
+    },
+    {
+      "reason": "search results page",
+      "count": 5
+    },
+    {
+      "reason": "Domain skipped: github.com",
+      "count": 4
+    },
+    {
+      "reason": "Domain skipped: www.gutenberg.org",
+      "count": 2
+    }
+  ],
+  "skip_gate_config": {
+    "model": "gpt-4o-mini",
+    "temperature": 0,
+    "prompt_name": "skip_gate_v2_3",
+    "prompt": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nEVALUATE INCLUDE RULES FIRST. Only fall through to SKIP rules if no INCLUDE rule matches.\n\nINCLUDE if any of:\n- Substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n- Individual ITEM pages (one specific model, font, icon, game, document, tool, library, etc.) with their own description, instructions, or content -- EVEN IF hosted on a marketplace, asset-library, or transactional platform. URL clue: a path with a specific item id-and-slug (e.g., /model/123-widget-stand-modular/, /boardgame/4567/star-freighter/, /filepage/8901/star-freighter-quick-reference). Confirm via snippet: substantive description of WHAT it is, HOW it works, materials, mechanics, build instructions, contents, or features.\n- URL-prior override: when the URL alone would match a SKIP rule below (youtube.com/watch/, youtube.com/shorts/, /products/, /pricing/, /shop/, /listing/, /@username, /profile/, /dashboard/, etc.) BUT the title or snippet clearly carries substantive learnable content -- a transcript narrating instruction, an analytical breakdown, an in-depth review or essay, a documentary explainer, a long-form analysis -- INCLUDE. The URL is a prior, not a verdict; concrete educational or analytical content in the snippet wins.\n\nSKIP only if no INCLUDE rule matched, AND the page is one of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page -- the page's PRIMARY purpose is to facilitate a purchase or acquisition. URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/. SKIP signal in snippet: emphasis on price, ratings, \"buy now\", shipping, stock, store policies, \"Add to cart\".\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse / category / index page -- a flat list or grid of MULTIPLE items (icons, fonts, vectors, 3D models, templates) with no narrative description of any specific item.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE.",
+    "tools": [
+      {
+        "name": "skip_page",
+        "description": "Skip this page entirely — it is a disambiguation page, error page, login wall, search results page, cookie consent redirect, or content-free stub. The page has no substantive content worth including in the knowledge compendium."
+      },
+      {
+        "name": "process_page",
+        "description": "Process this page — it has meaningful content worth including in the knowledge compendium. The page contains substantive information (article text, video content, Q&A, research paper)."
+      }
+    ]
+  }
+}

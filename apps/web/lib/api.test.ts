@@ -868,3 +868,21 @@ describe("removeMemberExclusion", () => {
     );
   });
 });
+
+describe("pipeline fetchers", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fetchPipelinePages hits /api/pipeline/pages with limit/offset/sort/dir", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ rows: [], total: 0, limit: 50, offset: 100, sort: "domain", dir: "asc" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchPipelinePages } = await import("./api");
+    const body = await fetchPipelinePages(50, 100, "domain", "asc");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/pages?limit=50&offset=100&sort=domain&dir=asc");
+    expect(body.offset).toBe(100);
+  });
+  it("fetchSkipTrends throws the house error on non-OK", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500, statusText: "Server Error" })));
+    const { fetchSkipTrends } = await import("./api");
+    await expect(fetchSkipTrends("30d")).rejects.toThrow("fetchSkipTrends failed: 500 Server Error");
+  });
+});

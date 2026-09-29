@@ -1,0 +1,310 @@
+{
+  "active_count": 162,
+  "archived_count": 90,
+  "by_reason": [
+    {
+      "reason": "skip_gate",
+      "count": 40,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 15
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 10
+        },
+        {
+          "domain": "github.com",
+          "count": 10
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "reason": "domain_skip",
+      "count": 20,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 9
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 5
+        },
+        {
+          "domain": "github.com",
+          "count": 4
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "reason": "placeholder_no_content",
+      "count": 10,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 3
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 3
+        },
+        {
+          "domain": "github.com",
+          "count": 3
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "reason": "dedup",
+      "count": 6,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 3
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 1
+        },
+        {
+          "domain": "github.com",
+          "count": 1
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "reason": "app_chrome_junk",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "github.com",
+          "count": 2
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 1
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 1
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "reason": "dedupe_fold",
+      "count": 4,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 2
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "reason": "trivial_capture",
+      "count": 3,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 2
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "reason": "manual_exclusion",
+      "count": 2,
+      "top_domains": [
+        {
+          "domain": "github.com",
+          "count": 2
+        }
+      ]
+    }
+  ],
+  "per_capture": [
+    {
+      "capture_id": "demo_noise_hidden_topic_adjacent_and_curiosities_20260510",
+      "started_at": "2026-07-13T20:50:53+00:00",
+      "archived": 4,
+      "total": 16,
+      "rate": 0.25
+    },
+    {
+      "capture_id": "demo_noise_phase2_music_theory_20260510",
+      "started_at": "2026-07-16T20:23:09+00:00",
+      "archived": 4,
+      "total": 7,
+      "rate": 0.5714285714285714
+    },
+    {
+      "capture_id": "demo_noise_phase1_phase_1_singletons_20260510",
+      "started_at": "2026-07-19T20:20:56+00:00",
+      "archived": 4,
+      "total": 14,
+      "rate": 0.2857142857142857
+    },
+    {
+      "capture_id": "demo_noise_phase2_bridges_20260511",
+      "started_at": "2026-07-23T00:23:09+00:00",
+      "archived": 4,
+      "total": 6,
+      "rate": 0.6666666666666666
+    },
+    {
+      "capture_id": "demo_noise_hidden2_materials_chemistry_20260510",
+      "started_at": "2026-07-23T20:03:53+00:00",
+      "archived": 4,
+      "total": 9,
+      "rate": 0.4444444444444444
+    },
+    {
+      "capture_id": "demo_noise_hidden_domains_disciplines_20260510",
+      "started_at": "2026-07-24T19:50:53+00:00",
+      "archived": 4,
+      "total": 14,
+      "rate": 0.2857142857142857
+    },
+    {
+      "capture_id": "demo_noise_phase2_phase_2_singletons_20260510",
+      "started_at": "2026-07-24T23:23:09+00:00",
+      "archived": 4,
+      "total": 14,
+      "rate": 0.2857142857142857
+    },
+    {
+      "capture_id": "demo_noise_phase1_statistics_20260510",
+      "started_at": "2026-07-26T19:20:56+00:00",
+      "archived": 4,
+      "total": 7,
+      "rate": 0.5714285714285714
+    },
+    {
+      "capture_id": "demo_noise_hidden2_humanities_social_20260510",
+      "started_at": "2026-07-30T19:03:53+00:00",
+      "archived": 4,
+      "total": 12,
+      "rate": 0.3333333333333333
+    },
+    {
+      "capture_id": "demo_noise_phase1_bridges_20260510",
+      "started_at": "2026-07-30T23:20:56+00:00",
+      "archived": 4,
+      "total": 6,
+      "rate": 0.6666666666666666
+    },
+    {
+      "capture_id": "demo_noise_hidden_physics_generic_concepts_20260510",
+      "started_at": "2026-07-31T18:50:53+00:00",
+      "archived": 4,
+      "total": 12,
+      "rate": 0.3333333333333333
+    },
+    {
+      "capture_id": "demo_noise_phase2_physical_oceanography_20260510",
+      "started_at": "2026-07-31T22:23:09+00:00",
+      "archived": 4,
+      "total": 7,
+      "rate": 0.5714285714285714
+    },
+    {
+      "capture_id": "demo_noise_phase1_geology_20260510",
+      "started_at": "2026-08-02T18:20:56+00:00",
+      "archived": 4,
+      "total": 8,
+      "rate": 0.5
+    },
+    {
+      "capture_id": "demo_noise_phase1_cooking_technique_20260510",
+      "started_at": "2026-08-06T17:20:56+00:00",
+      "archived": 4,
+      "total": 8,
+      "rate": 0.5
+    },
+    {
+      "capture_id": "demo_noise_phase1_cephalopod_cuisine_20260510",
+      "started_at": "2026-08-06T22:20:56+00:00",
+      "archived": 4,
+      "total": 8,
+      "rate": 0.5
+    },
+    {
+      "capture_id": "demo_hardware_20260509",
+      "started_at": "2026-08-07T02:31:45+00:00",
+      "archived": 4,
+      "total": 24,
+      "rate": 0.16666666666666666
+    },
+    {
+      "capture_id": "demo_noise_phase2_photography_composition_20260510",
+      "started_at": "2026-08-07T21:23:09+00:00",
+      "archived": 4,
+      "total": 7,
+      "rate": 0.5714285714285714
+    },
+    {
+      "capture_id": "demo_mythology_20260509",
+      "started_at": "2026-08-09T01:31:45+00:00",
+      "archived": 4,
+      "total": 21,
+      "rate": 0.19047619047619047
+    },
+    {
+      "capture_id": "demo_cephalopods_20260509",
+      "started_at": "2026-08-13T00:31:45+00:00",
+      "archived": 5,
+      "total": 17,
+      "rate": 0.29411764705882354
+    },
+    {
+      "capture_id": "demo_noise_phase1_diffusion_lineage_20260510",
+      "started_at": "2026-08-13T21:20:56+00:00",
+      "archived": 4,
+      "total": 7,
+      "rate": 0.5714285714285714
+    },
+    {
+      "capture_id": "demo_noise_hidden2_bio_health_natural_20260510",
+      "started_at": "2026-08-14T21:03:53+00:00",
+      "archived": 4,
+      "total": 11,
+      "rate": 0.36363636363636365
+    },
+    {
+      "capture_id": "demo_diffusion_20260508",
+      "started_at": "2026-08-14T23:31:45+00:00",
+      "archived": 5,
+      "total": 17,
+      "rate": 0.29411764705882354
+    }
+  ]
+}

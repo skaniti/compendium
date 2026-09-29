@@ -149,6 +149,33 @@ function loadFixtures(fixturesDir) {
     internals: readJson("internals.json"),
     me: readJson("me.json"),
     preferences: readJson("preferences.json"),
+    // Pipeline dev view (recorded fixtures). Only page/capture timestamps are
+    // shifted; skip-trends day keys are date-only strings, shifted the same way.
+    pipelineSummary: readJson("pipeline/summary.json"),
+    pipelinePages: (() => {
+      const pages = readJson("pipeline/pages.json");
+      return {
+        ...pages,
+        rows: pages.rows.map((r) => ({
+          ...r,
+          created_at: shiftIsoDateTime(r.created_at, deltaDays),
+          visited_at: shiftIsoDateTime(r.visited_at, deltaDays),
+        })),
+      };
+    })(),
+    skipTrends: (() => {
+      const t = readJson("pipeline/skip-trends.json");
+      const day = (d) => shiftIsoDateTime(`${d}T00:00:00`, deltaDays).slice(0, 10);
+      return {
+        ...t,
+        skip_rate: t.skip_rate.map((r) => ({ ...r, day: day(r.day) })),
+        skip_reasons: t.skip_reasons.map((r) => ({ ...r, day: day(r.day) })),
+      };
+    })(),
+    archiveHealth: (() => {
+      const h = readJson("pipeline/archive-health.json");
+      return { ...h, per_capture: h.per_capture.map((c) => ({ ...c, started_at: shiftIsoDateTime(c.started_at, deltaDays) })) };
+    })(),
   };
 }
 
@@ -923,6 +950,49 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
           token_type: "bearer",
         });
       },
+    },
+
+    // Pipeline dev view: demo-visitable reads (no write gate). The router
+    // matches on pathname (query stripped), so patterns carry no query suffix.
+    {
+      method: "GET",
+      pattern: /^\/api\/pipeline\/summary$/,
+      handler: (req, res) => sendJson(res, 200, fixtures.pipelineSummary),
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/pipeline\/pages$/,
+      handler: (req, res, m, url) => {
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
+        const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+        const SORTS = ["title", "domain", "status", "processing_depth", "visited_at", "created_at"];
+        const sort = url.searchParams.get("sort") ?? "created_at";
+        const dir = url.searchParams.get("dir") ?? "desc";
+        if (!SORTS.includes(sort) || !["asc", "desc"].includes(dir)) return sendJson(res, 422, { detail: "invalid sort" });
+        const sign = dir === "asc" ? 1 : -1;
+        const sorted = [...fixtures.pipelinePages.rows].sort((a, b) => {
+          const av = a[sort];
+          const bv = b[sort];
+          if (av === null && bv === null) return b.id - a.id;
+          if (av === null) return 1; // NULLS LAST both ways
+          if (bv === null) return -1;
+          return av < bv ? -sign : av > bv ? sign : b.id - a.id;
+        });
+        sendJson(res, 200, { rows: sorted.slice(offset, offset + limit), total: fixtures.pipelinePages.total, limit, offset, sort, dir });
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/pipeline\/skip-trends$/,
+      handler: (req, res, m, url) => {
+        const range = url.searchParams.get("range") || "all";
+        sendJson(res, 200, { ...fixtures.skipTrends, range });
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/analytics\/archive-health$/,
+      handler: (req, res) => sendJson(res, 200, fixtures.archiveHealth),
     },
 
     // POST /api/auth/view-as and POST /api/auth/return-to-admin -- the two
