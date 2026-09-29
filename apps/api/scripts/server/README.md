@@ -27,6 +27,13 @@ unwrapped run is unlogged. Override the location with `OPS_JOURNAL_DIR`.
 stderr is merged into stdout while wrapped, and a program that checks
 whether stdout is a terminal will see a pipe.
 
+`deploy_server.sh` keeps its own `<repo>/logs/` tee; the journal adds the run
+record and the masked copy on top. A background child that keeps stdout open
+delays the wrapper's return until it closes it. Ctrl-C leaves a start line
+without an end line. If the mask filter dies mid-run the command still
+completes and the end line carries `"mask_failed": true`. `git_sha` is the
+full sha of the checkout containing the script.
+
 ## What is masked, and what is not
 
 - Every value of 8+ characters in `~/.secrets` (or `$OPS_MASK_SECRETS`) is

@@ -70,8 +70,11 @@ def load_secrets(path=None):
                     continue
                 key, _, val = line.partition("=")
                 key, val = key.strip(), val.strip()
-                if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
-                    val = val[1:-1]
+                quoted = re.match(r"""^(["'])(.*?)\1(?:\s+#.*)?$""", val)
+                if quoted:
+                    val = quoted.group(2)
+                else:
+                    val = re.sub(r"\s+#.*$", "", val)
                 if key and len(val) >= MIN_SECRET_LEN:
                     pairs.append((key, val))
     except OSError:

@@ -74,3 +74,41 @@ test("stdin passes through to the wrapped command", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /got:hello/);
 });
+
+test("a dying mask filter never aborts the wrapped command", () => {
+  const e = setup();
+  const filter = join(e.d, "dead_filter.py");
+  writeFileSync(filter, "import sys\nsys.exit(1)\n");
+  const s = join(e.d, "five.sh");
+  writeFileSync(s, "#!/bin/sh\nfor i in 1 2 3 4 5; do echo line$i; done\nexit 4\n");
+  chmodSync(s, 0o755);
+  const r = spawnSync("bash", [wrapper, s], { encoding: "utf8", env: { PATH: process.env.PATH, HOME: e.d, OPS_JOURNAL_DIR: e.journal, OPS_MASK_SECRETS: e.secrets, OPS_MASK_SCRIPT: filter } });
+  assert.equal(r.status, 4);
+  assert.equal((r.stdout.match(/line\d/g) || []).length, 5);
+  const lines = readFileSync(join(e.journal, "journal.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(lines.length, 2);
+  assert.equal(lines[1].exit, 4);
+  assert.equal(lines[1].mask_failed, true);
+  assert.match(r.stderr, /mask filter failed/);
+});
+
+test("refuses with exit 2 when python3 is not on PATH", () => {
+  const e = setup();
+  const bin = join(e.d, "bin");
+  mkdirSync(bin);
+  for (const t of ["bash", "dirname", "basename", "date", "id", "mktemp", "cat", "rm", "tee", "git", "readlink"]) {
+    const p = spawnSync("bash", ["-c", `command -v ${t}`], { encoding: "utf8" }).stdout.trim();
+    if (p) spawnSync("ln", ["-s", p, join(bin, t)]);
+  }
+  const r = spawnSync("bash", [wrapper, e.script], { encoding: "utf8", env: { PATH: bin, HOME: e.d, OPS_JOURNAL_DIR: e.journal } });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /python3/);
+});
+
+test("git_sha is the full sha of the checkout containing the script", () => {
+  const e = setup();
+  const r = run(e, [wrapper.replace(/ops-run\.sh$/, "ops_mask.py"), "--version"]);
+  void r;
+  const lines = readFileSync(join(e.journal, "journal.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.match(lines[0].git_sha, /^[0-9a-f]{40}$/);
+});

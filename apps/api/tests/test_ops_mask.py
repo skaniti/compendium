@@ -121,7 +121,6 @@ def test_missing_secrets_file_still_shape_masks(tmp_path):
     assert out == "<REDACTED:token>\n"
 
 
-@pytest.mark.xfail(reason="audit_repo lands in task 1", strict=False)
 def test_shape_patterns_match_audit_repo():
     sys.path.insert(0, str(API_DIR))
     sys.path.insert(0, str(API_DIR / "scripts" / "server"))
@@ -130,3 +129,34 @@ def test_shape_patterns_match_audit_repo():
     from backend.db import audit_repo
 
     assert tuple(ops_mask.SECRET_SHAPE_PATTERNS) == tuple(audit_repo.SECRET_SHAPE_PATTERNS)
+
+
+def test_inline_comment_stripped(tmp_path):
+    f = tmp_path / "s"
+    f.write_text("A=" + "plainvalue1" + " # note\n" + 'B="' + "quotedval2" + '" # note\n')
+    out = run_mask("plainvalue1 quotedval2 note\n", f)
+    assert out == "<SECRET:A> <SECRET:B> note\n"
+
+
+def test_every_env_example_secret_key_masked(tmp_path):
+    import re
+    import secrets as pysecrets
+
+    keys = []
+    for line in (API_DIR / ".env.example").read_text().splitlines():
+        m = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
+        if m and (
+            re.search(r"(?i)(key|secret|token|password|passwd)", m.group(1))
+            or m.group(1) in ("DATABASE_URL", "TEST_DATABASE_URL")
+        ):
+            keys.append(m.group(1))
+    keys = sorted(set(keys))
+    assert len(keys) >= 8
+    values = {k: pysecrets.token_hex(12) for k in keys}  # 24 chars, runtime-made
+    f = tmp_path / "s"
+    f.write_text("".join(f"{k}={v}\n" for k, v in values.items()))
+    text = "".join(f"{k} is {v}\n" for k, v in values.items())
+    out = run_mask(text, f)
+    for k, v in values.items():
+        assert v not in out
+        assert f"<SECRET:{k}>" in out
