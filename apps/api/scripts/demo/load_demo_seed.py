@@ -285,6 +285,24 @@ def _reset_sequence(cur, table: str) -> None:
     )
 
 
+def _load_augment(cur, demo_user_id: int, source_user_id: int) -> int:
+    """Insert the synthetic augment pages (D10 c-1), if the file is present.
+
+    Archived / skipped / pending pages attached to the seed's captures so the
+    Pipeline dev view has a skip population. Temporary until the
+    demo-seed-maturity re-export replaces the seed.
+    """
+    augment_path = SEED_PATH.with_name("demo_seed_augment.json")
+    if not augment_path.exists():
+        return 0
+    augment = json.loads(augment_path.read_text(encoding="utf-8"))
+    n = _load_table(cur, "pages", augment["pages"], demo_user_id, source_user_id)
+    if n:
+        _reset_sequence(cur, "pages")
+    print(f"[load_demo_seed] augment: inserted {n} synthetic pages")
+    return n
+
+
 def main() -> int:
     if not SEED_PATH.exists():
         fail(f"seed artifact not found at {SEED_PATH}")
@@ -337,6 +355,10 @@ def main() -> int:
                 if table in SEQUENCE_TABLES and n:
                     _reset_sequence(cur, table)
                 print(f"  {table:24s} {n:6d} rows loaded")
+
+                if table == "pages":
+                    n_aug = _load_augment(cur, demo_user_id, source_user_id)
+                    counts["pages"] += n_aug
 
         conn.commit()
     except Exception:

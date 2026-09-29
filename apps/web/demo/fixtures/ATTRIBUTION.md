@@ -189,3 +189,9 @@ arXiv papers are licensed per-paper -- check each paper's own abstract page for 
 
 - https://www.youtube.com/watch?v=6gqsIeIGJoo
 
+
+## Pipeline fixtures (`demo/fixtures/pipeline/`)
+
+Recorded from the demo seed plus a synthetic augment of 94 junk-page rows
+(login, search and disambiguation pages and similar) on the domains listed
+above. The augment rows carry URLs and titles only, with no page content.

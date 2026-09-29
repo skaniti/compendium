@@ -52,3 +52,20 @@ harmless gap (the rest of the app — graph, diary, topic detail,
 clustering — is unaffected); closing it
 means re-exporting the binaries, tracked as follow-up work rather than
 blocking this task.
+
+## Synthetic augment (temporary, D10 c-1)
+
+`demo_seed_augment.json` holds 94 SYNTHETIC page rows (archived, skipped and
+pending) attached to the seed's existing captures. The real seed has no such
+pages, so without it the Pipeline dev view's skip sections would render empty
+against the demo. Rows carry no page content, embeddings or clusters, use only
+the seed's own domains, and never appear in the graph or diary (both count
+active pages only). `scripts/demo/load_demo_seed.py` inserts them right after
+the `pages` table, in the same transaction and under the same user_id remap.
+
+Regenerate (deterministic; rewrites an identical file for the same seed):
+
+    cd apps/api && python scripts/demo/build_demo_seed_augment.py
+
+Retirement: the demo-seed-maturity re-export deletes the augment file, the
+generator, its test, and the loader step.
