@@ -121,7 +121,7 @@ describe("getSwatches", () => {
 describe("DEFAULT_VARIANT", () => {
   it("matches the goldens' active variant", () => {
     expect(DEFAULT_VARIANT).toBe(goldens.active);
-    expect(DEFAULT_VARIANT).toBe("Brown");
+    expect(DEFAULT_VARIANT).toBe("Grey");
   });
 });
 

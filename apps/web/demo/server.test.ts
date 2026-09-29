@@ -891,7 +891,7 @@ describe("mutation endpoints (Task 6): PATCH /api/auth/preferences", () => {
     await withServer(async (base) => {
       const admin = adminToken();
       const before = await (await req(base, "GET", "/api/auth/preferences")).json();
-      expect(before.theme).toBe("Brown");
+      expect(before.theme).toBe("Grey");
 
       const patchRes = await req(
         base,
@@ -983,7 +983,7 @@ describe("mutation endpoints (Task 6): plain-demo write gate", () => {
       const status = await (await req(base, "GET", "/api/clustering/status")).json();
       expect(status.run_number).toBe(141);
       const prefs = await (await req(base, "GET", "/api/auth/preferences")).json();
-      expect(prefs.theme).toBe("Brown");
+      expect(prefs.theme).toBe("Grey");
     });
   });
 
@@ -1033,7 +1033,7 @@ describe("mutation endpoints (Task 6): reset on restart", () => {
       expect(exclusions.exclusions.length).toBe(0);
 
       const prefs = await (await req(base2, "GET", "/api/auth/preferences")).json();
-      expect(prefs.theme).toBe("Brown");
+      expect(prefs.theme).toBe("Grey");
 
       const status = await (await req(base2, "GET", "/api/clustering/status")).json();
       expect(status.run_number).toBe(141);
