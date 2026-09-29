@@ -936,6 +936,21 @@ def get_prompt_raw(name: str, **kwargs) -> str:
         raise KeyError(f"Missing placeholder {e} for prompt '{name}'")
 
 
+def get_prompt_template(name: str) -> str:
+    """Return the UNFORMATTED template text for ``name`` -- the live override
+    from ``overrides.json`` if one exists, else the registry entry. Used by
+    read-only surfaces that display a prompt (Pipeline dev view's skip-gate
+    config panel; the Prompts dev view) without rendering it.
+
+    Raises:
+        KeyError: If prompt name not found
+    """
+    if name not in PROMPTS:
+        raise KeyError(f"Prompt template '{name}' not found. Available: {list(PROMPTS.keys())}")
+    overrides = _load_overrides()
+    return overrides.get(name) or PROMPTS[name]["template"]
+
+
 def list_prompts() -> list[dict]:
     """List all available prompts with metadata."""
     return [
