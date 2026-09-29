@@ -1,15 +1,17 @@
-import { DEFAULT_WIDTH, MARGIN, frame, xBand, yLinear } from "./scales";
+import { MARGIN, frame, xBand, yLinear } from "./scales";
+import { useContainerWidth } from "./useContainerWidth";
 export interface StackSeries { name: string; values: number[] }
-const LEGEND_W = 150;
+const LEGEND_W = 230; // fits a 35-char 10px monospace label (~210px) plus swatch
 export default function StackedBarChart({ days, series, height = 240, yTitle = "% of skips" }:
   { days: string[]; series: StackSeries[]; height?: number; yTitle?: string }) {
-  const width = DEFAULT_WIDTH; const { innerW: fullW, innerH } = frame(width, height); const innerW = fullW - LEGEND_W;
+  const [ref, width] = useContainerWidth(); const { innerW: fullW, innerH } = frame(width, height); const innerW = fullW - LEGEND_W;
   const x = xBand(days, innerW); const y = yLinear(100, innerH);
   const n = Math.max(series.length - 1, 1);
   // Dash gradient: i-th of n reasons -> lighter/desaturated variant of --highlight via opacity steps
   const opacity = (i: number) => 0.65 - 0.35 * (i / n) + 0.1;
   const labelStep = Math.max(1, Math.ceil(days.length / 6));
   return (
+    <div ref={ref} style={{ width: "100%" }}>
     <svg className="chart" viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={yTitle}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
         {[0, 25, 50, 75, 100].map((t) => (<g key={t} transform={`translate(0,${y(t)})`}><line x2={innerW} className="chart-grid" /><text x={-6} dy="0.32em" textAnchor="end" className="chart-tick">{t}%</text></g>))}
@@ -28,5 +30,6 @@ export default function StackedBarChart({ days, series, height = 240, yTitle = "
         {yTitle && <text transform={`rotate(-90) translate(${-innerH / 2},${-MARGIN.left + 12})`} textAnchor="middle" className="chart-axis-title">{yTitle}</text>}
       </g>
     </svg>
+    </div>
   );
 }

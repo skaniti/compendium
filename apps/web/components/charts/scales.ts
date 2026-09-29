@@ -1,10 +1,12 @@
 import { scaleLinear, scaleTime, scaleBand } from "d3-scale";
 export const MARGIN = { top: 12, right: 16, bottom: 36, left: 44 };
-export const DEFAULT_WIDTH = 640; // viewBox units; the svg is width:100% so it scales with .trends-chart-cell
-export function frame(width: number, height: number) {
-  return { innerW: width - MARGIN.left - MARGIN.right, innerH: height - MARGIN.top - MARGIN.bottom };
+export const DEFAULT_WIDTH = 640; // SSR/jsdom fallback width; live width comes from useContainerWidth (1 viewBox unit = 1px)
+export type Margin = typeof MARGIN;
+export function frame(width: number, height: number, margin: Margin = MARGIN) {
+  return { innerW: Math.max(1, width - margin.left - margin.right), innerH: Math.max(1, height - margin.top - margin.bottom) };
 }
 export function xTime(dates: Date[], innerW: number) {
+  if (dates.length === 0) return scaleTime().domain([new Date(0), new Date(1)]).range([0, innerW]); // empty: axes only
   const min = dates.reduce((a, b) => (b < a ? b : a), dates[0]);
   const max = dates.reduce((a, b) => (b > a ? b : a), dates[0]);
   const pad = min.getTime() === max.getTime() ? 12 * 3600 * 1000 : 0; // single point: pad ±12h

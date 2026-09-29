@@ -4,6 +4,7 @@ import { archiveRatio } from "@/lib/pipeline";
 import type { ArchiveHealthSummary } from "@/lib/types";
 const fmt = (n: number) => n.toLocaleString("en-US");
 export default function ArchiveHealthSection({ data, error }: { data: ArchiveHealthSummary | null; error: string | null }) {
+  const captures = data ? data.per_capture.filter((c) => c.started_at) : [];
   return (
     <section>
       <h3 className="dev-section-title">Archive health</h3>
@@ -24,9 +25,9 @@ export default function ArchiveHealthSection({ data, error }: { data: ArchiveHea
             </table></div>
           )}
           <h3 className="dev-section-title">Archive rate per capture</h3>
-          {data.per_capture.length === 0 ? <p className="dev-empty dev-empty-inline">No captures in this window.</p> : (
+          {captures.length === 0 ? <p className="dev-empty dev-empty-inline">No captures in this window.</p> : (
             <BarChart yMax={105} yTicks={[0, 25, 50, 75, 100]} ySuffix="%" yTitle="Archive rate" xTitle="Capture start time"
-              points={data.per_capture.filter((c) => c.started_at).map((c) => ({ x: new Date(c.started_at as string), y: c.rate * 100, label: c.capture_id }))} />
+              points={captures.map((c) => ({ x: new Date(c.started_at as string), y: c.rate * 100, label: c.capture_id }))} />
           )}
         </>
       )}

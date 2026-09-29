@@ -35,3 +35,9 @@ it("a health failure does not hide the trends section", async () => {
   await screen.findByText(/Couldn't load archive health \(boom\)/);
   expect(await screen.findByText("Skip reason mix")).toBeInTheDocument();
 });
+it("shows the empty-captures caption when every capture lacks started_at", async () => {
+  vi.mocked(api.fetchArchiveHealth).mockResolvedValue({ ...health, per_capture: [{ capture_id: "c9", started_at: null, archived: 0, total: 1, rate: 0 }] });
+  vi.mocked(api.fetchSkipTrends).mockResolvedValue(trends);
+  render(<WindowedSections />);
+  expect(await screen.findByText("No captures in this window.")).toBeInTheDocument();
+});

@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import BarChart from "./BarChart";
 import LineAreaChart from "./LineAreaChart";
@@ -34,4 +34,31 @@ it("StackedBarChart stacks to 100 and labels segments >= 10", () => {
 it("charts render nothing harmful on a single point", () => {
   const { container } = render(<BarChart points={[{ x: d("2026-08-01"), y: 10, label: "one" }]} yMax={105} yTicks={[0, 100]} ySuffix="%" />);
   expect(container.querySelectorAll("rect.chart-bar")).toHaveLength(1);
+});
+it("BarChart and LineAreaChart render axes only for empty points", () => {
+  const bar = render(<BarChart points={[]} yMax={105} yTicks={[0, 100]} ySuffix="%" />);
+  expect(bar.container.querySelector("svg")).toBeTruthy();
+  expect(bar.container.querySelectorAll("rect.chart-bar")).toHaveLength(0);
+  const line = render(<LineAreaChart points={[]} yMax={110} yTicks={[0, 100]} ySuffix="%" />);
+  expect(line.container.querySelector("svg")).toBeTruthy();
+  expect(line.container.querySelectorAll("circle.chart-point")).toHaveLength(0);
+});
+it("LineAreaChart moves both labels above a point on the baseline", () => {
+  const { container } = render(<LineAreaChart height={240} points={[{ x: d("2026-08-01"), y: 0, hover: "h", labelTop: "0%", labelBottom: "0/2" }, { x: d("2026-08-02"), y: 50, hover: "h", labelTop: "50%", labelBottom: "1/2" }]} yMax={110} yTicks={[0, 100]} ySuffix="%" />);
+  const innerH = 240 - 12 - 36;
+  const labels = container.querySelectorAll(".chart-point-label");
+  const base = Array.from(labels[0].querySelectorAll("text")).map((t) => Number(t.getAttribute("y")));
+  expect(base.every((yy) => yy < innerH - 16)).toBe(true);
+  const mid = Array.from(labels[1].querySelectorAll("text")).map((t) => Number(t.getAttribute("y")));
+  expect(mid[1]).toBeGreaterThan(mid[0]); // unflipped: bottom label sits below the top label
+});
+it("charts size their viewBox to the measured container width", () => {
+  let cb: ResizeObserverCallback = () => {};
+  class RO { constructor(c: ResizeObserverCallback) { cb = c; } observe() { cb([{ contentRect: { width: 900 } } as ResizeObserverEntry], this as unknown as ResizeObserver); } disconnect() {} unobserve() {} }
+  vi.stubGlobal("ResizeObserver", RO);
+  try {
+    const { container } = render(<><BarChart points={[{ x: d("2026-08-01"), y: 1, label: "a" }]} yMax={105} yTicks={[0]} /><LineAreaChart points={[{ x: d("2026-08-01"), y: 1, hover: "h" }]} yMax={110} yTicks={[0]} /><StackedBarChart days={["2026-08-01"]} series={[{ name: "a", values: [100] }]} /></>);
+    const boxes = Array.from(container.querySelectorAll("svg")).map((s) => s.getAttribute("viewBox"));
+    expect(boxes).toEqual(["0 0 900 240", "0 0 900 240", "0 0 900 240"]);
+  } finally { vi.unstubAllGlobals(); }
 });
