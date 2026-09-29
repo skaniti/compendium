@@ -20,7 +20,7 @@
 set -uo pipefail
 
 JOURNAL_DIR="${OPS_JOURNAL_DIR:-/var/log/compendium-ops}"
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"  # follow the ~/bin/ops symlink
 MASK="${OPS_MASK_SCRIPT:-$HERE/ops_mask.py}"
 
 if [[ $# -lt 1 ]]; then

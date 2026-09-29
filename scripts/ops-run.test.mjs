@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, symlinkSync} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -111,4 +111,17 @@ test("git_sha is the full sha of the checkout containing the script", () => {
   void r;
   const lines = readFileSync(join(e.journal, "journal.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.match(lines[0].git_sha, /^[0-9a-f]{40}$/);
+});
+
+test("invoked through a ~/bin/ops symlink, the mask filter is found next to the real script", () => {
+  const e = setup();
+  const bin = join(e.d, "bin");
+  mkdirSync(bin);
+  const link = join(bin, "ops");
+  symlinkSync(wrapper, link);
+  const r = spawnSync(link, [e.script], { encoding: "utf8", env: { PATH: process.env.PATH, HOME: e.d, OPS_JOURNAL_DIR: e.journal, OPS_MASK_SECRETS: e.secrets } });
+  assert.equal(r.status, 3);
+  assert.doesNotMatch(r.stderr, /mask filter failed/, "mask must resolve beside the real script, not the symlink");
+  const log = readdirSync(join(e.journal, "runs")).map((f) => readFileSync(join(e.journal, "runs", f), "utf8")).join("");
+  assert.match(log, /<SECRET:MY_KEY>/, "run log is masked");
 });
