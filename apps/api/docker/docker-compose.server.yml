@@ -138,7 +138,7 @@ services:
       # clone-and-run stack's (compendium_hf_cache) so the two never collide
       # if ever run on the same host.
       - compendium_hf_cache_server:/root/.cache/huggingface
-      # JSON file log; host dir owned by section-22 (skaniti:adm 2750).
+      # JSON file log; host dir owned by section-22 (<user>:adm 2750).
       - /var/log/compendium-ops/api:/var/log/compendium-api
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]

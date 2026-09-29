@@ -5,11 +5,20 @@ Scripts here run on the app server. Mutation scripts are run through the
 
 ## The `ops <script>` convention
 
+Run from `apps/api` (the wrapper execs the command verbatim, so give a path
+or a command on `PATH`):
+
 ```
-ops deploy_server.sh
-ops backup_db.sh
-ops ./section-19-caddy.sh
+ops scripts/server/deploy_server.sh
+ops scripts/backup_db.sh
+ops scripts/restore_db.sh <file>
+ops scripts/update_secrets.sh
+ops scripts/server-setup/section-NN-name.sh
+ops docker compose -f docker/docker-compose.server.yml exec -e ROTATE_EMAIL=... api python -m backend.scripts.rotate_api_key
 ```
+
+After section 22 creates `~/bin`, run `source ~/.profile` (or call `~/bin/ops`)
+in the same shell so `ops` resolves.
 
 `ops` is `ops-run.sh` (symlinked to `~/bin/ops` by section 22). For each run it:
 
@@ -61,6 +70,8 @@ cat /var/log/compendium-ops/runs/<run_id>.log
 
 The API's file log is `/var/log/compendium-ops/api/api.jsonl` (rotated daily,
 14 kept, by `/etc/logrotate.d/compendium-api`).
+
+`api_key.auth_failed` audit rows carry an 8-char attacker-typed prefix; treat that field as data.
 
 ## Install (once, user-run)
 

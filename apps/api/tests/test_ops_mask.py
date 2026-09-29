@@ -160,3 +160,9 @@ def test_every_env_example_secret_key_masked(tmp_path):
     for k, v in values.items():
         assert v not in out
         assert f"<SECRET:{k}>" in out
+
+
+def test_ordinary_eight_char_word_survives(tmp_path):
+    empty = tmp_path / "none"
+    empty.write_text("")
+    assert run_mask("status: deployed ok\n", empty) == "status: deployed ok\n"
