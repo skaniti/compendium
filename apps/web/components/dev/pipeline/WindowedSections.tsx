@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import RangePills from "@/components/dev/RangePills";
+import { useTimeWindow } from "@/components/TimeWindowProvider";
+import { rangeKeyFor } from "@/lib/pipeline";
 import { fetchArchiveHealth, fetchSkipTrends } from "@/lib/api";
 import type { ArchiveHealthSummary, RangeKey, SkipTrends } from "@/lib/types";
 import ArchiveHealthSection from "./ArchiveHealthSection";
@@ -22,12 +24,13 @@ function useWindowed<T>(fetcher: (r: RangeKey) => Promise<T>, range: RangeKey) {
 }
 
 export default function WindowedSections() {
-  const [range, setRange] = useState<RangeKey>("30d");
+  const { timeWindow, setTimeWindow } = useTimeWindow();
+  const range = rangeKeyFor(timeWindow);
   const health = useWindowed<ArchiveHealthSummary>(fetchArchiveHealth, range);
   const trends = useWindowed<SkipTrends>(fetchSkipTrends, range);
   return (
     <>
-      <RangePills value={range} onChange={setRange} />
+      <RangePills value={timeWindow} onChange={setTimeWindow} />
       <ArchiveHealthSection data={health.data} error={health.error} />
       <SkipTrendsSection data={trends.data} error={trends.error} />
     </>

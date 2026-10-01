@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { patchPreferences } from "@/lib/preferences";
 import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
 
 // Thin context wrapper around a plain useState -- mirrors NavProvider.test.tsx's
@@ -28,6 +29,8 @@ function renderProvider() {
     </TimeWindowProvider>
   );
 }
+
+vi.mock("@/lib/preferences", () => ({ patchPreferences: vi.fn() }));
 
 describe("TimeWindowProvider", () => {
   it('defaults to "all" (Dash parity: graph-time-window Store initial data)', () => {
@@ -60,5 +63,42 @@ describe("TimeWindowProvider", () => {
     }
     expect(() => render(<Bare />)).toThrow(/TimeWindowProvider/);
     spy.mockRestore();
+  });
+
+  describe("persistence", () => {
+    beforeEach(() => vi.mocked(patchPreferences).mockClear());
+
+    function renderWith(props: { initialWindow?: "7" | "30" | "90" | "all"; canPersist?: boolean }) {
+      return render(
+        <TimeWindowProvider {...props}>
+          <Consumer />
+        </TimeWindowProvider>
+      );
+    }
+
+    it("takes its initial value from initialWindow", () => {
+      renderWith({ initialWindow: "90" });
+      expect(screen.getByTestId("time-window")).toHaveTextContent("90");
+    });
+
+    it("patches time_window when canPersist and the value changes", async () => {
+      renderWith({ canPersist: true });
+      await userEvent.click(screen.getByText("set-30"));
+      expect(patchPreferences).toHaveBeenCalledWith({ time_window: "30" });
+      expect(patchPreferences).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not patch when canPersist is false", async () => {
+      renderWith({});
+      await userEvent.click(screen.getByText("set-30"));
+      expect(screen.getByTestId("time-window")).toHaveTextContent("30");
+      expect(patchPreferences).not.toHaveBeenCalled();
+    });
+
+    it("does not patch when setting the same value", async () => {
+      renderWith({ canPersist: true, initialWindow: "30" });
+      await userEvent.click(screen.getByText("set-30"));
+      expect(patchPreferences).not.toHaveBeenCalled();
+    });
   });
 });

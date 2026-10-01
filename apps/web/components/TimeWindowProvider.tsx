@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { patchPreferences } from "@/lib/preferences";
 import type { TimeWindow } from "@/lib/types";
 
 // Next equivalent of Dash's `dcc.Store(id="graph-time-window", data="all")`
@@ -33,10 +34,28 @@ export function useTimeWindow(): TimeWindowContextValue {
   return ctx;
 }
 
-export default function TimeWindowProvider({ children }: { children: ReactNode }) {
-  const [timeWindow, setTimeWindow] = useState<TimeWindow>("all");
+export default function TimeWindowProvider({
+  children,
+  initialWindow = "all",
+  canPersist = false,
+}: {
+  children: ReactNode;
+  initialWindow?: TimeWindow;
+  canPersist?: boolean;
+}) {
+  const [timeWindow, setWindowState] = useState<TimeWindow>(initialWindow);
 
-  const value = useMemo<TimeWindowContextValue>(() => ({ timeWindow, setTimeWindow }), [timeWindow]);
+  // Persisted as preference `time_window` (fire-and-forget; patchPreferences
+  // swallows and logs its own errors). Skipped when the value is unchanged.
+  const setTimeWindow = useCallback(
+    (value: TimeWindow) => {
+      setWindowState(value);
+      if (canPersist && value !== timeWindow) void patchPreferences({ time_window: value });
+    },
+    [canPersist, timeWindow]
+  );
+
+  const value = useMemo<TimeWindowContextValue>(() => ({ timeWindow, setTimeWindow }), [timeWindow, setTimeWindow]);
 
   return <TimeWindowContext.Provider value={value}>{children}</TimeWindowContext.Provider>;
 }

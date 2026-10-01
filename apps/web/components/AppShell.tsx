@@ -12,6 +12,7 @@ import {
   getInitialPanelWidths,
   getInitialSessionRole,
   getInitialStarfieldVariant,
+  getInitialTimeWindow,
 } from "@/lib/preferences.server";
 
 interface AppShellProps {
@@ -36,6 +37,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
     initialStarfieldVariant,
     { hasSeen: compendiumLoaderSeen, canPersist: compendiumLoaderCanPersist },
     { role: sessionRole, actingAsDemo },
+    initialTimeWindow,
   ] = await Promise.all([
     getInitialPanelWidths(),
     // Same "read before first paint" role as the panel widths above, so
@@ -57,6 +59,8 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
     // demo" showed first-run whenever the demo account's OWN prefs row
     // happened to have compendium_loader_seen unset (observed live).
     getInitialSessionRole(),
+    // Persisted shared time period (graph + dev views), seeded before first paint.
+    getInitialTimeWindow(),
   ]);
 
   const isPlainDemo = sessionRole === "demo" && !actingAsDemo;
@@ -117,7 +121,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
           future reader) share one context instance. */}
-      <TimeWindowProvider>
+      <TimeWindowProvider initialWindow={initialTimeWindow} canPersist={canPersistPreferences}>
         <Header mode={mode} />
         {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
             .app-header. #header-graph-controls animates its mode-swap via

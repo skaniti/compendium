@@ -1,7 +1,9 @@
-import type { PipelinePage, RangeKey } from "./types";
+import type { PipelinePage, RangeKey, TimeWindow } from "./types";
 
-export const RANGE_KEYS: RangeKey[] = ["7d", "30d", "90d", "all"];
-export const RANGE_LABELS: Record<RangeKey, string> = { "7d": "7 days", "30d": "30 days", "90d": "90 days", all: "All time" };
+// The shared TimeWindow ("365" has no pipeline bucket, so it widens to "all").
+export function rangeKeyFor(tw: TimeWindow): RangeKey {
+  return tw === "7" ? "7d" : tw === "30" ? "30d" : tw === "90" ? "90d" : "all";
+}
 export const DASH = "—";
 const GATE_REASONS = new Set(["skip_gate", "manual_exclusion", "trivial_capture"]);
 

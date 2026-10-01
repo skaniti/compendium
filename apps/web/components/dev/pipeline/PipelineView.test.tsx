@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { vi, it, expect, beforeEach } from "vitest";
 import * as api from "@/lib/api";
 import type { PipelineSummary } from "@/lib/types";
+import TimeWindowProvider from "@/components/TimeWindowProvider";
 import PipelineView, { PIPELINE_SUBTITLE } from "./PipelineView";
 vi.mock("@/lib/api");
 const summary = (total: number): PipelineSummary => ({
@@ -16,19 +17,19 @@ beforeEach(() => {
 });
 it("shows loading, then formatted status cards and the subtitle", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(1303));
-  render(<PipelineView />);
+  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
   expect(screen.getAllByText("Loading…")).toHaveLength(4); // summary + table + archive health + skip trends
   expect(await screen.findByText("1,271")).toBeInTheDocument();
   expect(screen.getByText(PIPELINE_SUBTITLE)).toBeInTheDocument();
 });
 it("renders an alert when the summary fails", async () => {
   vi.mocked(api.fetchPipelineSummary).mockRejectedValue(new Error("boom"));
-  render(<PipelineView />);
+  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
   expect(await screen.findByRole("alert")).toHaveTextContent("boom");
 });
 it("shows No pages found. when total_pages is 0", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(0));
-  render(<PipelineView />);
+  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
   expect(await screen.findByText("No pages found.")).toBeInTheDocument();
   await screen.findByText("Row page"); // table has a row, so the empty copy is the summary branch
   expect(screen.getAllByText("No pages found.")).toHaveLength(1); // not DecisionBars' empty caption
@@ -36,7 +37,7 @@ it("shows No pages found. when total_pages is 0", async () => {
 });
 it("mounts the windowed sections even when the summary fails", async () => {
   vi.mocked(api.fetchPipelineSummary).mockRejectedValue(new Error("boom"));
-  render(<PipelineView />);
+  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
   expect(await screen.findByText("Archive health")).toBeInTheDocument();
   expect(await screen.findByText("Skip trends")).toBeInTheDocument();
   expect(await screen.findByText("No skipped pages in this window.")).toBeInTheDocument();

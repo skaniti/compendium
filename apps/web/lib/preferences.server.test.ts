@@ -6,6 +6,7 @@ import {
   getInitialSessionRole,
   getInitialStarfieldVariant,
   getInitialThemeVariant,
+  getInitialTimeWindow,
 } from "./preferences.server";
 
 // Gate-2 walkthrough fix 3: AppShell's new server-side session read, used to
@@ -504,5 +505,44 @@ describe("preferences fetch deduplication (React.cache)", () => {
     expect(panels).toEqual({});
     expect(starfield).toBe("twinkle");
     expect(loaderSeen).toEqual({ hasSeen: false, canPersist: true });
+  });
+});
+
+describe("getInitialTimeWindow", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  // Unique token per test: fetchPreferencesRow is memoized by token (see the
+  // mocked cache() above).
+  it.each(["7", "30", "90", "all"])("returns the persisted %s window", async (tw) => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: `tw-token-${tw}` }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ time_window: tw }) });
+    await expect(getInitialTimeWindow()).resolves.toBe(tw);
+  });
+
+  it('falls back to "all" for an unknown value', async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "tw-token-bad" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ time_window: "365" }) });
+    await expect(getInitialTimeWindow()).resolves.toBe("all");
+  });
+
+  it('falls back to "all" when the field is missing', async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "tw-token-missing" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({}) });
+    await expect(getInitialTimeWindow()).resolves.toBe("all");
+  });
+
+  it('falls back to "all" when the response is not ok', async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "tw-token-401" }) as never);
+    mockFetchResponse({ ok: false, status: 401, json: async () => ({ detail: "Unauthorized" }) });
+    await expect(getInitialTimeWindow()).resolves.toBe("all");
+  });
+
+  it('falls back to "all" when the body is not an object', async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "tw-token-arr" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ["x"] });
+    await expect(getInitialTimeWindow()).resolves.toBe("all");
   });
 });

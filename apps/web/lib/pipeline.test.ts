@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveSkipColumns, formatVisited, percentOf, archiveRatio, skipRatePoints, skipReasonMix, archiveReasonLabel } from "./pipeline";
+import { deriveSkipColumns, formatVisited, percentOf, archiveRatio, skipRatePoints, skipReasonMix, archiveReasonLabel, rangeKeyFor } from "./pipeline";
 import type { PipelinePage } from "./types";
 
 const base: PipelinePage = { id: 1, title: "T", domain: "example.org", status: "active", processing_depth: "processed",
@@ -71,5 +71,15 @@ describe("archiveReasonLabel (twin of SKIP_METHOD_LABELS)", () => {
     expect(archiveReasonLabel("dedupe_fold")).toBe("Dedupe Fold");
     expect(archiveReasonLabel("other")).toBe("Other");
     expect(archiveReasonLabel("some_new_reason")).toBe("Some New Reason");
+  });
+});
+
+describe("rangeKeyFor", () => {
+  it("maps the shared TimeWindow onto the pipeline API range key", () => {
+    expect(rangeKeyFor("7")).toBe("7d");
+    expect(rangeKeyFor("30")).toBe("30d");
+    expect(rangeKeyFor("90")).toBe("90d");
+    expect(rangeKeyFor("all")).toBe("all");
+    expect(rangeKeyFor("365")).toBe("all");
   });
 });

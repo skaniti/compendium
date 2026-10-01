@@ -12,6 +12,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getPaletteNames, normalizeVariant } from "@/lib/theme";
+import type { TimeWindow } from "@/lib/types";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
@@ -378,4 +379,21 @@ export async function getInitialSessionRole(): Promise<InitialSessionRole> {
   const role = rawRole === "admin" || rawRole === "demo" || rawRole === "user" ? rawRole : null;
   const actingAsDemo = (data as Record<string, unknown>).acting_as_demo === true;
   return { role, actingAsDemo };
+}
+
+// Persisted shared time period (graph DATE RANGE + dev views). Same shared
+// fetchPreferencesRow round-trip and same no-token behaviour as
+// getInitialStarfieldVariant; anything unusable falls back to "all".
+const PERSISTED_TIME_WINDOWS: readonly TimeWindow[] = ["7", "30", "90", "all"];
+
+export async function getInitialTimeWindow(): Promise<TimeWindow> {
+  const token = (await cookies()).get("access_token")?.value;
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return "all";
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) return "all";
+  const tw = (prefs as Record<string, unknown>).time_window;
+  return typeof tw === "string" && (PERSISTED_TIME_WINDOWS as readonly string[]).includes(tw)
+    ? (tw as TimeWindow)
+    : "all";
 }
