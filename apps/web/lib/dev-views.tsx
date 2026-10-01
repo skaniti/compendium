@@ -130,14 +130,14 @@ const OverviewIcon = tabIcon(
 // Tab order = array order (the recorded 05 information architecture).
 // "planned" entries are placeholder silhouettes until their batch lands.
 export const DEV_VIEWS: DevViewDef[] = [
+  { id: "overview", label: "Overview", href: "/dev/overview", access: "any", status: "planned", Icon: OverviewIcon },
+  { id: "data", label: "Data", href: "/dev/data", access: "any", status: "planned", Icon: DataIcon },
   { id: "pipeline", label: "Pipeline", href: "/dev/pipeline", access: "any", status: "live", Icon: PipelineIcon },
   { id: "clusters", label: "Clusters", href: "/dev/clusters", access: "any", status: "planned", Icon: ClustersIcon },
   { id: "dqbot", label: "dqBot", href: "/dev/dqbot", access: "admin", status: "planned", Icon: DqBotIcon },
   { id: "prompts", label: "Prompts", href: "/dev/prompts", access: "any", status: "planned", Icon: PromptsIcon },
-  { id: "data", label: "Data", href: "/dev/data", access: "any", status: "planned", Icon: DataIcon },
   { id: "logs", label: "Logs", href: "/dev/logs", access: "admin", status: "planned", Icon: LogsIcon },
   { id: "traces", label: "Traces", href: "/dev/traces", access: "admin", status: "planned", Icon: TracesIcon },
-  { id: "overview", label: "Overview", href: "/dev/overview", access: "any", status: "planned", Icon: OverviewIcon },
 ];
 
 export function liveDevViews(): DevViewDef[] {

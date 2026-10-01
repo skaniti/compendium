@@ -26,6 +26,6 @@ describe("DevTabs", () => {
     const { container } = render(<DevTabs />);
     expect(screen.getAllByRole("link")).toHaveLength(1);
     const labels = [...container.querySelectorAll(".dev-tab-planned .hbar-nav-caption")].map((e) => e.textContent);
-    expect(labels).toEqual(["Clusters", "Prompts", "Data", "Overview"]);
+    expect(labels).toEqual(["Overview", "Data", "Clusters", "Prompts"]);
   });
 });

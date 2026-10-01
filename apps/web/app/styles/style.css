@@ -435,7 +435,10 @@
    Anchoring left:var(--dev-zone) reserves the toggle's 94px column
    (76px button + 2*9px --bar-pad gutter, 2026-07-13 tweak pass; was
    72px = 54+2*9), leaving the rest for the tabs flex container. */
-.mode-switch-bar > #header-dev-tabs { left: var(--dev-zone); right: var(--bar-pad); }
+/* left = toggle's outer width (76px + 2px border) + 2*--bar-pad, so the
+   toggle-to-first-tab gap is exactly --bar-pad (was 7px: --dev-zone omits
+   the toggle's border). The inter-tab gap below uses the same variable. */
+.mode-switch-bar > #header-dev-tabs { left: calc(var(--dev-zone) + 2px); right: var(--bar-pad); }
 .mode-switch-bar.mode-dev > #header-dev-tabs {
     transform: translateX(0);
     opacity: 1;
@@ -515,7 +518,10 @@
 }
 
 /* Explorer set this inline on the container (app.py:582-590). */
-#header-dev-tabs.hbar-dev-tabs { display: flex; gap: 4px; align-items: center; }
+/* gap = --bar-pad (matches the toggle-to-first-tab gap). Tabs are top-anchored
+   at --bar-pad, the same top as the .dev-menu wrapper holding the toggle;
+   align-items:center put them 1px above the toggle (108px box vs 90px zone). */
+#header-dev-tabs.hbar-dev-tabs { display: flex; gap: var(--bar-pad); align-items: flex-start; padding-top: var(--bar-pad); }
 
 /* Next: tabs and toggle are <a> links; tab icons are always shown (the
    base .hbar-nav-icon-img is display:none for the toggle's mode swap). */

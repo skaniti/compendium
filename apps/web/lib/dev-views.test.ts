@@ -6,12 +6,12 @@ describe("dev view registry", () => {
     const v = findDevView("pipeline");
     expect(v?.href).toBe("/dev/pipeline");
     expect(v?.access).toBe("any");
-    expect(DEV_VIEWS[0].id).toBe("pipeline");
+    expect(DEV_VIEWS[2].id).toBe("pipeline");
   });
   it("unknown id -> undefined", () => expect(findDevView("nope")).toBeUndefined());
   it("plain demo drops admin-only views; admin and acting-as-demo keep them", () => {
     const adminOnly = { id: "logs", label: "Logs", href: "/dev/logs", access: "admin" as const, status: "live" as const, Icon: () => null };
-    const all = [DEV_VIEWS[0], adminOnly];
+    const all = [findDevView("pipeline")!, adminOnly];
     expect(visibleDevViews("demo", false, all).map((v) => v.id)).toEqual(["pipeline"]);
     expect(visibleDevViews("admin", false, all).map((v) => v.id)).toEqual(["pipeline", "logs"]);
     expect(visibleDevViews("demo", true, all).map((v) => v.id)).toEqual(["pipeline", "logs"]);
@@ -30,13 +30,13 @@ describe("dev view registry", () => {
     expect(canSeeAdminViews(null, false)).toBe(false);
   });
   it("registry order, one live view, rest planned", () => {
-    expect(DEV_VIEWS.map((v) => v.id)).toEqual(["pipeline", "clusters", "dqbot", "prompts", "data", "logs", "traces", "overview"]);
+    expect(DEV_VIEWS.map((v) => v.id)).toEqual(["overview", "data", "pipeline", "clusters", "dqbot", "prompts", "logs", "traces"]);
     expect(DEV_VIEWS.filter((v) => v.status === "live")).toHaveLength(1);
     expect(liveDevViews()[0].id).toBe("pipeline");
   });
   it("plain demo keeps planned any-access tabs, drops planned admin-only ones", () => {
     const ids = visibleDevViews("demo", false).map((v) => v.id);
-    expect(ids).toEqual(["pipeline", "clusters", "prompts", "data", "overview"]);
+    expect(ids).toEqual(["overview", "data", "pipeline", "clusters", "prompts"]);
     expect(visibleDevViews("admin", false)).toHaveLength(8);
   });
 });
