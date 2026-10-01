@@ -19,6 +19,7 @@ import httpx
 from openai.types.chat import ChatCompletionMessageToolCall
 
 from backend.config.settings import settings
+from backend.services.skip_categories import SKIP_CATEGORIES, SKIP_CATEGORY_IDS
 from backend.services.content_fetcher import (
     fetch_wikipedia_content,
     fetch_youtube_metadata,
@@ -1167,12 +1168,17 @@ PAGE_PROCESSING_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": list(SKIP_CATEGORY_IDS),
+                        "description": "\n".join(f"{cid}: {desc}" for cid, _label, desc in SKIP_CATEGORIES),
+                    },
                     "reason": {
                         "type": "string",
-                        "description": "Brief reason for skipping (e.g., 'disambiguation page', 'login wall')",
-                    }
+                        "description": "Short free-text detail (a few words) supporting the category",
+                    },
                 },
-                "required": ["reason"],
+                "required": ["category", "reason"],
             },
         },
     },

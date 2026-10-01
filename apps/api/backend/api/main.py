@@ -858,6 +858,7 @@ from backend.services.content_fetcher import (
     fetch_generic_content,
 )
 from backend.services.graph_service import load_graph
+from backend.services.skip_categories import normalize_category
 from fastapi import HTTPException
 
 TOOL_SELECTION_MODEL = "gpt-4o-mini"
@@ -1266,6 +1267,23 @@ async def create_capture(
     ).model_dump(by_alias=True)
 
 
+def _apply_gate_tool_call(result, tool_name: str, arguments: dict) -> str:
+    """Apply a skip-gate tool call to ``result``; return the free-text reasoning.
+
+    A skip stores a normalized category (out-of-enum or missing -> ``other``);
+    a process verdict leaves ``skip_category`` unset.
+    """
+    reasoning = arguments.get("reasoning") or arguments.get("reason", "")
+    if tool_name == "skip_page":
+        result.processing_depth = "skipped"
+        result.status = "skipped"
+        result.skip_category = normalize_category(arguments.get("category"))
+    else:
+        result.processing_depth = "processed"
+    result.processing_depth_reasoning = reasoning
+    return reasoning
+
+
 @langsmith_traceable(name="process_capture", run_type="chain")
 async def process_capture(
     capture: CaptureInput,
@@ -1614,15 +1632,7 @@ async def process_capture(
             if tool_calls:
                 tc = tool_calls[0]
                 tool_name_dc = tc["name"]
-                reasoning = tc["arguments"].get("reasoning") or tc["arguments"].get("reason", "")
-
-                if tool_name_dc == "skip_page":
-                    result.processing_depth = "skipped"
-                    result.status = "skipped"
-                else:
-                    result.processing_depth = "processed"
-
-                result.processing_depth_reasoning = reasoning
+                reasoning = _apply_gate_tool_call(result, tool_name_dc, tc["arguments"])
                 result.input_tokens = llm_response.input_tokens
                 result.output_tokens = llm_response.output_tokens
                 result.cost_usd = llm_response.cost_usd

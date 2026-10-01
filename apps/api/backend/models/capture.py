@@ -131,6 +131,8 @@ class PageProcessingResult(BaseModel):
     # Stage 1: Page processing depth (D+C tool call result)
     processing_depth: Optional[Literal["skipped", "surface", "full", "processed"]] = None
     processing_depth_reasoning: Optional[str] = None
+    # Standardized skip-gate category (set only on gate skips)
+    skip_category: Optional[str] = None
     # Learning classification (Plan 07)
     is_learning: Optional[bool] = None
     # Stage 4: Content generation

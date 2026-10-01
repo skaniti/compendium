@@ -307,6 +307,7 @@ def _persist_single_page(page_row: dict, result, response) -> None:
         status,
         archive_reason=archive_reason,
         skip_reasoning=result.processing_depth_reasoning,
+        skip_category=getattr(result, "skip_category", None),
         processing_depth=result.processing_depth,
         processing_metadata={
             "cost_usd": result.cost_usd,
