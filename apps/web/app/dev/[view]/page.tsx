@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function DevViewPage({ params }: { params: Promise<{ view: string }> }) {
   const { view } = await params;
   const def = findDevView(view);
-  if (!def) notFound();
+  if (!def || def.status !== "live") notFound();
   const { role, actingAsDemo } = await getInitialSessionRole();
   if (def.access === "admin" && !canSeeAdminViews(role, actingAsDemo)) notFound();
   const View = DEV_VIEW_COMPONENTS[def.id];

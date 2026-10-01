@@ -522,6 +522,18 @@
 .dev-tab-btn, #dev-graph-toggle-btn { text-decoration: none; }
 .dev-tab-btn .hbar-nav-icon-img { display: block; }
 
+/* Planned dev views: unclickable dashed silhouettes until their batch lands.
+   Same size/spacing as a live tab (inherits .dev-tab-btn). */
+.dev-tab-btn.dev-tab-planned {
+    background: transparent;
+    border: 1px dashed rgba(255,255,255,0.3);
+    color: var(--on-primary);
+    opacity: 0.55;
+    cursor: default;
+    pointer-events: none;
+}
+.dev-tab-btn.dev-tab-planned .hbar-nav-icon-img { display: block; opacity: 0.7; }
+
 /* ===== Graph-mode mini-cards (inside mode-switch-bar) =====
    Three compact cards (CLUSTERING / DATE RANGE / VIEW) that sit inside
    #header-graph-controls. Each card has an uppercase spaced label on top

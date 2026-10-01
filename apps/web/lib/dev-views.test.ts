@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEV_VIEWS, findDevView, visibleDevViews, isPlainDemo, canSeeAdminViews } from "./dev-views";
+import { DEV_VIEWS, findDevView, liveDevViews, visibleDevViews, isPlainDemo, canSeeAdminViews } from "./dev-views";
 
 describe("dev view registry", () => {
   it("pipeline is registered, demo-visitable, at /dev/pipeline", () => {
@@ -10,8 +10,8 @@ describe("dev view registry", () => {
   });
   it("unknown id -> undefined", () => expect(findDevView("nope")).toBeUndefined());
   it("plain demo drops admin-only views; admin and acting-as-demo keep them", () => {
-    const adminOnly = { id: "logs", label: "Logs", href: "/dev/logs", access: "admin" as const, Icon: () => null };
-    const all = [...DEV_VIEWS, adminOnly];
+    const adminOnly = { id: "logs", label: "Logs", href: "/dev/logs", access: "admin" as const, status: "live" as const, Icon: () => null };
+    const all = [DEV_VIEWS[0], adminOnly];
     expect(visibleDevViews("demo", false, all).map((v) => v.id)).toEqual(["pipeline"]);
     expect(visibleDevViews("admin", false, all).map((v) => v.id)).toEqual(["pipeline", "logs"]);
     expect(visibleDevViews("demo", true, all).map((v) => v.id)).toEqual(["pipeline", "logs"]);
@@ -28,5 +28,15 @@ describe("dev view registry", () => {
     expect(canSeeAdminViews("demo", false)).toBe(false);
     expect(canSeeAdminViews("user", false)).toBe(false);
     expect(canSeeAdminViews(null, false)).toBe(false);
+  });
+  it("registry order, one live view, rest planned", () => {
+    expect(DEV_VIEWS.map((v) => v.id)).toEqual(["pipeline", "clusters", "dqbot", "prompts", "data", "logs", "traces", "overview"]);
+    expect(DEV_VIEWS.filter((v) => v.status === "live")).toHaveLength(1);
+    expect(liveDevViews()[0].id).toBe("pipeline");
+  });
+  it("plain demo keeps planned any-access tabs, drops planned admin-only ones", () => {
+    const ids = visibleDevViews("demo", false).map((v) => v.id);
+    expect(ids).toEqual(["pipeline", "clusters", "prompts", "data", "overview"]);
+    expect(visibleDevViews("admin", false)).toHaveLength(8);
   });
 });

@@ -11,8 +11,8 @@ vi.mock("@/lib/preferences.server", () => ({ getInitialSessionRole: vi.fn(async 
 vi.mock("@/components/AppShell", () => ({ default: ({ children }: { children: React.ReactNode }) => <div data-testid="shell">{children}</div> }));
 vi.mock("@/lib/dev-views", async (orig) => {
   const m = await orig<typeof import("@/lib/dev-views")>();
-  const logs = { id: "logs", label: "Logs", href: "/dev/logs", access: "admin", Icon: () => null };
-  return { ...m, findDevView: (id: string) => [...m.DEV_VIEWS, logs].find((v) => v.id === id) };
+  const logs = { id: "logs", label: "Logs", href: "/dev/logs", access: "admin", status: "live", Icon: () => null };
+  return { ...m, findDevView: (id: string) => [logs, ...m.DEV_VIEWS].find((v) => v.id === id) };
 });
 vi.mock("./views", async (orig) => {
   const m = await orig<typeof import("./views")>();
@@ -39,6 +39,10 @@ describe("/dev/[view]", () => {
   ] as const)("admin-only view as %s -> notFound", async (_n, role, acting) => {
     as(role, acting);
     await expect(DevViewPage(params("logs"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+  it("planned view -> notFound even for admin", async () => {
+    as("admin", false);
+    await expect(DevViewPage(params("data"))).rejects.toThrow("NEXT_NOT_FOUND");
   });
   it("pipeline renders inside the dev shell for plain demo", async () => {
     const el = (await DevViewPage(params("pipeline"))) as ReactElement<{ mode: string; children: ReactElement }>;

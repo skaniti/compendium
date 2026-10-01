@@ -5,7 +5,7 @@ import HeaderCards from "./HeaderCards";
 import SettingsMenu from "./SettingsMenu";
 import DevTabs from "./dev/DevTabs";
 import { useSession } from "./SessionProvider";
-import { DevArrowsIcon, GraphGlyphIcon, visibleDevViews } from "@/lib/dev-views";
+import { DevArrowsIcon, GraphGlyphIcon, liveDevViews, visibleDevViews } from "@/lib/dev-views";
 
 // Mirrors app.py's .app-header inline style block (:1877-1899). Header grew
 // 84px -> 118px in the 2026-07-13 header-scaling pass; padding stays
@@ -86,7 +86,8 @@ const SIGN_OUT_BUTTON_STYLE: CSSProperties = {
 
 export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
   const { account, role, actingAsDemo } = useSession();
-  const firstDev = visibleDevViews(role, actingAsDemo)[0];
+  const liveIds = new Set(liveDevViews().map((v) => v.id));
+  const firstDev = visibleDevViews(role, actingAsDemo).find((v) => liveIds.has(v.id));
   const toggleHref = mode === "graph" ? (firstDev?.href ?? "/dev/pipeline") : "/";
 
   async function handleSignOut(): Promise<void> {
