@@ -149,9 +149,9 @@ class TestSummary:
             ["trivial_capture"],
         )
         assert {r["key"]: r["label"] for r in body["skip_methods"]} == {
-            "skip_gate": "LLM skip gate",
-            "domain_skip": "Domain filter",
-            "trivial_capture": "Trivial capture",
+            "skip_gate": "LLM Skip Gate",
+            "domain_skip": "Domain Filter",
+            "trivial_capture": "Trivial Capture",
         }
         reasons = {r["reason"]: r["count"] for r in body["skip_gate_reasons"]}
         assert reasons == {"login wall": 1, "Domain skipped": 1}  # '(none)' (trivial) dropped

@@ -13,6 +13,8 @@ it("fetches both sections with the default 30d window and re-fetches on pill cha
   render(<WindowedSections />);
   await screen.findByText("83.9%");
   expect(screen.getByText("docs.example.net (169), example.org (150), shop.example.com (82)")).toBeInTheDocument();
+  expect(screen.getByText("LLM Skip Gate")).toBeInTheDocument();
+  expect(screen.getByText("662").parentElement).toHaveTextContent("662 57%"); // of archived_count 1164
   expect(api.fetchArchiveHealth).toHaveBeenCalledWith("30d");
   expect(api.fetchSkipTrends).toHaveBeenCalledWith("30d");
   await userEvent.click(screen.getByRole("button", { name: "All time" }));

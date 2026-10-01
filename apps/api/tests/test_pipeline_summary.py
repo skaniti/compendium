@@ -53,11 +53,17 @@ class TestSkipMethods:
             {"skip_gate": 5, "domain_skip": 9, "dedupe_fold": 1, "other": 2}
         )
         assert rows == [
-            {"key": "domain_skip", "label": "Domain filter", "count": 9},
-            {"key": "skip_gate", "label": "LLM skip gate", "count": 5},
-            {"key": "other", "label": "other", "count": 2},
-            {"key": "dedupe_fold", "label": "dedupe_fold", "count": 1},
+            {"key": "domain_skip", "label": "Domain Filter", "count": 9},
+            {"key": "skip_gate", "label": "LLM Skip Gate", "count": 5},
+            {"key": "other", "label": "Other", "count": 2},
+            {"key": "dedupe_fold", "label": "Dedupe Fold", "count": 1},
         ]
+
+
+    def test_unknown_snake_case_falls_back_to_title_case(self):
+        rows = ps.build_skip_method_rows({"some_new_reason": 3})
+        assert rows[0]["label"] == "Some New Reason"
+        assert ps.skip_method_label("dedup") == "Dedup"
 
 
 class TestSkipGateReasons:

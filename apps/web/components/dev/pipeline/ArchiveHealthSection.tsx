@@ -1,6 +1,6 @@
 import StatCard from "@/components/dev/StatCard";
 import BarChart from "@/components/charts/BarChart";
-import { archiveRatio } from "@/lib/pipeline";
+import { archiveRatio, archiveReasonLabel, percentOf } from "@/lib/pipeline";
 import type { ArchiveHealthSummary } from "@/lib/types";
 const fmt = (n: number) => n.toLocaleString("en-US");
 export default function ArchiveHealthSection({ data, error }: { data: ArchiveHealthSummary | null; error: string | null }) {
@@ -21,7 +21,7 @@ export default function ArchiveHealthSection({ data, error }: { data: ArchiveHea
             <div className="dev-table-wrap"><table className="dev-table">
               <thead><tr><th>Reason</th><th>Count</th><th>Top domains</th></tr></thead>
               <tbody>{data.by_reason.map((r) => (
-                <tr key={r.reason}><td>{r.reason}</td><td>{r.count}</td><td>{r.top_domains.slice(0, 3).map((d) => `${d.domain} (${d.count})`).join(", ")}</td></tr>))}</tbody>
+                <tr key={r.reason}><td>{archiveReasonLabel(r.reason)}</td><td>{r.count}<span className="dev-bar-pct"> {Math.round(percentOf(r.count, data.archived_count))}%</span></td><td>{r.top_domains.slice(0, 3).map((d) => `${d.domain} (${d.count})`).join(", ")}</td></tr>))}</tbody>
             </table></div>
           )}
           <h3 className="dev-section-title">Archive rate per capture</h3>

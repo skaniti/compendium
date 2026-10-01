@@ -14,11 +14,21 @@ SKIP_GATE_PROMPT_NAME = "skip_gate_v2_3"  # backend/api/main.py process path
 SKIP_GATE_TEMPERATURE = 0.0
 
 SKIP_METHOD_LABELS = {
-    "domain_skip": "Domain filter",
-    "skip_gate": "LLM skip gate",
-    "manual_exclusion": "Manual exclusion",
-    "trivial_capture": "Trivial capture",
+    "skip_gate": "LLM Skip Gate",
+    "domain_skip": "Domain Filter",
+    "manual_exclusion": "Manual Exclusion",
+    "trivial_capture": "Trivial Capture",
+    "placeholder_no_content": "Placeholder No Content",
+    "dedup": "Dedup",
+    "app_chrome_junk": "App Chrome Junk",
+    "dedupe_fold": "Dedupe Fold",
+    "other": "Other",
 }
+
+
+def skip_method_label(key: str) -> str:
+    """Known keys use SKIP_METHOD_LABELS; unknown snake_case values become Title Case."""
+    return SKIP_METHOD_LABELS.get(key) or " ".join(w.capitalize() for w in key.split("_") if w)
 
 _DEPTH_LABELS = {"processed": "Processed", "skipped": "Skipped"}
 _NULL_KEYS = {"Pending": "pending", "Trivial Capture": "trivial_capture", "Other": "other"}
@@ -67,7 +77,7 @@ def build_decision_rows(depth_counts: dict[str, int], null_breakdown: dict[str, 
 
 def build_skip_method_rows(skip_methods: dict[str, int]) -> list[dict]:
     rows = [
-        {"key": k, "label": SKIP_METHOD_LABELS.get(k, k), "count": c}
+        {"key": k, "label": skip_method_label(k), "count": c}
         for k, c in skip_methods.items()
     ]
     rows.sort(key=lambda r: r["count"], reverse=True)

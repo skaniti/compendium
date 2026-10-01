@@ -9,11 +9,18 @@ const summary: PipelineSummary = {
   skip_gate_reasons: [{ reason: "login wall", count: 2 }],
   skip_gate_config: { model: "m", temperature: 0, prompt_name: "skip_gate_v2_3", prompt: "p", tools: [] },
 };
-it("shows decisions with pct of all pages, mechanisms with Dash fills, reasons with hover title", () => {
+it("shows decisions with pct of all pages, every bar in the highlight colour, reasons with hover title", () => {
   render(<DecisionBars summary={summary} />);
   expect(screen.getByText("60%")).toBeInTheDocument();           // 6 of 10
   const fills = document.querySelectorAll(".dev-bar-fill") as NodeListOf<HTMLElement>;
-  expect(fills[1].style.background).toBe("rgb(43, 46, 52)");    // #2b2e34 not-evaluated
-  expect(fills[2].style.background).toBe("var(--panel-caption)"); // Domain filter
+  expect(fills.length).toBe(5);
+  fills.forEach((f) => expect(f.style.background).toBe("var(--highlight)"));
   expect(screen.getByTitle("login wall")).toBeInTheDocument();
+});
+it("shows percentages of archived pages on skip mechanisms and gate reasons", () => {
+  render(<DecisionBars summary={{ ...summary, status_counts: { active: 0, pending: 0, archived: 10 }, total_pages: 20,
+    skip_methods: [{ key: "domain_skip", label: "Domain Filter", count: 4 }],
+    skip_gate_reasons: [{ reason: "login wall", count: 2 }] }} />);
+  expect(screen.getByText("Domain Filter").closest(".dev-bar-row")).toHaveTextContent("4 40%");
+  expect(screen.getByText("login wall").closest(".dev-bar-row")).toHaveTextContent("2 20%");
 });
