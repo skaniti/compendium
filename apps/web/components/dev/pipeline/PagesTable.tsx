@@ -39,7 +39,7 @@ export default function PagesTable() {
        : data.rows.length === 0 ? <p className="dev-empty">No pages found.</p>
        : (
         <div className="dev-table-wrap">
-          <table className="dev-table">
+          <table className="dev-table dev-table-fixed">
             <colgroup>{COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <thead><tr>{HEADERS.map((h) => h.sort ? (
               <th key={h.label} aria-sort={h.sort === sort ? (dir === "asc" ? "ascending" : "descending") : "none"}>

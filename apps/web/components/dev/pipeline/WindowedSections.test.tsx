@@ -17,6 +17,7 @@ it("fetches both sections with the shared window and re-fetches on pill change",
   await screen.findByText("83.9%");
   expect(screen.getByText("docs.example.net (169), example.org (150), shop.example.com (82)")).toBeInTheDocument();
   expect(screen.getByText("LLM Skip Gate")).toBeInTheDocument();
+  expect(document.querySelector(".dev-table")).not.toHaveClass("dev-table-fixed");
   expect(screen.getByText("662").parentElement).toHaveTextContent("662 57%"); // of archived_count 1164
   expect(api.fetchArchiveHealth).toHaveBeenCalledWith("30d");
   expect(api.fetchSkipTrends).toHaveBeenCalledWith("30d");

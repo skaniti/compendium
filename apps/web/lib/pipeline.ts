@@ -62,6 +62,8 @@ const ARCHIVE_REASON_LABELS: Record<string, string> = {
   skip_gate: "LLM Skip Gate", domain_skip: "Domain Filter", manual_exclusion: "Manual Exclusion", trivial_capture: "Trivial Capture",
   placeholder_no_content: "Placeholder No Content", dedup: "Dedup", app_chrome_junk: "App Chrome Junk", dedupe_fold: "Dedupe Fold", other: "Other",
 };
+/** Python str.capitalize() twin: first letter upper, rest lower. */
+const snakeToTitle = (raw: string) => raw.split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 export function archiveReasonLabel(raw: string): string {
-  return ARCHIVE_REASON_LABELS[raw] ?? raw.split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return Object.hasOwn(ARCHIVE_REASON_LABELS, raw) ? ARCHIVE_REASON_LABELS[raw] : snakeToTitle(raw);
 }

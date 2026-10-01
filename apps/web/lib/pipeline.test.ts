@@ -71,6 +71,8 @@ describe("archiveReasonLabel (twin of SKIP_METHOD_LABELS)", () => {
     expect(archiveReasonLabel("dedupe_fold")).toBe("Dedupe Fold");
     expect(archiveReasonLabel("other")).toBe("Other");
     expect(archiveReasonLabel("some_new_reason")).toBe("Some New Reason");
+    expect(archiveReasonLabel("SOME_NEW")).toBe("Some New");
+    expect(archiveReasonLabel("constructor")).toBe("Constructor");
   });
 });
 

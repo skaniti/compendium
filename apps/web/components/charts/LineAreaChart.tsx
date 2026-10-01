@@ -1,5 +1,5 @@
 import { area, line, curveLinear } from "d3-shape";
-import { MARGIN, frame, xTime, yLinear, fmtMonthDay, MIN_LABEL_SPACING } from "./scales";
+import { MARGIN, frame, xTime, yLinear, fmtMonthDay, thinTicks, MIN_LABEL_SPACING } from "./scales";
 import { useContainerWidth } from "./useContainerWidth";
 import { useChartTooltip } from "./ChartTooltip";
 export interface LinePoint { x: Date; y: number; hover: string; labelTop?: string; labelBottom?: string }
@@ -9,7 +9,7 @@ export default function LineAreaChart({ points, yMax, yTicks, ySuffix = "", heig
   const alwaysOn = points.length <= ALWAYS_ON_LABEL_MAX;
   const [ref, width] = useContainerWidth(); const { tooltip, show, hide } = useChartTooltip(); const { innerW, innerH } = frame(width, height);
   const x = xTime(points.map((p) => p.x), innerW); const y = yLinear(yMax, innerH);
-  const tickCount = Math.max(0, Math.floor(innerW / MIN_LABEL_SPACING.monthDay));
+  const ticks = points.length > 0 ? thinTicks(x, innerW, MIN_LABEL_SPACING.monthDay, fmtMonthDay) : [];
   const ln = line<LinePoint>().x((p) => x(p.x)).y((p) => y(p.y)).curve(curveLinear);
   const ar = area<LinePoint>().x((p) => x(p.x)).y0(innerH).y1((p) => y(p.y));
   return (
@@ -17,7 +17,7 @@ export default function LineAreaChart({ points, yMax, yTicks, ySuffix = "", heig
     <svg className="chart" viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={yTitle || "line chart"}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
         {yTicks.map((t) => (<g key={t} transform={`translate(0,${y(t)})`}><line x2={innerW} className="chart-grid" /><text x={-6} dy="0.32em" textAnchor="end" className="chart-tick">{t}{ySuffix}</text></g>))}
-        {points.length > 0 && tickCount >= 2 && x.ticks(tickCount).map((d, i) => (<text key={i} x={x(d)} y={innerH + 14} textAnchor="middle" className="chart-tick">{fmtMonthDay(d)}</text>))}
+        {ticks.map((d, i) => (<text key={i} x={x(d)} y={innerH + 14} textAnchor="middle" className="chart-tick">{fmtMonthDay(d)}</text>))}
         <path className="chart-area" d={ar(points) ?? ""} fill="var(--highlight)" fillOpacity={0.15} />
         <path className="chart-line" d={ln(points) ?? ""} fill="none" stroke="var(--highlight)" strokeWidth={2} />
         {points.map((p, i) => (<circle key={i} className="chart-point" cx={x(p.x)} cy={y(p.y)} r={3} fill="var(--highlight)" />))}

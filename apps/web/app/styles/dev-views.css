@@ -334,7 +334,8 @@
 
 
 /* Dash DataTable style_* props of the Pipeline / Archive tables, as CSS. */
-.dev-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-family: monospace; font-size: 0.72rem; }
+.dev-table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.72rem; }
+.dev-table-fixed { table-layout: fixed; width: 100%; }
 .dev-table th { text-align: left; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 6px 10px; background: var(--surface); color: var(--panel-caption); border-bottom: 1px solid var(--border); }
 .dev-table td { padding: 5px 10px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -360,7 +361,7 @@
 
 .chart { display: block; font-family: monospace; font-size: 10px; }
 .chart-grid { stroke: rgba(128,128,128,0.15); }
-.chart-tick, .chart-axis-title, .chart-legend { fill: var(--panel-caption); }
+.chart-tick, .chart-axis-title { fill: var(--panel-caption); }
 .chart-axis-title { font-size: 11px; }
 .chart-seg-label { fill: var(--on-primary); font-size: 7px; font-weight: 700; }
 .chart-tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-family: monospace; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); white-space: pre; }

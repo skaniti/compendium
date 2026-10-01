@@ -106,7 +106,8 @@ it("StackedBarChart legend is an HTML flow list with full labels, outside the sv
   const { container } = render(<StackedBarChart days={["2026-08-01"]} series={[{ name: a, values: [50] }, { name: b, values: [50] }]} />);
   const items = Array.from(container.querySelectorAll("ul.chart-legend-flow > li")).map((li) => li.textContent);
   expect(items).toEqual([a, b]);
-  expect(container.querySelectorAll("svg text.chart-legend")).toHaveLength(0);
+  const svgText = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent ?? "");
+  expect(svgText.some((t) => t.includes(a) || t.includes(b) || t.includes("x".repeat(10)))).toBe(false);
   expect(container.querySelector("ul.chart-legend-flow")!.previousElementSibling?.tagName.toLowerCase()).toBe("svg");
 });
 const barPts = Array.from({ length: 30 }, (_, i) => ({ x: d(`2026-08-${String(i + 1).padStart(2, "0")}`), y: 10, label: "c" }));
@@ -149,4 +150,37 @@ it("StackedBarChart draws no in-bar labels at ~45 bars in a wide cell", () => {
     expect(container.querySelectorAll("rect.chart-seg")).toHaveLength(90);
     expect(container.querySelectorAll(".chart-seg-label")).toHaveLength(0);
   } finally { vi.unstubAllGlobals(); }
+});
+
+const days = (n: number, start: string) => Array.from({ length: n }, (_, i) => { const t = new Date(`${start}T00:00:00`); t.setDate(t.getDate() + i); return t; });
+const gaps = (container: HTMLElement) => { const xs = Array.from(container.querySelectorAll("text.chart-tick[text-anchor]")).filter((t) => t.getAttribute("text-anchor") !== "end" || t.hasAttribute("transform")).filter((t) => t.getAttribute("y") && Number(t.getAttribute("y")) > 100).map((t) => Number(t.getAttribute("x"))); return xs.slice(1).map((v, i) => v - xs[i]); };
+it("LineAreaChart ticks across a month boundary stay >= 64px apart and distinct", () => {
+  withWidth(870, () => {
+    const pts = days(30, "2026-08-10").map((x) => ({ x, y: 5, hover: "h" }));
+    const { container } = render(<LineAreaChart points={pts} yMax={110} yTicks={[0, 100]} />);
+    const labels = Array.from(container.querySelectorAll("text.chart-tick[text-anchor='middle']")).map((t) => t.textContent);
+    expect(labels.length).toBeGreaterThan(2); expect(new Set(labels).size).toBe(labels.length);
+    gaps(container).forEach((g) => expect(g).toBeGreaterThanOrEqual(64));
+  });
+});
+it("BarChart ticks across a month boundary stay >= 56px apart", () => {
+  withWidth(870, () => {
+    const pts = days(30, "2026-08-10").map((x) => ({ x, y: 5, label: "c" }));
+    const { container } = render(<BarChart points={pts} yMax={105} yTicks={[0, 100]} />);
+    const g = gaps(container); expect(g.length).toBeGreaterThan(2);
+    g.forEach((v) => expect(v).toBeGreaterThanOrEqual(56));
+  });
+});
+it("7-day series renders only distinct date labels; single-point BarChart at most one", () => {
+  withWidth(1600, () => {
+    const l = render(<LineAreaChart points={days(7, "2026-08-10").map((x) => ({ x, y: 5, hover: "h" }))} yMax={110} yTicks={[0]} />);
+    const labels = Array.from(l.container.querySelectorAll("text.chart-tick[text-anchor='middle']")).map((t) => t.textContent);
+    expect(new Set(labels).size).toBe(labels.length);
+    const b = render(<BarChart points={[{ x: d("2026-08-01"), y: 1, label: "one" }]} yMax={105} yTicks={[0]} />);
+    expect(b.container.querySelectorAll("text.chart-tick[transform]").length).toBeLessThanOrEqual(1);
+  });
+});
+it("BarChart bars use the highlight colour", () => {
+  const { container } = render(<BarChart points={[{ x: d("2026-08-01"), y: 1, label: "a" }, { x: d("2026-08-02"), y: 2, label: "b" }]} yMax={105} yTicks={[0]} />);
+  container.querySelectorAll("rect.chart-bar").forEach((r) => expect(r.getAttribute("fill")).toBe("var(--highlight)"));
 });
