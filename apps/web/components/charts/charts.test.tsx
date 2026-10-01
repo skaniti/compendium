@@ -82,7 +82,7 @@ it("charts size their viewBox to the measured container width", () => {
 it("StackedBarChart gives 8 series distinct fills, a tooltip, and a legend-row tooltip", () => {
   const series = Array.from({ length: 8 }, (_, i) => ({ name: `reason ${i}`, values: [12.5] }));
   const { container } = render(<StackedBarChart days={["2026-08-01"]} series={series} />);
-  const fills = Array.from(container.querySelectorAll("rect.chart-seg")).map((r) => r.getAttribute("fill"));
+  const fills = Array.from(container.querySelectorAll("rect.chart-seg")).map((r) => (r as SVGElement).style.fill);
   expect(new Set(fills).size).toBe(8);
   expect(container.querySelector("title")).toBeNull();
   fireEvent.mouseMove(container.querySelector("rect.chart-seg")!);
