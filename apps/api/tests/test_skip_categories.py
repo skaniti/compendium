@@ -51,8 +51,18 @@ def test_normalize_empty_or_nonstring_is_other_quietly(value, caplog):
 def test_normalize_invalid_and_case_mismatch_logs(caplog):
     with caplog.at_level(logging.WARNING):
         assert sc.normalize_category("bogus") == "other"
-        assert sc.normalize_category("LOGIN_WALL") == "other"
+        assert sc.normalize_category("login wall!") == "other"
     assert len(caplog.records) == 2
+
+
+@pytest.mark.parametrize("value", ["LOGIN_WALL", " login_wall ", "Login Wall", " login wall "])
+def test_normalize_case_whitespace_and_label(value):
+    assert sc.normalize_category(value) == "login_wall"
+
+
+def test_normalize_every_label_maps_to_its_id():
+    for cid, label, _ in sc.SKIP_CATEGORIES:
+        assert sc.normalize_category(label) == cid
 
 
 def test_tool_schema_lists_exactly_the_ids_and_requires_category():
@@ -101,6 +111,15 @@ def test_gate_skip_bad_or_missing_category_is_other(args):
     _apply_gate_tool_call(r, "skip_page", args)
     assert r.skip_category == "other"
     assert r.status == "skipped"
+
+
+def test_gate_null_reason_does_not_raise():
+    from backend.api.main import _apply_gate_tool_call
+
+    r = _result()
+    reasoning = _apply_gate_tool_call(r, "skip_page", {"category": "login_wall", "reason": None})
+    assert reasoning == "" and isinstance(r.processing_depth_reasoning, str)
+    assert r.skip_category == "login_wall"
 
 
 def test_gate_process_leaves_category_none():
@@ -206,14 +225,18 @@ def _read_category(page_id):
         return cur.fetchone()[0]
 
 
-def test_update_page_status_persists_category_and_default_null():
+@pytest.mark.parametrize("cid", EXPECTED_IDS)
+def test_every_module_id_is_accepted_by_the_db(cid):
     from backend.db import page_repo
 
     pid = _db_page()
-    page_repo.update_page_status(
-        pid, "archived", skip_reasoning="sign in", skip_category="login_wall"
-    )
-    assert _read_category(pid) == "login_wall"
+    page_repo.update_page_status(pid, "archived", skip_reasoning="x", skip_category=cid)
+    assert _read_category(pid) == cid
+
+
+def test_update_page_status_default_null():
+    from backend.db import page_repo
+
     pid2 = _db_page()
     page_repo.update_page_status(pid2, "active")
     assert _read_category(pid2) is None

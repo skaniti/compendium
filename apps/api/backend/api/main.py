@@ -1273,7 +1273,7 @@ def _apply_gate_tool_call(result, tool_name: str, arguments: dict) -> str:
     A skip stores a normalized category (out-of-enum or missing -> ``other``);
     a process verdict leaves ``skip_category`` unset.
     """
-    reasoning = arguments.get("reasoning") or arguments.get("reason", "")
+    reasoning = str(arguments.get("reasoning") or arguments.get("reason") or "")
     if tool_name == "skip_page":
         result.processing_depth = "skipped"
         result.status = "skipped"

@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 # (id, label, one-line description) -- the description lines up with the
 # skip_gate_v2_3 prompt's SKIP list.
 SKIP_CATEGORIES: tuple[tuple[str, str, str], ...] = (
-    ("login_wall", "Login Wall", "login or sign-in wall, or a paywall with no readable content"),
+    ("login_wall", "Login Wall", "login wall, auth page, sign-in redirect"),
     (
         "user_specific",
         "User-Specific Page",
-        "account, dashboard, inbox, settings, or other page only meaningful to the signed-in user",
+        "user-specific page (profile, account, dashboard, settings, inbox)",
     ),
     (
         "store_listing",
@@ -28,7 +28,10 @@ SKIP_CATEGORIES: tuple[tuple[str, str, str], ...] = (
     (
         "asset_library",
         "Asset Library Listing",
-        "browse/listing page of an asset library (images, fonts, templates, icons)",
+        (
+            "asset library browse / category / index page listing multiple items "
+            "(icons, fonts, vectors, 3D models, templates)"
+        ),
     ),
     (
         "entertainment_video",
@@ -50,13 +53,24 @@ SKIP_CATEGORY_IDS: tuple[str, ...] = tuple(c[0] for c in SKIP_CATEGORIES)
 SKIP_CATEGORY_LABELS: dict[str, str] = {c[0]: c[1] for c in SKIP_CATEGORIES}
 
 
-def normalize_category(value: object) -> str:
-    """Return ``value`` if it is a valid category id, else ``"other"``.
+_LABEL_TO_ID = {label.lower(): cid for cid, label, _ in SKIP_CATEGORIES}
 
-    Logs a warning for non-empty values that are not valid ids.
+
+def normalize_category(value: object) -> str:
+    """Return the category id for ``value``, else ``"other"``.
+
+    Accepts an id or a label, case-insensitive, surrounding whitespace ignored.
+    Logs a warning for non-empty values that match neither.
     """
-    if isinstance(value, str) and value in SKIP_CATEGORY_IDS:
-        return value
-    if value not in (None, "") and not (isinstance(value, str) and not value.strip()):
-        logger.warning("skip gate returned out-of-enum category %r; storing 'other'", value)
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in SKIP_CATEGORY_IDS:
+            return v
+        if v in _LABEL_TO_ID:
+            return _LABEL_TO_ID[v]
+        if not v:
+            return "other"
+    elif value is None:
+        return "other"
+    logger.warning("skip gate returned out-of-enum category %r; storing 'other'", value)
     return "other"
