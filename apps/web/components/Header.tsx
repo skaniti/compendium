@@ -3,7 +3,6 @@
 import type { CSSProperties } from "react";
 import HeaderCards from "./HeaderCards";
 import SettingsMenu from "./SettingsMenu";
-import Link from "next/link";
 import DevTabs from "./dev/DevTabs";
 import { useSession } from "./SessionProvider";
 import { DevArrowsIcon, GraphGlyphIcon, visibleDevViews } from "@/lib/dev-views";
@@ -106,7 +105,11 @@ export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
         </div>
         <DevTabs />
         <div className="dev-menu">
-          <Link
+          {/* Plain anchor (full navigation) on purpose, as in the Dash app: a
+              client-side return to "/" leaves CompendiumLoader's return-fade
+              overlay opaque, because the vendored loader initializes once per
+              page load and does not re-run its dismiss sequence on remount. */}
+          <a
             id="dev-graph-toggle-btn"
             className="header-nav-btn"
             href={toggleHref}
@@ -119,7 +122,7 @@ export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
             <span id="dev-menu-label" className="hbar-nav-caption">
               {mode === "graph" ? "Dev" : "Graph"}
             </span>
-          </Link>
+          </a>
         </div>
       </div>
 

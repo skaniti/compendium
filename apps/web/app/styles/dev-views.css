@@ -363,4 +363,6 @@
 .chart-tick, .chart-axis-title, .chart-legend { fill: var(--panel-caption); }
 .chart-axis-title { font-size: 11px; }
 .chart-seg-label { fill: var(--on-primary); font-size: 7px; font-weight: 700; }
+.chart-tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-family: monospace; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); white-space: pre; }
+.chart-tooltip-title { color: var(--panel-caption); }
 .chart-label-strong { fill: var(--text); font-weight: 700; font-size: 8px; }
