@@ -48,6 +48,9 @@ ln -sfn "$(basename "$LOG")" "$LOG_DIR/latest-api.log"
 say "start: $PY -m uvicorn backend.api.main:app on 127.0.0.1:$PORT -> $LOG"
 cd "$API_DIR"
 export PYTHONUNBUFFERED=1
+# Same default as scripts/dev.sh so a direct launch matches the stack launcher:
+# the demo-role tooling (view demo / return to admin) is on in local dev.
+export DEMO_ROLE_TOOLING="${DEMO_ROLE_TOOLING:-1}"
 # exec: uvicorn takes over this pid, so a caller's $! (dev.sh) / systemd's MainPID
 # is uvicorn itself and killing it leaves no orphan. Nothing runs after exec, so
 # there is no "done" marker; uvicorn's own shutdown lines end the log.
