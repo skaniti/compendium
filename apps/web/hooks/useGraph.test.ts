@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
+import TimeWindowProvider from "@/components/TimeWindowProvider";
 import { useGraph, __resetGraphCacheForTest } from "./useGraph";
 import * as api from "@/lib/api";
 import type { GraphNode, GraphPayload } from "@/lib/types";
@@ -158,6 +160,20 @@ describe("useGraph", () => {
       expect(fetchSpy).toHaveBeenLastCalledWith("7");
       expect(result.current.graph).toEqual(windowed);
       expect(result.current.graphVersion).toBe(1);
+    });
+
+    it("first load inside a TimeWindowProvider uses the provider's window: one fetch, no graphVersion bump", async () => {
+      const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(payloadWith([makeNode({ id: "root" })]));
+      const wrapper = ({ children }: { children: ReactNode }) =>
+        // eslint-disable-next-line react/no-children-prop
+        createElement(TimeWindowProvider, { initialWindow: "30", children });
+
+      const { result } = renderHook(() => useGraph(), { wrapper });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledWith("30");
+      expect(result.current.graphVersion).toBe(0);
     });
 
     it("is a no-op when called with the currently-active window -- no extra fetchGraph call", async () => {

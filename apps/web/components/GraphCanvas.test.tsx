@@ -1306,6 +1306,31 @@ describe("GraphCanvas time-window wiring (Step 3: TimeWindowProvider's second re
     await waitFor(() => expect(screen.getByTestId("graph-version")).toHaveTextContent("1"));
   });
 
+  it("first load with a saved non-'all' period: ONE fetch at that window, graphVersion stays 0", async () => {
+    const fetchSpy = vi.spyOn(api, "fetchGraph").mockResolvedValue(WINDOW_7_PAYLOAD);
+    mockApiFetch(SIGNED_OUT, 401);
+    render(
+      <SessionProvider>
+        <ThemeProvider>
+          <TimeWindowProvider initialWindow="30">
+            <NavProvider>
+              <GraphCanvas />
+              <GraphProbe />
+            </NavProvider>
+          </TimeWindowProvider>
+        </ThemeProvider>
+      </SessionProvider>
+    );
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith("30");
+    expect(screen.getByTestId("graph-version")).toHaveTextContent("0");
+  });
+
   it("re-clicking the currently-active window pill is a no-op -- no extra fetch or re-render", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     renderCanvas();

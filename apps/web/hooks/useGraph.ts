@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { fetchGraph } from "@/lib/api";
+import { useOptionalTimeWindow } from "@/components/TimeWindowProvider";
 import type { GraphNode, GraphPayload, TimeWindow } from "@/lib/types";
 
 // Fetch-once graph cache (Task 5, batch 02). Several consumers -- header,
@@ -121,9 +122,13 @@ function load(isRefresh: boolean, window: TimeWindow): Promise<void> {
 // with the CURRENTLY active window instead of resetting to "all" -- though
 // in practice this only ever fires once per page load, before any
 // setWindow() call is even possible.
-function ensureLoaded(): void {
+//
+// `initialWindow` (the provider's persisted period, when there is one) is
+// the window of the FIRST load, so a saved non-"all" period fetches once at
+// that window and never counts as a refresh (graphVersion stays 0).
+function ensureLoaded(initialWindow?: TimeWindow): void {
   if (cacheState.graph || cacheState.error || inflight) return;
-  void load(false, cacheState.window);
+  void load(false, initialWindow ?? cacheState.window);
 }
 
 // Test-only reset -- mirrors the vendor one-shot init pattern elsewhere in
@@ -191,8 +196,11 @@ export function useGraph(): UseGraphResult {
   // run during render/SSR). Every mounted consumer runs this effect; the
   // graph/error/inflight guard inside ensureLoaded means only the first one
   // to run actually starts a fetch.
+  const providerWindow = useOptionalTimeWindow()?.timeWindow;
   useEffect(() => {
-    ensureLoaded();
+    ensureLoaded(providerWindow);
+    // First-load window only: later period changes go through setWindow().
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(async () => {

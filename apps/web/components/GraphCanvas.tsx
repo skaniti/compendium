@@ -472,14 +472,12 @@ export default function GraphCanvas() {
   }, []);
 
   // Task A1-3 (Step 3): TimeWindowProvider's second reader (the DATE RANGE
-  // header card is the first). setWindow() is idempotent against the
-  // already-active window (useGraph.ts's own guard) and its commit reuses
-  // the SAME graphVersion-driven re-render effect above -- no separate
-  // "window changed, redraw" path to keep in sync. Deliberately unguarded
-  // against the initial render (unlike the palette-recolor effect's
-  // isFirstVariantRender ref): calling setWindow("all") on mount is a
-  // genuine no-op by construction (cacheState.window already defaults to
-  // "all"), so there is nothing here worth special-casing away.
+  // header card is the first). useGraph()'s FIRST load already uses the
+  // provider's (persisted) window, so on mount this setWindow() matches the
+  // active window and is a no-op -- no second request, no graphVersion bump.
+  // Later period changes refetch and bump graphVersion (useGraph.ts's
+  // idempotence guard), reusing the SAME graphVersion-driven re-render
+  // effect above -- no separate "window changed, redraw" path to keep in sync.
   useEffect(() => {
     void setWindow(timeWindow);
   }, [timeWindow, setWindow]);
