@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
+import SortIcon from "@/components/dev/SortIcon";
 import { fetchPipelinePages } from "@/lib/api";
 import { DASH, deriveSkipColumns, formatVisited } from "@/lib/pipeline";
 import type { PageSortColumn, PipelinePagesResponse, SortDir } from "@/lib/types";
 const PAGE_SIZE = 50;
 // Header order matches the Dash table; "Skip" and "Skip reason" are derived
 // columns with no backing sort key, so they render as plain <th>.
+const COL_WIDTHS = ["26%", "14%", "8%", "9%", "7%", "24%", "12%"]; // fixed so columns never shift across sorts
 const HEADERS: { label: string; sort?: PageSortColumn }[] = [
   { label: "Title", sort: "title" }, { label: "Domain", sort: "domain" }, { label: "Status", sort: "status" },
   { label: "Decision", sort: "processing_depth" }, { label: "Skip" }, { label: "Skip reason" }, { label: "Visited", sort: "visited_at" },
@@ -38,10 +40,11 @@ export default function PagesTable() {
        : (
         <div className="dev-table-wrap">
           <table className="dev-table">
+            <colgroup>{COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <thead><tr>{HEADERS.map((h) => h.sort ? (
               <th key={h.label} aria-sort={h.sort === sort ? (dir === "asc" ? "ascending" : "descending") : "none"}>
                 <button type="button" className="dev-sort-btn" onClick={() => onSort(h.sort as PageSortColumn)}>
-                  {h.label}{h.sort === sort ? (dir === "asc" ? " ▲" : " ▼") : " ⇕"}
+                  {h.label}<SortIcon state={h.sort === sort ? dir : "none"} />
                 </button>
               </th>) : <th key={h.label}>{h.label}</th>)}</tr></thead>
             <tbody>

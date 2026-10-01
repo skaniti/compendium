@@ -334,7 +334,7 @@
 
 
 /* Dash DataTable style_* props of the Pipeline / Archive tables, as CSS. */
-.dev-table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.72rem; }
+.dev-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-family: monospace; font-size: 0.72rem; }
 .dev-table th { text-align: left; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 6px 10px; background: var(--surface); color: var(--panel-caption); border-bottom: 1px solid var(--border); }
 .dev-table td { padding: 5px 10px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -366,3 +366,8 @@
 .chart-tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-family: monospace; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); white-space: pre; }
 .chart-tooltip-title { color: var(--panel-caption); }
 .chart-label-strong { fill: var(--text); font-weight: 700; font-size: 8px; }
+
+.chart-legend-flow { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 8px 0 0; padding: 0 0 0 44px;
+  font-family: monospace; font-size: 10px; color: var(--panel-caption); }
+.chart-legend-flow li { display: flex; align-items: center; gap: 6px; }
+.chart-legend-flow .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }

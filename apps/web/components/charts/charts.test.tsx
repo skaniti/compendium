@@ -1,8 +1,13 @@
 import { it, expect, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, screen } from "@testing-library/react";
 import BarChart from "./BarChart";
 import LineAreaChart from "./LineAreaChart";
-import StackedBarChart, { legendLabels } from "./StackedBarChart";
+import StackedBarChart from "./StackedBarChart";
+function withWidth(w: number, fn: () => void) {
+  class RO { constructor(private c: ResizeObserverCallback) {} observe() { this.c([{ contentRect: { width: w } } as ResizeObserverEntry], this as unknown as ResizeObserver); } disconnect() {} unobserve() {} }
+  vi.stubGlobal("ResizeObserver", RO);
+  try { fn(); } finally { vi.unstubAllGlobals(); }
+}
 const d = (s: string) => new Date(`${s}T00:00:00`);
 it("BarChart draws one rect per point and y ticks with suffix", () => {
   const { container, getByText } = render(<BarChart points={[{ x: d("2026-08-01"), y: 50, label: "cap_1" }, { x: d("2026-08-02"), y: 100, label: "cap_2" }]} yMax={105} yTicks={[0, 25, 50, 75, 100]} ySuffix="%" />);
@@ -46,7 +51,7 @@ it("StackedBarChart stacks to 100 and labels segments >= 10", () => {
   expect(container.querySelectorAll("rect.chart-seg")).toHaveLength(2);
   expect(getByText("92%")).toBeInTheDocument();
   expect(queryByText("8%")).toBeNull();
-  expect(getByText("login wall")).toBeInTheDocument(); // legend
+  expect(getByText("login wall")).toBeInTheDocument(); // legend (HTML list)
 });
 it("charts render nothing harmful on a single point", () => {
   const { container } = render(<BarChart points={[{ x: d("2026-08-01"), y: 10, label: "one" }]} yMax={105} yTicks={[0, 100]} ySuffix="%" />);
@@ -79,7 +84,7 @@ it("charts size their viewBox to the measured container width", () => {
     expect(boxes).toEqual(["0 0 900 240", "0 0 900 240", "0 0 900 240"]);
   } finally { vi.unstubAllGlobals(); }
 });
-it("StackedBarChart gives 8 series distinct fills, a tooltip, and a legend-row tooltip", () => {
+it("StackedBarChart gives 8 series distinct fills and a segment tooltip", () => {
   const series = Array.from({ length: 8 }, (_, i) => ({ name: `reason ${i}`, values: [12.5] }));
   const { container } = render(<StackedBarChart days={["2026-08-01"]} series={series} />);
   const fills = Array.from(container.querySelectorAll("rect.chart-seg")).map((r) => (r as SVGElement).style.fill);
@@ -88,27 +93,52 @@ it("StackedBarChart gives 8 series distinct fills, a tooltip, and a legend-row t
   fireEvent.mouseMove(container.querySelector("rect.chart-seg")!);
   expect(container.querySelector('[role="tooltip"]')?.textContent).toContain("reason 0: 12.5%");
   fireEvent.mouseLeave(container.querySelector("rect.chart-seg")!);
-  const long = "x".repeat(50);
-  const l = render(<StackedBarChart days={["2026-08-01"]} series={[{ name: long, values: [100] }]} />);
-  fireEvent.mouseMove(l.container.querySelector(".chart-legend")!.parentElement!);
-  expect(l.container.querySelector('[role="tooltip"]')?.textContent).toBe(long);
 });
-it("StackedBarChart draws no in-bar labels in a narrow container", () => {
-  class RO { constructor(private c: ResizeObserverCallback) {} observe() { this.c([{ contentRect: { width: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver); } disconnect() {} unobserve() {} }
-  vi.stubGlobal("ResizeObserver", RO);
-  try {
-    const { container } = render(<StackedBarChart days={["2026-08-01"]} series={[{ name: "a", values: [60] }, { name: "b", values: [40] }]} />);
+it("StackedBarChart draws no in-bar labels when bands are narrow", () => {
+  withWidth(300, () => {
+    const days = Array.from({ length: 20 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`);
+    const { container } = render(<StackedBarChart days={days} series={[{ name: "a", values: days.map(() => 60) }, { name: "b", values: days.map(() => 40) }]} />);
     expect(container.querySelectorAll(".chart-seg-label")).toHaveLength(0);
-  } finally { vi.unstubAllGlobals(); }
+  });
 });
-it("StackedBarChart legend keeps colliding truncated labels distinguishable", () => {
-  const a = "User-specific page (profile, account settings)"; const b = "User-specific page (profile, account billing)";
-  const out = legendLabels([a, b, "short"]);
-  expect(new Set(out).size).toBe(3);
-  expect(out[0]).toMatch(/account settings\)$/); expect(out[1]).toMatch(/billing\)$/); expect(out[2]).toBe("short");
+it("StackedBarChart legend is an HTML flow list with full labels, outside the svg", () => {
+  const a = "User-specific page (profile, account settings)"; const b = "x".repeat(60);
   const { container } = render(<StackedBarChart days={["2026-08-01"]} series={[{ name: a, values: [50] }, { name: b, values: [50] }]} />);
-  const texts = Array.from(container.querySelectorAll(".chart-legend")).map((t) => t.textContent);
-  expect(new Set(texts).size).toBe(2);
+  const items = Array.from(container.querySelectorAll("ul.chart-legend-flow > li")).map((li) => li.textContent);
+  expect(items).toEqual([a, b]);
+  expect(container.querySelectorAll("svg text.chart-legend")).toHaveLength(0);
+  expect(container.querySelector("ul.chart-legend-flow")!.previousElementSibling?.tagName.toLowerCase()).toBe("svg");
+});
+const barPts = Array.from({ length: 30 }, (_, i) => ({ x: d(`2026-08-${String(i + 1).padStart(2, "0")}`), y: 10, label: "c" }));
+it("BarChart date labels scale with width: dense when wide, none when narrow", () => {
+  withWidth(1600, () => {
+    const { container } = render(<BarChart points={barPts} yMax={105} yTicks={[0, 100]} />);
+    expect(container.querySelectorAll("text.chart-tick[transform]").length).toBeGreaterThan(6);
+  });
+  withWidth(100, () => {
+    const { container } = render(<BarChart points={barPts} yMax={105} yTicks={[0, 100]} xTitle="Capture start time" />);
+    expect(container.querySelectorAll("text.chart-tick[transform]")).toHaveLength(0);
+    expect(screen.getByText("Capture start time")).toBeInTheDocument();
+  });
+});
+it("LineAreaChart date labels thin out and vanish as the width shrinks", () => {
+  const pts = Array.from({ length: 30 }, (_, i) => ({ x: d(`2026-08-${String(i + 1).padStart(2, "0")}`), y: 10, hover: "h" }));
+  const count = (w: number) => { let n = 0; withWidth(w, () => { const { container } = render(<LineAreaChart points={pts} yMax={110} yTicks={[0, 100]} />); n = container.querySelectorAll("text.chart-tick[text-anchor='middle']").length; }); return n; };
+  expect(count(1600)).toBeGreaterThan(count(500));
+  expect(count(100)).toBe(0);
+});
+it("StackedBarChart labels every ~3rd band at 45 bands / 870px and none when tiny", () => {
+  const days = Array.from({ length: 45 }, (_, i) => `2026-07-${String((i % 28) + 1).padStart(2, "0")}-${i}`);
+  const series = [{ name: "a", values: days.map(() => 100) }];
+  withWidth(870, () => {
+    const { container } = render(<StackedBarChart days={days} series={series} />);
+    const n = container.querySelectorAll("text.chart-tick[text-anchor='middle']").length;
+    expect(n).toBeGreaterThanOrEqual(14); expect(n).toBeLessThanOrEqual(23); // k = ceil(44/~15.6) = 3
+  });
+  withWidth(100, () => {
+    const { container } = render(<StackedBarChart days={days} series={series} />);
+    expect(container.querySelectorAll("text.chart-tick[text-anchor='middle']")).toHaveLength(0);
+  });
 });
 it("StackedBarChart draws no in-bar labels at ~45 bars in a wide cell", () => {
   class RO { constructor(private c: ResizeObserverCallback) {} observe() { this.c([{ contentRect: { width: 870 } } as ResizeObserverEntry], this as unknown as ResizeObserver); } disconnect() {} unobserve() {} }

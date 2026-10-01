@@ -49,3 +49,15 @@ it("empty -> No pages found.", async () => {
   render(<PagesTable />);
   await screen.findByText("No pages found.");
 });
+it("pins column widths with a 7-col colgroup and renders SVG sort icons", async () => {
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue(resp([row(1)], 120));
+  const { container } = render(<PagesTable />);
+  await screen.findByText("Page 1");
+  expect(container.querySelectorAll("table.dev-table colgroup col")).toHaveLength(7);
+  const btn = screen.getByRole("button", { name: /^Domain/ });
+  expect(btn.querySelector("svg.sort-icon")).toBeTruthy();
+  expect(btn.textContent).toBe("Domain");
+  expect(container.querySelectorAll("svg.sort-icon[data-state='none']")).toHaveLength(5);
+  await userEvent.click(btn);
+  await waitFor(() => expect(container.querySelector("svg.sort-icon[data-state='asc']")).toBeTruthy());
+});
