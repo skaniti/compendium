@@ -1,0 +1,11 @@
+export const RANGE_DAYS: Record<string, number>;
+export const GRANULARITY: Record<string, [string, string]>;
+export const HOUR: number;
+export const DAY: number;
+export function normalizeRange(range: string | null | undefined): string;
+export function isValidTz(tz: unknown): boolean;
+export function wallOf(ms: number, tz: string): number;
+export function isoWithOffset(wall: number, tz: string): string;
+export function floorWall(wall: number, granularity: string): number;
+export function stepWall(wall: number, granularity: string): number;
+export function bucketWalls(firstMs: number, nowMs: number, tz: string, granularity: string): number[];
