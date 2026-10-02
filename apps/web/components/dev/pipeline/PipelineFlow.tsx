@@ -2,7 +2,7 @@
 import type { MouseEvent } from "react";
 import { useChartTooltip } from "@/components/charts/ChartTooltip";
 import { useContainerWidth } from "@/components/charts/useContainerWidth";
-import { BAR_W, FLOW_MIN_WIDTH, layoutFlow, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
+import { BAR_W, FLOW_MIN_WIDTH, OUTCOME_LABEL_H, layoutFlow, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
 import { formatRatio, percentOf } from "@/lib/pipeline";
 import type { PipelineFlow as Flow, TopDomain } from "@/lib/types";
 
@@ -98,7 +98,7 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
               );
             })}
             {!hasNode("pending") && lastOf(1) && (
-              <text className="flow-pending-marker" x={lastOf(1)!.x - 8} y={lastOf(1)!.y + lastOf(1)!.h + 18} textAnchor="end" pointerEvents="none">Pending 0 ····</text>
+              <text className="flow-pending-marker" x={lastOf(1)!.x - 8} y={Math.max(lastOf(1)!.y + lastOf(1)!.h + 18, (lblOf.get(lastOf(1)!.id)?.y ?? 0) + OUTCOME_LABEL_H / 2 + 12)} textAnchor="end" pointerEvents="none">Pending 0 ····</text>
             )}
             {!hasNode("fate:pending") && lastOf(3) && (
               <text className="flow-pending-marker" x={lastOf(3)!.x} y={lastOf(3)!.y + lastOf(3)!.h + 18} pointerEvents="none">···· PENDING 0</text>

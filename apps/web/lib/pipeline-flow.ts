@@ -14,6 +14,8 @@ export interface FlowLabel { nodeId: string; x: number; y: number; anchor: "star
 export interface FlowLayout { width: number; height: number; columnX: [number, number, number, number]; nodes: FlowNode[]; links: FlowLink[]; labels: FlowLabel[] }
 
 export const FLOW_MIN_WIDTH = 1100, FLOW_HEIGHT = 380, BAR_W = 8, LABEL_PITCH = 14;
+/** Reserved label heights: outcome labels are two lines (label + count); a breakdown label with a `sub` is two lines, others one. */
+export const OUTCOME_LABEL_H = 30, SUB_LABEL_H = 2 * LABEL_PITCH;
 const OUTCOME_GAP = 10, GROUP_GAP = 10, IN_GROUP_GAP = 3, FATE_GAP = 10, MIN_H = 2, MAX_NAMED_GATE = 3;
 
 type ModelNode = Omit<FlowNode, "x" | "y" | "h"> & { group: string };
@@ -101,14 +103,19 @@ export function buildFlowModel(flow: PipelineFlow, catColors: Record<string, str
   return { nodes: nodes.map(({ group: _g, ...n }) => { void _g; return n; }), links };
 }
 
-/** Monotone and >= pitch apart; the first value is at least `top`, the last at most `bottom`. When the run does not fit, the back-sweep pushes earlier values up, possibly above `top`. */
-export function declutter(ys: number[], pitch: number, top: number, bottom: number): number[] {
-  const out = ys.map((y, i) => {
-    return i === 0 ? Math.max(y, top) : y;
-  });
-  for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1] + pitch);
-  if (out.length > 0 && out[out.length - 1] > bottom) out[out.length - 1] = bottom;
-  for (let i = out.length - 2; i >= 0; i--) out[i] = Math.min(out[i], out[i + 1] - pitch);
+/**
+ * Label centres, monotone, with each label's reserved box (height `heights[i]`, default `pitch`, centred on its y) kept clear of its neighbours.
+ * The first box starts at or below `top - pitch/2` and the last ends at or above `bottom + pitch/2` (for default heights: first y >= top, last y <= bottom).
+ * When the run does not fit, the back-sweep pushes earlier values up, possibly above `top`.
+ */
+export function declutter(ys: number[], pitch: number, top: number, bottom: number, heights?: number[]): number[] {
+  const h = (i: number) => heights?.[i] ?? pitch;
+  const out = ys.map((y, i) => (i === 0 ? Math.max(y, top + (h(0) - pitch) / 2) : y));
+  const gap = (i: number) => (h(i) + h(i + 1)) / 2;
+  for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1] + gap(i - 1));
+  const last = out.length - 1;
+  if (last >= 0 && out[last] > bottom - (h(last) - pitch) / 2) out[last] = bottom - (h(last) - pitch) / 2;
+  for (let i = last - 1; i >= 0; i--) out[i] = Math.min(out[i], out[i + 1] - gap(i));
   return out;
 }
 
@@ -198,10 +205,15 @@ export function layoutFlow(flow: PipelineFlow, catColors: Record<string, string>
 
   const labels: FlowLabel[] = [];
   const centre = (n: FlowNode) => n.y + n.h / 2;
-  for (const n of nodes.filter((x) => x.column === 0 || x.column === 1)) labels.push({ nodeId: n.id, x: n.x - 8, y: centre(n), anchor: "end" });
+  for (const n of nodes.filter((x) => x.column === 0)) labels.push({ nodeId: n.id, x: n.x - 8, y: centre(n), anchor: "end" });
+  const outc = nodes.filter((x) => x.column === 1);
+  const oys = declutter(outc.map(centre), LABEL_PITCH, OUTCOME_LABEL_H / 2, FLOW_HEIGHT - OUTCOME_LABEL_H / 2, outc.map(() => OUTCOME_LABEL_H));
+  outc.forEach((n, i) => labels.push({ nodeId: n.id, x: n.x - 8, y: oys[i], anchor: "end" }));
+  // A breakdown label with a sub-line reserves two lines; its box is centred 7px below the label's own y.
   const mid = nodes.filter((x) => x.column === 2);
-  const ys = declutter(mid.map(centre), LABEL_PITCH, LABEL_PITCH / 2, FLOW_HEIGHT - LABEL_PITCH / 2);
-  mid.forEach((n, i) => labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: ys[i], anchor: "start" }));
+  const shift = (n: FlowNode) => (n.sub ? (SUB_LABEL_H - LABEL_PITCH) / 2 : 0);
+  const ys = declutter(mid.map((n) => centre(n) + shift(n)), LABEL_PITCH, LABEL_PITCH / 2, FLOW_HEIGHT - LABEL_PITCH / 2, mid.map((n) => (n.sub ? SUB_LABEL_H : LABEL_PITCH)));
+  mid.forEach((n, i) => labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: ys[i] - shift(n), anchor: "start" }));
   for (const n of nodes.filter((x) => x.column === 3)) labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: centre(n), anchor: "start" });
   return { width: W, height: FLOW_HEIGHT, columnX, nodes, links, labels };
 }

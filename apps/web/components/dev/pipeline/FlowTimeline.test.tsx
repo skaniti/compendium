@@ -53,6 +53,25 @@ it("shows the no-skips copy inside the mix panel", async () => {
   const { container } = render(<FlowTimeline {...props} />);
   expect(await screen.findByText("No gate skips in this period.")).toBeInTheDocument();
   expect(container.innerHTML).not.toContain("NaN");
+  expect(container.querySelector('svg[aria-label="Skip category mix"] text.flow-tl-empty-svg')).toBeTruthy();
+  expect(container.querySelectorAll("text.chart-xlabel").length).toBeGreaterThan(0); // the shared axis survives an empty mix
+});
+it("labels each panel svg and formats the mix tooltip", async () => {
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, { categories: { login: 1200 } }), live(2)]));
+  const { container } = render(<FlowTimeline {...props} />);
+  await screen.findByText("Volume");
+  for (const l of ["Volume by outcome", "Archive and gate skip rates", "Skip category mix"]) expect(container.querySelector(`svg[aria-label="${l}"]`)).toBeTruthy();
+  fireEvent.mouseMove(container.querySelector("svg[aria-label='Skip category mix'] rect.flow-tl-seg")!);
+  const lines = Array.from(container.querySelectorAll('[role="tooltip"] div')).map((d) => d.textContent);
+  expect(lines).toEqual(["Sep 01", "Login Wall 1,200 (100.0%)"]);
+});
+it("keeps the two rate end labels at least 12px apart", async () => {
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, { archived: 8, total: 10, reached_gate: 10, outcomes: { before_gate: 2, rule_filter: 1, gate: 8, processed: 0, pending: 0 } }), live(2, { archived: 8, total: 10, reached_gate: 10, outcomes: { before_gate: 2, rule_filter: 1, gate: 8, processed: 0, pending: 0 } })]));
+  const { container } = render(<FlowTimeline {...props} />);
+  await screen.findByText("Volume");
+  const ys = Array.from(container.querySelectorAll("text.flow-rate-end")).map((t) => Number(t.getAttribute("y")));
+  expect(ys).toHaveLength(2);
+  expect(Math.abs(ys[0] - ys[1])).toBeGreaterThanOrEqual(12);
 });
 it("shows Loading… first and an alert on failure", async () => {
   vi.mocked(api.fetchPipelineTimeline).mockRejectedValue(new Error("boom"));

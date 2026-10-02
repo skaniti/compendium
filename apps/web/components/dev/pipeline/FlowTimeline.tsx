@@ -41,10 +41,10 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const grid = (t: number, y: (v: number) => number, text: string) => (
     <g key={t} transform={`translate(0,${y(t)})`}><line x2={innerW} className="chart-grid" /><text x={-6} dy="0.32em" textAnchor="end" className="chart-tick">{text}</text></g>
   );
-  const row = (h: number, head: ReactNode, body: ReactNode, extra = 0) => (
+  const row = (h: number, label: string, head: ReactNode, body: ReactNode, extra = 0) => (
     <div className="flow-tl-row">
       <div className="flow-tl-label">{head}</div>
-      {body === null ? null : <svg className="chart" viewBox={`0 0 ${plotW} ${h + MT + extra}`} width={plotW} height={h + MT + extra} role="img">{body}</svg>}
+      {body === null ? null : <svg className="chart" viewBox={`0 0 ${plotW} ${h + MT + extra}`} width={plotW} height={h + MT + extra} role="img" aria-label={label}>{body}</svg>}
     </div>
   );
   const hits = (cls: string, lines: (i: number) => string[]) => buckets.map((_, i) => (
@@ -65,7 +65,7 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
           return <rect key={k} className="flow-tl-seg" x={bx(i)} y={yv(acc)} width={x.bandwidth()} height={Math.max(0, yv(y0) - yv(acc))}
             style={{ fill: OUTCOME_COLOR[k] }} fillOpacity={k === "pending" ? 0.5 : 1} stroke={k === "pending" ? OUTCOME_COLOR[k] : undefined} strokeDasharray={k === "pending" ? "3 2" : undefined} />;
         })}</g>); })}
-      {hits("flow-tl-hit-volume", (i) => [cats[i].title, ...VOLUME_ORDER.filter((k) => buckets[i].outcomes[k] > 0).map((k) => `${OUTCOME_LABEL[k]}  ${buckets[i].outcomes[k]}`), `total ${VOLUME_ORDER.reduce((a, k) => a + buckets[i].outcomes[k], 0)}`])}
+      {hits("flow-tl-hit-volume", (i) => [cats[i].title, ...VOLUME_ORDER.filter((k) => buckets[i].outcomes[k] > 0).map((k) => `${OUTCOME_LABEL[k]}  ${buckets[i].outcomes[k].toLocaleString("en-US")}`), `total ${VOLUME_ORDER.reduce((a, k) => a + buckets[i].outcomes[k], 0).toLocaleString("en-US")}`])}
     </g>
   );
 
@@ -75,10 +75,14 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const yr = (v: number) => H_RATE - ((v - rmin) / (rmax - rmin)) * H_RATE;
   const rateTicks: number[] = []; for (let t = rmin; t <= rmax; t += 20) rateTicks.push(t);
   const path = (pts: typeof rs.archive) => line<{ y: number | null }>().defined((p) => p.y !== null).x((_, i) => cx(i)).y((p) => yr(p.y as number))(pts) ?? "";
-  const endLabel = (pts: typeof rs.archive, color: string) => {
-    let i = pts.length - 1; while (i >= 0 && pts[i].y === null) i--;
-    return i < 0 ? null : <text className="flow-rate-end" x={cx(i) + 8} y={yr(pts[i].y as number)} dy="0.32em" style={{ fill: color }}>{`${(pts[i].y as number).toFixed(1)}%`}</text>;
-  };
+  const endOf = (pts: typeof rs.archive) => { let i = pts.length - 1; while (i >= 0 && pts[i].y === null) i--; return i < 0 ? null : { i, y: yr(pts[i].y as number), v: pts[i].y as number }; };
+  const ends = [endOf(rs.archive), endOf(rs.gate)];
+  const endYs = ends.map((e) => e?.y ?? 0);
+  if (ends[0] && ends[1] && Math.abs(endYs[0] - endYs[1]) < 12) { // keep the higher line's label above, push apart symmetrically
+    const mid = (endYs[0] + endYs[1]) / 2, up = endYs[0] <= endYs[1] ? 0 : 1;
+    endYs[up] = mid - 6; endYs[1 - up] = mid + 6;
+  }
+  const endLabel = (k: number, color: string) => { const e = ends[k]; return e ? <text className="flow-rate-end" x={cx(e.i) + 8} y={endYs[k]} dy="0.32em" style={{ fill: color }}>{`${e.v.toFixed(1)}%`}</text> : null; };
   const fmt = (p: { y: number | null; n: number; d: number }) => (p.y === null ? "—" : `${p.y.toFixed(1)}% (${p.n}/${p.d})`);
   const rates = (
     <g transform={`translate(${ML},${MT})`}>
@@ -87,7 +91,7 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
         <g key={k} pointerEvents="none">
           <path className="flow-rate-line" d={path(pts)} fill="none" style={{ stroke: color }} strokeWidth={1.5} />
           {pts.map((p, i) => p.y === null ? null : <circle key={i} className="flow-rate-dot" cx={cx(i)} cy={yr(p.y)} r={2.5} style={{ fill: color }} />)}
-          {endLabel(pts, color)}
+          {endLabel(k, color)}
         </g>
       ))}
       {hits("flow-tl-hit-rates", (i) => [cats[i].title, `archive rate: ${fmt(rs.archive[i])}`, `skip rate (gate): ${fmt(rs.gate[i])}`])}
@@ -99,13 +103,14 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const ym = yLinear(100, H_MIX);
   const notLive = gateNotLiveRun(buckets);
   const notLiveW = notLive > 0 ? bx(notLive - 1) + x.bandwidth() - bx(0) : 0;
-  const mixBody = mix.length === 0 ? null : (
+  const mixBody = (
     <g transform={`translate(${ML},${MT})`}>
+      {mix.length === 0 && <text className="flow-tl-empty-svg" x={innerW / 2} y={H_MIX / 2} dy="0.32em" textAnchor="middle" pointerEvents="none">{EMPTY_GATE}</text>}
       {buckets.map((b, bi) => { let acc = 0; return (
         <g key={bi}>{mix.map((s) => {
           const v = s.values[bi]; const y0 = acc; acc += v;
           if (!(s.counts[bi] > 0)) return null;
-          const tip = (e: React.MouseEvent) => show(e, [cats[bi].title, `${s.name}: ${s.counts[bi]} (${v.toFixed(1)}%)`]);
+          const tip = (e: React.MouseEvent) => show(e, [cats[bi].title, `${s.name} ${s.counts[bi].toLocaleString("en-US")} (${v.toFixed(1)}%)`]);
           return <rect key={s.id} className="flow-tl-seg" x={bx(bi)} y={ym(acc)} width={x.bandwidth()} height={Math.max(0, ym(y0) - ym(acc))}
             style={{ fill: catColors[s.id] ?? UNCATEGORIZED_FILL }} stroke="var(--bg)" strokeWidth={0.5} onMouseEnter={tip} onMouseMove={tip} onMouseLeave={hide} />;
         })}</g>); })}
@@ -116,13 +121,11 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const swatch = (color: string) => <span className="flow-tl-swatch" style={{ background: color }} />;
 
   return wrap(<>
-    {row(H_VOL, <><div className="flow-tl-title">Volume</div><div className="flow-tl-sub">captured, by outcome</div><div className="flow-tl-sub flow-tl-faint">colours = flow above</div></>, volume)}
-    {row(H_RATE, <><div className="flow-tl-title">Rates</div><div className="flow-tl-sub">{swatch(ARCHIVE_COLOR)}archive rate</div><div className="flow-tl-sub">{swatch(GATE_COLOR)}skip rate (gate)</div></>, rates)}
+    {row(H_VOL, "Volume by outcome", <><div className="flow-tl-title">Volume</div><div className="flow-tl-sub">captured, by outcome</div><div className="flow-tl-sub flow-tl-faint">colours = flow above</div></>, volume)}
+    {row(H_RATE, "Archive and gate skip rates", <><div className="flow-tl-title">Rates</div><div className="flow-tl-sub">{swatch(ARCHIVE_COLOR)}archive rate</div><div className="flow-tl-sub">{swatch(GATE_COLOR)}skip rate (gate)</div></>, rates)}
     <div className="flow-tl-row">
       <div className="flow-tl-label"><div className="flow-tl-title">Skip mix</div><div className="flow-tl-sub">share of gate skips</div></div>
-      {mixBody === null
-        ? <p className="dev-empty dev-empty-inline flow-tl-empty">{EMPTY_GATE}</p>
-        : <svg className="chart" viewBox={`0 0 ${plotW} ${H_MIX + MT + AXIS_H}`} width={plotW} height={H_MIX + MT + AXIS_H} role="img">{mixBody}{axisG}</svg>}
+      <svg className="chart" viewBox={`0 0 ${plotW} ${H_MIX + MT + AXIS_H}`} width={plotW} height={H_MIX + MT + AXIS_H} role="img" aria-label="Skip category mix">{mixBody}{axisG}</svg>
     </div>
   </>);
 }

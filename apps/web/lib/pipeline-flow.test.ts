@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, buildFlowModel, declutter, layoutFlow, ribbonPath } from "./pipeline-flow";
+import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonPath } from "./pipeline-flow";
 import type { FateKey, FlowDetail, FlowOutcomeKey, PipelineFlow } from "./types";
 
 const fates = (archived: number, active = 0, pending = 0): Record<FateKey, number> => ({ archived, active, pending });
@@ -169,5 +169,40 @@ describe("declutter", () => {
   });
   it("is the identity when already spaced", () => {
     expect(declutter([20, 60, 100], 14, 7, 300)).toEqual([20, 60, 100]);
+  });
+});
+
+describe("label reserved boxes", () => {
+  const small = (): PipelineFlow => ({
+    total: 1000,
+    outcomes: [
+      { key: "before_gate", label: "Archived before gate", count: 940, top_domains: [] },
+      { key: "rule_filter", label: "Rule filter · no LLM", count: 4, top_domains: [] },
+      { key: "gate", label: "Skipped by LLM gate", count: 5, top_domains: [] },
+      { key: "processed", label: "Processed · kept", count: 51, top_domains: [] },
+    ],
+    details: [
+      d("before_gate", "manual", 940, fates(940)), d("rule_filter", "domain", 4, fates(4)), d("gate", "a", 5, fates(5)),
+      d("processed", "later_manual", 3, fates(3)), d("processed", "later_duplicate", 2, fates(2)), d("processed", "active", 46, fates(0, 46)),
+    ],
+    fates: [{ key: "archived", label: "Archived", count: 954 }, { key: "active", label: "Active", count: 46 }],
+  });
+  const boxes = (col: number, h: (n: { sub?: string }) => number, shift: (n: { sub?: string }) => number) => {
+    const L = layoutFlow(small(), cats, 1400);
+    return L.labels.map((l) => ({ l, n: L.nodes.find((n) => n.id === l.nodeId)! })).filter((x) => x.n.column === col)
+      .map(({ l, n }) => ({ c: l.y + shift(n), h: h(n), sub: n.sub }));
+  };
+  it("breakdown boxes (two lines for a sub) never overlap", () => {
+    const b = boxes(2, (n) => (n.sub ? SUB_LABEL_H : LABEL_PITCH), (n) => (n.sub ? (SUB_LABEL_H - LABEL_PITCH) / 2 : 0));
+    expect(b.some((x) => x.sub)).toBe(true);
+    for (let i = 1; i < b.length; i++) expect(b[i].c - b[i].h / 2).toBeGreaterThanOrEqual(b[i - 1].c + b[i - 1].h / 2 - 1e-9);
+  });
+  it("outcome boxes (label + count) never overlap", () => {
+    const b = boxes(1, () => OUTCOME_LABEL_H, () => 0);
+    expect(b).toHaveLength(4);
+    for (let i = 1; i < b.length; i++) expect(b[i].c - b[i - 1].c).toBeGreaterThanOrEqual(OUTCOME_LABEL_H - 1e-9);
+  });
+  it("declutter honours per-label heights", () => {
+    expect(declutter([20, 22], 14, 7, 300, [14, 28])).toEqual([20, 41]);
   });
 });

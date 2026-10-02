@@ -17,6 +17,7 @@
 .flow-headline-active { fill: var(--highlight); }
 .flow-ratio { fill: var(--panel-caption); font-size: 11px; }
 .flow-label { fill: var(--text); font-size: 12px; }
+.flow-label, .flow-num, .flow-sub, .flow-cap, .flow-ratio, .flow-headline, .flow-pending-marker { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .flow-num { fill: var(--text); font-family: monospace; font-weight: 600; }
 .flow-num-lg { font-size: 16px; }
 .flow-sub { fill: var(--panel-caption); font-family: monospace; font-size: 10px; }
@@ -32,10 +33,10 @@
 .flow-tl-sub { color: var(--panel-caption); font-size: 12px; display: flex; align-items: center; gap: 6px; line-height: 1.5; }
 .flow-tl-faint { opacity: 0.7; }
 .flow-tl-swatch { display: inline-block; width: 16px; height: 2px; flex: none; }
-.flow-tl-empty { margin: 0; align-self: center; }
 .flow-rate-end { font-family: monospace; font-size: 11px; }
 .flow-not-live { fill: var(--panel-caption); font-family: monospace; font-size: 11px; }
 .flow-tl-hit { cursor: default; }
 
-.chart-legend-flat { padding-left: 0; font-size: 12px; }
-.chart-legend-flat .flow-count { color: var(--text); font-family: monospace; font-weight: 600; }
+.chart-legend-flow.chart-legend-flat { padding-left: 0; font-size: 12px; font-family: inherit; }
+.chart-legend-flow.chart-legend-flat .flow-count { color: var(--text); font-family: monospace; font-weight: 600; }
+.flow-tl-empty-svg { fill: var(--panel-caption); font-family: inherit; font-size: 12px; }
