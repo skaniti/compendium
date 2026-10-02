@@ -8,7 +8,8 @@ call. Nothing here writes the tracked ``backend/prompts/overrides.json``:
 with the setting unset, every write raises ``OverridesNotConfigured``.
 
 Writes are validated (non-empty, size cap, balanced braces, only the
-registry template's placeholders) and atomic (temp file in the same
+registry template's placeholders, and the text must fill with every
+registry placeholder) and atomic (temp file in the same
 directory, fsync, ``os.replace``) under a process lock. An existing file
 that does not parse is never overwritten.
 """
@@ -104,7 +105,7 @@ def validate(name: str, text: str) -> list[str]:
         )
     try:
         text.format(**{f: "" for f in allowed})
-    except (ValueError, KeyError, IndexError, AttributeError) as exc:
+    except (ValueError, KeyError, IndexError, AttributeError, TypeError) as exc:
         raise InvalidTemplate(f"The template can't be filled ({exc}).") from exc
     return [f for f in allowed if f not in fields]
 

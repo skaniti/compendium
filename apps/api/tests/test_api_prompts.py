@@ -193,6 +193,20 @@ def test_write_role_matrix(as_role, ofile, role, status):
     assert tc.delete(f"/api/prompts/templates/{NAME}/override").status_code == status
 
 
+@pytest.mark.parametrize("role", ["demo", "user"])
+def test_non_admin_403_precedes_validation(as_role, ofile, role):
+    tc = as_role(role)
+    denied = {"detail": "Admin context required"}
+    r = tc.put("/api/prompts/templates/nope_v1/override", json={})
+    assert (r.status_code, r.json()) == (403, denied)
+    r = tc.put("/api/prompts/templates/Bad-Name/override", json={"template": ""})
+    assert (r.status_code, r.json()) == (403, denied)
+    r = tc.delete("/api/prompts/templates/nope_v1/override")
+    assert (r.status_code, r.json()) == (403, denied)
+    r = tc.get("/api/prompts/evals/.hidden")
+    assert (r.status_code, r.json()) == (403, denied)
+
+
 def test_put_round_trip(as_role, ofile):
     tc = as_role("admin")
     r = tc.put(f"/api/prompts/templates/{NAME}/override", json={"template": "NEW {title}"})
