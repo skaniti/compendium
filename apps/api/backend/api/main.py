@@ -3566,3 +3566,7 @@ app.include_router(_dq_bot_router.router)
 from backend.api.routers import pipeline as _pipeline_router  # noqa: E402
 
 app.include_router(_pipeline_router.router)
+
+from backend.api.routers import overview as _overview_router  # noqa: E402
+
+app.include_router(_overview_router.router)
