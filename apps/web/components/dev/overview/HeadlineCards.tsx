@@ -15,7 +15,7 @@ export default function HeadlineCards({ summary, range }: { summary: OverviewSum
       <StatCard label="Clusters" value={clusters ? formatCount(clusters.clusters) : "—"}
         lines={clusters ? [`${plural(clusters.superclusters, "supercluster")} · ${plural(clusters.topics, "topic")}`, `latest run · ${formatRunDate(clusters.run_completed_at)}`] : ["No clustering run yet"]} />
       <StatCard label="LLM spend" value={formatUsd(spend.usd)}
-        lines={[spend.calls > 0 ? plural(spend.calls, "LLM call") : "No LLM calls in this period", ...(all ? [] : [`${formatUsd(spend.all_time_usd)} all time`])]} />
+        lines={[spend.calls > 0 ? plural(spend.calls, "call") : "No LLM calls in this period", ...(all ? [] : [`${formatUsd(spend.all_time_usd)} all time`])]} />
     </div>
   );
 }

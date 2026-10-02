@@ -12,6 +12,8 @@ describe("overview lib", () => {
     expect(formatUsd(0)).toBe("$0.00");
     expect(formatUsd(Number.NaN)).toBe("$0.00");
     expect(formatUsd(0.0031)).toBe("$0.0031");
+    expect(formatUsd(0.00004)).toBe("<$0.0001");
+    expect(formatUsd(0.0001)).toBe("$0.0001");
     expect(formatUsd(0.01)).toBe("$0.01");
     expect(formatUsd(0.8421)).toBe("$0.84");
   });

@@ -72,3 +72,43 @@ it("no captures and no spend: growth row carries the x labels", async () => {
   const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
   expect(rows[0].querySelectorAll("text.chart-xlabel").length).toBeGreaterThan(0);
 });
+const legendOf = (row: HTMLElement) => [...row.querySelectorAll(".overview-tl-legend li")].map((li) => li.textContent);
+it("stacked-row legends list top-of-stack first; growth legend keeps series order", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline([
+    bucket(0, { spend: { gates: 0.01, clustering: 0.02, chat: 0.001, other: 0 } }),
+    bucket(1, { spend: { gates: 0.01, clustering: 0.02, chat: 0.001, other: 0 } }),
+  ]));
+  const { container } = mount();
+  await waitFor(() => expect(container.querySelectorAll(".overview-tl-row")).toHaveLength(3));
+  const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
+  expect(legendOf(rows[0])).toEqual(["Captured", "In your graph"]);
+  expect(legendOf(rows[1])).toEqual(["Phone", "Desktop"]);
+  expect(legendOf(rows[2])).toEqual(["Chat", "Clustering & naming", "Skip & learning gates"]);
+});
+it("no captures: the captures row has no legend; spend row keeps its own", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline([noCaptures(0), noCaptures(1)]));
+  const { container } = mount();
+  await screen.findByText("No captures in this period.");
+  const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
+  expect(rows[1].querySelector(".overview-tl-legend")).toBeNull();
+  expect(rows[2].querySelector(".overview-tl-legend")).not.toBeNull();
+});
+it("no spend: the spend row has no legend", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline([noCaptures(0, noSpend, 0), bucket(1, { spend: noSpend, calls: 0 })]));
+  const { container } = mount();
+  await screen.findByText("No LLM spend in this period.");
+  const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
+  expect(rows[2].querySelector(".overview-tl-legend")).toBeNull();
+});
+const day = (i: number) => bucket(i, { start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() });
+it("growth point markers only when the period has at most 16 buckets", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline(Array.from({ length: 16 }, (_, i) => day(i))));
+  const a = mount();
+  await waitFor(() => expect(a.container.querySelectorAll(".overview-tl-row")).toHaveLength(3));
+  expect(a.container.querySelector(".overview-tl-row")!.querySelectorAll("circle.chart-point").length).toBeGreaterThan(0);
+  a.unmount();
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline(Array.from({ length: 17 }, (_, i) => day(i))));
+  const b = mount();
+  await waitFor(() => expect(b.container.querySelectorAll(".overview-tl-row")).toHaveLength(3));
+  expect(b.container.querySelector(".overview-tl-row")!.querySelectorAll("circle.chart-point")).toHaveLength(0);
+});

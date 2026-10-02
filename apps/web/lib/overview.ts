@@ -13,6 +13,7 @@ export function plural(n: number, word: string): string { return `${formatCount(
 /** $0.00 for zero, four decimals below one cent (demo spend stays legible), two otherwise. */
 export function formatUsd(v: number): string {
   if (!Number.isFinite(v) || v <= 0) return "$0.00";
+  if (v < 0.0001) return "<$0.0001";
   return `$${v < 0.01 ? v.toFixed(4) : v.toFixed(2)}`;
 }
 /** Short axis tick: "$0", "$0.015", "$1.5". */

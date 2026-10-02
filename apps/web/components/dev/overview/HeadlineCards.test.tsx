@@ -10,7 +10,7 @@ it("all time: four cards in order with values, lines and the pipeline link", () 
   const cs = cards(container);
   expect(cs.map((c) => c.querySelector(".dev-stat-label")?.textContent)).toEqual(["Captured", "In your graph", "Clusters", "LLM spend"]);
   expect(cs.map((c) => c.querySelector(".dev-stat-value")?.textContent)).toEqual(["4,812", "731", "42", "$0.84"]);
-  for (const t of ["pages from 512 captures", "15.2% of captured", "5 superclusters · 7 topics", "latest run · Sep 23", "3,250 LLM calls"]) expect(screen.getByText(t)).toBeInTheDocument();
+  for (const t of ["pages from 512 captures", "15.2% of captured", "5 superclusters · 7 topics", "latest run · Sep 23", "3,250 calls"]) expect(screen.getByText(t)).toBeInTheDocument();
   expect(container.textContent).not.toContain("all time");
   expect(cs[1]).toHaveClass("is-accent");
   expect(screen.getByRole("link", { name: "Where the rest went → Pipeline" })).toHaveAttribute("href", "/dev/pipeline");
@@ -33,5 +33,5 @@ it("singulars", () => {
     clusters: { run_completed_at: "2026-09-23T12:00:00+00:00", clusters: 1, superclusters: 1, topics: 7 },
     spend: { ...base.spend, calls: 1 },
   })} />);
-  for (const t of ["pages from 1 capture", "1 supercluster · 7 topics", "1 LLM call"]) expect(screen.getByText(t)).toBeInTheDocument();
+  for (const t of ["pages from 1 capture", "1 supercluster · 7 topics", "1 call"]) expect(screen.getByText(t)).toBeInTheDocument();
 });
