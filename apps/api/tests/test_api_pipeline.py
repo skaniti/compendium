@@ -280,6 +280,32 @@ class TestPages:
         assert tc.get("/api/pipeline/pages?dir=sideways").status_code == 422
 
 
+class TestDbRejectedTz:
+    @pytest.mark.parametrize(
+        ("path", "attr"),
+        [
+            ("/api/pipeline/summary", "get_summary_counts"),
+            ("/api/pipeline/timeline", "get_timeline"),
+            ("/api/pipeline/pages", "get_windowed_pages"),
+        ],
+    )
+    @pytest.mark.parametrize("exc_name", ["InvalidParameterValue", "DataError"])
+    def test_db_unknown_zone_is_422(self, client, monkeypatch, path, attr, exc_name):
+        import psycopg2
+        import psycopg2.errors
+
+        from backend.db import pipeline_repo
+
+        exc = getattr(psycopg2.errors, exc_name, None) or psycopg2.DataError
+
+        def boom(*a, **k):
+            raise exc("time zone not recognized")
+
+        monkeypatch.setattr(pipeline_repo, attr, boom)
+        tc, _ = client
+        assert tc.get(path, params={"tz": "UTC"}).status_code == 422
+
+
 class TestRemoved:
     def test_skip_trends_is_gone(self, client):
         tc, _ = client
@@ -310,7 +336,7 @@ class TestAuth:
         auth_repo.set_role(demo["id"], "demo")
         _seed_mix(owner["id"])
         cap = _capture(demo["id"], "cap_demo")
-        page_repo.insert_pages(
+        (demo_pid,) = page_repo.insert_pages(
             cap["id"],
             [
                 {
@@ -321,6 +347,14 @@ class TestAuth:
                 }
             ],
         )
+        _set(
+            demo_pid,
+            status="archived",
+            processing_depth="skipped",
+            archive_reason="skip_gate",
+            skip_category="web_app",
+            user_id=demo["id"],
+        )
         app.dependency_overrides[verify_api_key] = lambda: demo["id"]
         try:
             tc = TestClient(app)
@@ -328,5 +362,16 @@ class TestAuth:
             assert pages["total"] == 1 and pages["rows"][0]["title"] == "Demo only"
             summary = tc.get("/api/pipeline/summary").json()
             assert summary["total_pages"] == 1
+            assert [(g["key"], g["count"]) for g in summary["archive_reasons"]] == [
+                ("skip_gate", 1)
+            ]
+            assert [(g["key"], g["count"]) for g in summary["skip_categories"]] == [("web_app", 1)]
+            assert summary["skip_categories"][0]["top_domains"] == [
+                {"domain": "docs.example.net", "count": 1}
+            ]
+            tl = tc.get("/api/pipeline/timeline?range=all").json()["buckets"]
+            assert sum(b["kept"] + b["archived"] for b in tl) == 1
+            assert sum(b["skipped"] for b in tl) == 1
+            assert [b["categories"] for b in tl if b["categories"]] == [{"web_app": 1}]
         finally:
             app.dependency_overrides.pop(verify_api_key, None)

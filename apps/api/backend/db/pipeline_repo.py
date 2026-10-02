@@ -52,10 +52,14 @@ def since_for(range_key: str, now: datetime) -> datetime | None:
     return now - timedelta(days=days) if days else None
 
 
-def _window(since: datetime | None) -> tuple[str, list]:
+def _window(since: datetime | None, now: datetime) -> tuple[str, list]:
+    """Window clause, capped at ``visited_at <= now`` so every section agrees.
+
+    ``all`` still counts pages whose ``visited_at`` is NULL.
+    """
     if since is None:
-        return "", []
-    return " AND p.visited_at >= %s", [since]
+        return " AND (p.visited_at IS NULL OR p.visited_at <= %s)", [now]
+    return " AND p.visited_at >= %s AND p.visited_at <= %s", [since, now]
 
 
 def get_windowed_pages(
@@ -74,7 +78,7 @@ def get_windowed_pages(
     if direction not in ("asc", "desc"):
         raise ValueError(f"unsupported direction: {direction!r}")
     now = now or datetime.now(UTC)
-    wsql, wparams = _window(since_for(normalize_range(range_key), now))
+    wsql, wparams = _window(since_for(normalize_range(range_key), now), now)
     order_sql = f"ORDER BY p.{sort} {direction.upper()} NULLS LAST, p.id DESC"  # allow-listed
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -133,7 +137,7 @@ def get_summary_counts(
 ) -> dict:
     """Windowed status / depth / null-depth counts, archive reasons, skip categories."""
     now = now or datetime.now(UTC)
-    wsql, wparams = _window(since_for(normalize_range(range_key), now))
+    wsql, wparams = _window(since_for(normalize_range(range_key), now), now)
     base = f"FROM pages p JOIN captures c ON p.capture_id = c.id WHERE c.user_id = %s{wsql}"
     params = [user_id, *wparams]
     with get_conn() as conn, conn.cursor() as cur:
@@ -199,13 +203,13 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
     since = since_for(range_key, now)
     granularity, label_key, step = _GRANULARITY[range_key]
     bucket = _BUCKET_SQL[granularity]
-    wsql, wparams = _window(since)
+    wsql, wparams = _window(since, now)
     with get_conn() as conn, conn.cursor() as cur:
         if since is None:
             cur.execute(
                 "SELECT MIN(p.visited_at) FROM pages p JOIN captures c ON p.capture_id = c.id "
-                "WHERE c.user_id = %s",
-                (user_id,),
+                "WHERE c.user_id = %s AND p.visited_at <= %s",
+                (user_id, now),
             )
             first = cur.fetchone()[0] or now
         else:

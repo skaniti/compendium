@@ -15,6 +15,8 @@ same pattern as routers/dq_bot.py.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from psycopg2 import DataError
+from psycopg2.errors import InvalidParameterValue
 
 from backend.api.main import verify_api_key
 from backend.db import page_repo, pipeline_repo
@@ -33,6 +35,14 @@ def _tz(tz: str = Query("UTC")) -> str:
     return tz
 
 
+def _guard_tz(fn, *args, **kwargs):
+    """Run a repo call; a zone name Postgres doesn't know is a 422, not a 500."""
+    try:
+        return fn(*args, **kwargs)
+    except (InvalidParameterValue, DataError):
+        raise HTTPException(status_code=422, detail="invalid time zone") from None
+
+
 @router.get("/summary")
 async def pipeline_summary(
     range: str | None = None,
@@ -40,7 +50,7 @@ async def pipeline_summary(
     user_id: int = Depends(verify_api_key),
 ) -> dict:
     key = pipeline_repo.normalize_range(range)
-    c = pipeline_repo.get_summary_counts(user_id, key)
+    c = _guard_tz(pipeline_repo.get_summary_counts, user_id, key)
     status_counts = {k: int(c["status_counts"].get(k, 0)) for k in _STATUS_KEYS}
     total = int(sum(c["status_counts"].values()))
     return {
@@ -61,7 +71,7 @@ async def pipeline_timeline(
     tz: str = Depends(_tz),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
-    return pipeline_repo.get_timeline(user_id, pipeline_repo.normalize_range(range), tz)
+    return _guard_tz(pipeline_repo.get_timeline, user_id, pipeline_repo.normalize_range(range), tz)
 
 
 _SORT_PATTERN = "^(" + "|".join(page_repo.RECENT_PAGES_SORT_COLUMNS) + ")$"
@@ -77,7 +87,8 @@ async def pipeline_pages(
     tz: str = Depends(_tz),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
-    rows, total = pipeline_repo.get_windowed_pages(
+    rows, total = _guard_tz(
+        pipeline_repo.get_windowed_pages,
         user_id,
         pipeline_repo.normalize_range(range),
         limit=limit,

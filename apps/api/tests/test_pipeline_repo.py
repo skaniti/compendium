@@ -104,7 +104,6 @@ class TestTimeline:
         assert all(b["label_key"] == "day" for b in t["buckets"])
 
     def test_7d_six_hour_blocks_across_dst_end(self, uid):
-        # 2026-11-01 05:30 UTC = 01:30 EDT (before fall-back); 07:30 UTC = 02:30 EST? no: 01:30 EST.
         _add(
             uid,
             [
@@ -128,6 +127,26 @@ class TestTimeline:
         assert by["2026-11-01T00:00:00"]["start"].endswith("-04:00")
         assert by["2026-11-01T06:00:00"]["start"].endswith("-05:00")
         assert sum(b["kept"] for b in t["buckets"]) == 3
+
+    def test_7d_six_hour_blocks_across_dst_start(self, uid):
+        now = datetime(2026, 3, 10, 15, 0, tzinfo=UTC)  # 11:00 EDT
+        t = pipeline_repo.get_timeline(uid, "7d", NY, now=now)
+        starts = [b["start"] for b in t["buckets"]]
+        assert len(starts) == len(set(starts)) == 29
+        parsed = [datetime.fromisoformat(s[:19]) for s in starts]
+        assert all(b - a == timedelta(hours=6) for a, b in pairwise(parsed))
+        assert all(p.hour % 6 == 0 for p in parsed)
+        by = {s[:19]: s for s in starts}
+        assert by["2026-03-08T00:00:00"].endswith("-05:00")
+        assert by["2026-03-08T06:00:00"].endswith("-04:00")
+        assert starts[0].endswith("-05:00") and starts[-1].endswith("-04:00")
+
+    def test_future_dated_visit_excluded_from_timeline(self, uid):
+        _add(uid, [{"visited_at": NOW + timedelta(days=2)}])
+        for rng in ("7d", "30d", "90d", "all"):
+            t = pipeline_repo.get_timeline(uid, rng, "UTC", now=NOW)
+            assert sum(b["kept"] for b in t["buckets"]) == 0
+            assert t["buckets"], rng  # never empty: series is anchored at now
 
     def test_90d_weekly_monday_starts(self, uid):
         _add(uid, [{"visited_at": NOW - timedelta(days=10)}])
@@ -255,6 +274,21 @@ class TestSummaryCounts:
         c = pipeline_repo.get_summary_counts(uid, "7d", now=NOW)
         assert c["status_counts"] == {} and c["depth_counts"] == {}
         assert c["archive_reasons"] == [] and c["skip_categories"] == []
+
+
+class TestFutureDatedExcluded:
+    def test_future_page_excluded_everywhere(self, uid):
+        ts = NOW - timedelta(days=1)
+        fut = NOW + timedelta(days=2)
+        _add(uid, [_skip(ts, "login_wall"), _skip(fut, "login_wall", "future.example")])
+        for rng in ("7d", "30d", "90d", "all"):
+            c = pipeline_repo.get_summary_counts(uid, rng, now=NOW)
+            assert c["status_counts"] == {"archived": 1}, rng
+            assert [g["count"] for g in c["skip_categories"]] == [1], rng
+            assert [g["count"] for g in c["archive_reasons"]] == [1], rng
+            assert pipeline_repo.get_windowed_pages(uid, rng, now=NOW)[1] == 1, rng
+            t = pipeline_repo.get_timeline(uid, rng, "UTC", now=NOW)
+            assert sum(b["archived"] for b in t["buckets"]) == 1, rng
 
 
 class TestWindowedPages:
