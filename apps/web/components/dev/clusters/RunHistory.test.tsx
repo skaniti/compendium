@@ -43,3 +43,8 @@ it("only failed runs", () => {
   expect(screen.getByText("No finished runs yet.")).toBeInTheDocument();
   expect(container.querySelector("svg")).toBeNull();
 });
+it("one finished run shows a note instead of charts", () => {
+  const { container } = render(<RunHistory runs={{ total: 1, items: [runOf(1, "completed")] }} currentId={1} />);
+  expect(screen.getByText("One finished run so far; the history chart appears after the next recluster.")).toBeInTheDocument();
+  expect(container.querySelector("svg")).toBeNull();
+});

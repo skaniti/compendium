@@ -36,7 +36,7 @@ export default function RunHistory({ runs, currentId }: { runs: ClustersSummary[
         <h3 className="dev-section-title">Run history</h3>
         <span className="dev-panel-meta">{plural(runs.total, "run")} · {formatCount(failed)} failed{runs.total > runs.items.length ? ` · showing the latest ${formatCount(runs.items.length)}` : ""}</span>
       </div>
-      {finished.length > 0 ? (
+      {finished.length >= 2 ? (
         <div className="clusters-runs-chart">
           {rowsDef.map((d) => (
             <div key={d.title} className="clusters-runs-row">
@@ -51,7 +51,7 @@ export default function RunHistory({ runs, currentId }: { runs: ClustersSummary[
             </div>
           ))}
         </div>
-      ) : <p className="dev-empty dev-empty-inline">No finished runs yet.</p>}
+      ) : <p className="dev-empty dev-empty-inline">{finished.length === 1 ? "One finished run so far; the history chart appears after the next recluster." : "No finished runs yet."}</p>}
       <div className="dev-table-wrap">
         <table className="dev-table clusters-runs-table">
           <thead><tr><th>Run</th><th>Status</th><th>Clusters</th><th>Noise pages</th><th>Naming cost</th><th>Duration</th><th>Started</th></tr></thead>
