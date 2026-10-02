@@ -255,6 +255,11 @@ class Settings(BaseSettings):
     ``AGENT_SYSTEM_PROMPT_VERSION`` -- flipping to "v2" is the no-deploy
     rollback."""
 
+    prompt_overrides_path: str = ""
+    """Prompt override file (a JSON object, prompt name -> template) outside the
+    repo. Empty: the Prompts dev view's editor is off, and reads fall back to the
+    tracked backend/prompts/overrides.json. Env var ``PROMPT_OVERRIDES_PATH``."""
+
     cluster_naming_prompt_version: str = "v1a"
     """Selects the registry entry ``cluster_naming_{version}`` in
     ``backend/prompts/templates.py`` for

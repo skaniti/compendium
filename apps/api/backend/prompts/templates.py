@@ -23,10 +23,14 @@ Removed templates (temporal-model artifacts, no longer called):
 - analysis_planner_v1 — unimplemented M10 agent prompt
 
 Hot-reloadable overrides:
-    ``get_prompt()`` reads ``overrides.json`` in this directory on every
-    call. Keys present there take precedence over the ``PROMPTS`` dict,
-    so the Models dev view can edit templates without a restart. Read
-    cost is negligible for a solo dev tool — simplicity over speed.
+    ``get_prompt()`` re-reads the override file on every call. Keys present
+    there take precedence over the ``PROMPTS`` dict, so the Prompts dev view
+    can edit templates without a restart. The file is
+    ``settings.prompt_overrides_path`` (env ``PROMPT_OVERRIDES_PATH``), a
+    deployment-local file outside the repo; when that is unset, the tracked
+    ``overrides.json`` in this directory (kept ``{}``) is read instead, and
+    nothing writes to it. Read cost is negligible for a solo dev tool --
+    simplicity over speed.
 """
 
 from datetime import date
@@ -828,16 +832,32 @@ from pathlib import Path as _Path
 _OVERRIDES_PATH = _Path(__file__).resolve().parent / "overrides.json"
 
 
+def _overrides_path() -> _Path:
+    """Where overrides are read from.
+
+    ``settings.prompt_overrides_path`` when set: a deployment-local file
+    outside the repo, which the Prompts dev view's editor writes. Otherwise
+    the tracked ``overrides.json`` beside this module (kept empty in git) as
+    the read fallback. ``_OVERRIDES_PATH`` is read at call time so tests can
+    monkeypatch it.
+    """
+    from backend.config.settings import settings
+
+    configured = (settings.prompt_overrides_path or "").strip()
+    return _Path(configured).expanduser() if configured else _OVERRIDES_PATH
+
+
 def _load_overrides() -> dict:
     """Read the override map. Returns {} if missing or invalid.
 
-    Called on every ``get_prompt()`` so edits via the Models dev view
+    Called on every ``get_prompt()`` so edits via the Prompts dev view
     take effect without restarting the server.
     """
-    if not _OVERRIDES_PATH.exists():
+    path = _overrides_path()
+    if not path.exists():
         return {}
     try:
-        data = _json.loads(_OVERRIDES_PATH.read_text(encoding="utf-8"))
+        data = _json.loads(path.read_text(encoding="utf-8"))
     except (_json.JSONDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}
