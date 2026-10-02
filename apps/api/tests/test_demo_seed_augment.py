@@ -7,7 +7,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from scripts.demo.build_demo_seed_augment import GATE_REASONS, build_augment_rows
+from scripts.demo.build_demo_seed_augment import GATE_CATEGORY, GATE_REASONS, build_augment_rows
 
 SEED = Path("data/demo-seed/demo_seed.json.gz")
 AUG = Path("data/demo-seed/demo_seed_augment.json")
@@ -75,3 +75,17 @@ def test_ids_captures_and_hygiene():
     bad_terms = ["ska" + "niti", "sravya" + "kaniti", "print" + "ables", "claude" + ".ai"]
     for bad in bad_terms:
         assert bad not in text
+
+
+def test_skip_gate_rows_carry_a_valid_category_others_null():
+    from backend.services.skip_categories import SKIP_CATEGORY_IDS
+
+    d = _seed()
+    rows = build_augment_rows(d["pages"], d["captures"])
+    assert set(GATE_CATEGORY) == set(GATE_REASONS)
+    for r in rows:
+        if r["archive_reason"] == "skip_gate":
+            assert r["skip_category"] in SKIP_CATEGORY_IDS
+            assert r["skip_category"] == GATE_CATEGORY[r["skip_reasoning"]]
+        else:
+            assert r["skip_category"] is None

@@ -32,6 +32,18 @@ GATE_REASONS = (
     "User-specific page (profile, dashboard)",
 )
 
+# Category (backend.services.skip_categories ids) matching each gate reason.
+GATE_CATEGORY = {
+    "login wall": "login_wall",
+    "disambiguation page": "disambiguation",
+    "search results page": "search_results",
+    "content-free stub": "content_free_stub",
+    "cookie consent redirect": "other",
+    "error page": "error_page",
+    "Marketplace / product / store listing": "store_listing",
+    "User-specific page (profile, dashboard)": "user_specific",
+}
+
 # (archive_reason, count, processing_depth, status) -- mirrors the real
 # corpus's shape (2026-08-25 capture): gate + domain skips carry depth
 # 'skipped'; the placeholder/dedup/chrome family has NULL depth ("Other").
@@ -109,8 +121,10 @@ def build_augment_rows(seed_pages: list[dict], seed_captures: list[dict]) -> lis
             domain, url_t, title_t = next(junk_cycle)
             q = next(q_cycle)
             url = url_t.format(q=q, Q=q.capitalize())
+            category = None
             if reason == "skip_gate":
                 reasoning = next(gate_cycle)
+                category = GATE_CATEGORY[reasoning]
             elif reason == "domain_skip":
                 reasoning = f"Domain skipped: {domain}"
             else:
@@ -131,6 +145,7 @@ def build_augment_rows(seed_pages: list[dict], seed_captures: list[dict]) -> lis
                     "extracted_text": None,
                     "normalized_url": url,
                     "skip_reasoning": reasoning,
+                    "skip_category": category,
                     "content_summary": "Domain skipped" if reason == "domain_skip" else None,
                     "page_content_id": None,
                     "transition_type": "link",
