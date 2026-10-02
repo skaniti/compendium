@@ -1870,3 +1870,69 @@ describe("clusters routes (replayed from the recorded seed run)", () => {
     });
   });
 });
+
+describe("prompts routes (replayed from the recorded plain-demo payloads)", () => {
+  const fx = (f: string) => JSON.parse(readFileSync(`demo/fixtures/${f}`, "utf8"));
+  const names = (s: { tasks: { prompts: { name: string }[] }[] }) => s.tasks.flatMap((t) => t.prompts.map((p) => p.name));
+  const NOT_CONFIGURED = { overrides: { configured: false, readable: true, count: 0 }, evals: { configured: false } };
+  const call = (path: string, init?: RequestInit, token?: string) =>
+    fetch(`${baseUrl}${path}`, { ...init, headers: token ? { authorization: `Bearer ${token}` } : undefined });
+
+  it("default identity (admin): summary.admin is the not-configured status, tasks match the fixture", async () => {
+    const s = await (await call("/api/prompts/summary")).json();
+    expect(s.admin).toEqual(NOT_CONFIGURED);
+    expect(s.tasks).toEqual(fx("prompts/summary.json").tasks);
+  });
+
+  it("plain demo: summary.admin is null and equals the fixture", async () => {
+    const s = await (await call("/api/prompts/summary", undefined, plainDemoToken())).json();
+    expect(s.admin).toBeNull();
+    expect(s).toEqual(fx("prompts/summary.json"));
+  });
+
+  it("every summary prompt has a template; plain demo has no override key, admin has override null", async () => {
+    const listed = names(fx("prompts/summary.json"));
+    expect(listed.length).toBeGreaterThan(0);
+    for (const n of listed) {
+      const plain = await call(`/api/prompts/templates/${n}`, undefined, plainDemoToken());
+      expect(plain.status).toBe(200);
+      expect("override" in (await plain.json())).toBe(false);
+      const admin = await call(`/api/prompts/templates/${n}`);
+      expect(admin.status).toBe(200);
+      expect((await admin.json()).override).toBeNull();
+    }
+  });
+
+  it("unknown name 404s; an invalid name has no route", async () => {
+    const r = await call("/api/prompts/templates/nope_v1");
+    expect(r.status).toBe(404);
+    expect(await r.json()).toEqual({ detail: "prompt not found" });
+    expect((await call("/api/prompts/templates/Bad-Name")).status).toBe(404);
+  });
+
+  it("PUT and DELETE override: 403 plain demo, 409 admin, 404 unknown name", async () => {
+    const known = names(fx("prompts/summary.json"))[0];
+    for (const method of ["PUT", "DELETE"]) {
+      const init = { method, headers: { "content-type": "application/json" }, body: method === "PUT" ? JSON.stringify({ template: "x" }) : undefined };
+      const plain = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, { ...init, headers: { ...init.headers, authorization: `Bearer ${plainDemoToken()}` } });
+      expect(plain.status).toBe(403);
+      expect(await plain.json()).toEqual({ detail: "Admin context required" });
+      const admin = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, init);
+      expect(admin.status).toBe(409);
+      expect(await admin.json()).toEqual({ detail: "Prompt overrides are not configured on this deployment." });
+      const unknown = await fetch(`${baseUrl}/api/prompts/templates/nope_v1/override`, init);
+      expect(unknown.status).toBe(404);
+    }
+  });
+
+  it("evals: plain demo 403, admin 200 not configured; run detail 403 / 404", async () => {
+    expect((await call("/api/prompts/evals", undefined, plainDemoToken())).status).toBe(403);
+    const list = await call("/api/prompts/evals");
+    expect(list.status).toBe(200);
+    expect(await list.json()).toEqual({ configured: false, readable: false, runs: [], skipped: 0 });
+    expect((await call("/api/prompts/evals/x", undefined, plainDemoToken())).status).toBe(403);
+    const run = await call("/api/prompts/evals/x");
+    expect(run.status).toBe(404);
+    expect(await run.json()).toEqual({ detail: "run not found" });
+  });
+});

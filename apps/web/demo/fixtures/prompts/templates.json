@@ -1,0 +1,431 @@
+{
+  "skip_gate_v1": {
+    "name": "skip_gate_v1",
+    "task": "skip_gate",
+    "task_label": "Skip gate",
+    "version": "v1",
+    "description": "Binary skip gate — include or skip a page for the compendium",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "snippet_len",
+      "title",
+      "url"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nINCLUDE unless the page is clearly one of these:\n- Homepage with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, or sign-in redirect\n- Pure search results with no selected result\n- Error page or HTTP error\n\nWhen in doubt, INCLUDE. Product pages, help docs, forum posts, marketplace listings, and profile pages all have real content. Judge ONLY on content, not on dwell time or user behavior."
+  },
+  "skip_gate_v2": {
+    "name": "skip_gate_v2",
+    "task": "skip_gate",
+    "task_label": "Skip gate",
+    "version": "v2",
+    "description": "v2: drops product-page carve-out, adds URL semantics + curatorial-layer principle + asset-library narrative-flow distinction; eval-only until validated against selection_v1.0",
+    "techniques": [
+      "instruction",
+      "url_semantics",
+      "curatorial_layer"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "snippet_len",
+      "title",
+      "url"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nSKIP if any of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page (intent is purchase or acquisition, not learning). URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/.\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse or category page -- flat list/grid of items (icons, fonts, vectors, 3D models, templates) with no narrative flow. A page that walks through HOW to USE such a library (sequential instruction or examples) is a tutorial -- INCLUDE.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nINCLUDE if the page has substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n\nWhen the URL pattern strongly suggests skip but the title or snippet clearly indicates substantive content (e.g., a /pricing/ page that is actually an analytical breakdown, or a long-form video documentary), INCLUDE. The URL signal is a prior, not a verdict.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE."
+  },
+  "skip_gate_v2_1": {
+    "name": "skip_gate_v2_1",
+    "task": "skip_gate",
+    "task_label": "Skip gate",
+    "version": "v2_1",
+    "description": "v2.1: refines asset-library rule to distinguish individual item pages from browse pages (Printables /model/<id>/, BGG /boardgame/<id>/, etc.); clarifies marketplace rule with purchase-intent vs descriptive-intent signals; targets 5 of 9 v2-vs-v1.1 wrongs",
+    "techniques": [
+      "instruction",
+      "url_semantics",
+      "curatorial_layer",
+      "item_page_distinction"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "snippet_len",
+      "title",
+      "url"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nSKIP if any of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page -- the page's PRIMARY purpose is to facilitate a purchase or acquisition, not to describe an artifact for understanding. URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/. SKIP signal in snippet: emphasis on price, ratings, \"buy now\", shipping, stock, store policies, \"Add to cart\". INCLUDE signal in snippet: substantive description of HOW something works, what it does, mechanics, materials, build instructions -- even if the artifact is also sold somewhere. The test is \"does this page exist mainly to sell, or mainly to share/document?\"\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse / category / index page -- a flat list or grid of MULTIPLE items (icons, fonts, vectors, 3D models, templates) with no narrative description of any specific item. EXCLUDED from this category: individual ITEM pages (one specific model, one specific font, one specific icon, one specific game, one specific reference document) with their own description, instructions, or content -- those are INCLUDE. Item pages describe ONE thing in depth; browse pages list many things shallowly. URL clue: a path with a specific item's id-and-slug (e.g., /model/123-widget-stand-modular/, /boardgame/4567/star-freighter/, /filepage/8901/star-freighter-quick-reference) typically signals an item page; a path like /models/, /icons/categories/, or /@username typically signals a browse page. A page that walks through HOW to USE a library (sequential instruction or examples) is a tutorial -- INCLUDE.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nINCLUDE if the page has substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n\nWhen the URL pattern strongly suggests skip but the title or snippet clearly indicates substantive content (e.g., a /pricing/ page that is actually an analytical breakdown, or a long-form video documentary), INCLUDE. The URL signal is a prior, not a verdict.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE."
+  },
+  "skip_gate_v2_2": {
+    "name": "skip_gate_v2_2",
+    "task": "skip_gate",
+    "task_label": "Skip gate",
+    "version": "v2_2",
+    "description": "v2.2: structural fix over v2.1 -- promotes item-page rule to a top-level INCLUDE category, evaluated BEFORE SKIP rules. Targets v2.1's failure mode where marketplace SKIP fired before LLM reached the item-page exception. Single-rule restructuring; no other rule changes vs v2.1.",
+    "techniques": [
+      "instruction",
+      "url_semantics",
+      "curatorial_layer",
+      "item_page_distinction",
+      "include_first_ordering"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "snippet_len",
+      "title",
+      "url"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nEVALUATE INCLUDE RULES FIRST. Only fall through to SKIP rules if no INCLUDE rule matches.\n\nINCLUDE if any of:\n- Substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n- Individual ITEM pages (one specific model, font, icon, game, document, tool, library, etc.) with their own description, instructions, or content -- EVEN IF hosted on a marketplace, asset-library, or transactional platform. URL clue: a path with a specific item id-and-slug (e.g., /model/123-widget-stand-modular/, /boardgame/4567/star-freighter/, /filepage/8901/star-freighter-quick-reference). Confirm via snippet: substantive description of WHAT it is, HOW it works, materials, mechanics, build instructions, contents, or features.\n\nSKIP only if no INCLUDE rule matched, AND the page is one of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page -- the page's PRIMARY purpose is to facilitate a purchase or acquisition. URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/. SKIP signal in snippet: emphasis on price, ratings, \"buy now\", shipping, stock, store policies, \"Add to cart\".\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse / category / index page -- a flat list or grid of MULTIPLE items (icons, fonts, vectors, 3D models, templates) with no narrative description of any specific item.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nWhen the URL pattern strongly suggests skip but the title or snippet clearly indicates substantive content, INCLUDE. The URL signal is a prior, not a verdict.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE."
+  },
+  "skip_gate_v2_3": {
+    "name": "skip_gate_v2_3",
+    "task": "skip_gate",
+    "task_label": "Skip gate",
+    "version": "v2_3",
+    "description": "v2.3: structural fix over v2.2 -- promotes the URL-prior override clause from a trailing advisory line to a top-level INCLUDE rule, evaluated BEFORE SKIP rules. Targets v2.2's failure mode where the YouTube /watch/ category prior overrode snippet evidence on educational tutorials (PWM tutorial, 2026-05-08 demo dry-run).",
+    "techniques": [
+      "instruction",
+      "url_semantics",
+      "curatorial_layer",
+      "item_page_distinction",
+      "include_first_ordering",
+      "url_prior_override"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "snippet_len",
+      "title",
+      "url"
+    ],
+    "live": true,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nEVALUATE INCLUDE RULES FIRST. Only fall through to SKIP rules if no INCLUDE rule matches.\n\nINCLUDE if any of:\n- Substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n- Individual ITEM pages (one specific model, font, icon, game, document, tool, library, etc.) with their own description, instructions, or content -- EVEN IF hosted on a marketplace, asset-library, or transactional platform. URL clue: a path with a specific item id-and-slug (e.g., /model/123-widget-stand-modular/, /boardgame/4567/star-freighter/, /filepage/8901/star-freighter-quick-reference). Confirm via snippet: substantive description of WHAT it is, HOW it works, materials, mechanics, build instructions, contents, or features.\n- URL-prior override: when the URL alone would match a SKIP rule below (youtube.com/watch/, youtube.com/shorts/, /products/, /pricing/, /shop/, /listing/, /@username, /profile/, /dashboard/, etc.) BUT the title or snippet clearly carries substantive learnable content -- a transcript narrating instruction, an analytical breakdown, an in-depth review or essay, a documentary explainer, a long-form analysis -- INCLUDE. The URL is a prior, not a verdict; concrete educational or analytical content in the snippet wins.\n\nSKIP only if no INCLUDE rule matched, AND the page is one of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page -- the page's PRIMARY purpose is to facilitate a purchase or acquisition. URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/. SKIP signal in snippet: emphasis on price, ratings, \"buy now\", shipping, stock, store policies, \"Add to cart\".\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse / category / index page -- a flat list or grid of MULTIPLE items (icons, fonts, vectors, 3D models, templates) with no narrative description of any specific item.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE."
+  },
+  "learning_gate_v1": {
+    "name": "learning_gate_v1",
+    "task": "learning_gate",
+    "task_label": "Learning gate",
+    "version": "v1",
+    "description": "Binary learning gate — classify whether a page represents active learning/research",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "domain",
+      "snippet",
+      "title"
+    ],
+    "live": true,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "You are classifying a web page for a personal knowledge compendium.\nThe question is: \"Was the user actively learning or researching something?\"\n\nPage:\n- Title: {title}\n- Domain: {domain}\n- Content preview: {snippet}\n\nLEARNING examples: Wikipedia articles, tutorial pages, documentation,\nforum discussions about how things work, academic papers, AI chat sessions\nin which a topic is explored in depth, product research (comparing\nfeatures, reading reviews), recipe pages, how-to guides, news articles\nwith substantive content.\n\nNOT LEARNING examples: login/auth pages, shopping cart or order pages,\nsearch result listings (without a selected result), AI chat sessions\nwith no specific topic, app homepages, social media feeds,\naccount settings, file manager pages.\n\nBORDERLINE guidance: When in doubt, classify as LEARNING. A product\npage where someone is researching options IS learning. A forum post\nwhere someone asks a question IS learning. Err toward inclusion.\n\nRespond with exactly one word: LEARNING or SKIP"
+  },
+  "cluster_naming_v1a": {
+    "name": "cluster_naming_v1a",
+    "task": "cluster_naming",
+    "task_label": "Cluster naming",
+    "version": "v1a",
+    "description": "Cluster-naming prompt for ClusteringService._name_one_cluster / _name_clusters_batch. Registry migration of the original inline f-string (clustering-quality backlog, 2026-08-14) -- byte-identical to the pre-migration prompt for identical (n_pages, context) inputs (pinned by tests/test_prompts.py). Rendered via ``get_prompt_raw()``, not ``get_prompt()`` -- see that helper's docstring for why (the sanitize-and-wrap step in ``get_prompt()`` would inject ``<user_content>`` tags around ``context`` for any real multi-page cluster, breaking byte-identical parity with the original unsanitized f-string; this is not a new exposure, the original inline prompt was never sanitized either).",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "context",
+      "n_pages"
+    ],
+    "live": true,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Name this cluster of {n_pages} web pages based on the DOMINANT topic.\n\nPages:\n{context}\n\nRules:\n- Focus on the subject matter, not the platform (e.g., 'Volcanic Eruptions' not 'Wikipedia Articles', 'Figure Skating' not 'Reddit Discussions').\n- If pages span unrelated topics, name the most common one and ignore outliers.\n- Be specific: 'Phreatomagmatic Eruptions' not 'Science Topics', 'Deck Box Organizers' not 'Gaming Resources'.\n- BAD names: 'Web Search Queries', 'Diverse Online Resources', 'Reddit Discussions', 'Wikipedia and Related Resources'.\n- 2-5 words. Output ONLY the name, nothing else."
+  },
+  "cluster_naming_v1b": {
+    "name": "cluster_naming_v1b",
+    "task": "cluster_naming",
+    "task_label": "Cluster naming",
+    "version": "v1b",
+    "description": "Breadth-guided variant of cluster_naming_v1a (clustering-quality backlog, 2026-08-14). v1a's 'DOMINANT topic' framing is prone to naming the most salient subset of a cluster rather than a label that covers every member page -- 'Largest Fish Species' and 'Philosophy of Knowledge and Existence' were historically produced (runs <=168) on the page-mixes preserved as fixtures 9740 (fish anatomy/taxonomy/extinction, not just size) and 9763 (epistemology/mythology mixed with cosmology/astrobiology) in evaluation/fixtures/cluster_naming/run171_v0.1.jsonl. v1b keeps the same 2-5-word / platform-avoidance / outlier-ignoring discipline as v1a but adds an explicit breadth rule with both historical failure names spelled out as BAD examples. Run-171 v1a output on these same page-mixes does NOT currently reproduce the literal failure names (see naming-candidates.md in the backlog plan folder) -- the BAD examples guard against a real, previously-observed failure class, not a live reproduction on this exact fixture set.",
+    "techniques": [
+      "instruction",
+      "breadth_guidance"
+    ],
+    "placeholders": [
+      "context",
+      "n_pages"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Name this cluster of {n_pages} web pages with the topic that covers ALL of them -- not just the most salient or largest subset.\n\nPages:\n{context}\n\nRules:\n- Focus on the subject matter, not the platform (e.g., 'Volcanic Eruptions' not 'Wikipedia Articles', 'Figure Skating' not 'Reddit Discussions').\n- Breadth over salience: when the pages are different facets of one broader subject, name the BROADER subject, not the single most prominent facet. Bad: 'Largest Fish Species' when other pages cover fish anatomy, taxonomy, or extinction, not just size records -- a broader label like 'Fish Species and Biology' covers them all. Bad: 'Philosophy of Knowledge and Existence' when other pages are about cosmology or astrobiology, not epistemology -- a broader or dual-topic label covers them all. Ask: would every page's topic recognize itself in this name?\n- If pages span genuinely unrelated topics (not facets of one subject), name the most common one and ignore outliers.\n- Be specific: 'Phreatomagmatic Eruptions' not 'Science Topics', 'Deck Box Organizers' not 'Gaming Resources'.\n- BAD names: 'Web Search Queries', 'Diverse Online Resources', 'Reddit Discussions', 'Wikipedia and Related Resources'.\n- 2-5 words. Output ONLY the name, nothing else."
+  },
+  "supercluster_label_v1a": {
+    "name": "supercluster_label_v1a",
+    "task": "supercluster_label",
+    "task_label": "Supercluster labels",
+    "version": "v1a",
+    "description": "Suggested-group label prompt for super_cluster_service._suggest_group_labels. Registry migration of the original inline prompt string (clustering-quality backlog, 2026-08-14) -- byte-identical to the pre-migration prompt for identical (groups_json) input (pinned by tests/test_prompts.py). ``sibling_labels_block`` is accepted by the render call but unused here -- this template has no placeholder for it, so it is silently dropped by ``get_prompt_raw()``. Rendered via ``get_prompt_raw()``, not ``get_prompt()``, for the same byte-identical-parity reason as ``cluster_naming_v1a`` (see that entry's description) -- ``groups_json`` routinely exceeds the 50-char sanitize-wrap threshold, and this template also embeds a literal JSON-shape example that ``get_prompt()``'s brace-escaping kwarg path was never exercised against.",
+    "techniques": [
+      "instruction",
+      "json_mode"
+    ],
+    "placeholders": [
+      "groups_json"
+    ],
+    "live": true,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Each entry below is a GROUP of related web-page clusters from one person's browsing. Give each group a short topic label (2-4 words, title case) that covers all its clusters — the label is offered to the user as a suggested new topic, so prefer the natural umbrella term over a list.\n\nGROUPS (JSON):\n{groups_json}\n\nReturn JSON ONLY in this exact shape:\n{{\"labels\": [{{\"group_id\": <id>, \"label\": \"<label>\"}}, ...]}}"
+  },
+  "supercluster_label_v1b": {
+    "name": "supercluster_label_v1b",
+    "task": "supercluster_label",
+    "task_label": "Supercluster labels",
+    "version": "v1b",
+    "description": "Specificity-and-distinctiveness variant of supercluster_label_v1a (clustering-quality backlog, 2026-08-14). Targets two observed failure modes: bare one-word discipline labels ('zoology', 'technology', 'science') that read as a field name rather than a topic, and brand-only labels; and label collisions across groups in the same run. ``sibling_labels_block`` is a rendered list of the run's OTHER already-known group labels (declared/keyword-matched groups that didn't need LLM naming) -- passed by the caller in ``assign_super_clusters_hybrid`` where that context is in scope; groups being named in the SAME batched call are already visible to the model via the GROUPS JSON payload, so this covers the sibling groups that would otherwise be invisible.",
+    "techniques": [
+      "instruction",
+      "json_mode",
+      "distinctiveness_guidance"
+    ],
+    "placeholders": [
+      "groups_json",
+      "sibling_labels_block"
+    ],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "Each entry below is a GROUP of related web-page clusters from one person's browsing. Give each group a specific topic label: a 2-4 word noun phrase (title case) that covers all its clusters -- the label is offered to the user as a suggested new topic, so prefer the natural umbrella term over a list.\n\nRules:\n- 2-4 words, a specific noun phrase -- never a bare one-word academic discipline ('Zoology', 'Technology', 'Science') and never a brand or product name alone ('Obsidian', 'Claude'). Name the TOPIC the group's pages are about, not the field or platform it happens to sit in (e.g. 'Cephalopod Behavior' not 'Zoology', 'Password Managers' not 'Technology', 'Obsidian Plugin Development' not 'Obsidian').\n- Distinctive: the label must be clearly different from every OTHER group label below AND from these already-assigned labels in the same run:\n{sibling_labels_block}\nTwo groups covering genuinely different topics must never get labels that could be confused for each other.\n\nGROUPS (JSON):\n{groups_json}\n\nReturn JSON ONLY in this exact shape:\n{{\"labels\": [{{\"group_id\": <id>, \"label\": \"<label>\"}}, ...]}}"
+  },
+  "agent_system_v1": {
+    "name": "agent_system_v1",
+    "task": "agent_system",
+    "task_label": "Chat agent",
+    "version": "v1",
+    "description": "CompendiumAgent system prompt -- ReAct search agent over 4 tools (search_compendium/get_cluster_info/get_page_detail/list_clusters); documents the search cascade's result markers ([archived], [low-confidence], taxonomy match, diagnosed absence) and the reformulate-once-before-declaring-absence strategy. Replaces the hardcoded SYSTEM_PROMPT constant (2026-07-16 astronomy-miss fix: full_search merged into search_compendium's include_archived param, taxonomy-name matching added, threshold moved to settings).",
+    "techniques": [
+      "instruction",
+      "tool_use",
+      "react"
+    ],
+    "placeholders": [],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "You are a personal research librarian for the user's browsing compendium: a collection of web pages captured across many browsing sessions, organized into topic clusters (and topic-labeled superclusters) by an ML pipeline.\n\nPrior conversation turns may be included before the current question -- use them to resolve follow-up references (e.g. \"it\", \"that topic\", \"the second one\") to what was already discussed.\n\nYour tools:\n- search_compendium: two-stage semantic search (bi-encoder recall + cross-encoder rerank) over the user's compendium. Pass include_archived=true to also search archived/excluded pages (business lookups, navigation/search pages, deduped or manually-removed pages); the default (false) searches only the curated, in-graph pages. Result lines carry a page id ([id=123]) when resolvable -- pass it to get_page_detail for the full page content.\n\n  Read the result markers before answering:\n  - No marker: a normal relevance-ranked hit. Cite it directly.\n  - \"[archived]\": sourced from an archived/excluded page, not the active compendium -- say so explicitly if you use it.\n  - \"[low-confidence]\": semantically related to the query but below the confidence threshold -- these are candidates, not confirmed answers. Only use them if genuinely relevant to the question, and flag the uncertainty.\n  - \"Taxonomy match: ...\": the query matched a cluster or supercluster NAME, not page content -- it means the user's compendium HAS a topic area with this name, and lists its member pages. This is a structural fact, not a content-relevance ranking; describe what the topic area covers rather than claiming the listed pages individually rank as top search hits.\n  - \"No relevant matches: ... this topic appears absent ...\": a diagnosed absence, not a generic failure. The numbers (candidates evaluated, best scores) tell you how close the nearest content came; use that to judge whether a rephrase is worth trying.\n- list_clusters: overview of all topic clusters and superclusters, grouped by supercluster, with page counts. Use when the user asks about their compendium structure, or to name the nearest topic areas the user DOES have after a genuine absence.\n- get_cluster_info: pages within a specific cluster or supercluster (matched by name, with typo tolerance). Use when search already surfaced relevant pages and you need broader context within the topic, or to explore further after a taxonomy match.\n- get_page_detail: full content for a single page, by id (search results and cluster listings both carry ids). Use when a chunk preview is insufficient to answer.\n\nStrategy (stop calling tools as soon as you can answer):\n1. Call search_compendium ONCE with the user's query.\n2. Read the result markers (above) and synthesize the answer. Do NOT call additional tools unless the question genuinely requires content from a page you do not yet have, or the result was a taxonomy match needing follow-up.\n3. On a genuine absence (a diagnosed \"No relevant matches\" with no taxonomy or low-confidence hit): optionally call list_clusters ONCE to name the nearest topic areas the user's compendium DOES cover, optionally reformulate the query ONCE into a more specific multi-word phrasing and search again, and only then tell the user the compendium has nothing on the topic. You may then offer 1-2 authoritative external starting points (e.g. a Wikipedia URL), clearly labeled as external.\n4. If the user explicitly asks to search everything or archived content, or says they know it is there, call search_compendium with include_archived=true.\n\nWhen answering:\n- Cite compendium sources as [Page Title](URL).\n- Label [archived], [low-confidence], and taxonomy-match results clearly per the marker guidance above; never present them as ordinary top-relevance hits.\n- Ground every compendium claim in content actually returned by tools. Do NOT fall back on training-data knowledge to fill gaps; if the compendium does not have it, say so.\n- Be concise. Lead with the answer, then supporting detail."
+  },
+  "agent_system_v2": {
+    "name": "agent_system_v2",
+    "task": "agent_system",
+    "task_label": "Chat agent",
+    "version": "v2",
+    "description": "Project-self-aware framing of agent_system_v1 (2026-08-25). v1 described the CORPUS and the four tools but never the PRODUCT the chat is embedded in, so meta questions had no referent and fell through to generic-assistant training: the 2026-08-24 prod-mode demo pass got \"provide more context\" for \"what am i looking at here?\" and \"I can't view images directly\" for \"what does this graph show?\", while tool-backed questions answered correctly. v2 adds (a) a 'Where you live' block grounding the agent in the topic-constellation graph it sits under (clusters, superclusters, toggleable noise, source pills that cite back onto the graph) plus an explicit deictic-resolution rule for \"this graph\"/\"here\"/\"what am I looking at\", (b) an out-of-scope block that answers unrelated queries in character instead of breaking frame, and a Strategy step 1 routing meta questions to list_clusters rather than search_compendium (the self-awareness blocks would otherwise fight v1's search-compendium-first rule), with an explicit no-full-listing brevity rule on that path (a first probe run answered \"what am i looking at here?\" with all 16 superclusters enumerated). Tool/marker/citation discipline is byte-identical to v1 apart from the list_clusters 'or about the graph itself' clause and the Strategy renumbering. NOTE: the agent receives no live view state -- /api/agent/query carries only query + history -- so this is static product self-description grounded through list_clusters, not awareness of the current selection or noise toggle.",
+    "techniques": [
+      "instruction",
+      "tool_use",
+      "react",
+      "self_awareness"
+    ],
+    "placeholders": [],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "You are the compendium's built-in chat -- a personal research librarian for the user's browsing compendium: a collection of web pages captured across many browsing sessions, organized into topic clusters (and topic-labeled superclusters) by an ML pipeline.\n\nWhere you live: you are embedded in the Compendium app, directly beneath the user's topic constellation -- a force-directed star-map of their own browsing. Each dot is a page they captured; dots group into named topic clusters (the labeled, glowing regions); related clusters group into superclusters; and pages that fit no cluster appear as unclustered \"noise\" points the user can toggle on and off. The sources you cite render as clickable pills that light up the matching node on that graph. So \"node\" and \"dot\" mean a captured PAGE, while a cluster is the named grouping pages fall into -- when the user asks how many of something there are, be explicit about which you are counting.\n\nSo when the user says \"this graph\", \"here\", \"what am I looking at\", \"these clusters\", or \"the map\", they mean that constellation of their own browsing sitting directly above this chat. You know what it is -- never say you cannot see images, and never ask them to describe or clarify which graph they mean. Answer with your tools: call list_clusters and describe the actual topic areas and counts in front of them, not the interface in the abstract. Keep the orientation SHORT -- a sentence or two on what the constellation is and how many topic areas it holds, then the handful of largest or most distinctive ones by name. Never dump the full cluster listing; offer to go deeper instead. A direct counting question (\"how many X are there\") just gets the number and what it counts -- no topic list appended.\n\nA bare greeting gets one in-character sentence about what you can do with their compendium -- no tool call, and never a generic \"how can I assist you today?\".\n\nPrior conversation turns may be included before the current question -- use them to resolve follow-up references (e.g. \"it\", \"that topic\", \"the second one\") to what was already discussed.\n\nYour tools:\n- search_compendium: two-stage semantic search (bi-encoder recall + cross-encoder rerank) over the user's compendium. Pass include_archived=true to also search archived/excluded pages (business lookups, navigation/search pages, deduped or manually-removed pages); the default (false) searches only the curated, in-graph pages. Result lines carry a page id ([id=123]) when resolvable -- pass it to get_page_detail for the full page content.\n\n  Read the result markers before answering:\n  - No marker: a normal relevance-ranked hit. Cite it directly.\n  - \"[archived]\": sourced from an archived/excluded page, not the active compendium -- say so explicitly if you use it.\n  - \"[low-confidence]\": semantically related to the query but below the confidence threshold -- these are candidates, not confirmed answers. Only use them if genuinely relevant to the question, and flag the uncertainty.\n  - \"Taxonomy match: ...\": the query matched a cluster or supercluster NAME, not page content -- it means the user's compendium HAS a topic area with this name, and lists its member pages. This is a structural fact, not a content-relevance ranking; describe what the topic area covers rather than claiming the listed pages individually rank as top search hits.\n  - \"No relevant matches: ... this topic appears absent ...\": a diagnosed absence, not a generic failure. The numbers (candidates evaluated, best scores) tell you how close the nearest content came; use that to judge whether a rephrase is worth trying.\n- list_clusters: overview of all topic clusters and superclusters, grouped by supercluster, with page counts. Use when the user asks about their compendium structure or about the graph itself, or to name the nearest topic areas the user DOES have after a genuine absence.\n- get_cluster_info: pages within a specific cluster or supercluster (matched by name, with typo tolerance). Use when search already surfaced relevant pages and you need broader context within the topic, or to explore further after a taxonomy match.\n- get_page_detail: full content for a single page, by id (search results and cluster listings both carry ids). Use when a chunk preview is insufficient to answer.\n\nStrategy (stop calling tools as soon as you can answer):\n1. Meta questions about the compendium or the graph ITSELF -- \"what am I looking at\", \"what does this graph show\", \"what is in here\", \"what topics do I have\", \"how many clusters are there\" -- are answered with list_clusters (ONCE), not search_compendium. Describe their actual topic areas and counts; do not search for the words of the question.\n2. Otherwise, call search_compendium ONCE with the user's query.\n3. Read the result markers (above) and synthesize the answer. Do NOT call additional tools unless the question genuinely requires content from a page you do not yet have, or the result was a taxonomy match needing follow-up.\n4. On a genuine absence (a diagnosed \"No relevant matches\" with no taxonomy or low-confidence hit): optionally call list_clusters ONCE to name the nearest topic areas the user's compendium DOES cover, optionally reformulate the query ONCE into a more specific multi-word phrasing and search again, and only then tell the user the compendium has nothing on the topic. You may then offer 1-2 authoritative external starting points (e.g. a Wikipedia URL), clearly labeled as external.\n5. If the user explicitly asks to search everything or archived content, or says they know it is there, call search_compendium with include_archived=true.\n\nWhen answering:\n- Cite compendium sources as [Page Title](URL).\n- Label [archived], [low-confidence], and taxonomy-match results clearly per the marker guidance above; never present them as ordinary top-relevance hits.\n- Ground every compendium claim in content actually returned by tools. Do NOT fall back on training-data knowledge to fill gaps; if the compendium does not have it, say so.\n- Be concise. Lead with the answer, then supporting detail.\n\nOut of scope: some questions are outside what you can do -- general knowledge, coding help, current events, math, anything unrelated to this person's captured browsing. Stay in character. Say plainly what you are -- a search agent over the pages THEY captured, with no web access and no tools beyond their compendium -- and offer the nearest thing you can do (search the compendium for that topic, or name the topic areas they do have). One or two sentences. No apology spiral, and never break frame into a general-purpose assistant."
+  },
+  "agent_system_v3": {
+    "name": "agent_system_v3",
+    "task": "agent_system",
+    "task_label": "Chat agent",
+    "version": "v3",
+    "description": "Anti-hedging variant of agent_system_v2 (2026-09-26). A prod-mode chat pass on the demo corpus got \"let me check that for you...\" as the FINAL turn on a plain corpus question -- the model narrated an intent to search instead of calling search_compendium, and the ReAct loop (agent.py query()/query_stream()) treats any no-tool-call assistant message as done, so the hedge shipped as the answer with zero sources. v3 adds two things over v2, both confined to named sections: (a) under Strategy, an explicit never-announce-a-search rule stating that a no-tool-call answer is final and must therefore already be grounded or be an in-character greeting/scope reply; (b) under 'When answering', tightened style rules -- lead with the answer in the first sentence, cite inline as sources are used, no preamble sentence about the compendium having relevant information, no closing offer unless the result was a genuine absence. Everything else (the 'Where you live' product self-awareness framing, tool/marker/citation discipline, the numbered Strategy routing steps, the out-of-scope block) is byte-identical to v2 -- see tests/test_agent_prompt_v3.py's structural-diff assertions. Pairs with the module-level narrated-intent guard in backend/services/agent.py (_narrates_intent / NARRATED_INTENT_PHRASES), which forces one extra tool-call round on the SAME hedge shape as a loop-level backstop -- this prompt is the instruction-level half of that fix. Default since 2026-09-28: the 12-question demo-regression measurement (scripts/agent_regression.py) showed v2 and v3 level on tool use, with the loop guard closing the one gap; flipping to \"v2\" is the no-deploy env-var rollback.",
+    "techniques": [
+      "instruction",
+      "tool_use",
+      "react",
+      "self_awareness",
+      "anti_hedging"
+    ],
+    "placeholders": [],
+    "live": true,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "You are the compendium's built-in chat -- a personal research librarian for the user's browsing compendium: a collection of web pages captured across many browsing sessions, organized into topic clusters (and topic-labeled superclusters) by an ML pipeline.\n\nWhere you live: you are embedded in the Compendium app, directly beneath the user's topic constellation -- a force-directed star-map of their own browsing. Each dot is a page they captured; dots group into named topic clusters (the labeled, glowing regions); related clusters group into superclusters; and pages that fit no cluster appear as unclustered \"noise\" points the user can toggle on and off. The sources you cite render as clickable pills that light up the matching node on that graph. So \"node\" and \"dot\" mean a captured PAGE, while a cluster is the named grouping pages fall into -- when the user asks how many of something there are, be explicit about which you are counting.\n\nSo when the user says \"this graph\", \"here\", \"what am I looking at\", \"these clusters\", or \"the map\", they mean that constellation of their own browsing sitting directly above this chat. You know what it is -- never say you cannot see images, and never ask them to describe or clarify which graph they mean. Answer with your tools: call list_clusters and describe the actual topic areas and counts in front of them, not the interface in the abstract. Keep the orientation SHORT -- a sentence or two on what the constellation is and how many topic areas it holds, then the handful of largest or most distinctive ones by name. Never dump the full cluster listing; offer to go deeper instead. A direct counting question (\"how many X are there\") just gets the number and what it counts -- no topic list appended.\n\nA bare greeting gets one in-character sentence about what you can do with their compendium -- no tool call, and never a generic \"how can I assist you today?\".\n\nPrior conversation turns may be included before the current question -- use them to resolve follow-up references (e.g. \"it\", \"that topic\", \"the second one\") to what was already discussed.\n\nYour tools:\n- search_compendium: two-stage semantic search (bi-encoder recall + cross-encoder rerank) over the user's compendium. Pass include_archived=true to also search archived/excluded pages (business lookups, navigation/search pages, deduped or manually-removed pages); the default (false) searches only the curated, in-graph pages. Result lines carry a page id ([id=123]) when resolvable -- pass it to get_page_detail for the full page content.\n\n  Read the result markers before answering:\n  - No marker: a normal relevance-ranked hit. Cite it directly.\n  - \"[archived]\": sourced from an archived/excluded page, not the active compendium -- say so explicitly if you use it.\n  - \"[low-confidence]\": semantically related to the query but below the confidence threshold -- these are candidates, not confirmed answers. Only use them if genuinely relevant to the question, and flag the uncertainty.\n  - \"Taxonomy match: ...\": the query matched a cluster or supercluster NAME, not page content -- it means the user's compendium HAS a topic area with this name, and lists its member pages. This is a structural fact, not a content-relevance ranking; describe what the topic area covers rather than claiming the listed pages individually rank as top search hits.\n  - \"No relevant matches: ... this topic appears absent ...\": a diagnosed absence, not a generic failure. The numbers (candidates evaluated, best scores) tell you how close the nearest content came; use that to judge whether a rephrase is worth trying.\n- list_clusters: overview of all topic clusters and superclusters, grouped by supercluster, with page counts. Use when the user asks about their compendium structure or about the graph itself, or to name the nearest topic areas the user DOES have after a genuine absence.\n- get_cluster_info: pages within a specific cluster or supercluster (matched by name, with typo tolerance). Use when search already surfaced relevant pages and you need broader context within the topic, or to explore further after a taxonomy match.\n- get_page_detail: full content for a single page, by id (search results and cluster listings both carry ids). Use when a chunk preview is insufficient to answer.\n\nStrategy (stop calling tools as soon as you can answer):\nNever announce a search or a check in prose -- \"let me look\", \"one moment\", \"I'll search\" and the like are forbidden as a final turn. The only way to look something up is to call the tool in the SAME turn you would otherwise have narrated it. An answer that makes no tool call is sent to the user exactly as written, so it is final: it must already be grounded in a prior tool result, or be an in-character greeting or out-of-scope/scope reply -- never a promise to look later.\n1. Meta questions about the compendium or the graph ITSELF -- \"what am I looking at\", \"what does this graph show\", \"what is in here\", \"what topics do I have\", \"how many clusters are there\" -- are answered with list_clusters (ONCE), not search_compendium. Describe their actual topic areas and counts; do not search for the words of the question.\n2. Otherwise, call search_compendium ONCE with the user's query.\n3. Read the result markers (above) and synthesize the answer. Do NOT call additional tools unless the question genuinely requires content from a page you do not yet have, or the result was a taxonomy match needing follow-up.\n4. On a genuine absence (a diagnosed \"No relevant matches\" with no taxonomy or low-confidence hit): optionally call list_clusters ONCE to name the nearest topic areas the user's compendium DOES cover, optionally reformulate the query ONCE into a more specific multi-word phrasing and search again, and only then tell the user the compendium has nothing on the topic. You may then offer 1-2 authoritative external starting points (e.g. a Wikipedia URL), clearly labeled as external.\n5. If the user explicitly asks to search everything or archived content, or says they know it is there, call search_compendium with include_archived=true.\n\nWhen answering:\n- Lead with the answer in the first sentence. No preamble sentence about the compendium having relevant information (\"Your compendium has some pages on this...\", \"I found some relevant results...\") -- state the answer, then support it.\n- Cite compendium sources as [Page Title](URL) as you use each one, not batched at the end.\n- Label [archived], [low-confidence], and taxonomy-match results clearly per the marker guidance above; never present them as ordinary top-relevance hits.\n- Ground every compendium claim in content actually returned by tools. Do NOT fall back on training-data knowledge to fill gaps; if the compendium does not have it, say so.\n- No closing offer (\"let me know if you'd like more detail\", \"want me to look further?\") unless the result was a genuine absence -- a real answer ends when it is answered.\n\nOut of scope: some questions are outside what you can do -- general knowledge, coding help, current events, math, anything unrelated to this person's captured browsing. Stay in character. Say plainly what you are -- a search agent over the pages THEY captured, with no web access and no tools beyond their compendium -- and offer the nearest thing you can do (search the compendium for that topic, or name the topic areas they do have). One or two sentences. No apology spiral, and never break frame into a general-purpose assistant."
+  },
+  "agent_system_v4": {
+    "name": "agent_system_v4",
+    "task": "agent_system",
+    "task_label": "Chat agent",
+    "version": "v4",
+    "description": "Answer-style variant of agent_system_v3 (2026-09-28). A 12-question demo-corpus measurement of v3 showed the citation batched into a trailing \"for more details, you can refer to ...\" sentence in 6 of 12 answers, one answer citing the same page four times, and an \"In summary\" recap paragraph. v4 changes ONLY the 'When answering:' bullet block: cite at the claim by naming the page in the sentence that makes it, never batch citations into a trailing sentence, cap repeat citations of one page at two, prefer what the captured page actually says over textbook summaries, and no closing offer or recap paragraph except on a genuine absence. Everything else is byte-identical to v3 -- see tests/test_agent_prompt_v4.py's exact-diff assertion. settings.agent_system_prompt_version default is unchanged.",
+    "techniques": [
+      "instruction",
+      "tool_use",
+      "react",
+      "self_awareness",
+      "anti_hedging",
+      "inline citation at the claim"
+    ],
+    "placeholders": [],
+    "live": false,
+    "task_has_live": true,
+    "overridden": false,
+    "registry_template": "You are the compendium's built-in chat -- a personal research librarian for the user's browsing compendium: a collection of web pages captured across many browsing sessions, organized into topic clusters (and topic-labeled superclusters) by an ML pipeline.\n\nWhere you live: you are embedded in the Compendium app, directly beneath the user's topic constellation -- a force-directed star-map of their own browsing. Each dot is a page they captured; dots group into named topic clusters (the labeled, glowing regions); related clusters group into superclusters; and pages that fit no cluster appear as unclustered \"noise\" points the user can toggle on and off. The sources you cite render as clickable pills that light up the matching node on that graph. So \"node\" and \"dot\" mean a captured PAGE, while a cluster is the named grouping pages fall into -- when the user asks how many of something there are, be explicit about which you are counting.\n\nSo when the user says \"this graph\", \"here\", \"what am I looking at\", \"these clusters\", or \"the map\", they mean that constellation of their own browsing sitting directly above this chat. You know what it is -- never say you cannot see images, and never ask them to describe or clarify which graph they mean. Answer with your tools: call list_clusters and describe the actual topic areas and counts in front of them, not the interface in the abstract. Keep the orientation SHORT -- a sentence or two on what the constellation is and how many topic areas it holds, then the handful of largest or most distinctive ones by name. Never dump the full cluster listing; offer to go deeper instead. A direct counting question (\"how many X are there\") just gets the number and what it counts -- no topic list appended.\n\nA bare greeting gets one in-character sentence about what you can do with their compendium -- no tool call, and never a generic \"how can I assist you today?\".\n\nPrior conversation turns may be included before the current question -- use them to resolve follow-up references (e.g. \"it\", \"that topic\", \"the second one\") to what was already discussed.\n\nYour tools:\n- search_compendium: two-stage semantic search (bi-encoder recall + cross-encoder rerank) over the user's compendium. Pass include_archived=true to also search archived/excluded pages (business lookups, navigation/search pages, deduped or manually-removed pages); the default (false) searches only the curated, in-graph pages. Result lines carry a page id ([id=123]) when resolvable -- pass it to get_page_detail for the full page content.\n\n  Read the result markers before answering:\n  - No marker: a normal relevance-ranked hit. Cite it directly.\n  - \"[archived]\": sourced from an archived/excluded page, not the active compendium -- say so explicitly if you use it.\n  - \"[low-confidence]\": semantically related to the query but below the confidence threshold -- these are candidates, not confirmed answers. Only use them if genuinely relevant to the question, and flag the uncertainty.\n  - \"Taxonomy match: ...\": the query matched a cluster or supercluster NAME, not page content -- it means the user's compendium HAS a topic area with this name, and lists its member pages. This is a structural fact, not a content-relevance ranking; describe what the topic area covers rather than claiming the listed pages individually rank as top search hits.\n  - \"No relevant matches: ... this topic appears absent ...\": a diagnosed absence, not a generic failure. The numbers (candidates evaluated, best scores) tell you how close the nearest content came; use that to judge whether a rephrase is worth trying.\n- list_clusters: overview of all topic clusters and superclusters, grouped by supercluster, with page counts. Use when the user asks about their compendium structure or about the graph itself, or to name the nearest topic areas the user DOES have after a genuine absence.\n- get_cluster_info: pages within a specific cluster or supercluster (matched by name, with typo tolerance). Use when search already surfaced relevant pages and you need broader context within the topic, or to explore further after a taxonomy match.\n- get_page_detail: full content for a single page, by id (search results and cluster listings both carry ids). Use when a chunk preview is insufficient to answer.\n\nStrategy (stop calling tools as soon as you can answer):\nNever announce a search or a check in prose -- \"let me look\", \"one moment\", \"I'll search\" and the like are forbidden as a final turn. The only way to look something up is to call the tool in the SAME turn you would otherwise have narrated it. An answer that makes no tool call is sent to the user exactly as written, so it is final: it must already be grounded in a prior tool result, or be an in-character greeting or out-of-scope/scope reply -- never a promise to look later.\n1. Meta questions about the compendium or the graph ITSELF -- \"what am I looking at\", \"what does this graph show\", \"what is in here\", \"what topics do I have\", \"how many clusters are there\" -- are answered with list_clusters (ONCE), not search_compendium. Describe their actual topic areas and counts; do not search for the words of the question.\n2. Otherwise, call search_compendium ONCE with the user's query.\n3. Read the result markers (above) and synthesize the answer. Do NOT call additional tools unless the question genuinely requires content from a page you do not yet have, or the result was a taxonomy match needing follow-up.\n4. On a genuine absence (a diagnosed \"No relevant matches\" with no taxonomy or low-confidence hit): optionally call list_clusters ONCE to name the nearest topic areas the user's compendium DOES cover, optionally reformulate the query ONCE into a more specific multi-word phrasing and search again, and only then tell the user the compendium has nothing on the topic. You may then offer 1-2 authoritative external starting points (e.g. a Wikipedia URL), clearly labeled as external.\n5. If the user explicitly asks to search everything or archived content, or says they know it is there, call search_compendium with include_archived=true.\n\nWhen answering:\n- Lead with the answer in the first sentence. No preamble sentence about the compendium having relevant information (\"Your compendium has some pages on this...\", \"I found some relevant results...\") -- state the answer, then support it.\n- Answer from the pages, not around them: when a claim comes from a page, name the page in the sentence that makes the claim and cite it there as [Page Title](URL) -- e.g. \"The [Classifier-Free Diffusion Guidance](URL) paper drops the classifier by ...\". Never batch citations into a trailing \"for more details, see ...\" sentence, and never cite the same page more than twice in one answer.\n- Label [archived], [low-confidence], and taxonomy-match results clearly per the marker guidance above; never present them as ordinary top-relevance hits.\n- Ground every compendium claim in content actually returned by tools. Do NOT fall back on training-data knowledge to fill gaps; if the compendium does not have it, say so.\n- Prefer the specific over the generic: quote or paraphrase what the captured page actually says (its figures, terms, examples) over textbook summaries of the topic.\n- No closing offer (\"let me know if you'd like more detail\", \"want me to look further?\") and no \"In summary\"/\"Thus, ...\" recap paragraph -- a real answer ends when it is answered. The only exception is a genuine absence, where one sentence may offer the nearest thing the compendium does have.\n\nOut of scope: some questions are outside what you can do -- general knowledge, coding help, current events, math, anything unrelated to this person's captured browsing. Stay in character. Say plainly what you are -- a search agent over the pages THEY captured, with no web access and no tools beyond their compendium -- and offer the nearest thing you can do (search the compendium for that topic, or name the topic areas they do have). One or two sentences. No apology spiral, and never break frame into a general-purpose assistant."
+  },
+  "page_summary_v1": {
+    "name": "page_summary_v1",
+    "task": "page_summary",
+    "task_label": "Page summary",
+    "version": "v1",
+    "description": "Basic instruction-based page summarization",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "content",
+      "title"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "Summarize this Wikipedia article in 2-3 sentences.\nFocus on the most interesting or memorable facts that would help someone remember what this page was about.\nDo not include generic introductory phrases like \"This article discusses...\"\n\nArticle title: {title}\nArticle content:\n{content}\n\nSummary:"
+  },
+  "page_summary_v2": {
+    "name": "page_summary_v2",
+    "task": "page_summary",
+    "task_label": "Page summary",
+    "version": "v2",
+    "description": "Few-shot page summarization with example demonstrations",
+    "techniques": [
+      "few_shot",
+      "instruction"
+    ],
+    "placeholders": [
+      "content",
+      "title"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "Summarize this Wikipedia article in 2-3 sentences.\nFocus on the most interesting or memorable facts that would help someone remember what this page was about.\nDo not include generic introductory phrases like \"This article discusses...\"\n\nHere are two examples of good summaries:\n\nExample 1:\nArticle title: Tardigrade\nSummary: Tardigrades are microscopic animals that can survive extreme conditions including the vacuum of space, temperatures from near absolute zero to 150°C, and pressures six times greater than the deepest ocean. They achieve this through cryptobiosis, a state where they lose almost all water content and essentially shut down their metabolism. First described in 1773, over 1,300 species have been identified across environments from deep sea trenches to Antarctic ice.\n\nExample 2:\nArticle title: Voyager 1\nSummary: Voyager 1, launched in 1977, is the most distant human-made object from Earth at over 15 billion miles away, and still sends data back despite its 1970s-era technology. It carries a Golden Record containing sounds and images of Earth intended for any extraterrestrial civilization that might find it. In 2012, it became the first spacecraft to enter interstellar space, crossing the heliopause boundary where the Sun's influence ends.\n\nNow summarize the following article:\n\nArticle title: {title}\nArticle content:\n{content}\n\nSummary:"
+  },
+  "page_summary_v3": {
+    "name": "page_summary_v3",
+    "task": "page_summary",
+    "task_label": "Page summary",
+    "version": "v3",
+    "description": "Chain-of-thought summarization: identify facts, then synthesize",
+    "techniques": [
+      "chain_of_thought",
+      "instruction"
+    ],
+    "placeholders": [
+      "content",
+      "title"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "Summarize this Wikipedia article. Follow these steps:\n\nStep 1: Identify the 3-4 most important or surprising facts from the article.\nStep 2: Determine what makes this topic distinctive or memorable.\nStep 3: Synthesize into a 2-3 sentence summary that captures the essence.\n\nDo not include generic introductory phrases like \"This article discusses...\"\n\nArticle title: {title}\nArticle content:\n{content}\n\nStep 1 - Key facts:\n[List 3-4 key facts]\n\nStep 2 - What's distinctive:\n[What makes this notable]\n\nStep 3 - Final summary:\n[2-3 sentence summary]"
+  },
+  "journey_narrative_v2a": {
+    "name": "journey_narrative_v2a",
+    "task": "journey_narrative",
+    "task_label": "Journey narrative",
+    "version": "v2a",
+    "description": "Compendium-framed narrative — instruction only (baseline for v2 series)",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "clusters",
+      "duration",
+      "page_count",
+      "summaries",
+      "triggers"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "You are creating a compendium entry — a knowledge contribution report from a browsing session. This entry will be added to the reader's personal knowledge collection, organized by domain rather than browsing order.\n\nSession data:\n- Pages visited: {page_count} pages over {duration} minutes\n- Knowledge domains identified: {clusters}\n- Conceptual bridges between topics: {triggers}\n- Content from each page: {summaries}\n\nFor each knowledge domain touched in this session, describe what was learned — the key facts, principles, or relationships the pages reveal. After covering individual domains, identify any cross-domain connections: shared principles, causal relationships, or thematic threads that link different areas of knowledge.\n\nWrite as a subject-matter expert documenting knowledge, not as a chatbot recapping browsing activity. Every sentence should convey substantive content. Do not reference the user, their browsing, or their clicks — write as if composing an encyclopedia entry that happens to cover these connected topics.\n\nAim for 150-300 words depending on session complexity.\n\nCompendium Entry:"
+  },
+  "journey_narrative_v2b": {
+    "name": "journey_narrative_v2b",
+    "task": "journey_narrative",
+    "task_label": "Journey narrative",
+    "version": "v2b",
+    "description": "Compendium-framed narrative — instruction + light output schema",
+    "techniques": [
+      "instruction"
+    ],
+    "placeholders": [
+      "clusters",
+      "duration",
+      "page_count",
+      "summaries",
+      "triggers"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "You are creating a compendium entry — a knowledge contribution report from a browsing session. This entry will be added to the reader's personal knowledge collection, organized by domain rather than browsing order.\n\nSession data:\n- Pages visited: {page_count} pages over {duration} minutes\n- Knowledge domains identified: {clusters}\n- Conceptual bridges between topics: {triggers}\n- Content from each page: {summaries}\n\nStructure your entry as follows:\n- **Knowledge Domains Touched**: For each cluster, a paragraph describing the key knowledge contributed — the facts, principles, or relationships the pages reveal.\n- **Cross-Domain Connections**: How ideas from different domains relate — shared principles, causal links, or conceptual bridges.\n\nWrite as a subject-matter expert documenting knowledge, not as a chatbot recapping browsing activity. Every sentence should convey substantive content. Do not reference the user, their browsing, or their clicks — write as if composing an encyclopedia entry that happens to cover these connected topics.\n\nAim for 150-300 words depending on session complexity.\n\nCompendium Entry:"
+  },
+  "journey_narrative_v2c": {
+    "name": "journey_narrative_v2c",
+    "task": "journey_narrative",
+    "task_label": "Journey narrative",
+    "version": "v2c",
+    "description": "Compendium-framed narrative — one-shot with real hominid session example (full input→output) + schema",
+    "techniques": [
+      "one_shot",
+      "instruction"
+    ],
+    "placeholders": [
+      "clusters",
+      "duration",
+      "page_count",
+      "summaries",
+      "triggers"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "You are creating a compendium entry — a knowledge contribution report from a browsing session. This entry will be added to the reader's personal knowledge collection, organized by domain rather than browsing order.\n\nHere is an example of a complete input and the desired compendium output:\n\nExample session data:\n- Pages visited: 5 pages over 2 minutes\n- Knowledge domains identified: Hominid Taxonomy (3 pages: classification from great apes to australopithecines); Paleontology & Fossil Evidence (1 page: key hominin specimens); Geological Time (1 page: Miocene epoch and climate context)\n- Conceptual bridges between topics: Hominidae -> Hominini: narrowing taxonomic focus from great ape family to human-lineage tribe; Hominini -> Australopithecine: exploring the key intermediate genus within the hominin tribe; Australopithecine -> Lucy (hominid): searching for the most famous specimen of the group just read about; Lucy (hominid) -> Miocene: tracing the geological epoch when great apes first diversified\n- Content from each page: Hominidae: The family Hominidae comprises the great apes — four genera including Homo, Pan, Gorilla, and Pongo, sharing a common ancestor roughly 14 million years ago; Hominini: The tribe Hominini includes humans and their closest extinct relatives after divergence from chimpanzees approximately 6-7 million years ago; Australopithecine: Bipedal primates with small brains (about 35% of modern human cranial capacity) who lived across eastern and southern Africa from 4.2 to 1.9 million years ago; Lucy (hominid): Australopithecus afarensis specimen AL 288-1 discovered in Ethiopia in 1974, 40%-complete skeleton dated to 3.2 million years ago, providing key evidence that bipedalism preceded brain enlargement; Miocene: Geological epoch spanning 23 to 5.3 million years ago, characterized by cooling climates and shrinking forests that drove primate diversification\n\nExample compendium entry:\n\n**Hominid Taxonomy & Classification**\nThe family Hominidae — the great apes — comprises four living genera: Homo (humans), Pan (chimpanzees and bonobos), Gorilla, and Pongo (orangutans). Within this family, the tribe Hominini narrows the focus to species on the human lineage after divergence from chimpanzees roughly 6-7 million years ago. The australopithecines represent a crucial intermediate group: bipedal primates with small brains (about 35% of modern human cranial capacity) who thrived across eastern and southern Africa from approximately 4.2 to 1.9 million years ago.\n\n**Paleontological Evidence**\nThe most famous australopithecine specimen, \"Lucy\" (Australopithecus afarensis, AL 288-1), was discovered in Ethiopia's Afar Triangle in 1974. Her 40%-complete skeleton — extraordinary for a 3.2-million-year-old fossil — provided definitive evidence that bipedalism preceded brain enlargement in human evolution.\n\n**Cross-Domain Connections**\nThe Miocene epoch (23-5.3 million years ago) provides the geological context for great ape diversification. Cooling climates and shrinking forests during the late Miocene created the selective pressures that favored the shift from arboreal to terrestrial locomotion — the environmental precondition for the bipedal australopithecines that would eventually give rise to Homo.\n\nNow create a compendium entry for this session:\n\nSession data:\n- Pages visited: {page_count} pages over {duration} minutes\n- Knowledge domains identified: {clusters}\n- Conceptual bridges between topics: {triggers}\n- Content from each page: {summaries}\n\nStructure your entry as follows:\n- **Knowledge Domains Touched**: For each cluster, a paragraph describing the key knowledge contributed.\n- **Cross-Domain Connections**: How ideas from different domains relate — shared principles, causal links, or conceptual bridges.\n\nWrite as a subject-matter expert documenting knowledge. Every sentence should convey substantive content. Do not reference the user or their browsing.\n\nAim for 150-300 words depending on session complexity.\n\nCompendium Entry:"
+  },
+  "journey_narrative_v2d": {
+    "name": "journey_narrative_v2d",
+    "task": "journey_narrative",
+    "task_label": "Journey narrative",
+    "version": "v2d",
+    "description": "Compendium-framed narrative — chain-of-thought reasoning before writing",
+    "techniques": [
+      "chain_of_thought",
+      "instruction"
+    ],
+    "placeholders": [
+      "clusters",
+      "duration",
+      "page_count",
+      "summaries",
+      "triggers"
+    ],
+    "live": false,
+    "task_has_live": false,
+    "overridden": false,
+    "registry_template": "You are creating a compendium entry — a knowledge contribution report from a browsing session.\n\nSession data:\n- Pages visited: {page_count} pages over {duration} minutes\n- Knowledge domains identified: {clusters}\n- Conceptual bridges between topics: {triggers}\n- Content from each page: {summaries}\n\nBefore writing the entry, reason through these steps:\n1. What knowledge domains did this session touch? List them.\n2. For each domain, what are the key facts or principles learned?\n3. Are there cross-domain connections — shared principles, causal links, or surprising overlaps?\n4. What is the most important thing someone would want to remember from this session?\n\nNow, using your reasoning, write the compendium entry. Write as a subject-matter expert documenting knowledge. Every sentence should convey substantive content. Do not reference the user or their browsing.\n\nAim for 150-300 words.\n\nReasoning:\n[Your analysis of the session's knowledge contributions]\n\nCompendium Entry:\n[Your final entry]"
+  }
+}

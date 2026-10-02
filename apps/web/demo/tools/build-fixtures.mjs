@@ -25,6 +25,7 @@
 //        node demo/tools/build-fixtures.mjs --pipeline-only
 //        node demo/tools/build-fixtures.mjs --overview-only
 //        node demo/tools/build-fixtures.mjs --clusters-only
+//        node demo/tools/build-fixtures.mjs --prompts-only
 //   --pipeline-only rebuilds ONLY demo/fixtures/pipeline/ from raw/pipeline/,
 //   leaving every other committed fixture untouched. It reuses the anchor
 //   already recorded in the committed meta.json (instead of today) so the
@@ -33,8 +34,10 @@
 //   raw/overview/ plus the committed demo seed).
 //   --clusters-only does the same for demo/fixtures/clusters/ (from
 //   raw/clusters/ plus the committed graph / topics fixtures).
-//   NOTE: a FULL build (no flag) now also needs fixtures/raw/clusters/, recorded
-//   first with demo/tools/capture-clusters-fixtures.mjs.
+//   --prompts-only does the same for demo/fixtures/prompts/ (from raw/prompts/).
+//   NOTE: a FULL build (no flag) now also needs fixtures/raw/clusters/ and
+//   fixtures/raw/prompts/, recorded first with demo/tools/capture-clusters-fixtures.mjs
+//   and demo/tools/capture-prompts-fixtures.mjs.
 
 import {
   mkdirSync,
@@ -57,6 +60,7 @@ const OUT_DIR = path.join(REPO_ROOT, 'demo', 'fixtures');
 const PIPELINE_ONLY = process.argv.includes('--pipeline-only');
 const OVERVIEW_ONLY = process.argv.includes('--overview-only');
 const CLUSTERS_ONLY = process.argv.includes('--clusters-only');
+const PROMPTS_ONLY = process.argv.includes('--prompts-only');
 
 function fatal(msg) {
   console.error(`\n[build-fixtures] FATAL: ${msg}\n`);
@@ -65,6 +69,7 @@ function fatal(msg) {
 
 if (PIPELINE_ONLY && OVERVIEW_ONLY) fatal('--pipeline-only and --overview-only are mutually exclusive');
 if (CLUSTERS_ONLY && (PIPELINE_ONLY || OVERVIEW_ONLY)) fatal('--clusters-only is mutually exclusive with --pipeline-only and --overview-only');
+if (PROMPTS_ONLY && (PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY)) fatal('--prompts-only is mutually exclusive with the other --*-only flags');
 
 function readJson(...relParts) {
   const full = path.join(RAW_DIR, ...relParts);
@@ -98,9 +103,9 @@ const OUTPUT_ENTRIES = [
   'graph-window-90.json', 'graph-window-365.json',
   'diary-day.json', 'diary-week.json', 'diary-month.json',
   'diary-filtered-day.json', 'diary-filtered-week.json', 'diary-filtered-month.json',
-  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline', 'overview', 'clusters',
+  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline', 'overview', 'clusters', 'prompts',
 ];
-for (const entry of PIPELINE_ONLY ? ['pipeline'] : OVERVIEW_ONLY ? ['overview'] : CLUSTERS_ONLY ? ['clusters'] : OUTPUT_ENTRIES) {
+for (const entry of PIPELINE_ONLY ? ['pipeline'] : OVERVIEW_ONLY ? ['overview'] : CLUSTERS_ONLY ? ['clusters'] : PROMPTS_ONLY ? ['prompts'] : OUTPUT_ENTRIES) {
   rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
 }
 console.log('[build-fixtures] cleaned previous output');
@@ -239,10 +244,10 @@ function formatMonthLabel(monthKey) {
 // Anchor = today (UTC midnight), truncated to a date. meta.json records it;
 // Task 4's stub shifts every date it serves by (today - anchor) at runtime.
 const now = new Date();
-const anchor = PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY
+const anchor = PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY || PROMPTS_ONLY
   ? parseIsoDateUTC(JSON.parse(readFileSync(path.join(OUT_DIR, 'meta.json'), 'utf8')).anchor)
   : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-console.log(`[build-fixtures] anchor (${PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
+console.log(`[build-fixtures] anchor (${PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY || PROMPTS_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
 
 // Hand-written, deterministic cadence: no RNG, no Date.now()-seeded shuffle.
 // 14 active browsing days spread across a rolling 35-day window ending at
@@ -363,6 +368,26 @@ function buildClustersFixtures() {
   console.log(`[build-fixtures] clusters: run ${summary.run ? summary.run.id : 'none'}, ${summary.clusters.length} clusters, ${unclustered.total} not in a cluster`);
 }
 
+// Prompts dev-view fixtures: the recorded plain-demo responses, validated and
+// written as-is (no dates to shift). The summary is the plain-demo shape
+// (admin null), no detail carries an override, and the template map covers
+// exactly the prompts the summary lists.
+function buildPromptsFixtures() {
+  const summary = readJson('prompts', 'summary.json');
+  const templates = readJson('prompts', 'templates.json');
+  if (summary.admin !== null) fatal('raw/prompts/summary.json is not the plain-demo shape (admin must be null)');
+  const names = summary.tasks.flatMap((t) => t.prompts.map((p) => p.name)).sort();
+  const keys = Object.keys(templates).sort();
+  if (JSON.stringify(names) !== JSON.stringify(keys)) fatal('raw/prompts/templates.json keys differ from the summary prompt names');
+  for (const [key, d] of Object.entries(templates)) {
+    if ('override' in d) fatal(`prompts template ${key} carries an override key`);
+    if (d.name !== key) fatal(`prompts template ${key} has name ${d.name}`);
+  }
+  writeJson('prompts/summary.json', summary);
+  writeJson('prompts/templates.json', templates);
+  console.log(`[build-fixtures] prompts: ${names.length} prompts, ${summary.tasks.length} tasks, ${summary.models.length} models`);
+}
+
 // Hygiene gate: hoisted so both the full build (Step 11) and --pipeline-only
 // run it over the whole committed output.
 // Terms assembled from parts so this tracked file never matches its own gate
@@ -401,6 +426,13 @@ if (CLUSTERS_ONLY) {
   buildClustersFixtures();
   runHygieneGate();
   console.log('[build-fixtures] --clusters-only: done (other fixtures untouched)');
+  process.exit(0);
+}
+
+if (PROMPTS_ONLY) {
+  buildPromptsFixtures();
+  runHygieneGate();
+  console.log('[build-fixtures] --prompts-only: done (other fixtures untouched)');
   process.exit(0);
 }
 
@@ -750,6 +782,7 @@ writeJson('meta.json', { anchor: isoDateStr(anchor), runNumber: rawClusteringSta
 buildPipelineFixtures();
 buildOverviewFixtures();
 buildClustersFixtures();
+buildPromptsFixtures();
 
 // ---------------------------------------------------------------------------
 // Step 10: ATTRIBUTION.md

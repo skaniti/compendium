@@ -36,6 +36,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { computeDeltaDays, shiftDiaryWindow, shiftIsoDateTime } from "./lib/dates.mjs";
 import { computeOverviewSummary, computeOverviewTimeline } from "./lib/overview.mjs";
 import { membersFor, pageUnclustered, shiftClustersFixtures } from "./lib/clusters.mjs";
+import { PROMPT_NOT_FOUND, detailFor, evalDetail, evalsList, overrideWrite, summaryFor } from "./lib/prompts.mjs";
 import { computePages, computeSummary, computeTimeline, isValidTz, PAGE_SORTS } from "./lib/pipeline.mjs";
 import { bearerFromRequest, decodeToken, mintToken } from "./lib/tokens.mjs";
 
@@ -171,6 +172,9 @@ function loadFixtures(fixturesDir, now = new Date()) {
     // Clusters dev view: the recorded backend responses, replayed (run dates
     // shifted to "now"; demo/lib/clusters.mjs).
     clusters: { summary: shiftClustersFixtures(readJson("clusters/summary.json"), deltaDays), members: readJson("clusters/members.json"), unclustered: readJson("clusters/unclustered.json") },
+    // Prompts dev view: the recorded plain-demo payloads, replayed (no dates to
+    // shift; demo/lib/prompts.mjs).
+    prompts: { summary: readJson("prompts/summary.json"), templates: readJson("prompts/templates.json") },
   };
 }
 
@@ -1035,6 +1039,46 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         const body = membersFor(fixtures.clusters.members, m[1]);
         if (body) sendJson(res, 200, body);
         else sendJson(res, 404, { detail: "cluster not found" });
+      },
+    },
+
+    // Prompts dev view: plain demo gets the recorded registry view; admin
+    // context gets the honest not-configured state (demo/lib/prompts.mjs).
+    {
+      method: "GET",
+      pattern: /^\/api\/prompts\/summary$/,
+      handler: (req, res) => sendJson(res, 200, summaryFor(fixtures.prompts.summary, !isPlainDemo(req))),
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/prompts\/templates\/([a-z0-9_]{1,80})$/,
+      handler: (req, res, m) => {
+        const d = detailFor(fixtures.prompts.templates, m[1], !isPlainDemo(req));
+        return d ? sendJson(res, 200, d) : sendJson(res, 404, { detail: PROMPT_NOT_FOUND });
+      },
+    },
+    ...["PUT", "DELETE"].map((method) => ({
+      method,
+      pattern: /^\/api\/prompts\/templates\/([a-z0-9_]{1,80})\/override$/,
+      handler: (req, res, m) => {
+        const r = overrideWrite(fixtures.prompts.templates, m[1], !isPlainDemo(req));
+        sendJson(res, r.status, r.body);
+      },
+    })),
+    {
+      method: "GET",
+      pattern: /^\/api\/prompts\/evals$/,
+      handler: (req, res) => {
+        const r = evalsList(!isPlainDemo(req));
+        sendJson(res, r.status, r.body);
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/prompts\/evals\/([^/]+)$/,
+      handler: (req, res) => {
+        const r = evalDetail(!isPlainDemo(req));
+        sendJson(res, r.status, r.body);
       },
     },
 

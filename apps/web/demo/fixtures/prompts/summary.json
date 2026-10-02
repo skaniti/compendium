@@ -1,0 +1,429 @@
+{
+  "models": [
+    {
+      "id": "skip_gate",
+      "use": "Skip gate",
+      "detail": "Decides whether a captured page is processed or skipped.",
+      "model": "gpt-4o-mini",
+      "source": "backend.api.main.TOOL_SELECTION_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": "skip_gate_v2_3"
+    },
+    {
+      "id": "learning_gate",
+      "use": "Learning gate",
+      "detail": "Classifies whether a kept page shows active learning.",
+      "model": "gpt-4o-mini",
+      "source": "backend.api.main.LEARNING_GATE_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": "learning_gate_v1"
+    },
+    {
+      "id": "cluster_naming",
+      "use": "Cluster naming",
+      "detail": "Names each cluster from a sample of its pages.",
+      "model": "gpt-4o-mini",
+      "source": "backend.services.clustering_service.NAMING_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": "cluster_naming_v1a"
+    },
+    {
+      "id": "supercluster_grouping",
+      "use": "Supercluster grouping",
+      "detail": "Groups clusters into superclusters and labels the groups.",
+      "model": "gpt-4o-mini",
+      "source": "backend.services.super_cluster_service.ASSIGNMENT_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": "supercluster_label_v1a"
+    },
+    {
+      "id": "supercluster_icons",
+      "use": "Supercluster icons",
+      "detail": "Picks an icon for each supercluster.",
+      "model": "gpt-4o-mini",
+      "source": "backend.services.super_cluster_service.ICON_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": null
+    },
+    {
+      "id": "agent",
+      "use": "Chat agent",
+      "detail": "Answers questions in chat by searching your pages.",
+      "model": "gpt-4o-mini",
+      "source": "backend.services.agent.AGENT_MODEL",
+      "provider": "openai",
+      "price_in": 0.15,
+      "price_out": 0.6,
+      "prompt": "agent_system_v3"
+    },
+    {
+      "id": "default_inference",
+      "use": "Default",
+      "detail": "Used by any call that names no model.",
+      "model": "gpt-4o",
+      "source": "settings.default_inference_model",
+      "provider": "openai",
+      "price_in": 2.5,
+      "price_out": 10,
+      "prompt": null
+    },
+    {
+      "id": "clustering_embeddings",
+      "use": "Clustering embeddings",
+      "detail": "Embeds pages for clustering and supercluster discovery.",
+      "model": "text-embedding-3-small",
+      "source": "settings.clustering_embedding_model",
+      "provider": "openai",
+      "price_in": null,
+      "price_out": null,
+      "prompt": null
+    },
+    {
+      "id": "search_embeddings",
+      "use": "Search embeddings",
+      "detail": "Embeds page text for search.",
+      "model": "all-MiniLM-L6-v2",
+      "source": "backend.services.sbert_loader.SBERT_MODEL_NAME",
+      "provider": "local",
+      "price_in": null,
+      "price_out": null,
+      "prompt": null
+    },
+    {
+      "id": "reranker",
+      "use": "Search reranking",
+      "detail": "Re-ranks retrieved passages before the agent reads them.",
+      "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "source": "backend.services.reranker.MODEL_NAME",
+      "provider": "local",
+      "price_in": null,
+      "price_out": null,
+      "prompt": null
+    }
+  ],
+  "unused_models": [
+    {
+      "model": "gpt-3.5-turbo",
+      "source": "settings.default_summary_model"
+    },
+    {
+      "model": "text-embedding-3-small",
+      "source": "settings.default_embedding_model"
+    }
+  ],
+  "tasks": [
+    {
+      "task": "skip_gate",
+      "label": "Skip gate",
+      "live": "skip_gate_v2_3",
+      "selector": "backend.api.main.SKIP_GATE_PROMPT",
+      "prompts": [
+        {
+          "name": "skip_gate_v1",
+          "version": "v1",
+          "description": "Binary skip gate — include or skip a page for the compendium",
+          "techniques": [
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "skip_gate_v2",
+          "version": "v2",
+          "description": "v2: drops product-page carve-out, adds URL semantics + curatorial-layer principle + asset-library narrative-flow distinction; eval-only until validated against selection_v1.0",
+          "techniques": [
+            "instruction",
+            "url_semantics",
+            "curatorial_layer"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "skip_gate_v2_1",
+          "version": "v2_1",
+          "description": "v2.1: refines asset-library rule to distinguish individual item pages from browse pages (Printables /model/<id>/, BGG /boardgame/<id>/, etc.); clarifies marketplace rule with purchase-intent vs descriptive-intent signals; targets 5 of 9 v2-vs-v1.1 wrongs",
+          "techniques": [
+            "instruction",
+            "url_semantics",
+            "curatorial_layer",
+            "item_page_distinction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "skip_gate_v2_2",
+          "version": "v2_2",
+          "description": "v2.2: structural fix over v2.1 -- promotes item-page rule to a top-level INCLUDE category, evaluated BEFORE SKIP rules. Targets v2.1's failure mode where marketplace SKIP fired before LLM reached the item-page exception. Single-rule restructuring; no other rule changes vs v2.1.",
+          "techniques": [
+            "instruction",
+            "url_semantics",
+            "curatorial_layer",
+            "item_page_distinction",
+            "include_first_ordering"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "skip_gate_v2_3",
+          "version": "v2_3",
+          "description": "v2.3: structural fix over v2.2 -- promotes the URL-prior override clause from a trailing advisory line to a top-level INCLUDE rule, evaluated BEFORE SKIP rules. Targets v2.2's failure mode where the YouTube /watch/ category prior overrode snippet evidence on educational tutorials (PWM tutorial, 2026-05-08 demo dry-run).",
+          "techniques": [
+            "instruction",
+            "url_semantics",
+            "curatorial_layer",
+            "item_page_distinction",
+            "include_first_ordering",
+            "url_prior_override"
+          ],
+          "live": true,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "learning_gate",
+      "label": "Learning gate",
+      "live": "learning_gate_v1",
+      "selector": "backend.api.main.LEARNING_GATE_PROMPT",
+      "prompts": [
+        {
+          "name": "learning_gate_v1",
+          "version": "v1",
+          "description": "Binary learning gate — classify whether a page represents active learning/research",
+          "techniques": [
+            "instruction"
+          ],
+          "live": true,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "cluster_naming",
+      "label": "Cluster naming",
+      "live": "cluster_naming_v1a",
+      "selector": "settings.cluster_naming_prompt_version",
+      "prompts": [
+        {
+          "name": "cluster_naming_v1a",
+          "version": "v1a",
+          "description": "Cluster-naming prompt for ClusteringService._name_one_cluster / _name_clusters_batch. Registry migration of the original inline f-string (clustering-quality backlog, 2026-08-14) -- byte-identical to the pre-migration prompt for identical (n_pages, context) inputs (pinned by tests/test_prompts.py). Rendered via ``get_prompt_raw()``, not ``get_prompt()`` -- see that helper's docstring for why (the sanitize-and-wrap step in ``get_prompt()`` would inject ``<user_content>`` tags around ``context`` for any real multi-page cluster, breaking byte-identical parity with the original unsanitized f-string; this is not a new exposure, the original inline prompt was never sanitized either).",
+          "techniques": [
+            "instruction"
+          ],
+          "live": true,
+          "overridden": false
+        },
+        {
+          "name": "cluster_naming_v1b",
+          "version": "v1b",
+          "description": "Breadth-guided variant of cluster_naming_v1a (clustering-quality backlog, 2026-08-14). v1a's 'DOMINANT topic' framing is prone to naming the most salient subset of a cluster rather than a label that covers every member page -- 'Largest Fish Species' and 'Philosophy of Knowledge and Existence' were historically produced (runs <=168) on the page-mixes preserved as fixtures 9740 (fish anatomy/taxonomy/extinction, not just size) and 9763 (epistemology/mythology mixed with cosmology/astrobiology) in evaluation/fixtures/cluster_naming/run171_v0.1.jsonl. v1b keeps the same 2-5-word / platform-avoidance / outlier-ignoring discipline as v1a but adds an explicit breadth rule with both historical failure names spelled out as BAD examples. Run-171 v1a output on these same page-mixes does NOT currently reproduce the literal failure names (see naming-candidates.md in the backlog plan folder) -- the BAD examples guard against a real, previously-observed failure class, not a live reproduction on this exact fixture set.",
+          "techniques": [
+            "instruction",
+            "breadth_guidance"
+          ],
+          "live": false,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "supercluster_label",
+      "label": "Supercluster labels",
+      "live": "supercluster_label_v1a",
+      "selector": "settings.supercluster_label_prompt_version",
+      "prompts": [
+        {
+          "name": "supercluster_label_v1a",
+          "version": "v1a",
+          "description": "Suggested-group label prompt for super_cluster_service._suggest_group_labels. Registry migration of the original inline prompt string (clustering-quality backlog, 2026-08-14) -- byte-identical to the pre-migration prompt for identical (groups_json) input (pinned by tests/test_prompts.py). ``sibling_labels_block`` is accepted by the render call but unused here -- this template has no placeholder for it, so it is silently dropped by ``get_prompt_raw()``. Rendered via ``get_prompt_raw()``, not ``get_prompt()``, for the same byte-identical-parity reason as ``cluster_naming_v1a`` (see that entry's description) -- ``groups_json`` routinely exceeds the 50-char sanitize-wrap threshold, and this template also embeds a literal JSON-shape example that ``get_prompt()``'s brace-escaping kwarg path was never exercised against.",
+          "techniques": [
+            "instruction",
+            "json_mode"
+          ],
+          "live": true,
+          "overridden": false
+        },
+        {
+          "name": "supercluster_label_v1b",
+          "version": "v1b",
+          "description": "Specificity-and-distinctiveness variant of supercluster_label_v1a (clustering-quality backlog, 2026-08-14). Targets two observed failure modes: bare one-word discipline labels ('zoology', 'technology', 'science') that read as a field name rather than a topic, and brand-only labels; and label collisions across groups in the same run. ``sibling_labels_block`` is a rendered list of the run's OTHER already-known group labels (declared/keyword-matched groups that didn't need LLM naming) -- passed by the caller in ``assign_super_clusters_hybrid`` where that context is in scope; groups being named in the SAME batched call are already visible to the model via the GROUPS JSON payload, so this covers the sibling groups that would otherwise be invisible.",
+          "techniques": [
+            "instruction",
+            "json_mode",
+            "distinctiveness_guidance"
+          ],
+          "live": false,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "agent_system",
+      "label": "Chat agent",
+      "live": "agent_system_v3",
+      "selector": "settings.agent_system_prompt_version",
+      "prompts": [
+        {
+          "name": "agent_system_v1",
+          "version": "v1",
+          "description": "CompendiumAgent system prompt -- ReAct search agent over 4 tools (search_compendium/get_cluster_info/get_page_detail/list_clusters); documents the search cascade's result markers ([archived], [low-confidence], taxonomy match, diagnosed absence) and the reformulate-once-before-declaring-absence strategy. Replaces the hardcoded SYSTEM_PROMPT constant (2026-07-16 astronomy-miss fix: full_search merged into search_compendium's include_archived param, taxonomy-name matching added, threshold moved to settings).",
+          "techniques": [
+            "instruction",
+            "tool_use",
+            "react"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "agent_system_v2",
+          "version": "v2",
+          "description": "Project-self-aware framing of agent_system_v1 (2026-08-25). v1 described the CORPUS and the four tools but never the PRODUCT the chat is embedded in, so meta questions had no referent and fell through to generic-assistant training: the 2026-08-24 prod-mode demo pass got \"provide more context\" for \"what am i looking at here?\" and \"I can't view images directly\" for \"what does this graph show?\", while tool-backed questions answered correctly. v2 adds (a) a 'Where you live' block grounding the agent in the topic-constellation graph it sits under (clusters, superclusters, toggleable noise, source pills that cite back onto the graph) plus an explicit deictic-resolution rule for \"this graph\"/\"here\"/\"what am I looking at\", (b) an out-of-scope block that answers unrelated queries in character instead of breaking frame, and a Strategy step 1 routing meta questions to list_clusters rather than search_compendium (the self-awareness blocks would otherwise fight v1's search-compendium-first rule), with an explicit no-full-listing brevity rule on that path (a first probe run answered \"what am i looking at here?\" with all 16 superclusters enumerated). Tool/marker/citation discipline is byte-identical to v1 apart from the list_clusters 'or about the graph itself' clause and the Strategy renumbering. NOTE: the agent receives no live view state -- /api/agent/query carries only query + history -- so this is static product self-description grounded through list_clusters, not awareness of the current selection or noise toggle.",
+          "techniques": [
+            "instruction",
+            "tool_use",
+            "react",
+            "self_awareness"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "agent_system_v3",
+          "version": "v3",
+          "description": "Anti-hedging variant of agent_system_v2 (2026-09-26). A prod-mode chat pass on the demo corpus got \"let me check that for you...\" as the FINAL turn on a plain corpus question -- the model narrated an intent to search instead of calling search_compendium, and the ReAct loop (agent.py query()/query_stream()) treats any no-tool-call assistant message as done, so the hedge shipped as the answer with zero sources. v3 adds two things over v2, both confined to named sections: (a) under Strategy, an explicit never-announce-a-search rule stating that a no-tool-call answer is final and must therefore already be grounded or be an in-character greeting/scope reply; (b) under 'When answering', tightened style rules -- lead with the answer in the first sentence, cite inline as sources are used, no preamble sentence about the compendium having relevant information, no closing offer unless the result was a genuine absence. Everything else (the 'Where you live' product self-awareness framing, tool/marker/citation discipline, the numbered Strategy routing steps, the out-of-scope block) is byte-identical to v2 -- see tests/test_agent_prompt_v3.py's structural-diff assertions. Pairs with the module-level narrated-intent guard in backend/services/agent.py (_narrates_intent / NARRATED_INTENT_PHRASES), which forces one extra tool-call round on the SAME hedge shape as a loop-level backstop -- this prompt is the instruction-level half of that fix. Default since 2026-09-28: the 12-question demo-regression measurement (scripts/agent_regression.py) showed v2 and v3 level on tool use, with the loop guard closing the one gap; flipping to \"v2\" is the no-deploy env-var rollback.",
+          "techniques": [
+            "instruction",
+            "tool_use",
+            "react",
+            "self_awareness",
+            "anti_hedging"
+          ],
+          "live": true,
+          "overridden": false
+        },
+        {
+          "name": "agent_system_v4",
+          "version": "v4",
+          "description": "Answer-style variant of agent_system_v3 (2026-09-28). A 12-question demo-corpus measurement of v3 showed the citation batched into a trailing \"for more details, you can refer to ...\" sentence in 6 of 12 answers, one answer citing the same page four times, and an \"In summary\" recap paragraph. v4 changes ONLY the 'When answering:' bullet block: cite at the claim by naming the page in the sentence that makes it, never batch citations into a trailing sentence, cap repeat citations of one page at two, prefer what the captured page actually says over textbook summaries, and no closing offer or recap paragraph except on a genuine absence. Everything else is byte-identical to v3 -- see tests/test_agent_prompt_v4.py's exact-diff assertion. settings.agent_system_prompt_version default is unchanged.",
+          "techniques": [
+            "instruction",
+            "tool_use",
+            "react",
+            "self_awareness",
+            "anti_hedging",
+            "inline citation at the claim"
+          ],
+          "live": false,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "page_summary",
+      "label": "Page summary",
+      "live": null,
+      "selector": null,
+      "prompts": [
+        {
+          "name": "page_summary_v1",
+          "version": "v1",
+          "description": "Basic instruction-based page summarization",
+          "techniques": [
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "page_summary_v2",
+          "version": "v2",
+          "description": "Few-shot page summarization with example demonstrations",
+          "techniques": [
+            "few_shot",
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "page_summary_v3",
+          "version": "v3",
+          "description": "Chain-of-thought summarization: identify facts, then synthesize",
+          "techniques": [
+            "chain_of_thought",
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        }
+      ]
+    },
+    {
+      "task": "journey_narrative",
+      "label": "Journey narrative",
+      "live": null,
+      "selector": null,
+      "prompts": [
+        {
+          "name": "journey_narrative_v2a",
+          "version": "v2a",
+          "description": "Compendium-framed narrative — instruction only (baseline for v2 series)",
+          "techniques": [
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "journey_narrative_v2b",
+          "version": "v2b",
+          "description": "Compendium-framed narrative — instruction + light output schema",
+          "techniques": [
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "journey_narrative_v2c",
+          "version": "v2c",
+          "description": "Compendium-framed narrative — one-shot with real hominid session example (full input→output) + schema",
+          "techniques": [
+            "one_shot",
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        },
+        {
+          "name": "journey_narrative_v2d",
+          "version": "v2d",
+          "description": "Compendium-framed narrative — chain-of-thought reasoning before writing",
+          "techniques": [
+            "chain_of_thought",
+            "instruction"
+          ],
+          "live": false,
+          "overridden": false
+        }
+      ]
+    }
+  ],
+  "admin": null
+}
