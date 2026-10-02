@@ -2,7 +2,7 @@
 
 Selects the DISTINCT ``skip_reasoning`` strings of ``skip_gate`` pages whose
 category is NULL (all users), classifies them in small batches (BATCH_SIZE) with one LLM
-tool call per batch, writes a reviewable mapping file OUTSIDE the repo, and --
+tool call per batch plus bounded retries, writes a reviewable mapping file OUTSIDE the repo, and --
 only with ``--apply`` -- updates the pages.
 
     cd apps/api
@@ -193,8 +193,8 @@ def parse_response(arguments: object, reasons: list[str]) -> list[str | None]:
 
 
 def _add_usage(total: dict, usage: dict) -> None:
-    for k in total:
-        total[k] += usage[k]
+    for k, v in usage.items():
+        total[k] = total.get(k, 0) + v
 
 
 def _estimate_usage(llm, model: str, prompt: str, max_tokens: int) -> dict:
@@ -206,7 +206,7 @@ def _estimate_usage(llm, model: str, prompt: str, max_tokens: int) -> dict:
         cost = float(calc(model, tin, tout)) if calc else 0.0
     except Exception:  # noqa: BLE001 - estimate only
         cost = 0.0
-    return {"input_tokens": tin, "output_tokens": tout, "cost_usd": cost}
+    return {"input_tokens": tin, "output_tokens": tout, "cost_usd": cost, "estimated_usd": cost}
 
 
 def _merged_arguments(tool_calls) -> dict | None:
@@ -238,7 +238,7 @@ async def _ask(llm, reasons: list[str], model: str, usage: dict) -> list[str | N
     except json.JSONDecodeError:
         # Malformed/truncated tool-call JSON: billed but unusable. Treat as "no
         # answer" so the retry path re-asks for these items.
-        log("malformed tool-call JSON; will retry the affected items")
+        log("malformed tool-call JSON; usage for this call is estimated; will retry the items")
         _add_usage(usage, _estimate_usage(llm, model, prompt, max_tokens))
         return [None] * len(reasons)
     _add_usage(
@@ -264,7 +264,7 @@ async def classify_batch(
     """
     cats: list[str | None] = [None] * len(reasons)
     if usage is None:
-        usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+        usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "estimated_usd": 0.0}
     stats = {"retried": 0, "single": 0}
 
     def pending() -> list[int]:
@@ -343,17 +343,30 @@ def build_mapping(model: str, rows: list[tuple], cats: list[str | None]) -> dict
     }
 
 
-def _repo_root() -> Path:
-    """Root of the repo this script lives in; fails closed if git cannot answer."""
+def _ancestor_with_dot_git(path: Path) -> Path | None:
+    """Nearest ancestor (or self) holding a ``.git`` entry (dir or file), if any."""
+    for d in (path, *path.parents):
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+def _repo_root() -> Path | None:
+    """Root of the repo this script lives in. Without a git binary (the hosted API
+    container) fall back to a ``.git`` walk, which may find none (None). Any other
+    probe failure fails closed."""
+    here = Path(__file__).resolve().parent
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            cwd=Path(__file__).resolve().parent,
+            cwd=here,
             capture_output=True,
             text=True,
             check=True,
             timeout=15,
         ).stdout.strip()
+    except FileNotFoundError:
+        return _ancestor_with_dot_git(here)
     except (OSError, subprocess.SubprocessError) as e:
         raise SystemExit(f"cannot determine the git work tree ({e}); refusing") from e
     return Path(out).resolve()
@@ -367,7 +380,11 @@ def _inside_git_work_tree(directory: Path) -> bool:
             text=True,
             check=False,
             timeout=15,
+            env={**os.environ, "LC_ALL": "C"},
         )
+    except FileNotFoundError:
+        # No git binary: look for a .git entry on the way up instead.
+        return _ancestor_with_dot_git(directory) is not None
     except (OSError, subprocess.SubprocessError) as e:
         raise SystemExit(f"git probe failed ({e}); refusing") from e
     if r.returncode == 0:
@@ -379,16 +396,17 @@ def _inside_git_work_tree(directory: Path) -> bool:
 
 def check_outside_repo(path: Path) -> None:
     """Refuse a mapping path inside ANY git work tree (lexically, via symlinks, or
-    through its nearest existing ancestor). Fails closed."""
+    through its nearest existing directory). Fails closed on probe errors."""
     root = _repo_root()
     lexical = Path(os.path.abspath(os.path.expanduser(path)))
     resolved = lexical.resolve()
-    for p in (lexical, resolved):
-        if p.is_relative_to(root):
-            raise SystemExit(f"refusing mapping path inside the git work tree: {p}")
+    if root is not None:
+        for p in (lexical, resolved):
+            if p.is_relative_to(root):
+                raise SystemExit(f"refusing mapping path inside the git work tree: {p}")
     anc = resolved
-    while not anc.exists() and anc != anc.parent:
-        anc = anc.parent
+    while not anc.is_dir() and anc != anc.parent:
+        anc = anc.parent  # existing file or missing path: probe its parent directory
     if _inside_git_work_tree(anc):
         raise SystemExit(f"refusing mapping path inside a git work tree: {resolved}")
 
@@ -458,6 +476,10 @@ def record_cost(user_id: int, model: str, usage: dict) -> None:
             input_tokens=usage["input_tokens"],
             output_tokens=usage["output_tokens"],
             cost_usd=usage["cost_usd"],
+            metadata={
+                "estimated_usd": usage.get("estimated_usd", 0.0),
+                "actual_usd": usage["cost_usd"] - usage.get("estimated_usd", 0.0),
+            },
         )
     except Exception as e:  # noqa: BLE001 - cost bookkeeping is best-effort
         log(f"cost event insert failed: {e}")
@@ -476,7 +498,7 @@ async def classify_all(
     groups = group_reasons(rows)
     reps = [g["rep"] for g in groups]
     rep_cats: list[str | None] = []
-    total = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    total = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "estimated_usd": 0.0}
     stats = {"retried": 0, "single": 0}
     chunks = list(batches(reps, BATCH_SIZE))
     try:
@@ -564,7 +586,9 @@ def main(argv: list[str] | None = None) -> int:
     unresolved = sum(1 for c in cats if c is None)
     if unresolved:
         print(f"unresolved (left uncategorized): {unresolved}")
-    print(f"LLM spend: ${usage['cost_usd']:.5f}")
+    est = usage.get("estimated_usd", 0.0)
+    est_note = f" (includes ~${est:.5f} estimated)" if est else ""
+    print(f"LLM spend: ${usage['cost_usd']:.5f}{est_note}")
     print(f"mapping written: {out}")
     if args.apply:
         print(f"rows updated: {apply_mapping(mapping['items'])}")

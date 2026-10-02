@@ -192,6 +192,17 @@ def test_failed_parse_still_adds_usage():
     assert cats == ["error_page"]
     # the failed call is estimated (prompt tokens + the output cap), plus the good call's 10/5
     assert usage["input_tokens"] > 10 and usage["output_tokens"] > 5
+    assert "estimated_usd" in usage
+
+
+def test_record_cost_splits_estimated_and_actual(monkeypatch):
+    seen = {}
+    monkeypatch.setattr("backend.db.trends_repo.insert_cost_event", lambda **kw: seen.update(kw))
+    bf.record_cost(
+        1, "m", {"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.03, "estimated_usd": 0.01}
+    )
+    assert seen["metadata"]["estimated_usd"] == 0.01
+    assert abs(seen["metadata"]["actual_usd"] - 0.02) < 1e-9
 
 
 def test_usage_recorded_even_when_guard_trips(monkeypatch):
@@ -290,14 +301,18 @@ def test_refuses_symlink_that_points_into_repo(tmp_path):
         bf.check_outside_repo(link / "x.json")
 
 
-def test_refuses_in_repo_symlink_that_points_out(tmp_path):
-    link = Path(bf.__file__).resolve().parent / "zz_test_link"
-    link.symlink_to(tmp_path)
-    try:
-        with pytest.raises(SystemExit):
-            bf.check_outside_repo(link / "x.json")
-    finally:
-        link.unlink()
+def test_refuses_in_repo_symlink_that_points_out(tmp_path, monkeypatch):
+    import subprocess
+
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(fake_repo)], check=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (fake_repo / "docs").symlink_to(outside)
+    monkeypatch.setattr(bf, "_repo_root", lambda: fake_repo.resolve())
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(fake_repo / "docs" / "x.json")
 
 
 def test_refuses_when_nearest_ancestor_is_a_git_work_tree(tmp_path):
@@ -308,17 +323,141 @@ def test_refuses_when_nearest_ancestor_is_a_git_work_tree(tmp_path):
         bf.check_outside_repo(tmp_path / "other" / "new" / "dir" / "m.json")
 
 
-def test_fails_closed_when_git_probe_fails(monkeypatch, tmp_path):
+def test_probe_fails_closed_on_oserror(monkeypatch, tmp_path):
+    monkeypatch.setattr(bf, "_repo_root", lambda: None)
+
     def boom(*a, **k):
-        raise FileNotFoundError("git")
+        raise PermissionError("git")
 
     monkeypatch.setattr(bf.subprocess, "run", boom)
     with pytest.raises(SystemExit):
         bf.check_outside_repo(tmp_path / "m.json")
 
 
+def test_probe_fails_closed_on_unrecognised_stderr(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(bf, "_repo_root", lambda: None)
+    monkeypatch.setattr(
+        bf.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=128, stderr="fatal: something odd", stdout=""),
+    )
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(tmp_path / "m.json")
+
+
+def test_probe_runs_with_c_locale(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    seen = {}
+
+    def fake(*a, **k):
+        seen["env"] = k.get("env")
+        return SimpleNamespace(returncode=128, stderr="fatal: not a git repository", stdout="")
+
+    monkeypatch.setattr(bf, "_repo_root", lambda: None)
+    monkeypatch.setattr(bf.subprocess, "run", fake)
+    bf.check_outside_repo(tmp_path / "m.json")
+    assert seen["env"]["LC_ALL"] == "C"
+
+
+def test_no_git_binary_walks_for_dot_git(monkeypatch, tmp_path):
+    def nogit(*a, **k):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(bf.subprocess, "run", nogit)
+    monkeypatch.setattr(bf, "_repo_root", lambda: None)
+    bf.check_outside_repo(tmp_path / "m.json")  # no .git anywhere above: accepted
+    (tmp_path / ".git").mkdir()  # a .git directory
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(tmp_path / "sub" / "m.json")
+    (tmp_path / ".git").rmdir()
+    (tmp_path / ".git").write_text("gitdir: elsewhere")  # a .git file (worktree)
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(tmp_path / "m.json")
+
+
+def test_existing_mapping_file_probes_its_parent_dir(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    f = tmp_path / "m.json"
+    f.write_text("{}")
+    seen = []
+
+    def fake(cmd, **k):
+        seen.append(cmd[2])
+        return SimpleNamespace(returncode=128, stderr="not a git repository", stdout="")
+
+    monkeypatch.setattr(bf, "_repo_root", lambda: None)
+    monkeypatch.setattr(bf.subprocess, "run", fake)
+    bf.check_outside_repo(f)
+    assert seen == [str(tmp_path.resolve())]
+
+
 def test_accepts_path_outside_repo(tmp_path):
     bf.check_outside_repo(tmp_path / "m.json")
+
+
+def test_prompt_states_precedence_rule_and_examples():
+    p = bf.build_prompt(["x"])
+    assert "names a specific kind of page" in p
+    assert "even when it also says the page lacks substantive content" in p
+    assert "Use content_free_stub only when the reason names no more specific kind" in p
+    assert p.count("Example:") == 6
+    for cid in ("user_specific", "web_app", "search_results"):
+        assert f"-> {cid}" in p
+
+
+def test_normalize_key_cases():
+    n = bf.normalize_key
+    assert n("  Login   WALL. ") == "login wall"
+    assert n("Error page!!") == "error page"
+    assert n("Search results page -- URL clues: q=x") == "search results page"
+    assert n("A page. URL clues: foo") == "a page"
+    assert n("Same thing,") == n("same thing")
+
+
+def test_group_reasons_picks_most_frequent_representative():
+    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Other thing", 1)]
+    groups = bf.group_reasons(rows)
+    assert len(groups) == 2
+    g = next(g for g in groups if g["key"] == "dashboard page")
+    assert g["rep"] == "dashboard  page" and g["members"] == [0, 1]
+
+
+def test_classify_all_applies_representative_category_to_members(monkeypatch):
+    seen = []
+
+    async def fake_batch(llm, reasons, model, usage=None):
+        seen.extend(reasons)
+        return ["user_specific"] * len(reasons), usage, {"retried": 0, "single": 0}
+
+    monkeypatch.setattr(bf, "classify_batch", fake_batch)
+    monkeypatch.setattr("backend.services.llm_service.LLMService", lambda: object())
+    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Login", 1)]
+    cats, _, _, ngroups = asyncio.run(bf.classify_all(rows, "m"))
+    assert ngroups == 2
+    assert cats == ["user_specific"] * 3
+    assert sorted(seen) == ["Login", "dashboard  page"]
+
+
+def test_mixed_prefix_groups_detects_split_prefix():
+    items = [
+        {"reason": "Google Maps page, directions", "category": "web_app", "pages": 11},
+        {"reason": "Google maps page with route", "category": "asset_library", "pages": 4},
+        {"reason": "Login wall", "category": "login_wall", "pages": 5},
+        {"reason": "Login wall again", "category": "login_wall", "pages": 2},
+    ]
+    mixed = bf.mixed_prefix_groups(items)
+    assert mixed == [
+        {"prefix": "google maps", "pages_by_category": {"web_app": 11, "asset_library": 4}}
+    ]
+
+
+def test_build_mapping_skips_unresolved():
+    m = bf.build_mapping("m", [("a", 3), ("b", 1)], ["login_wall", None])
+    assert [i["reason"] for i in m["items"]] == ["a"]
 
 
 def test_default_mapping_path_is_outside_repo():
