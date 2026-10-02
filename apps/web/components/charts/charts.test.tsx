@@ -111,13 +111,18 @@ it("categoryColors: named ids take their index's colour, uncategorized is the ne
   expect(c.a).toBe(categoryFill(0));
   expect(c.b).toBe(categoryFill(1));
 });
-it("categoryColors: no hue within 30 degrees of the highlight, 13 distinct colours, neighbours far apart", async () => {
+it("categoryColors: 14 ids, no hue within 30 degrees of the highlight, every pair differs by >=35 deg hue or >=0.15 lightness", async () => {
   const { categoryColors } = await import("./palette");
-  const ids = Array.from({ length: 13 }, (_, i) => `c${i}`);
+  const ids = Array.from({ length: 14 }, (_, i) => `c${i}`);
   const c = categoryColors(ids);
-  const hues = ids.map((id) => Number(/calc\(h \+ (\d+)\)/.exec(c[id])![1]));
-  for (const h of hues) { const d = Math.min(h % 360, 360 - (h % 360)); expect(d).toBeGreaterThanOrEqual(30); expect(h).toBeGreaterThanOrEqual(60); }
-  expect(new Set(ids.map((id) => c[id])).size).toBe(13);
-  for (let i = 1; i < hues.length; i++) expect(Math.abs(hues[i] - hues[i - 1])).toBeGreaterThanOrEqual(15);
-  expect(c.c0).not.toBe(c.c1);
+  const parsed = ids.map((id) => {
+    const m = /calc\(l ([+-]) ([\d.]+)\).*calc\(h \+ (\d+)\)/.exec(c[id])!;
+    return { h: Number(m[3]), l: (m[1] === "-" ? -1 : 1) * Number(m[2]) };
+  });
+  for (const { h } of parsed) { expect(Math.min(h % 360, 360 - (h % 360))).toBeGreaterThanOrEqual(30); expect(h).toBeGreaterThanOrEqual(60); }
+  expect(new Set(ids.map((id) => c[id])).size).toBe(14);
+  for (let i = 0; i < 14; i++) for (let j = i + 1; j < 14; j++) {
+    const dh = Math.abs(parsed[i].h - parsed[j].h), dl = Math.abs(parsed[i].l - parsed[j].l);
+    expect(dh >= 35 || dl >= 0.15 - 1e-9, `${i}/${j}`).toBe(true);
+  }
 });
