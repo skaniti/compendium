@@ -560,6 +560,12 @@
 .prompts-evals-table col.col-vs { width: 16%; }
 .prompts-evals-table col.col-action { width: 6%; }
 .prompts-evals-table .prompts-link { white-space: nowrap; }
+.prompts-link { text-align: left; }
+.prompts-classes { table-layout: auto; width: auto; }
+.prompts-classes th, .prompts-classes td { white-space: nowrap; }
+.prompts-compare-block { margin-bottom: 12px; }
+.prompts-compare-block select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font: inherit; font-size: 0.72rem; }
+.prompts-compare-block select:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 .prompts-editor:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 .prompts-editor-actions button:first-child { background: color-mix(in oklch, var(--highlight) 32%, transparent); }
 .prompts-editor-actions button:disabled { opacity: 0.45; cursor: default; }
