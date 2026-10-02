@@ -366,7 +366,8 @@
 .dev-config-panel.dev-panel[open] summary::before { transform: rotate(90deg); }
 .dev-config-panel.dev-panel .config-body { padding: 12px 0 0; }
 .dev-config-title { font-size: 0.78rem; font-weight: 600; color: var(--text); margin-right: 4px; }
-.pipeline-filters-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 20px; align-items: start; }
+.pipeline-summary { --pipeline-gap: 20px; display: flex; flex-direction: column; gap: var(--pipeline-gap); margin-bottom: var(--pipeline-gap); }
+.pipeline-filters-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--pipeline-gap, 20px); align-items: stretch; }
 @media (max-width: 900px) { .pipeline-filters-row { grid-template-columns: minmax(0, 1fr); } }
 .dev-chip { font-family: monospace; font-size: 11px; color: var(--text); border-radius: 6px; padding: 2px 8px;
   background: color-mix(in oklch, var(--panel-caption) 14%, transparent); }
@@ -388,4 +389,14 @@
 .rule-filter-domains li, .rule-filter-patterns li, .rule-filter-paths li { overflow-wrap: anywhere; color: var(--text); }
 .rule-filter-patterns li span:last-child { color: var(--panel-caption); }
 .rule-filter-footnote { margin: 0; }
-.pipeline-flow-panel { margin-bottom: 20px; }
+.rule-filter-hidden { margin: 8px 0 0; color: var(--panel-caption); }
+.pipeline-flow-panel .dev-empty-inline { text-align: center; padding: 60px 20px; font-size: 0.85rem; }
+.pipeline-summary .dev-panel { margin: 0; }
+.pipeline-filters-row > .dev-panel { min-width: 0; }
+.dev-table-fixed { min-width: 880px; }
+.dev-table .cell-pill { white-space: nowrap; min-width: 84px; }
+.dev-table .cell-skip { white-space: nowrap; min-width: 72px; }
+.dev-table .cell-visited { white-space: nowrap; min-width: 150px; }
+.dev-table .cell-sans { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.dev-config-panel.dev-panel summary .skip-gate-face { flex: 1 0 100%; margin-top: 12px; cursor: default; }
+.skip-gate-face .rule-filter-claim { margin: 12px 0 0; }

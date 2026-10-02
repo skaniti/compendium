@@ -28,7 +28,7 @@ const flow = {
 };
 const summary = (o: Partial<PipelineSummary> = {}): PipelineSummary => ({
   range: "30d", status_counts: { active: 1271, pending: 2, archived: 40 }, total_pages: 1313, archive_ratio: 0.031,
-  skip_gate_config: cfg, flow, rule_filter_config: { domains: [], domain_suffixes: [], url_patterns: [], path_rules: [] }, ...o,
+  skip_gate_config: cfg, flow, rule_filter_config: { counts: { domains: 0, url_patterns: 0, path_rules: 0 }, lists_visible: false, domains: [], domain_suffixes: [], url_patterns: [], path_rules: [] }, ...o,
 });
 const row = { id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null, outcome: "processed" as const, detail: "active", detail_label: "Active", fate: "active" as const };
 beforeEach(() => {
@@ -133,4 +133,32 @@ it("a pill click marks the sections aria-busy until the new responses resolve", 
   resolveSummary(summary({ range: "all" }));
   await waitFor(() => expect(container.querySelector('[data-section="summary"]')).toHaveAttribute("aria-busy", "false"));
   await waitFor(() => expect(busy()).toBe(0));
+});
+it("a failed period change after a good load drops the stale legend and filters but keeps the timeline", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValueOnce(summary()).mockRejectedValueOnce(new Error("boom"));
+  const { container } = mount();
+  await loaded();
+  expect(container.querySelector(".pipeline-filters-row")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "All time" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+  expect(container.querySelector(".chart-legend-flow")).toBeNull();
+  expect(container.querySelector(".pipeline-filters-row")).toBeNull();
+  expect(await screen.findByText("No activity in this period.")).toBeInTheDocument();
+});
+it("category colours stay the same across periods with different gate categories", async () => {
+  const cats = { ...cfg, categories: ["login_wall", "ads", "cookie", "thin", "paywall"].map((id) => ({ id, label: id, description: "d" })) };
+  const gateOnly = (keys: string[]) => ({ ...flow, details: flow.details.filter((d) => keys.includes(d.key)) });
+  vi.mocked(api.fetchPipelineSummary)
+    .mockResolvedValueOnce(summary({ skip_gate_config: cats, flow: gateOnly(["login_wall", "ads", "paywall"]) }))
+    .mockResolvedValueOnce(summary({ range: "all", skip_gate_config: cats, flow: gateOnly(["paywall", "login_wall"]) }));
+  mount();
+  await loaded();
+  const colorOf = (name: string) => {
+    const li = within(document.querySelector(".chart-legend-flow") as HTMLElement).getByText(name).closest("li") as HTMLElement;
+    return (li.querySelector(".swatch") as HTMLElement).style.background;
+  };
+  const before = { login: colorOf("Login Wall"), paywall: colorOf("Paywall") };
+  await userEvent.click(screen.getByRole("button", { name: "All time" }));
+  await waitFor(() => expect(within(document.querySelector(".chart-legend-flow") as HTMLElement).queryByText("Ad Heavy")).toBeNull());
+  expect({ login: colorOf("Login Wall"), paywall: colorOf("Paywall") }).toEqual(before);
 });

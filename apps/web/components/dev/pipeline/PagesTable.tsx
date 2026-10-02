@@ -5,9 +5,9 @@ import { fetchPipelinePages } from "@/lib/api";
 import { DASH, PERIOD_LABELS, flowColumns, formatVisited } from "@/lib/pipeline";
 import type { PageSortColumn, PipelinePagesResponse, RangeKey, SortDir } from "@/lib/types";
 const PAGE_SIZE = 50;
-// Header order matches the Dash table; "Skip" and "Skip reason" are derived
-// columns with no backing sort key, so they render as plain <th>.
-const COL_WIDTHS = ["26%", "14%", "8%", "9%", "7%", "24%", "12%"]; // fixed so columns never shift across sorts
+// "Skip" and "Skip reason" are derived columns with no backing sort key, so
+// they render as plain <th>.
+const COL_WIDTHS = ["24%", "13%", "10%", "8%", "9%", "19%", "17%"]; // fixed so columns never shift across sorts
 const HEADERS: { label: string; sort?: PageSortColumn }[] = [
   { label: "Title", sort: "title" }, { label: "Domain", sort: "domain" }, { label: "Status", sort: "status" },
   { label: "Decision", sort: "processing_depth" }, { label: "Skip" }, { label: "Skip reason" }, { label: "Visited", sort: "visited_at" },
@@ -61,9 +61,9 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
             <tbody>
               {data.rows.map((r) => { const s = flowColumns(r); return (
                 <tr key={r.id}>
-                  <td title={r.title ?? undefined}>{r.title || DASH}</td><td>{r.domain || DASH}</td><td><span className={`status-pill status-${r.fate}`}>{r.fate}</span></td>
-                  <td>{s.decision}</td><td>{s.skip}</td>
-                  <td title={s.skipReasonTitle}>{s.skipReason}</td><td>{formatVisited(r.visited_at)}</td>
+                  <td className="cell-sans" title={r.title ?? undefined}>{r.title || DASH}</td><td>{r.domain || DASH}</td><td className="cell-pill"><span className={`status-pill status-${r.fate}`}>{r.fate}</span></td>
+                  <td>{s.decision}</td><td className="cell-skip">{s.skip}</td>
+                  <td className="cell-sans" title={s.skipReasonTitle}>{s.skipReason}</td><td className="cell-visited">{formatVisited(r.visited_at)}</td>
                 </tr>); })}
             </tbody>
           </table>

@@ -32,10 +32,18 @@ export default function PipelineView() {
   const range = rangeKeyFor(timeWindow);
   const [tz] = useState(browserTimeZone);
   const { data: summary, error, busy } = usePeriodFetch(`${range}|${tz}`, () => fetchPipelineSummary(range, tz));
-  const labels = useMemo(() => labelsOf(summary), [summary]);
-  const gate = useMemo(() => gateDetails(summary), [summary]);
+  // After a failed period change usePeriodFetch keeps the previous summary; don't derive anything from it.
+  const live = error ? null : summary;
+  const labels = useMemo(() => labelsOf(live), [live]);
+  const gate = useMemo(() => gateDetails(live), [live]);
   const order = useMemo(() => gate.map((d) => d.key), [gate]);
-  const catColors = useMemo(() => categoryColors(order), [order]);
+  // Fixed id order (config categories, then any other gate keys, then uncategorized) so colours don't shift between periods.
+  const colorOrder = useMemo(() => {
+    const cats = live ? live.skip_gate_config.categories.map((c) => c.id) : [];
+    const extra = gate.map((d) => d.key).filter((k) => !cats.includes(k) && k !== "uncategorized").sort();
+    return [...cats.filter((k) => k !== "uncategorized"), ...extra, "uncategorized"];
+  }, [live, gate]);
+  const catColors = useMemo(() => categoryColors(colorOrder), [colorOrder]);
   const legend = gate.map((d) => ({ id: d.key, label: d.label, count: d.count, color: catColors[d.key] }));
   return (
     <>
@@ -47,21 +55,21 @@ export default function PipelineView() {
         <RangePills value={timeWindow} onChange={setTimeWindow} />
       </div>
       <div className="dev-view-body">
-        <div data-section="summary" className={busy ? "is-refreshing" : undefined} aria-busy={busy}>
+        <div data-section="summary" className={busy ? "pipeline-summary is-refreshing" : "pipeline-summary"} aria-busy={busy}>
           <section className="dev-panel pipeline-flow-panel">
             {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pipeline summary ({error}).</p>
              : !summary ? <p className="dev-empty">Loading…</p>
              : !summary.flow ? <p className="dev-empty" role="alert">The API is older than this view; restart it to load the flow.</p>
              : <PipelineFlow flow={summary.flow} catColors={catColors} ratio={summary.archive_ratio} />}
-            {!(summary && (!summary.flow || summary.flow.total === 0)) && (
+            {!(live && (!live.flow || live.flow.total === 0)) && (
               <FlowTimeline range={range} tz={tz} order={order} labels={labels} catColors={catColors} />
             )}
-            {summary?.flow && legend.length > 0 && <CategoryLegend items={legend} />}
+            {live?.flow && legend.length > 0 && <CategoryLegend items={legend} />}
           </section>
-          {summary && (
+          {live && (
             <div className="pipeline-filters-row">
-              {summary.flow && summary.rule_filter_config && <RuleFilterPanel flow={summary.flow} config={summary.rule_filter_config} />}
-              <SkipGateConfigPanel config={summary.skip_gate_config} />
+              {live.flow && live.rule_filter_config && <RuleFilterPanel flow={live.flow} config={live.rule_filter_config} />}
+              <SkipGateConfigPanel config={live.skip_gate_config} flow={live.flow} />
             </div>
           )}
         </div>

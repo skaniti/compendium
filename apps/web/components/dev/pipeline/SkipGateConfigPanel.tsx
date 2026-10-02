@@ -1,5 +1,10 @@
-import type { SkipGateConfig } from "@/lib/types";
-export default function SkipGateConfigPanel({ config }: { config: SkipGateConfig }) {
+import { formatRatio } from "@/lib/pipeline";
+import type { PipelineFlow, SkipGateConfig } from "@/lib/types";
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+export default function SkipGateConfigPanel({ config, flow }: { config: SkipGateConfig; flow?: PipelineFlow }) {
+  const count = flow?.outcomes.find((o) => o.key === "gate")?.count ?? 0;
   return (
     <details className="dev-config-panel dev-panel">
       <summary>
@@ -7,6 +12,14 @@ export default function SkipGateConfigPanel({ config }: { config: SkipGateConfig
         <span className="dev-chip">{config.model}</span>
         <span className="dev-chip">{config.prompt_name}</span>
         <span className="dev-chip">{config.categories.length} categories + uncategorized</span>
+        {flow && (
+          // inside <summary> so it stays visible while the panel is collapsed
+          <div className="skip-gate-face">
+            <div className="rule-filter-count"><span className="rule-filter-number">{fmt(count)}</span></div>
+            <div className="rule-filter-share">pages · {flow.total > 0 ? formatRatio(count / flow.total) : "—"} of captured</div>
+            <p className="rule-filter-claim">Decided by {config.model} over the API; pages it keeps go on to processing.</p>
+          </div>
+        )}
       </summary>
       <div className="config-body">
         <div className="config-row"><span className="config-label">Model</span><span className="config-value">{config.model}</span></div>
