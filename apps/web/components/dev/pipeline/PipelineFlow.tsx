@@ -103,10 +103,11 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
               return (
                 <g key={n.id} pointerEvents="none">
                   {key === "archived"
-                    ? <text className="flow-cap" x={l.x} y={l.y - 26}>ARCHIVED</text>
+                    ? <text className="flow-cap" x={l.x} y={l.y - 12}>ARCHIVED</text>
                     : <text className="flow-cap flow-cap-active" x={l.x} y={l.y - 12}>ACTIVE · in your graph</text>}
-                  <text className={key === "active" ? "flow-headline flow-headline-active" : "flow-headline flow-headline-lg"} x={l.x} y={l.y + (key === "active" ? 14 : 6)}>{num(n.count)}</text>
-                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 28}><tspan className="flow-ratio-pct">{formatRatio(ratio)}</tspan><tspan>{" archive ratio"}</tspan></text>}
+                  {/* Same size for both fates: the band widths carry the proportion, the figures just state it. */}
+                  <text className={key === "active" ? "flow-headline flow-headline-active" : "flow-headline"} x={l.x} y={l.y + 14}>{num(n.count)}</text>
+                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 32}><tspan className="flow-ratio-pct">{formatRatio(ratio)}</tspan><tspan>{" archive ratio"}</tspan></text>}
                 </g>
               );
             })}

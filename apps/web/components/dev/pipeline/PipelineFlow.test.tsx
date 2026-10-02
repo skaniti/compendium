@@ -88,13 +88,17 @@ it("an empty period renders the empty copy without NaN", () => {
   expect(screen.getByText("No pages in this period.")).toBeInTheDocument();
   expect(container.innerHTML).not.toContain("NaN");
 });
-it("fate hierarchy: ARCHIVED count is the large headline, ACTIVE the smaller one", () => {
+it("fate counts share one size: ARCHIVED and ACTIVE differ only in colour", () => {
   const { container } = mount();
   const heads = Array.from(container.querySelectorAll("text.flow-headline"));
-  expect(heads.find((h) => h.textContent === "70")).toHaveClass("flow-headline-lg");
+  const archived = heads.find((h) => h.textContent === "70")!;
   const active = heads.find((h) => h.textContent === "30")!;
-  expect(active).toHaveClass("flow-headline-active");
+  expect(archived).not.toHaveClass("flow-headline-lg");
   expect(active).not.toHaveClass("flow-headline-lg");
+  expect(active).toHaveClass("flow-headline-active");
+  // Same offset from each label's centre, so the two figures sit identically under their captions.
+  const capOf = (t: Element) => Number(t.previousElementSibling!.getAttribute("y"));
+  expect(Number(archived.getAttribute("y")) - capOf(archived)).toBeCloseTo(Number(active.getAttribute("y")) - capOf(active), 6);
 });
 it("fate captions stay below the column header when the archived node is tiny", () => {
   const f: Flow = {

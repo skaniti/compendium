@@ -18,7 +18,6 @@
 .flow-cap-active { fill: var(--highlight); }
 .flow-cap-pending { font-family: monospace; }
 .flow-headline { fill: var(--text); font-family: monospace; font-size: 22px; font-weight: 600; }
-.flow-headline-lg { font-size: 32px; }
 .flow-headline-active { fill: var(--highlight); }
 .flow-ratio { fill: var(--panel-caption); font-size: 14px; }
 .flow-ratio-pct { fill: var(--text); font-family: monospace; font-weight: 700; }

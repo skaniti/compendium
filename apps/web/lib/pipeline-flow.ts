@@ -17,7 +17,7 @@ export interface FlowLayout { width: number; height: number; columnX: [number, n
 export const FLOW_MIN_WIDTH = 1100, FLOW_HEIGHT = 380, BAR_W = 8, LABEL_PITCH = 14;
 /** Reserved label heights: outcome labels are two lines (label + count); a breakdown label with a `sub` is two lines, others one. */
 export const OUTCOME_LABEL_H = 30, SUB_LABEL_H = 2 * LABEL_PITCH;
-/** Fate label boxes (centred on the label y): ARCHIVED = caption + 32px count + ratio line, ACTIVE = caption + 22px count, PENDING = one line. */
+/** Fate label boxes (centred on the label y): ARCHIVED = caption + 22px count + ratio line, ACTIVE = caption + 22px count, PENDING = one line. */
 export const FATE_LABEL_H: Record<FateKey, number> = { archived: 72, active: 44, pending: LABEL_PITCH };
 /** Extra gap between the last label of one outcome's breakdown group and the first of the next. */
 export const DETAIL_GROUP_EXTRA = 8;
