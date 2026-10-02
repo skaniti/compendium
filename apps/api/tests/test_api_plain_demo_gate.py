@@ -801,6 +801,37 @@ class TestCaptureIngestGate:
         r = client.post("/api/captures", json=self._PAYLOAD, headers=_bearer(token))
         assert r.status_code != 403
 
+    @pytest.mark.parametrize("path", ["/api/captures", "/api/passive-captures"])
+    def test_acting_as_demo_forbidden(self, client, users, path):
+        """verify_not_demo_identity is stricter than the plain-demo gate: an
+        admin's view-as-demo token must not ingest real browsing into the
+        demo account either."""
+        from backend.services.auth_service import create_access_token
+
+        admin = users["admin"]
+        admin_token = create_access_token(admin["id"], admin["email"])
+        demo_token = _acting_as_demo_token(client, admin_token)
+        r = client.post(path, json=self._PAYLOAD, headers=_bearer(demo_token))
+        assert r.status_code == 403
+        assert "ingest" in r.json()["detail"]
+
+    @pytest.mark.parametrize("path", ["/api/captures", "/api/passive-captures"])
+    def test_admin_not_gated(self, client, users, path):
+        from backend.services.auth_service import create_access_token
+
+        admin = users["admin"]
+        token = create_access_token(admin["id"], admin["email"])
+        r = client.post(path, json=self._PAYLOAD, headers=_bearer(token))
+        assert r.status_code != 403
+
+    def test_passive_capture_normal_user_not_gated(self, client, users):
+        from backend.services.auth_service import create_access_token
+
+        plain = users["plain"]
+        token = create_access_token(plain["id"], plain["email"])
+        r = client.post("/api/passive-captures", json=self._PAYLOAD, headers=_bearer(token))
+        assert r.status_code != 403
+
 
 class TestTagWriteGate:
     def test_direct_demo_forbidden(self, client, users):

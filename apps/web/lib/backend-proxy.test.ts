@@ -51,6 +51,26 @@ describe("proxyToBackend", () => {
     expect(Buffer.from(init.body as ArrayBuffer).toString()).toBe(JSON.stringify(payload));
   });
 
+  it("does not inject the cookie Bearer when the request carries an X-API-Key", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar("ambient-token") as never);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/passive-captures", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": "ext-key" },
+      body: JSON.stringify({ pages: [] }),
+    });
+
+    await proxyToBackend(req, "/api/passive-captures");
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+    expect(init.headers.get("x-api-key")).toBe("ext-key");
+    expect(init.headers.get("authorization")).toBeNull();
+  });
+
   it("appends the caller's query string to upstreamPath", async () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
     const fetchMock = vi

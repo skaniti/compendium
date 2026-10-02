@@ -305,6 +305,24 @@ async def verify_not_plain_demo(
     return user_id
 
 
+async def verify_not_demo_identity(
+    user_id: int = Depends(verify_api_key),
+) -> int:
+    """Reject ANY demo-role identity for collector-data ingest.
+
+    Stricter than ``verify_not_plain_demo``: that gate deliberately lets an
+    admin's view-as-demo token (``acting_as_demo`` claim) through so view-as
+    can exercise write paths. Ingest must not -- a view-as session routed
+    through the web proxy would otherwise file the admin's real browsing
+    under the public demo account. The claim is intentionally ignored here.
+    """
+    from backend.db import auth_repo as ar
+
+    if ar.get_role(user_id) == "demo":
+        raise HTTPException(status_code=403, detail="Demo account cannot ingest captures")
+    return user_id
+
+
 async def verify_admin_context(
     user_id: int = Depends(verify_api_key),
     claims: dict = Depends(get_current_claims),
@@ -1246,7 +1264,7 @@ async def create_capture(
     request: Request,
     capture: CaptureInput,
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(verify_not_plain_demo),
+    user_id: int = Depends(verify_not_demo_identity),
 ):
     """Receive a browsing capture, persist to PostgreSQL, and queue processing.
 
@@ -1989,7 +2007,7 @@ async def receive_passive_capture(
     request: Request,
     capture: PassiveCaptureInput,
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(verify_not_plain_demo),
+    user_id: int = Depends(verify_not_demo_identity),
 ):
     """Receive a passive capture from the extension or mobile app.
 

@@ -42,9 +42,13 @@ export async function proxyToBackend(req: Request, upstreamPath: string): Promis
   // uncompressed here; Vercel's edge compresses for the browser itself.
   headers.set("accept-encoding", "identity");
 
-  // Inject the Next-held JWT (set at login) if the caller didn't supply one.
+  // Inject the Next-held JWT (set at login) if the caller didn't supply
+  // one. An X-API-Key is an explicit credential (browser extension, Android
+  // collector) and must win over the ambient cookie: the API prefers a
+  // Bearer token over X-API-Key, so injecting here would silently
+  // re-attribute the upload to whoever's session cookie the browser holds.
   const token = (await cookies()).get("access_token")?.value;
-  if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
+  if (token && !headers.has("authorization") && !headers.has("x-api-key")) headers.set("authorization", `Bearer ${token}`);
 
   // Proxy hygiene (batch-06 deploy-flip fix wave): the API authenticates
   // via the Authorization header above and never reads cookies, so
