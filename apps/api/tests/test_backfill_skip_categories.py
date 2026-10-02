@@ -187,7 +187,13 @@ def test_blank_reasons_are_excluded_from_selection_sql():
 def test_build_mapping_shape():
     rows = [("a", 3), ("b", 1), ("c", 2)]
     m = bf.build_mapping("m", rows, ["login_wall", "other", "login_wall"])
-    assert set(m) == {"generated_at", "model", "counts_by_category", "items"}
+    assert set(m) == {
+        "generated_at",
+        "model",
+        "counts_by_category",
+        "items",
+        "mixed_prefix_groups",
+    }
     assert m["model"] == "m"
     assert m["items"][0] == {"reason": "a", "category": "login_wall", "pages": 3}
     assert m["counts_by_category"]["login_wall"] == {"reasons": 2, "pages": 5}
@@ -203,6 +209,71 @@ def test_refuses_path_inside_repo():
 
 def test_accepts_path_outside_repo(tmp_path):
     bf.check_outside_repo(tmp_path / "m.json")
+
+
+def test_prompt_states_precedence_rule_and_examples():
+    p = bf.build_prompt(["x"])
+    assert "names a specific kind of page" in p
+    assert "even when it also says the page lacks substantive content" in p
+    assert "Use content_free_stub only when the reason names no more specific kind" in p
+    assert p.count("Example:") == 6
+    for cid in ("user_specific", "web_app", "search_results"):
+        assert f"-> {cid}" in p
+
+
+def test_normalize_key_cases():
+    n = bf.normalize_key
+    assert n("  Login   WALL. ") == "login wall"
+    assert n("Error page!!") == "error page"
+    assert n("Search results page -- URL clues: q=x") == "search results page"
+    assert n("Maps page; looks like directions") == "maps page"
+    assert n("A page. URL clues: foo") == "a page"
+    assert n("Same thing,") == n("same thing")
+
+
+def test_group_reasons_picks_most_frequent_representative():
+    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Other thing", 1)]
+    groups = bf.group_reasons(rows)
+    assert len(groups) == 2
+    g = next(g for g in groups if g["key"] == "dashboard page")
+    assert g["rep"] == "dashboard  page" and g["members"] == [0, 1]
+
+
+def test_classify_all_applies_representative_category_to_members(monkeypatch):
+    seen = []
+
+    async def fake_batch(llm, reasons, model):
+        seen.extend(reasons)
+        return (
+            ["user_specific"] * len(reasons),
+            {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+            },
+            {"retried": 0, "single": 0},
+        )
+
+    monkeypatch.setattr(bf, "classify_batch", fake_batch)
+    monkeypatch.setattr("backend.services.llm_service.LLMService", lambda: object())
+    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Login", 1)]
+    cats, _, _, ngroups = asyncio.run(bf.classify_all(rows, "m"))
+    assert ngroups == 2
+    assert cats == ["user_specific"] * 3
+    assert sorted(seen) == ["Login", "dashboard  page"]
+
+
+def test_mixed_prefix_groups_detects_split_prefix():
+    items = [
+        {"reason": "Google Maps page, directions", "category": "web_app", "pages": 11},
+        {"reason": "Google maps page with route", "category": "asset_library", "pages": 4},
+        {"reason": "Login wall", "category": "login_wall", "pages": 5},
+        {"reason": "Login wall again", "category": "login_wall", "pages": 2},
+    ]
+    mixed = bf.mixed_prefix_groups(items)
+    assert mixed == [
+        {"prefix": "google maps", "pages_by_category": {"web_app": 11, "asset_library": 4}}
+    ]
 
 
 def test_build_mapping_skips_unresolved():

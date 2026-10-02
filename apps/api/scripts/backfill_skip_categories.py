@@ -109,15 +109,37 @@ def classify_tool() -> dict:
     }
 
 
+PRECEDENCE_RULES = (
+    "Precedence: if the reason names a specific kind of page (user-specific, "
+    "profile, account, dashboard, settings, inbox; homepage or index; login, auth, "
+    "sign-in; marketplace, product, store, pricing; search results including image "
+    "search; map, location service, directions, form, editor or status tool; video; local file; "
+    "error), choose that category even when it also says the page lacks "
+    "substantive content. Use content_free_stub only when the reason names no more "
+    "specific kind of page."
+)
+
+EXAMPLES = (
+    ("Account settings page with nothing substantive", "user_specific"),
+    ("Personal dashboard view, no real content to keep", "user_specific"),
+    ("Route planner map page with no article content", "web_app"),
+    ("Online form submission page, no substantive text", "web_app"),
+    ("Image search results grid with no real content", "search_results"),
+    ("Keyword search page listing hits, nothing substantive", "search_results"),
+)
+
+
 def build_prompt(reasons: list[str]) -> str:
     cats = "\n".join(f"- {cid}: {desc}" for cid, _label, desc in SKIP_CATEGORIES)
     numbered = "\n".join(f"{i}. {r}" for i, r in enumerate(reasons))
+    examples = "\n".join(f'Example: "{r}" -> {c}' for r, c in EXAMPLES)
     return (
         "A page-skipping gate archived web pages and recorded a short free-text "
         "reason for each. Classify every numbered reason below into exactly one "
         f"category, then call {TOOL_NAME} once with an entry for EVERY number "
         f"(do not omit any). For each entry also copy the first {ECHO_CHARS} "
         "characters of its reason into `echo`.\n\n"
+        f"{PRECEDENCE_RULES}\n\n{examples}\n\n"
         f"Categories:\n{cats}\n\nReasons:\n{numbered}"
     )
 
@@ -227,6 +249,43 @@ async def classify_batch(
     return cats, usage, stats
 
 
+_CUT_MARKERS = (" url clues", " -- ", "; ")
+
+
+def normalize_key(reason: str) -> str:
+    """Grouping key: lowercase, cut at clue/aside markers, collapse spaces, strip
+    trailing punctuation."""
+    k = " ".join(reason.lower().split())
+    for marker in _CUT_MARKERS:
+        i = k.find(marker)
+        if i != -1:
+            k = k[:i]
+    return k.rstrip(" .,;:!?-")
+
+
+def group_reasons(rows: list[tuple]) -> list[dict]:
+    """Group near-duplicate reasons; the most frequent member represents the group."""
+    groups: dict[str, dict] = {}
+    for i, (reason, pages) in enumerate(rows):
+        g = groups.setdefault(normalize_key(reason), {"members": [], "rep_i": i})
+        g["members"].append(i)
+        if pages > rows[g["rep_i"]][1]:
+            g["rep_i"] = i
+    return [
+        {"key": k, "rep": rows[g["rep_i"]][0], "members": g["members"]} for k, g in groups.items()
+    ]
+
+
+def mixed_prefix_groups(items: list[dict]) -> list[dict]:
+    """Prefixes (first two words of the normalized key) whose items got >1 category."""
+    by_prefix: dict[str, dict[str, int]] = {}
+    for it in items:
+        prefix = " ".join(normalize_key(it["reason"]).split()[:2])
+        cats = by_prefix.setdefault(prefix, {})
+        cats[it["category"]] = cats.get(it["category"], 0) + it["pages"]
+    return [{"prefix": p, "pages_by_category": c} for p, c in by_prefix.items() if len(c) > 1]
+
+
 def build_mapping(model: str, rows: list[tuple], cats: list[str | None]) -> dict:
     counts = {cid: {"reasons": 0, "pages": 0} for cid in SKIP_CATEGORY_IDS}
     items = []
@@ -241,6 +300,7 @@ def build_mapping(model: str, rows: list[tuple], cats: list[str | None]) -> dict
         "model": model,
         "counts_by_category": counts,
         "items": items,
+        "mixed_prefix_groups": mixed_prefix_groups(items),
     }
 
 
@@ -324,27 +384,34 @@ def record_cost(user_id: int, model: str, usage: dict) -> None:
         log(f"cost event insert failed: {e}")
 
 
-async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None], dict, dict]:
+async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None], dict, dict, int]:
+    """Classify one representative per near-duplicate group; members inherit it."""
     from backend.services.llm_service import LLMService
 
     llm = LLMService()
-    cats: list[str | None] = []
+    groups = group_reasons(rows)
+    reps = [g["rep"] for g in groups]
+    rep_cats: list[str | None] = []
     total = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
     stats = {"retried": 0, "single": 0}
-    chunks = list(batches(rows, BATCH_SIZE))
+    chunks = list(batches(reps, BATCH_SIZE))
     for n, chunk in enumerate(chunks, 1):
-        got, usage, st = await classify_batch(llm, [r for r, _ in chunk], model)
-        cats.extend(got)
+        got, usage, st = await classify_batch(llm, chunk, model)
+        rep_cats.extend(got)
         _add_usage(total, usage)
         for k in stats:
             stats[k] += st[k]
         log(
-            f"batch {n}/{len(chunks)}  classified {len(cats)}/{len(rows)}  "
+            f"batch {n}/{len(chunks)}  classified {len(rep_cats)}/{len(reps)}  "
             f"spend ${total['cost_usd']:.5f}"
         )
         if total["cost_usd"] > MAX_COST_USD:
             raise SystemExit(f"spend guard tripped (> ${MAX_COST_USD}); stopping")
-    return cats, total, stats
+    cats: list[str | None] = [None] * len(rows)
+    for g, c in zip(groups, rep_cats):
+        for i in g["members"]:
+            cats[i] = c
+    return cats, total, stats, len(groups)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -390,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         print("nothing to do")
         return 0
 
-    cats, usage, stats = asyncio.run(classify_all(rows, TOOL_SELECTION_MODEL))
+    cats, usage, stats, ngroups = asyncio.run(classify_all(rows, TOOL_SELECTION_MODEL))
     mapping = build_mapping(TOOL_SELECTION_MODEL, rows, cats)
     mapping["cost_usd"] = usage["cost_usd"]
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -398,6 +465,11 @@ def main(argv: list[str] | None = None) -> int:
     top_user = max(per_user, key=lambda x: x[1])[0] if per_user else 0
     record_cost(top_user, TOOL_SELECTION_MODEL, usage)
     print_summary(mapping)
+    print(f"groups classified: {ngroups} (of {len(rows)} distinct reasons)")
+    mixed = mapping["mixed_prefix_groups"]
+    print(f"mixed-prefix groups: {len(mixed)}")
+    for g in mixed:
+        print(f"  {g['prefix']!r}: {g['pages_by_category']}")
     print(f"items resolved by retry: {stats['retried']}, single-call: {stats['single']}")
     unresolved = sum(1 for c in cats if c is None)
     if unresolved:
