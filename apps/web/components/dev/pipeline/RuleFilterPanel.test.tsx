@@ -21,9 +21,9 @@ it("shows count, share, verbatim claim, split line, rules and footnote", () => {
   expect(container.querySelector("section.dev-panel.rule-filter-panel")).toBeTruthy();
   expect(screen.getByText("Rule filter · no LLM")).toBeInTheDocument();
   expect(screen.getByText("2,695")).toBeInTheDocument();
-  expect(screen.getByText(/26\.7% of captured/)).toBeInTheDocument();
+  expect(screen.getByText(/pages · 26\.7% of captured/)).toBeInTheDocument();
   expect(screen.getByText("Matched a fixed domain or URL rule before the LLM gate. Never sent to an LLM, by API or subscription, during processing, and never embedded or clustered.")).toBeInTheDocument();
-  expect(screen.getByText("domain rules 1,920 · URL pattern rules 775")).toBeInTheDocument();
+  expect(container.querySelector(".rule-filter-split")).toHaveTextContent("domain rules 1,920 · URL pattern rules 775");
   expect(screen.getByText("Rules: 3 domains · 2 URL patterns · 4 path rules")).toBeInTheDocument();
   expect(screen.getByText("a.example")).toBeInTheDocument();
   expect(screen.getByText("/login")).toBeInTheDocument();
@@ -31,7 +31,7 @@ it("shows count, share, verbatim claim, split line, rules and footnote", () => {
   expect(screen.getByText("Stored on your server as an audit row. Not yet covered: DQ bot reads and LangSmith tracing.")).toBeInTheDocument();
 });
 it("empty flow reads 0 and 0.0%", () => {
-  render(<RuleFilterPanel flow={{ total: 0, outcomes: [], details: [], fates: [] }} config={config} />);
-  expect(screen.getByText("0")).toBeInTheDocument();
-  expect(screen.getByText(/0\.0% of captured/)).toBeInTheDocument();
+  const { container } = render(<RuleFilterPanel flow={{ total: 0, outcomes: [], details: [], fates: [] }} config={config} />);
+  expect(container.querySelector(".rule-filter-number")).toHaveTextContent("0");
+  expect(screen.getByText(/pages · 0\.0% of captured/)).toBeInTheDocument();
 });

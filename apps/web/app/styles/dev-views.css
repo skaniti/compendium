@@ -389,7 +389,8 @@
 .dev-panel-meta { font-family: monospace; font-size: 0.72rem; color: var(--panel-caption); }
 .dev-config-panel.dev-panel { padding: 16px 24px; }
 .dev-config-panel.dev-panel summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0; text-transform: none; letter-spacing: normal; }
-.dev-config-panel.dev-panel summary::before { content: none; }
+.dev-config-panel.dev-panel summary::before { content: "›"; font-size: 1rem; line-height: 1; margin: 0 2px 0 0; color: var(--panel-caption); transition: transform 0.15s ease; }
+.dev-config-panel.dev-panel[open] summary::before { transform: rotate(90deg); }
 .dev-config-panel.dev-panel .config-body { padding: 12px 0 0; }
 .dev-config-title { font-size: 0.78rem; font-weight: 600; color: var(--text); margin-right: 4px; }
 .pipeline-filters-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 24px; align-items: start; }
@@ -397,17 +398,16 @@
 .dev-chip { font-family: monospace; font-size: 11px; color: var(--text); border-radius: 6px; padding: 2px 8px;
   background: color-mix(in oklch, var(--panel-caption) 14%, transparent); }
 .status-pill { display: inline-block; font-family: monospace; font-size: 11px; padding: 1px 8px; border-radius: 999px; }
-.status-active { background: color-mix(in oklch, var(--highlight) 18%, transparent); color: var(--highlight); }
-.status-archived { background: color-mix(in oklch, var(--panel-caption) 14%, transparent); color: var(--panel-caption); }
-.status-pending { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--panel-caption); }
-.rule-filter-panel { font-family: monospace; }
-.rule-filter-panel .dev-section-title { font-family: inherit; }
+.status-pill.status-active { background: color-mix(in oklch, var(--highlight) 18%, transparent); color: var(--highlight); }
+.status-pill.status-archived { background: color-mix(in oklch, var(--panel-caption) 14%, transparent); color: var(--panel-caption); }
+.status-pill.status-pending { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--panel-caption); }
+.rule-filter-number, .rule-filter-num { font-family: monospace; }
 .rule-filter-number { font-size: 2rem; font-weight: 600; color: var(--text); line-height: 1.1; }
 .rule-filter-share, .rule-filter-split, .rule-filter-footnote { font-size: 0.72rem; color: var(--panel-caption); }
 .rule-filter-claim { font-size: 0.75rem; color: var(--text); margin: 12px 0; }
 .rule-filter-rules { margin: 12px 0; font-size: 0.72rem; }
 .rule-filter-rules summary { cursor: pointer; color: var(--text); }
-.rule-filter-rules ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.rule-filter-rules ul { font-family: monospace; list-style: none; margin: 8px 0 0; padding: 0; }
 .rule-filter-domains { columns: 2 160px; column-gap: 16px; }
 .rule-filter-domains li, .rule-filter-patterns li, .rule-filter-paths li { overflow-wrap: anywhere; color: var(--text); }
 .rule-filter-patterns li span:last-child { color: var(--panel-caption); }

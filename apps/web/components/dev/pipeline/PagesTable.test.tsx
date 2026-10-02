@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, it, expect } from "vitest";
 import * as api from "@/lib/api";
@@ -6,7 +6,7 @@ import type { PageSortColumn, PipelinePagesResponse, SortDir } from "@/lib/types
 import PagesTable from "./PagesTable";
 vi.mock("@/lib/api");
 const row = (id: number) => ({ id, title: `Page ${id}`, domain: "example.org", status: "archived", processing_depth: "skipped",
-  archive_reason: "skip_gate", skip_reasoning: "login wall", skip_category: null, visited_at: "2026-08-13T23:17:14+00:00", created_at: null,
+  archive_reason: "skip_gate", skip_reasoning: "free text from the gate", skip_category: null, visited_at: "2026-08-13T23:17:14+00:00", created_at: null,
   outcome: "gate" as const, detail: "login_wall", detail_label: "login wall", fate: "archived" as const });
 const resp = (rows: ReturnType<typeof row>[], total: number, offset = 0, sort: PageSortColumn = "created_at", dir: SortDir = "desc"): PipelinePagesResponse =>
   ({ rows, total, limit: 50, offset, sort, dir });
@@ -16,7 +16,9 @@ it("renders rows, derived skip columns, and pages through", async () => {
   await screen.findByText("Page 1");
   expect(screen.getAllByText("LLM gate")).toHaveLength(2);
   expect(screen.getAllByText("skip")).toHaveLength(2);
+  const reasonCell = screen.getAllByText("login wall")[0].closest("td")!;
   expect(screen.getAllByText("login wall")).toHaveLength(2);
+  expect(reasonCell).toHaveAttribute("title", "free text from the gate");
   expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
   expect(screen.getByText("1 / 3")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Next page" }));
@@ -104,6 +106,9 @@ it("renders keep/skip/pre-gate/rule/LLM gate per outcome and status pills by fat
   const { container } = render(<PagesTable range="7d" tz="UTC" />);
   await screen.findByText("Page 1");
   expect(screen.getByText("keep")).toBeInTheDocument();
+  const activeRow = screen.getByText("Page 1").closest("tr")!;
+  expect(activeRow).not.toHaveTextContent("kept");
+  expect(within(activeRow).getAllByText("—").length).toBeGreaterThan(0);
   expect(screen.getByText("pre-gate")).toBeInTheDocument();
   expect(screen.getByText("rule")).toBeInTheDocument();
   expect(container.querySelector("span.status-pill.status-active")).toHaveTextContent("active");

@@ -20,13 +20,14 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
   const [sort, setSort] = useState<PageSortColumn>("created_at");
   const [dir, setDir] = useState<SortDir>("desc");
   const [data, setData] = useState<PipelinePagesResponse | null>(null);
+  const [dataRange, setDataRange] = useState<RangeKey>(range); // the period `data` was fetched for
   const [error, setError] = useState<string | null>(null);
   const requestKey = `${page}|${sort}|${dir}|${range}|${tz}`;
   const [settledKey, setSettledKey] = useState(requestKey); // the request whose response (or error) is on screen
   const busy = settledKey !== requestKey;
   useEffect(() => {
     let cancelled = false;
-    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir, range, tz).then((d) => { if (!cancelled) { setData(d); setError(null); setSettledKey(requestKey); } })
+    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir, range, tz).then((d) => { if (!cancelled) { setData(d); setDataRange(range); setError(null); setSettledKey(requestKey); } })
       .catch((e: Error) => { if (!cancelled) { setError(e.message); setSettledKey(requestKey); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- requestKey is derived from these same deps
@@ -42,7 +43,7 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
     <section className={busy ? "dev-panel is-refreshing" : "dev-panel"} aria-busy={busy}>
       <div className="dev-panel-head">
         <h3 className="dev-section-title">All pages</h3>
-        <span className="dev-panel-meta">{(data?.total ?? 0).toLocaleString("en-US")} · {PERIOD_LABELS[range]}</span>
+        {data && <span className="dev-panel-meta">{data.total.toLocaleString("en-US")} · {PERIOD_LABELS[dataRange]}</span>}
       </div>
       {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pages ({error}).</p>
        : !data ? <p className="dev-empty">Loading…</p>
