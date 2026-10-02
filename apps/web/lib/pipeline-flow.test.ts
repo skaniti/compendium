@@ -1,3 +1,4 @@
+import { UNCATEGORIZED_FILL } from "@/components/charts/palette";
 import { describe, it, expect } from "vitest";
 import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonPath, ribbonOpacity, mergeDomains, FATE_LABEL_H, FATE_LABEL_TOP, DETAIL_GROUP_EXTRA } from "./pipeline-flow";
 import type { FateKey, FlowDetail, FlowOutcomeKey, PipelineFlow } from "./types";
@@ -240,6 +241,7 @@ describe("label reserved boxes", () => {
     expect(ribbonOpacity("var(--flow-rule)")).toBe(0.55);
     expect(ribbonOpacity("var(--flow-before)")).toBe(0.55);
     expect(ribbonOpacity("var(--flow-archived)")).toBe(0.55);
+    expect(ribbonOpacity(UNCATEGORIZED_FILL)).toBe(0.55);
     expect(ribbonOpacity("var(--flow-processed)")).toBe(0.35);
     expect(ribbonOpacity("var(--flow-gate)")).toBe(0.35);
   });

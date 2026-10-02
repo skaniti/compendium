@@ -97,3 +97,17 @@ it("shows Loading… first and an alert on failure", async () => {
   expect(screen.getByText("Loading…")).toBeInTheDocument();
   expect(await screen.findByRole("alert")).toHaveTextContent("boom");
 });
+it("clamps sparse points below the dense floor into the rates plot and keeps the end label", async () => {
+  const dense = { total: 40, archived: 38, reached_gate: 30, outcomes: { before_gate: 2, rule_filter: 8, gate: 28, processed: 2, pending: 0 } };
+  const sparse = { total: 3, archived: 0, reached_gate: 2, outcomes: { before_gate: 0, rule_filter: 0, gate: 0, processed: 3, pending: 0 } };
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, dense), live(2, dense), live(3, sparse)]));
+  const { container } = render(<FlowTimeline {...props} />);
+  await screen.findByText("Volume");
+  const rates = container.querySelector('svg[aria-label="Archive and gate skip rates"]')!;
+  const plotH = 82; // H_RATE
+  const sparseDots = Array.from(rates.querySelectorAll("circle.flow-rate-dot-sparse"));
+  expect(sparseDots.length).toBe(2);
+  for (const c of sparseDots) { const y = Number(c.getAttribute("cy")); expect(y).toBeGreaterThanOrEqual(0); expect(y).toBeLessThanOrEqual(plotH); }
+  for (const l of Array.from(rates.querySelectorAll("path.flow-rate-line"))) for (const n of (l.getAttribute("d") ?? "").match(/,(-?[\d.]+)/g) ?? []) expect(Number(n.slice(1))).toBeLessThanOrEqual(plotH);
+  expect(rates.querySelectorAll("text.flow-rate-end").length).toBe(2);
+});

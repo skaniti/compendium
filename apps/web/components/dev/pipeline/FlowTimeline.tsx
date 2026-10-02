@@ -74,9 +74,11 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const rs = rateSeries(buckets);
   const [rmin, rmax] = rateDomain(rs);
   const yr = (v: number) => H_RATE - ((v - rmin) / (rmax - rmin)) * H_RATE;
+  // Sparse points sit outside the (dense-only) domain; clamp where they are DRAWN so they never clip out of the panel. Labels keep the true value.
+  const yd = (p: { y: number | null; d: number }) => yr(isSparse(p as never) ? Math.min(rmax, Math.max(rmin, p.y as number)) : (p.y as number));
   const rateTicks: number[] = []; for (let t = rmin; t <= rmax; t += 20) rateTicks.push(t);
-  const path = (pts: typeof rs.archive) => line<{ y: number | null }>().defined((p) => p.y !== null).x((_, i) => cx(i)).y((p) => yr(p.y as number))(pts) ?? "";
-  const endOf = (pts: typeof rs.archive) => { let i = pts.length - 1; while (i >= 0 && pts[i].y === null) i--; return i < 0 ? null : { i, y: yr(pts[i].y as number), v: pts[i].y as number }; };
+  const path = (pts: typeof rs.archive) => line<{ y: number | null }>().defined((p) => p.y !== null).x((_, i) => cx(i)).y((p, i) => yd(pts[i]))(pts) ?? "";
+  const endOf = (pts: typeof rs.archive) => { let i = pts.length - 1; while (i >= 0 && pts[i].y === null) i--; return i < 0 ? null : { i, y: yd(pts[i]), v: pts[i].y as number }; };
   const ends = [endOf(rs.archive), endOf(rs.gate)];
   const endYs = ends.map((e) => e?.y ?? 0);
   if (ends[0] && ends[1] && Math.abs(endYs[0] - endYs[1]) < 12) { // keep the higher line's label above, push apart symmetrically
@@ -95,8 +97,8 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
             if (p.y === null) return null;
             // under MIN_RATE_DENOM pages the point is noise: hollow, and the line still runs through it
             return isSparse(p)
-              ? <circle key={i} className="flow-rate-dot flow-rate-dot-sparse" cx={cx(i)} cy={yr(p.y)} r={2.5} fill="none" strokeWidth={1.25} style={{ stroke: color }} />
-              : <circle key={i} className="flow-rate-dot" cx={cx(i)} cy={yr(p.y)} r={2.5} style={{ fill: color }} />;
+              ? <circle key={i} className="flow-rate-dot flow-rate-dot-sparse" cx={cx(i)} cy={yd(p)} r={2.5} fill="none" strokeWidth={1.25} style={{ stroke: color }} />
+              : <circle key={i} className="flow-rate-dot" cx={cx(i)} cy={yd(p)} r={2.5} style={{ fill: color }} />;
           })}
           {endLabel(k, color)}
         </g>

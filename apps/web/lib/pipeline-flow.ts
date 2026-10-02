@@ -1,4 +1,5 @@
 // Pure layout model for the Pipeline flow (Captured -> Outcome -> Breakdown -> Fate). No React, no DOM.
+import { UNCATEGORIZED_FILL } from "@/components/charts/palette";
 import { OUTCOME_COLOR } from "./pipeline";
 import type { FateKey, FlowDetail, FlowOutcomeKey, PipelineFlow, TopDomain } from "./types";
 
@@ -22,7 +23,7 @@ export const FATE_LABEL_H: Record<FateKey, number> = { archived: 72, active: 44,
 export const DETAIL_GROUP_EXTRA = 8;
 /** The fate column header sits at svg y=14 (group y = -22); label boxes start below it. */
 export const FATE_LABEL_TOP = -8;
-const GREY_COLORS = new Set(["var(--flow-captured)", "var(--flow-rule)", "var(--flow-before)", "var(--flow-archived)", "var(--flow-pending)"]);
+const GREY_COLORS = new Set(["var(--flow-captured)", "var(--flow-rule)", "var(--flow-before)", "var(--flow-archived)", "var(--flow-pending)", UNCATEGORIZED_FILL]);
 /** Grey-sourced ribbons need more opacity to read against the panel; cyan/teal ones stay light so they do not overpower. */
 export const ribbonOpacity = (color: string): number => (GREY_COLORS.has(color) ? 0.55 : 0.35);
 const OUTCOME_GAP = 10, GROUP_GAP = 10, IN_GROUP_GAP = 3, FATE_GAP = 10, MIN_H = 2, MAX_NAMED_GATE = 3;

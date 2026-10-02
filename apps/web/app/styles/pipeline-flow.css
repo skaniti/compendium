@@ -3,7 +3,7 @@
   --flow-captured: color-mix(in oklch, var(--panel-caption) 70%, var(--surface));
   --flow-processed: var(--highlight);
   --flow-gate: color-mix(in oklch, var(--highlight) 40%, var(--surface));
-  --flow-rule: color-mix(in oklch, var(--panel-caption) 60%, var(--surface)); /* cooler/lighter than before-gate so the privacy-story band stands apart */
+  --flow-rule: color-mix(in oklch, var(--panel-caption) 60%, var(--surface)); /* a lighter grey than before-gate (28%) so the privacy-story band stands apart */
   --flow-before: color-mix(in oklch, var(--panel-caption) 28%, var(--surface));
   --flow-archived: color-mix(in oklch, var(--panel-caption) 50%, var(--surface));
   --flow-pending: var(--panel-caption);
