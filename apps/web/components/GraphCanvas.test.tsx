@@ -1621,50 +1621,25 @@ describe("GraphCanvas filter dimming (Step 5: carried A1-1 deferral)", () => {
   });
 });
 
-describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from GraphPlaceholder.test.tsx)", () => {
-  // NEXT_PUBLIC_DEMO_ROLE_TOOLING opt-in: this whole describe block covers
-  // the role machinery (view-demo/return-to-admin) itself, so it opts in
-  // for every test here -- same convention as SessionKeeper.test.tsx's
-  // NEXT_PUBLIC_IDLE_MINUTES save/restore. The default-OFF contract (the
-  // control absent with no flag) is covered separately in its own describe
-  // block below, which deliberately does NOT set this.
-  const originalRoleTooling = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-
-  beforeEach(() => {
-    process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = "1";
-  });
-
-  afterEach(() => {
-    if (originalRoleTooling === undefined) delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-    else process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = originalRoleTooling;
-  });
-
-  it("admin: sees the view-demo trigger, not return-to-admin", async () => {
+// The view-demo / return-to-admin controls moved to the app header
+// (components/Header.tsx, covered in Header.test.tsx); the overlay now holds
+// only the noise toggle.
+describe("GraphCanvas graph-debug-overlay (view-as controls moved to the header)", () => {
+  it("admin: the overlay no longer renders view-as / return controls", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
 
-    await waitFor(() => expect(screen.getByText("view demo")).toBeInTheDocument());
-    expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
-  });
-
-  it("acting-as-demo: sees the return-to-admin trigger, not view-demo", async () => {
-    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
-    renderCanvas(
-      { id: 2, email: "demo@example.com", role: "demo", acting_as_demo: true, admin_origin_email: "admin@example.com" },
-      200
-    );
-
-    await waitFor(() => expect(screen.getByText("return to admin")).toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector("#graph-debug-overlay")).not.toBeNull());
     expect(screen.queryByText("view demo")).not.toBeInTheDocument();
+    expect(document.querySelector("#view-as-demo-form")).toBeNull();
+    expect(document.querySelector("#return-to-admin-form")).toBeNull();
   });
 
-  it("plain user: sees neither trigger, and the whole overlay wrapper is absent (2026-08-24: admin-context gate)", async () => {
+  it("plain user: the whole overlay wrapper is absent (2026-08-24: admin-context gate)", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 3, email: "user@example.com", role: "user", acting_as_demo: false }, 200);
 
     await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-    expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
     // Was: `.not.toBeNull()` -- the wrapper rendered unconditionally before
     // the 2026-08-24 admin-context gate (prod-mode sweep item 1). Role
     // "user" is not admin-context (role !== "admin" && !actingAsDemo), so
@@ -1695,15 +1670,15 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
   // if a future container-level click handler is added without the same
   // exclusion: a click on these controls/regions must never throw or
   // disturb #graph-debug-overlay's other contents.
-  it("regression (Task V3 item 2): clicking noise-toggle-btn does not disturb #graph-debug-overlay or its other controls", async () => {
+  it("regression (Task V3 item 2): clicking noise-toggle-btn does not disturb #graph-debug-overlay", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
     renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
 
-    await waitFor(() => expect(screen.getByText("view demo")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("noise: off")).toBeInTheDocument());
     act(() => screen.getByText("noise: off").click());
 
     expect(document.querySelector("#graph-debug-overlay")).not.toBeNull();
-    expect(screen.getByText("view demo")).toBeInTheDocument();
+    expect(screen.getByText(/^noise: (on|off)$/)).toBeInTheDocument();
   });
 
   it("regression (Task V3 item 2): clicking inside #compendium-empty-state does not throw and leaves #graph-debug-overlay intact", async () => {
@@ -1721,90 +1696,12 @@ describe("GraphCanvas graph-debug-overlay role-gated triggers (ported from Graph
   });
 });
 
-// Default-off contract: NEXT_PUBLIC_DEMO_ROLE_TOOLING left UNSET -- the
-// out-of-the-box `npm run demo` / `npm run dev` experience. The view-as
-// control must not render even for a session whose role/actingAsDemo WOULD
-// otherwise satisfy the old unconditional gate (i.e. even if a real or stub
-// backend somehow reflects role: "admin" or acting_as_demo: true). The
-// beforeEach explicitly DELETES the var (rather than relying on it merely
-// happening to be unset in whatever ambient environment the suite runs
-// under) so this block's "default off" premise holds regardless of the
-// wider test run's env state -- same save/restore idiom as the describe
-// block above, just deleting instead of setting.
-describe("GraphCanvas graph-debug-overlay role-gated triggers: default off (NEXT_PUBLIC_DEMO_ROLE_TOOLING unset)", () => {
-  const originalRoleTooling = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-
-  beforeEach(() => {
-    delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-  });
-
-  afterEach(() => {
-    if (originalRoleTooling === undefined) delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-    else process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = originalRoleTooling;
-  });
-
-  it("admin role: view-demo trigger is absent by default", async () => {
-    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
-    renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
-
-    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-    expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
-    // The overlay itself (and the un-individually-gated noise toggle inside
-    // it) still renders for this admin session -- NEXT_PUBLIC_DEMO_ROLE_
-    // TOOLING being unset only hides the two role-tooling trigger controls,
-    // not the admin-context gate (role === "admin" || actingAsDemo) added
-    // 2026-08-24 around the whole wrapper.
-    expect(document.querySelector("#graph-debug-overlay")).not.toBeNull();
-  });
-
-  it("acting-as-demo: return-to-admin trigger is absent by default", async () => {
-    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
-    renderCanvas(
-      { id: 2, email: "demo@example.com", role: "demo", acting_as_demo: true, admin_origin_email: "admin@example.com" },
-      200
-    );
-
-    await waitFor(() => expect(api.apiFetch).toHaveBeenCalled());
-    expect(screen.queryByText("return to admin")).not.toBeInTheDocument();
-    expect(screen.queryByText("view demo")).not.toBeInTheDocument();
-  });
-});
-
-// NEXT_PUBLIC_DEMO_ROLE_TOOLING="true" is accepted the same as "1"
-// (isRoleToolingVisible's widened parse) -- a single representative
-// assertion, not a full re-run of every case the "1" describe block above
-// already covers.
-describe('GraphCanvas graph-debug-overlay role-gated triggers: NEXT_PUBLIC_DEMO_ROLE_TOOLING="true" is also accepted', () => {
-  const originalRoleTooling = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-
-  beforeEach(() => {
-    process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = "true";
-  });
-
-  afterEach(() => {
-    if (originalRoleTooling === undefined) delete process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-    else process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING = originalRoleTooling;
-  });
-
-  it('admin: sees the view-demo trigger with the flag set to "true" (not just "1")', async () => {
-    vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);
-    renderCanvas({ id: 1, email: "admin@example.com", name: "Admin", role: "admin", acting_as_demo: false }, 200);
-
-    await waitFor(() => expect(screen.getByText("view demo")).toBeInTheDocument());
-  });
-});
-
 // 2026-08-24 (prod-mode sweep item 1): #graph-debug-overlay -- the WHOLE
 // wrapper, including the noise toggle, not just the two role-tooling
 // triggers -- is gated to admin-context sessions (role === "admin" ||
 // actingAsDemo), mirroring Dash's 2026-07-13 roles rework
 // (app.py:2785-2799's clientside callback). Ledgered known limitation
-// since batch-03 (task-A1-5's note); this closes it. Independent of
-// NEXT_PUBLIC_DEMO_ROLE_TOOLING, which the describe blocks above already
-// cover for the two individual triggers -- left unset here (default off)
-// since it has no bearing on whether the wrapper/noise-toggle itself
-// renders.
+// since batch-03 (task-A1-5's note); this closes it.
 describe("GraphCanvas graph-debug-overlay admin-context gate (2026-08-24: prod-mode sweep item 1)", () => {
   it("admin: overlay wrapper and noise toggle render", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(EMPTY_PAYLOAD);

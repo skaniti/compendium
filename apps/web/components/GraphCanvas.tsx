@@ -46,9 +46,9 @@ type GraphVendorModule = typeof import("@/lib/graph/d3-graph-vendor.js");
 //  2. The dev-note placeholder text ("graph arrives in a later slice") is
 //     deleted; the #graph-debug-overlay WRAPPER it lived in is NOT --
 //     Dash's own wrapper persists indefinitely as the home for the
-//     view-demo/return-to-admin triggers (graph_canvas.py:643-747), and a
-//     noise-toggle text control (graph_canvas.py:724-733; each trigger's
-//     own " | " separator span leads into it), the latter landing at Task
+//     view-demo/return-to-admin triggers (graph_canvas.py:643-747; since
+//     moved to the app header, components/Header.tsx) and a noise-toggle
+//     text control (graph_canvas.py:724-733), the latter landing at Task
 //     A1-3 Step 4 (#noise-toggle-btn below).
 //
 //     2026-08-24 (prod-mode sweep item 1): this port originally rendered
@@ -185,27 +185,6 @@ const GRAPH_DEBUG_OVERLAY_STYLE: CSSProperties = {
   fontFamily: "monospace",
 };
 
-// Verbatim port of the inline button style dict graph_canvas.py uses for
-// both "view demo" and "return to admin" (:660-670, :693-703).
-const DEBUG_LINK_BUTTON_STYLE: CSSProperties = {
-  background: "transparent",
-  border: "none",
-  padding: "0",
-  margin: "0",
-  color: "inherit",
-  font: "inherit",
-  cursor: "pointer",
-  textDecoration: "none",
-};
-
-// Verbatim port of the " | " separator span style following each trigger
-// (:672-677, :705-710).
-const DEBUG_LINK_SEPARATOR_STYLE: CSSProperties = {
-  opacity: 0.3,
-  marginLeft: "4px",
-  marginRight: "4px",
-};
-
 // Task A1-3 (Step 4): verbatim port of the noise-toggle span's inline style
 // dict (graph_canvas.py:724-733's html.Span(id="noise-toggle-btn")). App CSS
 // (app/styles/search-bar.css, already ported) supplies the hover filter
@@ -256,26 +235,6 @@ const ERROR_STYLE: CSSProperties = {
 // .panel-center/.app-container has a transform/filter/backdrop-filter/
 // will-change rule that would trap it).
 const NODE_TOOLTIP_STYLE: CSSProperties = { display: "none" };
-
-// Role-tooling opt-in (frontend half; stub-side sibling is
-// DEMO_ROLE_TOOLING in demo/server.mjs's startServer): OFF by default, so a
-// stranger running `npm run demo` (or plain `npm run dev`) never sees the
-// view-demo/return-to-admin controls below, regardless of what `role`/
-// `actingAsDemo` useSession() happens to report. The maintainer's own dev
-// stack (scripts/dev.sh) sets NEXT_PUBLIC_DEMO_ROLE_TOOLING=1;
-// demo/launcher.mjs (`npm run demo`) deliberately does not. Read live
-// (not cached at module scope) via a literal `process.env.NEXT_PUBLIC_...`
-// reference -- same convention as SessionKeeper.tsx's readIdleMinutes --
-// so Next's client build can still statically inline it per the
-// NEXT_PUBLIC_* convention while a test can still override it per-case.
-// Accepts "1" or "true" (anything else, including unset, is off) -- same
-// accepted-value contract as demo/server.mjs's isEnvFlagOn (kept as two
-// independent implementations, one per process; see that function's doc
-// comment).
-function isRoleToolingVisible(): boolean {
-  const flag = process.env.NEXT_PUBLIC_DEMO_ROLE_TOOLING;
-  return flag === "1" || flag === "true";
-}
 
 // Almagest graph tuner (Task 4, dev-only): production safety hinges on
 // GraphCanvas.tsx never containing a top-level static import of the
@@ -414,8 +373,8 @@ export default function GraphCanvas() {
   // backend's is_plain_demo gate) -- same local derivation ThemeProvider/
   // StarfieldProvider/usePanelResize's own callers use (AppShell.tsx's
   // isPlainDemo), computed here directly since GraphCanvas already reads
-  // role/actingAsDemo from useSession() for the view-demo/return-to-admin
-  // triggers above and isn't threaded any props from a server component.
+  // role/actingAsDemo from useSession() (the view-demo/return-to-admin
+  // controls moved to components/Header.tsx) and isn't threaded any props from a server component.
   const isPlainDemo = role === "demo" && !actingAsDemo;
 
   // 2026-08-24 (prod-mode sweep item 1): admin-context gate for the whole
@@ -991,35 +950,6 @@ export default function GraphCanvas() {
     recolorRef.current?.();
   }, [variant]);
 
-  // JWT port of Dash's admin-only /__view_as_demo switch (D5, batch 04) --
-  // ported unchanged from GraphPlaceholder.tsx (originally moved there
-  // from components/Header.tsx, 2026-07-13 Dash relocation into the
-  // graph-canvas debug overlay).
-  async function handleViewDemo(): Promise<void> {
-    const res = await apiFetch("/api/auth/view-as", { method: "POST" });
-    if (!res.ok) {
-      console.error("view-as failed:", res.status);
-      return;
-    }
-    // Full reload (not router navigation) is deliberate: the identity swap
-    // must invalidate every client-side cache/context tied to the old
-    // session, not just the URL.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after an identity swap
-    window.location.assign("/");
-  }
-
-  // JWT port of Dash's /__return_to_admin (D5, batch 04) -- ported
-  // unchanged from GraphPlaceholder.tsx.
-  async function handleReturnToAdmin(): Promise<void> {
-    const res = await apiFetch("/api/auth/return", { method: "POST" });
-    if (!res.ok) {
-      console.error("return-to-admin failed:", res.status);
-      return;
-    }
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after an identity swap (same as handleViewDemo above)
-    window.location.assign("/");
-  }
-
   // Task A1-3 (Step 4): port of Dash's noise-toggle click handler
   // (callbacks/graph.py:129-154's toggle_noise). Flips the local/vendor
   // state unconditionally (the effect above pushes it to the vendor).
@@ -1085,38 +1015,19 @@ export default function GraphCanvas() {
             Couldn&apos;t load graph: {error}
           </p>
         )}
-        {/* 2026-08-24 (prod-mode sweep item 1): the whole wrapper -- view
-            demo/return-to-admin triggers AND the noise toggle -- is gated
+        {/* 2026-08-24 (prod-mode sweep item 1): the whole wrapper (now just
+            the noise toggle; the view-as-demo / return-to-admin controls
+            moved to the app header, components/Header.tsx) is gated
             on adminContext, mirroring Dash's 2026-07-13 roles rework
             (app.py:2785-2799's clientside callback hides the entire
             #graph-debug-overlay div for every role except admin-context).
             Previously only the two trigger spans were individually
-            role-gated below; the noise toggle had no gate of its own and
+            role-gated; the noise toggle had no gate of its own and
             the outer div rendered unconditionally, so plain demo (and any
             other non-admin-context role) could see it -- ledgered known
             limitation since batch-03 (task-A1-5), closed here. */}
         {adminContext && (
           <div id="graph-debug-overlay" style={GRAPH_DEBUG_OVERLAY_STYLE}>
-            {isRoleToolingVisible() && role === "admin" && !actingAsDemo && (
-              <span id="view-as-demo-form" style={{ display: "inline", margin: 0 }}>
-                <button type="button" style={DEBUG_LINK_BUTTON_STYLE} onClick={() => void handleViewDemo()}>
-                  view demo
-                </button>
-                <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-              </span>
-            )}
-            {isRoleToolingVisible() && actingAsDemo && (
-              <span id="return-to-admin-form" style={{ display: "inline", margin: 0 }}>
-                <button
-                  type="button"
-                  style={DEBUG_LINK_BUTTON_STYLE}
-                  onClick={() => void handleReturnToAdmin()}
-                >
-                  return to admin
-                </button>
-                <span style={DEBUG_LINK_SEPARATOR_STYLE}> | </span>
-              </span>
-            )}
             {/* Task A1-3 (Step 4): port of graph_canvas.py's noise-toggle
                 html.Span (:724-733). Dash gives it no gate of its own
                 beyond the outer #graph-debug-overlay wrapper's own

@@ -5,6 +5,8 @@ import HeaderCards from "./HeaderCards";
 import SettingsMenu from "./SettingsMenu";
 import DevTabs from "./dev/DevTabs";
 import { useSession } from "./SessionProvider";
+import { apiFetch } from "@/lib/api";
+import { isRoleToolingVisible } from "@/lib/role-tooling";
 import { DevArrowsIcon, GraphGlyphIcon, liveDevViews, visibleDevViews } from "@/lib/dev-views";
 
 // Mirrors app.py's .app-header inline style block (:1877-1899). Header grew
@@ -35,7 +37,7 @@ const ACCOUNT_COLUMN_STYLE: CSSProperties = {
   flexDirection: "column",
   alignItems: "flex-end",
   justifyContent: "center",
-  gap: "5px",
+  gap: "4px",
   flexShrink: 0,
   marginRight: "5px",
 };
@@ -98,6 +100,23 @@ export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
     window.location.href = "/login";
   }
 
+  // Admin-only identity switch (JWT port of Dash's /__view_as_demo and
+  // /__return_to_admin), moved here from the graph debug overlay so the
+  // admin can flip ANY view between their own data and the demo account's.
+  async function switchIdentity(route: string, label: string): Promise<void> {
+    const res = await apiFetch(route, { method: "POST" });
+    if (!res.ok) {
+      console.error(`${label} failed:`, res.status);
+      return;
+    }
+    // Full reload (not router navigation) is deliberate: the identity swap
+    // must invalidate every client-side cache/context tied to the old
+    // session. Reloads the CURRENT page so the admin stays on the view
+    // they are checking.
+    const { pathname, search, hash } = window.location;
+    window.location.assign(pathname + search + hash);
+  }
+
   return (
     <div className="app-header" style={APP_HEADER_STYLE}>
       <div id="mode-switch-bar" className={`mode-switch-bar mode-${mode}`}>
@@ -134,6 +153,30 @@ export default function Header({ mode = "graph" }: { mode?: "graph" | "dev" }) {
         <div id="account-display" style={ACCOUNT_VALUE_STYLE}>
           {account}
         </div>
+        {isRoleToolingVisible() && role === "admin" && !actingAsDemo && (
+          <span id="view-as-demo-form">
+            <button
+              type="button"
+              title="View the current page as the demo account"
+              style={SIGN_OUT_BUTTON_STYLE}
+              onClick={() => void switchIdentity("/api/auth/view-as", "view-as")}
+            >
+              View as demo
+            </button>
+          </span>
+        )}
+        {isRoleToolingVisible() && actingAsDemo && (
+          <span id="return-to-admin-form">
+            <button
+              type="button"
+              title="Return to your own account on the current page"
+              style={SIGN_OUT_BUTTON_STYLE}
+              onClick={() => void switchIdentity("/api/auth/return", "return-to-admin")}
+            >
+              Return to admin
+            </button>
+          </span>
+        )}
         <button
           type="button"
           title="Sign out (clears session, returns to login screen)"

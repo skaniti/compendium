@@ -1241,7 +1241,7 @@ function isDirectEntry(metaUrl, argv1) {
 
 // Parses an opt-in boolean env flag: "1" or "true" is ON, anything else
 // (unset, "0", "false", garbage) is OFF. Shared accepted-value CONTRACT with
-// components/GraphCanvas.tsx's isRoleToolingVisible (NEXT_PUBLIC_DEMO_ROLE_TOOLING)
+// lib/role-tooling.ts's isRoleToolingVisible (NEXT_PUBLIC_DEMO_ROLE_TOOLING)
 // -- kept as two independent implementations, one per process, per that
 // function's own doc comment. Exported for direct test coverage without
 // spawning this module as a subprocess.
