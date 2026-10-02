@@ -34,7 +34,9 @@ from backend.services.skip_categories import (
     normalize_category,
 )
 
-BATCH_SIZE = 40
+BATCH_SIZE = 15
+MAX_RETRIES = 2
+ECHO_CHARS = 30
 MAX_COST_USD = 0.50
 TOOL_NAME = "classify_skip_reasons"
 
@@ -42,12 +44,14 @@ SELECT_REASONS_SQL = """
     SELECT skip_reasoning, count(*) AS pages
     FROM pages
     WHERE archive_reason = 'skip_gate' AND skip_category IS NULL
+      AND skip_reasoning IS NOT NULL AND btrim(skip_reasoning) <> ''
     GROUP BY skip_reasoning
     ORDER BY count(*) DESC, skip_reasoning
 """
 PER_USER_SQL = """
     SELECT user_id, count(*) FROM pages
     WHERE archive_reason = 'skip_gate' AND skip_category IS NULL
+      AND skip_reasoning IS NOT NULL AND btrim(skip_reasoning) <> ''
     GROUP BY user_id ORDER BY user_id
 """
 UPDATE_SQL = (
@@ -81,6 +85,12 @@ def classify_tool() -> dict:
                             "type": "object",
                             "properties": {
                                 "index": {"type": "integer", "description": "The reason's number"},
+                                "echo": {
+                                    "type": "string",
+                                    "description": (
+                                        f"The first {ECHO_CHARS} characters of that reason, copied exactly"
+                                    ),
+                                },
                                 "category": {
                                     "type": "string",
                                     "enum": list(SKIP_CATEGORY_IDS),
@@ -89,7 +99,7 @@ def classify_tool() -> dict:
                                     ),
                                 },
                             },
-                            "required": ["index", "category"],
+                            "required": ["index", "category", "echo"],
                         },
                     }
                 },
@@ -105,14 +115,43 @@ def build_prompt(reasons: list[str]) -> str:
     return (
         "A page-skipping gate archived web pages and recorded a short free-text "
         "reason for each. Classify every numbered reason below into exactly one "
-        f"category, then call {TOOL_NAME} once with an entry for every number.\n\n"
+        f"category, then call {TOOL_NAME} once with an entry for EVERY number "
+        f"(do not omit any). For each entry also copy the first {ECHO_CHARS} "
+        "characters of its reason into `echo`.\n\n"
         f"Categories:\n{cats}\n\nReasons:\n{numbered}"
     )
 
 
-def parse_response(arguments: object, n: int) -> list[str]:
-    """Category per index 0..n-1; missing/invalid/out-of-range -> ``other``."""
-    out = ["other"] * n
+def reasons_in_prompt(prompt: str) -> list[str]:
+    """Inverse of build_prompt's numbered list (used by tests and debugging)."""
+    tail = prompt.split("Reasons:\n", 1)[1]
+    return [line.split(". ", 1)[1] for line in tail.split("\n") if ". " in line]
+
+
+def _valid_category(value: object) -> str | None:
+    """A category id for a valid model answer, else None (no silent 'other')."""
+    if not isinstance(value, str):
+        return None
+    v = value.strip().lower()
+    if v in SKIP_CATEGORY_IDS:
+        return v
+    for cid, label, _ in SKIP_CATEGORIES:
+        if v == label.lower():
+            return cid
+    return None
+
+
+def _echo_matches(echo: object, reason: str) -> bool:
+    if not isinstance(echo, str) or not echo.strip():
+        return False
+    norm = " ".join(reason.lower().split())
+    return norm.startswith(" ".join(echo.lower().split()))
+
+
+def parse_response(arguments: object, reasons: list[str]) -> list[str | None]:
+    """Category per reason; None for anything missing, invalid, or echo-mismatched."""
+    n = len(reasons)
+    out: list[str | None] = [None] * n
     items = arguments.get("items") if isinstance(arguments, dict) else None
     if not isinstance(items, list):
         return out
@@ -122,11 +161,19 @@ def parse_response(arguments: object, n: int) -> list[str]:
         idx = it.get("index")
         if isinstance(idx, bool) or not isinstance(idx, int) or not 0 <= idx < n:
             continue
-        out[idx] = normalize_category(it.get("category"))
+        cat = _valid_category(it.get("category"))
+        if cat is None or not _echo_matches(it.get("echo"), reasons[idx]):
+            continue
+        out[idx] = cat
     return out
 
 
-async def classify_batch(llm, reasons: list[str], model: str) -> tuple[list[str], dict]:
+def _add_usage(total: dict, usage: dict) -> None:
+    for k in total:
+        total[k] += usage[k]
+
+
+async def _ask(llm, reasons: list[str], model: str) -> tuple[list[str | None], dict]:
     resp, tool_calls = await llm.select_tool(
         prompt=build_prompt(reasons), tools=[classify_tool()], model=model, temperature=0.0
     )
@@ -136,13 +183,50 @@ async def classify_batch(llm, reasons: list[str], model: str) -> tuple[list[str]
         "cost_usd": getattr(resp, "cost_usd", 0.0) or 0.0,
     }
     args = tool_calls[0]["arguments"] if tool_calls else None
-    return parse_response(args, len(reasons)), usage
+    return parse_response(args, reasons), usage
 
 
-def build_mapping(model: str, rows: list[tuple], cats: list[str]) -> dict:
+async def classify_batch(
+    llm, reasons: list[str], model: str
+) -> tuple[list[str | None], dict, dict]:
+    """Classify with retries for dropped items, then one call per leftover item.
+
+    Returns (categories, usage, stats). A category stays None only if the model
+    never produced a valid, echo-verified answer; it is NOT defaulted to 'other'.
+    """
+    cats: list[str | None] = [None] * len(reasons)
+    usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    stats = {"retried": 0, "single": 0}
+
+    def pending() -> list[int]:
+        return [i for i, c in enumerate(cats) if c is None]
+
+    for attempt in range(MAX_RETRIES + 1):
+        todo = pending()
+        if not todo:
+            break
+        got, u = await _ask(llm, [reasons[i] for i in todo], model)
+        _add_usage(usage, u)
+        for i, c in zip(todo, got):
+            if c is not None:
+                cats[i] = c
+                if attempt > 0:
+                    stats["retried"] += 1
+    for i in pending():
+        got, u = await _ask(llm, [reasons[i]], model)
+        _add_usage(usage, u)
+        if got[0] is not None:
+            cats[i] = got[0]
+            stats["single"] += 1
+    return cats, usage, stats
+
+
+def build_mapping(model: str, rows: list[tuple], cats: list[str | None]) -> dict:
     counts = {cid: {"reasons": 0, "pages": 0} for cid in SKIP_CATEGORY_IDS}
     items = []
     for (reason, pages), cat in zip(rows, cats):
+        if cat is None:
+            continue
         items.append({"reason": reason, "category": cat, "pages": pages})
         counts[cat]["reasons"] += 1
         counts[cat]["pages"] += pages
@@ -234,26 +318,27 @@ def record_cost(user_id: int, model: str, usage: dict) -> None:
         log(f"cost event insert failed: {e}")
 
 
-async def classify_all(rows: list[tuple], model: str) -> tuple[list[str], dict]:
+async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None], dict, dict]:
     from backend.services.llm_service import LLMService
 
     llm = LLMService()
-    cats: list[str] = []
+    cats: list[str | None] = []
     total = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    stats = {"retried": 0, "single": 0}
     chunks = list(batches(rows, BATCH_SIZE))
     for n, chunk in enumerate(chunks, 1):
-        reasons = [r if r is not None else "" for r, _ in chunk]
-        got, usage = await classify_batch(llm, reasons, model)
-        # NULL/empty reasons carry no signal; never spend a guess on them.
-        cats.extend("other" if not r else c for r, c in zip(reasons, got))
-        for k in total:
-            total[k] += usage[k]
+        got, usage, st = await classify_batch(llm, [r for r, _ in chunk], model)
+        cats.extend(got)
+        _add_usage(total, usage)
+        for k in stats:
+            stats[k] += st[k]
         log(
-            f"batch {n}/{len(chunks)}  classified {len(cats)}/{len(rows)}  spend ${total['cost_usd']:.5f}"
+            f"batch {n}/{len(chunks)}  classified {len(cats)}/{len(rows)}  "
+            f"spend ${total['cost_usd']:.5f}"
         )
         if total["cost_usd"] > MAX_COST_USD:
             raise SystemExit(f"spend guard tripped (> ${MAX_COST_USD}); stopping")
-    return cats, total
+    return cats, total, stats
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -286,13 +371,20 @@ def main(argv: list[str] | None = None) -> int:
     from backend.api.main import TOOL_SELECTION_MODEL
 
     rows, per_user = select_reasons(args.limit)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM pages WHERE archive_reason = 'skip_gate' "
+            "AND skip_category IS NULL "
+            "AND (skip_reasoning IS NULL OR btrim(skip_reasoning) = '')"
+        )
+        print(f"pages with no reason text (left uncategorized): {cur.fetchone()[0]}")
     print(f"candidate pages by user: {dict(per_user)}")
     print(f"distinct reasons to classify: {len(rows)} ({-(-len(rows) // BATCH_SIZE)} batches)")
     if not rows:
         print("nothing to do")
         return 0
 
-    cats, usage = asyncio.run(classify_all(rows, TOOL_SELECTION_MODEL))
+    cats, usage, stats = asyncio.run(classify_all(rows, TOOL_SELECTION_MODEL))
     mapping = build_mapping(TOOL_SELECTION_MODEL, rows, cats)
     mapping["cost_usd"] = usage["cost_usd"]
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -300,6 +392,10 @@ def main(argv: list[str] | None = None) -> int:
     top_user = max(per_user, key=lambda x: x[1])[0] if per_user else 0
     record_cost(top_user, TOOL_SELECTION_MODEL, usage)
     print_summary(mapping)
+    print(f"items resolved by retry: {stats['retried']}, single-call: {stats['single']}")
+    unresolved = sum(1 for c in cats if c is None)
+    if unresolved:
+        print(f"unresolved (left uncategorized): {unresolved}")
     print(f"LLM spend: ${usage['cost_usd']:.5f}")
     print(f"mapping written: {out}")
     if args.apply:

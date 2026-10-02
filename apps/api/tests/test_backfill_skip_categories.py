@@ -28,10 +28,11 @@ def _pg_reachable() -> bool:
 needs_pg = pytest.mark.skipif(not _pg_reachable(), reason="test PostgreSQL not reachable")
 
 
-def test_batches_split_into_forty():
-    items = list(range(95))
-    chunks = list(bf.batches(items, 40))
-    assert [len(c) for c in chunks] == [40, 40, 15]
+def test_batches_split_by_batch_size():
+    items = list(range(40))
+    chunks = list(bf.batches(items, bf.BATCH_SIZE))
+    assert bf.BATCH_SIZE == 15
+    assert [len(c) for c in chunks] == [15, 15, 10]
     assert [x for c in chunks for x in c] == items
 
 
@@ -41,62 +42,131 @@ def test_tool_enum_matches_categories():
     assert fn["name"] == "classify_skip_reasons"
     item = fn["parameters"]["properties"]["items"]["items"]
     assert item["properties"]["category"]["enum"] == list(SKIP_CATEGORY_IDS)
-    assert set(item["required"]) == {"index", "category"}
+    assert "web_app" in SKIP_CATEGORY_IDS
+    assert set(item["required"]) == {"index", "category", "echo"}
 
 
-def test_parse_response_fills_missing_and_invalid_with_other():
+def _ans(i, cat, reasons):
+    return {"index": i, "category": cat, "echo": reasons[i][:30]}
+
+
+def test_parse_response_gaps_and_invalid_are_none_not_other():
+    reasons = ["r0", "r1", "r2", "r3", "r4"]
     args = {
         "items": [
-            {"index": 0, "category": "login_wall"},
-            {"index": 1, "category": "Search Results"},  # label tolerated
-            {"index": 2, "category": "not_a_category"},  # invalid -> other
-            {"index": 9, "category": "error_page"},  # out of range, ignored
-            {"index": "x", "category": "error_page"},  # bad index, ignored
+            _ans(0, "login_wall", reasons),
+            _ans(1, "Search Results", reasons),  # label tolerated
+            _ans(2, "not_a_category", reasons),  # invalid -> None
+            {"index": 9, "category": "error_page", "echo": "r0"},  # out of range
+            {"index": "x", "category": "error_page", "echo": "r0"},  # bad index
             "junk",
         ]
     }
-    out = bf.parse_response(args, 5)
-    assert out == ["login_wall", "search_results", "other", "other", "other"]
+    out = bf.parse_response(args, reasons)
+    assert out == ["login_wall", "search_results", None, None, None]
+
+
+def test_parse_response_valid_other_is_other():
+    reasons = ["weird"]
+    assert bf.parse_response({"items": [_ans(0, "other", reasons)]}, reasons) == ["other"]
+
+
+def test_parse_response_rejects_echo_mismatch_and_missing_echo():
+    reasons = ["login wall seen", "error page seen"]
+    args = {
+        "items": [
+            {"index": 0, "category": "error_page", "echo": "error page seen"},  # shifted
+            {"index": 1, "category": "error_page"},  # no echo
+        ]
+    }
+    assert bf.parse_response(args, reasons) == [None, None]
+
+
+def test_parse_response_echo_is_prefix_of_long_reason_case_insensitive():
+    reasons = ["Marketplace / product / store listing page with many items"]
+    args = {"items": [{"index": 0, "category": "store_listing", "echo": reasons[0][:30].upper()}]}
+    assert bf.parse_response(args, reasons) == ["store_listing"]
 
 
 def test_parse_response_handles_garbage():
-    assert bf.parse_response(None, 2) == ["other", "other"]
-    assert bf.parse_response({"items": "nope"}, 2) == ["other", "other"]
+    assert bf.parse_response(None, ["a", "b"]) == [None, None]
+    assert bf.parse_response({"items": "nope"}, ["a", "b"]) == [None, None]
 
 
-def test_classify_batch_uses_mock_and_returns_usage(monkeypatch):
-    seen = {}
+class _Resp:
+    input_tokens = 10
+    output_tokens = 5
+    cost_usd = 0.001
 
-    class FakeResp:
-        input_tokens = 10
-        output_tokens = 5
-        cost_usd = 0.001
 
-    class FakeLLM:
-        async def select_tool(self, prompt, tools, model=None, **kw):
-            seen.update(prompt=prompt, tools=tools, kw=kw)
-            args = {"items": [{"index": 0, "category": "error_page"}]}
-            return FakeResp(), [{"name": "classify_skip_reasons", "arguments": args}]
+class _ScriptedLLM:
+    """Answers per call from a script: each step maps the prompt's reasons to categories
+    only for the indices the step lists (the model 'forgets' the rest)."""
 
-    cats, usage = asyncio.run(bf.classify_batch(FakeLLM(), ["r0", "r1"], "m"))
+    def __init__(self, steps):
+        self.steps = list(steps)
+        self.prompts = []
+
+    async def select_tool(self, prompt, tools, model=None, **kw):
+        assert kw["temperature"] == 0.0
+        self.prompts.append(prompt)
+        reasons = bf.reasons_in_prompt(prompt)
+        answered = self.steps.pop(0) if self.steps else {}
+        items = [
+            {"index": i, "category": answered[r], "echo": r[:30]}
+            for i, r in enumerate(reasons)
+            if r in answered
+        ]
+        return _Resp(), [{"name": "classify_skip_reasons", "arguments": {"items": items}}]
+
+
+def test_classify_batch_all_answered_first_call():
+    llm = _ScriptedLLM([{"r0": "error_page", "r1": "other"}])
+    cats, usage, stats = asyncio.run(bf.classify_batch(llm, ["r0", "r1"], "m"))
     assert cats == ["error_page", "other"]
-    assert usage["cost_usd"] == 0.001
-    assert seen["kw"]["temperature"] == 0.0
-    assert "r0" in seen["prompt"] and "r1" in seen["prompt"]
+    assert stats == {"retried": 0, "single": 0}
+    assert usage["cost_usd"] == 0.001 and len(llm.prompts) == 1
 
 
-def test_classify_batch_no_tool_call_is_all_other():
-    class FakeResp:
-        input_tokens = 0
-        output_tokens = 0
-        cost_usd = 0.0
+def test_retry_reasks_only_missing_items():
+    llm = _ScriptedLLM([{"r0": "login_wall"}, {"r1": "error_page", "r2": "web_app"}])
+    cats, _, stats = asyncio.run(bf.classify_batch(llm, ["r0", "r1", "r2"], "m"))
+    assert cats == ["login_wall", "error_page", "web_app"]
+    assert stats == {"retried": 2, "single": 0}
+    assert len(llm.prompts) == 2
+    assert "r0" not in bf.reasons_in_prompt(llm.prompts[1])
+    assert bf.reasons_in_prompt(llm.prompts[1]) == ["r1", "r2"]
 
+
+def test_falls_back_to_single_calls_then_leaves_none():
+    # initial + 2 retries answer nothing for r1; its single call also answers nothing.
+    llm = _ScriptedLLM([{"r0": "login_wall"}, {}, {}, {}])
+    cats, _, _stats = asyncio.run(bf.classify_batch(llm, ["r0", "r1"], "m"))
+    assert cats == ["login_wall", None]
+    assert len(llm.prompts) == 4
+    assert bf.reasons_in_prompt(llm.prompts[3]) == ["r1"]
+
+
+def test_single_call_resolves():
+    llm = _ScriptedLLM([{}, {}, {}, {"r0": "local_file"}])
+    cats, _, stats = asyncio.run(bf.classify_batch(llm, ["r0"], "m"))
+    assert cats == ["local_file"]
+    assert stats == {"retried": 0, "single": 1}
+
+
+def test_classify_batch_no_tool_call_leaves_none():
     class FakeLLM:
         async def select_tool(self, prompt, tools, model=None, **kw):
-            return FakeResp(), None
+            return _Resp(), None
 
-    cats, _ = asyncio.run(bf.classify_batch(FakeLLM(), ["a", "b"], "m"))
-    assert cats == ["other", "other"]
+    cats, _, _ = asyncio.run(bf.classify_batch(FakeLLM(), ["a", "b"], "m"))
+    assert cats == [None, None]
+
+
+def test_blank_reasons_are_excluded_from_selection_sql():
+    assert "skip_reasoning IS NOT NULL" in bf.SELECT_REASONS_SQL
+    assert "btrim(skip_reasoning) <> ''" in bf.SELECT_REASONS_SQL
+    assert "skip_reasoning IS NOT NULL" in bf.PER_USER_SQL
 
 
 def test_build_mapping_shape():
@@ -120,10 +190,55 @@ def test_accepts_path_outside_repo(tmp_path):
     bf.check_outside_repo(tmp_path / "m.json")
 
 
+def test_build_mapping_skips_unresolved():
+    m = bf.build_mapping("m", [("a", 3), ("b", 1)], ["login_wall", None])
+    assert [i["reason"] for i in m["items"]] == ["a"]
+
+
 def test_default_mapping_path_is_outside_repo():
     p = bf.default_mapping_path()
     assert ".local/share/compendium" in str(p)
     bf.check_outside_repo(p)
+
+
+@needs_pg
+def test_selection_excludes_null_and_blank_reasons():
+    from datetime import UTC, datetime
+
+    from backend.db import capture_repo, user_repo
+    from backend.db.connection import get_conn
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "TRUNCATE graph_cache, page_clusters, pages, page_content, captures, users CASCADE"
+        )
+    uid = user_repo.create_user("bf2@example.com", name="BF")["id"]
+    now = datetime(2026, 3, 15, 10, 0, tzinfo=UTC)
+    cap_id = capture_repo.save_capture(
+        user_id=uid, capture_id="bf_cap2", source="desktop_active", started_at=now, ended_at=now
+    )["id"]
+    with get_conn() as conn, conn.cursor() as cur:
+        for i, reason in enumerate(["real reason", None, "  ", "real reason"]):
+            cur.execute(
+                "INSERT INTO pages (url, title, domain, status, user_id, capture_id, "
+                "archive_reason, skip_reasoning, normalized_url) "
+                "VALUES (%s, 't', 'example.com', 'archived', %s, %s, 'skip_gate', %s, %s)",
+                (f"https://example.com/{i}", uid, cap_id, reason, f"https://example.com/{i}"),
+            )
+    rows, per_user = bf.select_reasons(None)
+    assert rows == [("real reason", 2)]
+    assert per_user == [(uid, 2)]
+
+
+@needs_pg
+def test_web_app_is_persisted():
+    from backend.db.connection import get_conn
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM pages WHERE skip_category = 'web_app'")
+        assert cur.fetchone()[0] == 0
+    # the 047 constraint accepts it (covered by test_skip_categories parametrized write)
+    assert "web_app" in SKIP_CATEGORY_IDS
 
 
 @needs_pg
