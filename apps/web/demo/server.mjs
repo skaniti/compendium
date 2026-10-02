@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { computeDeltaDays, shiftDiaryWindow, shiftIsoDateTime } from "./lib/dates.mjs";
+import { computeOverviewSummary, computeOverviewTimeline } from "./lib/overview.mjs";
 import { computePages, computeSummary, computeTimeline, isValidTz, PAGE_SORTS } from "./lib/pipeline.mjs";
 import { bearerFromRequest, decodeToken, mintToken } from "./lib/tokens.mjs";
 
@@ -161,6 +162,11 @@ function loadFixtures(fixturesDir, now = new Date()) {
       created_at: shiftIsoDateTime(r.created_at, deltaDays),
       visited_at: shiftIsoDateTime(r.visited_at, deltaDays),
     })),
+    // Overview dev view: captures from the demo seed and the recorded latest-run
+    // clusters block, shifted to "now" like everything else; pages are the
+    // Pipeline fixture rows above (demo/lib/overview.mjs).
+    overviewCaptures: readJson("overview/captures.json").map((c) => ({ ...c, started_at: shiftIsoDateTime(c.started_at, deltaDays) })),
+    overviewClusters: (({ clusters }) => clusters && { ...clusters, run_completed_at: shiftIsoDateTime(clusters.run_completed_at, deltaDays) })(readJson("overview/summary.json")),
   };
 }
 
@@ -980,6 +986,26 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         }
         if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
         sendJson(res, 200, computePages(fixtures.pipelinePages, q.get("range"), getNow().getTime(), { limit, offset, sort, dir }));
+      },
+    },
+
+    // Overview dev view: demo-visitable reads, computed like the pipeline routes.
+    {
+      method: "GET",
+      pattern: /^\/api\/overview\/summary$/,
+      handler: (req, res, m, url) => {
+        const tz = url.searchParams.get("tz") ?? "UTC";
+        if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
+        sendJson(res, 200, computeOverviewSummary(fixtures.pipelinePages, fixtures.overviewCaptures, fixtures.overviewClusters, url.searchParams.get("range"), getNow().getTime()));
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/overview\/timeline$/,
+      handler: (req, res, m, url) => {
+        const tz = url.searchParams.get("tz") ?? "UTC";
+        if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
+        sendJson(res, 200, computeOverviewTimeline(fixtures.pipelinePages, fixtures.overviewCaptures, url.searchParams.get("range"), tz, getNow().getTime()));
       },
     },
 

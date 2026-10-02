@@ -1747,3 +1747,52 @@ describe("pipeline routes (flow contract, computed from the recorded pages)", ()
     expect((await get("/api/analytics/archive-health")).status).toBe(404);
   });
 });
+
+describe("overview routes (computed from the pipeline pages + seed captures)", () => {
+  const NOW_EOD = new Date("2026-10-01T23:59:59Z");
+  const withNow = <T,>(fn: (get: (p: string) => Promise<Response>) => Promise<T>) =>
+    withServer((base) => fn((p) => fetch(`${base}${p}`)), { now: () => NOW_EOD });
+  const jget = async (g: (p: string) => Promise<Response>, p: string) => (await g(p)).json();
+
+  it("summary: pages, captures and clusters present; spend is the empty shape", async () => {
+    await withNow(async (g) => {
+      const s = await jget(g, "/api/overview/summary?range=all&tz=UTC");
+      expect(s.pages.captured).toBeGreaterThan(0);
+      expect(s.pages.all_time_captured).toBe(s.pages.captured);
+      expect(s.captures.total).toBeGreaterThan(0);
+      expect(s.spend).toEqual({ usd: 0, calls: 0, all_time_usd: 0, purposes: [] });
+      expect(s.spend.calls).toBe(0);
+      expect(s.clusters.clusters).toBeGreaterThan(0);
+    });
+  });
+
+  it("captured agrees with the pipeline summary for the same range", async () => {
+    await withNow(async (g) => {
+      for (const range of ["7d", "30d", "90d", "all"]) {
+        const o = await jget(g, `/api/overview/summary?range=${range}`);
+        const p = await jget(g, `/api/pipeline/summary?range=${range}`);
+        expect(o.pages.captured).toBe(p.total_pages);
+        expect(o.pages.in_graph).toBe(p.status_counts.active);
+      }
+    });
+  });
+
+  it("timeline 30d: 31 daily buckets reconciling with the summary", async () => {
+    await withNow(async (g) => {
+      const t = await jget(g, "/api/overview/timeline?range=30d&tz=UTC");
+      const s = await jget(g, "/api/overview/summary?range=30d&tz=UTC");
+      expect(t.buckets).toHaveLength(31);
+      // no NULL-visit rows fall in a windowed range
+      expect(t.buckets.reduce((n: number, b: { captured: number }) => n + b.captured, 0)).toBe(s.pages.captured);
+    });
+  });
+
+  it("an invalid time zone is a 422 on both routes", async () => {
+    await withNow(async (g) => {
+      for (const route of ["summary", "timeline"]) {
+        expect((await g(`/api/overview/${route}?tz=Not/AZone`)).status).toBe(422);
+        expect((await g(`/api/overview/${route}?tz=Europe/Berlin`)).status).toBe(200);
+      }
+    });
+  });
+});

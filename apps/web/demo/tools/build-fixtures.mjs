@@ -23,10 +23,13 @@
 //
 // Usage: node demo/tools/build-fixtures.mjs
 //        node demo/tools/build-fixtures.mjs --pipeline-only
+//        node demo/tools/build-fixtures.mjs --overview-only
 //   --pipeline-only rebuilds ONLY demo/fixtures/pipeline/ from raw/pipeline/,
 //   leaving every other committed fixture untouched. It reuses the anchor
 //   already recorded in the committed meta.json (instead of today) so the
 //   pipeline dates agree with the existing diary.
+//   --overview-only does the same for demo/fixtures/overview/ (from
+//   raw/overview/ plus the committed demo seed).
 
 import {
   mkdirSync,
@@ -38,6 +41,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +50,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const RAW_DIR = path.join(REPO_ROOT, 'demo', 'fixtures', 'raw');
 const OUT_DIR = path.join(REPO_ROOT, 'demo', 'fixtures');
 const PIPELINE_ONLY = process.argv.includes('--pipeline-only');
+const OVERVIEW_ONLY = process.argv.includes('--overview-only');
 
 function fatal(msg) {
   console.error(`\n[build-fixtures] FATAL: ${msg}\n`);
@@ -84,9 +89,9 @@ const OUTPUT_ENTRIES = [
   'graph-window-90.json', 'graph-window-365.json',
   'diary-day.json', 'diary-week.json', 'diary-month.json',
   'diary-filtered-day.json', 'diary-filtered-week.json', 'diary-filtered-month.json',
-  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline',
+  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline', 'overview',
 ];
-for (const entry of PIPELINE_ONLY ? ['pipeline'] : OUTPUT_ENTRIES) {
+for (const entry of PIPELINE_ONLY ? ['pipeline'] : OVERVIEW_ONLY ? ['overview'] : OUTPUT_ENTRIES) {
   rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
 }
 console.log('[build-fixtures] cleaned previous output');
@@ -225,10 +230,10 @@ function formatMonthLabel(monthKey) {
 // Anchor = today (UTC midnight), truncated to a date. meta.json records it;
 // Task 4's stub shifts every date it serves by (today - anchor) at runtime.
 const now = new Date();
-const anchor = PIPELINE_ONLY
+const anchor = PIPELINE_ONLY || OVERVIEW_ONLY
   ? parseIsoDateUTC(JSON.parse(readFileSync(path.join(OUT_DIR, 'meta.json'), 'utf8')).anchor)
   : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-console.log(`[build-fixtures] anchor (${PIPELINE_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
+console.log(`[build-fixtures] anchor (${PIPELINE_ONLY || OVERVIEW_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
 
 // Hand-written, deterministic cadence: no RNG, no Date.now()-seeded shuffle.
 // 14 active browsing days spread across a rolling 35-day window ending at
@@ -294,6 +299,24 @@ function buildPipelineFixtures() {
   console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages`);
 }
 
+// Overview dev-view fixtures. Captures come from the committed demo seed (only
+// started_at + source are kept), respread on the diary cadence like the
+// pipeline pages; the clusters block is the recorded latest run, dated to the
+// anchor day (the demo's "latest run" is as recent as its newest browsing).
+function buildOverviewFixtures() {
+  const seedPath = path.resolve(REPO_ROOT, '..', 'api', 'data', 'demo-seed', 'demo_seed.json.gz');
+  if (!existsSync(seedPath)) fatal(`missing demo seed: ${seedPath}`);
+  const seed = JSON.parse(gunzipSync(readFileSync(seedPath)).toString('utf8'));
+  const timeOf = (iso, fallback = '12:00:00+00:00') => { const m = /T(.+)$/.exec(iso || ''); return m ? m[1] : fallback; };
+  const captures = [...seed.captures]
+    .sort((a, b) => (a.started_at < b.started_at ? -1 : a.started_at > b.started_at ? 1 : 0))
+    .map((c, i) => ({ started_at: `${isoDateStr(addDaysUTC(anchor, -DAY_CYCLE[i % DAY_CYCLE.length]))}T${timeOf(c.started_at)}`, source: c.source }));
+  writeJson('overview/captures.json', captures);
+  const { clusters } = readJson('overview', 'summary.json');
+  writeJson('overview/summary.json', { clusters: clusters && { ...clusters, run_completed_at: `${isoDateStr(anchor)}T${timeOf(clusters.run_completed_at)}` } });
+  console.log(`[build-fixtures] overview: ${captures.length} captures, clusters ${clusters ? clusters.clusters : 'none'}`);
+}
+
 // Hygiene gate: hoisted so both the full build (Step 11) and --pipeline-only
 // run it over the whole committed output.
 // Terms assembled from parts so this tracked file never matches its own gate
@@ -319,6 +342,13 @@ function runHygieneGate() {
     fatal(`hygiene gate FAILED -- forbidden pattern found in:\n${hygieneHits}`);
   }
   console.log('[build-fixtures] hygiene gate PASSED (grep came back empty)');
+}
+
+if (OVERVIEW_ONLY) {
+  buildOverviewFixtures();
+  runHygieneGate();
+  console.log('[build-fixtures] --overview-only: done (other fixtures untouched)');
+  process.exit(0);
 }
 
 if (PIPELINE_ONLY) {
@@ -665,6 +695,7 @@ const rawClusteringStatus = readJson('clustering-status.json');
 writeJson('meta.json', { anchor: isoDateStr(anchor), runNumber: rawClusteringStatus.run_number });
 
 buildPipelineFixtures();
+buildOverviewFixtures();
 
 // ---------------------------------------------------------------------------
 // Step 10: ATTRIBUTION.md
