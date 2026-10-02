@@ -177,7 +177,7 @@ headlessly via jsdom.
   unsigned APK); release signing happens out-of-band — no keystore or
   signing config is committed.
 - **Dev views:** they live at `/dev/<view>` behind the header's Dev toggle;
-  the first ported view is Pipeline, backed by `/api/pipeline/summary`,
+  the ported views are Overview (`/api/overview/summary`, `/api/overview/timeline`) and Pipeline, backed by `/api/pipeline/summary`,
   `/api/pipeline/timeline` and `/api/pipeline/pages`.
 
 ## Status
@@ -187,12 +187,12 @@ surface by surface. Ported and live here: the app shell, the diary/history
 and topic-detail panels, the header widgets, the constellation graph (a
 vendored D3 port with supercluster nameplate layout, an original typeface,
 and a tunable layout), the streaming chat with source pills, the
-auth/session/role mechanics, and the Pipeline dev view (`/dev/pipeline`). The FastAPI backend lives at `apps/api` and
+auth/session/role mechanics, and the Overview and Pipeline dev views (`/dev/overview`, `/dev/pipeline`). The FastAPI backend lives at `apps/api` and
 runs the hosted instance; the browser extension (`apps/extension`) and the
 Android collector (`apps/android`) ship from here too.
 
 Migration in progress: the internal dev/observability views (data
-browser, prompts, logs, traces, overview, clusters, dqBot), a deploy target for this
+browser, prompts, logs, traces, clusters, dqBot), a deploy target for this
 frontend, and retirement of the predecessor's Dash surface.
 
 ## Known limitations

@@ -50,6 +50,11 @@ describe("/dev/[view]", () => {
     expect(el.props.mode).toBe("dev");
     expect(el.props.children.type).toBe(DEV_VIEW_COMPONENTS.pipeline);
   });
+  it("overview renders inside the dev shell for plain demo", async () => {
+    const el = (await DevViewPage(params("overview"))) as ReactElement<{ mode: string; children: ReactElement }>;
+    expect(el.type).toBe(AppShell);
+    expect(el.props.children.type).toBe(DEV_VIEW_COMPONENTS.overview);
+  });
   it.each([
     ["admin", "admin", false],
     ["acting-as-demo", "demo", true],

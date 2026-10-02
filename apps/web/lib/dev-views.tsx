@@ -130,7 +130,7 @@ const OverviewIcon = tabIcon(
 // Tab order = array order (the recorded 05 information architecture).
 // "planned" entries are placeholder silhouettes until their batch lands.
 export const DEV_VIEWS: DevViewDef[] = [
-  { id: "overview", label: "Overview", href: "/dev/overview", access: "any", status: "planned", Icon: OverviewIcon },
+  { id: "overview", label: "Overview", href: "/dev/overview", access: "any", status: "live", Icon: OverviewIcon },
   { id: "data", label: "Data", href: "/dev/data", access: "any", status: "planned", Icon: DataIcon },
   { id: "pipeline", label: "Pipeline", href: "/dev/pipeline", access: "any", status: "live", Icon: PipelineIcon },
   { id: "clusters", label: "Clusters", href: "/dev/clusters", access: "any", status: "planned", Icon: ClustersIcon },

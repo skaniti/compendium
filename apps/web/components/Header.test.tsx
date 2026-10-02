@@ -13,7 +13,7 @@ describe("Header dev/graph toggle", () => {
   it("graph mode: Dev link to the first dev view", () => {
     const { container } = render(<Header mode="graph" />);
     const link = container.querySelector("#dev-graph-toggle-btn");
-    expect(link).toHaveAttribute("href", "/dev/pipeline");
+    expect(link).toHaveAttribute("href", "/dev/overview");
     expect(screen.getByText("Dev")).toBeInTheDocument();
     expect(container.querySelector("#mode-switch-bar")?.className).toContain("mode-graph");
   });
