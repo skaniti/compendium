@@ -6,7 +6,8 @@
 //     on visited_at exactly like Pipeline (All time also counts NULL visits);
 //   - captures: [{started_at, source}] from the demo seed, windowed on started_at;
 //   - spend: always empty -- the demo seed has no cost events;
-//   - clusters: the recorded latest-run block, replayed.
+//   - clusters: the recorded latest run (cluster count, date); superclusters and topics
+//     are derived from the committed graph/topics fixtures (see tools/build-fixtures.mjs).
 import { DAY, GRANULARITY, RANGE_DAYS, bucketWalls, floorWall, isoWithOffset, normalizeRange, prepare, wallOf, windowRows } from "./period.mjs";
 
 const DESKTOP = new Set(["desktop_active", "desktop_passive"]);

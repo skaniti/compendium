@@ -57,6 +57,8 @@ function fatal(msg) {
   process.exit(1);
 }
 
+if (PIPELINE_ONLY && OVERVIEW_ONLY) fatal('--pipeline-only and --overview-only are mutually exclusive');
+
 function readJson(...relParts) {
   const full = path.join(RAW_DIR, ...relParts);
   if (!existsSync(full)) fatal(`missing raw input: ${full}`);
