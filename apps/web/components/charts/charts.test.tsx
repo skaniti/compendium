@@ -2,7 +2,8 @@ import { it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import TimelineBars from "./TimelineBars";
 import LineAreaChart from "./LineAreaChart";
-import StackedBarChart, { seriesFill } from "./StackedBarChart";
+import StackedBarChart from "./StackedBarChart";
+import { seriesFill } from "./palette";
 import { countTicks, labelSpacing, thinBandLabels } from "./scales";
 
 function withWidth(w: number, fn: () => void) {
@@ -101,4 +102,12 @@ it("week labels get wider spacing so 'wk of Sep 22' never runs together at 700px
   expect(texts.length).toBeLessThanOrEqual(Math.floor(640 / 96) + 1);
   expect(labelSpacing(["wk of Sep 22", null])).toBeGreaterThanOrEqual(96);
   expect(labelSpacing(["Sep 22", null])).toBe(76);
+});
+
+it("categoryColors: named ids rotate in order, uncategorized is the neutral grey", async () => {
+  const { categoryColors, UNCATEGORIZED_FILL } = await import("./palette");
+  const c = categoryColors(["a", "uncategorized", "b"]);
+  expect(c.uncategorized).toBe(UNCATEGORIZED_FILL);
+  expect(c.a).toBe(seriesFill(0, 2));
+  expect(c.b).toBe(seriesFill(1, 2));
 });

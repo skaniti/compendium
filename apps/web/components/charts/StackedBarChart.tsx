@@ -2,13 +2,9 @@ import { MARGIN, frame, xBand, yLinear, type BandCat } from "./scales";
 import { useContainerWidth } from "./useContainerWidth";
 import { useChartTooltip } from "./ChartTooltip";
 import BandAxis from "./BandAxis";
+import { seriesFill } from "./palette";
 /** values = share of the bucket in percent (columns sum to 100); counts = the raw numbers behind them. */
 export interface StackSeries { name: string; values: number[]; counts: number[] }
-/** Series i of n: hue rotated around --highlight; odd series also get lighter so neighbours differ in hue and lightness. */
-export function seriesFill(i: number, n: number): string {
-  const dh = Math.round((i * 360) / Math.max(n, 2));
-  return `oklch(from var(--highlight) ${i % 2 ? "calc(l + 0.08)" : "l"} c calc(h + ${dh}))`;
-}
 export default function StackedBarChart({ cats, series, height = 240, yTitle = "% of gate skips" }:
   { cats: BandCat[]; series: StackSeries[]; height?: number; yTitle?: string }) {
   const [ref, width] = useContainerWidth(); const { tooltip, show, hide } = useChartTooltip(); const { innerW, innerH } = frame(width, height);

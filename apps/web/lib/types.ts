@@ -279,19 +279,30 @@ export interface PipelineSummary {
   archive_reasons: ReasonRow[];
   skip_categories: ReasonRow[];
   skip_gate_config: SkipGateConfig;
+  flow?: PipelineFlow; // optional: stale-API guard
+  rule_filter_config?: RuleFilterConfig;
 }
+export type FlowOutcomeKey = "before_gate" | "rule_filter" | "gate" | "processed" | "pending";
+export type FateKey = "archived" | "active" | "pending";
+export interface FlowOutcome { key: FlowOutcomeKey; label: string; count: number; top_domains: TopDomain[] }
+export interface FlowDetail { outcome: FlowOutcomeKey; key: string; label: string; count: number; top_domains: TopDomain[]; fates: Record<FateKey, number> }
+export interface FlowFate { key: FateKey; label: string; count: number }
+export interface PipelineFlow { total: number; outcomes: FlowOutcome[]; details: FlowDetail[]; fates: FlowFate[] }
+export interface RuleFilterConfig { domains: string[]; domain_suffixes: string[]; url_patterns: { domain: string; path: string }[]; path_rules: string[] }
 export type TimelineGranularity = "6h" | "day" | "week" | "month";
 export interface TimelineBucket {
   start: string; // ISO with the viewer's local offset
   label_key: string;
   kept: number; archived: number; evaluated: number; skipped: number;
   categories: Record<string, number>;
+  total: number; outcomes: Record<FlowOutcomeKey, number>; reached_gate: number;
 }
 export interface PipelineTimeline { range: RangeKey; granularity: TimelineGranularity; buckets: TimelineBucket[] }
 export interface PipelinePage {
   id: number; title: string | null; domain: string | null; status: string;
   processing_depth: string | null; archive_reason: string | null;
   skip_reasoning: string | null; skip_category: string | null; visited_at: string | null; created_at: string | null;
+  outcome: FlowOutcomeKey; detail: string; detail_label: string; fate: FateKey;
 }
 export type PageSortColumn = "title" | "domain" | "status" | "processing_depth" | "visited_at" | "created_at";
 export type SortDir = "asc" | "desc";

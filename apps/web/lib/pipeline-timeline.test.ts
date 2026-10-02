@@ -3,7 +3,7 @@ import { axisLabels, bucketTitle, archiveBars, skipRateSeries, categoryMix, hasA
 import type { TimelineBucket } from "./types";
 
 const b = (start: string, o: Partial<TimelineBucket> = {}): TimelineBucket =>
-  ({ start, label_key: "x", kept: 0, archived: 0, evaluated: 0, skipped: 0, categories: {}, ...o });
+  ({ start, label_key: "x", kept: 0, archived: 0, evaluated: 0, skipped: 0, categories: {}, total: 0, outcomes: { before_gate: 0, rule_filter: 0, gate: 0, processed: 0, pending: 0 }, reached_gate: 0, ...o });
 
 describe("bucket labels", () => {
   it("6h: tooltip names the block of the day, axis shows the day at the first block", () => {
@@ -56,5 +56,53 @@ describe("series", () => {
     expect(hasActivity([])).toBe(false);
     expect(hasActivity([b("2026-09-28T00:00:00Z")])).toBe(false);
     expect(hasActivity(bs)).toBe(true);
+  });
+});
+
+import { VOLUME_ORDER, hasFlowActivity, rateSeries, rateDomain, mixSeries, gateNotLiveRun } from "./pipeline-timeline";
+
+const fb = (o: Partial<Record<"before_gate" | "rule_filter" | "gate" | "processed" | "pending", number>>, extra: Partial<TimelineBucket> = {}): TimelineBucket => {
+  const outcomes = { before_gate: 0, rule_filter: 0, gate: 0, processed: 0, pending: 0, ...o };
+  const total = Object.values(outcomes).reduce((a, n) => a + n, 0);
+  return b("2026-09-28T00:00:00-05:00", { outcomes, total, reached_gate: outcomes.gate + outcomes.processed, ...extra });
+};
+
+describe("flow timeline helpers", () => {
+  it("VOLUME_ORDER stacks bottom to top", () => {
+    expect(VOLUME_ORDER).toEqual(["processed", "gate", "rule_filter", "before_gate", "pending"]);
+  });
+  it("hasFlowActivity reads totals", () => {
+    expect(hasFlowActivity([fb({}), fb({})])).toBe(false);
+    expect(hasFlowActivity([fb({}), fb({ processed: 1 })])).toBe(true);
+  });
+  it("rateSeries: null on a zero denominator, 1 decimal otherwise", () => {
+    const s = rateSeries([fb({}), fb({ before_gate: 1, gate: 1, processed: 1 }), fb({ before_gate: 2 })]);
+    expect(s.archive).toEqual([{ y: null, n: 0, d: 0 }, { y: 66.7, n: 2, d: 3 }, { y: 100, n: 2, d: 2 }]);
+    expect(s.gate).toEqual([{ y: null, n: 0, d: 0 }, { y: 50, n: 1, d: 2 }, { y: null, n: 0, d: 0 }]);
+  });
+  it("rateDomain floors to 20 and never exceeds a 60 floor", () => {
+    const p = (y: number | null) => ({ y, n: 0, d: 0 });
+    expect(rateDomain({ archive: [p(95), p(null)], gate: [p(88)] })).toEqual([60, 100]);
+    expect(rateDomain({ archive: [p(47.2)], gate: [p(80)] })).toEqual([40, 100]);
+    expect(rateDomain({ archive: [p(5)], gate: [] })).toEqual([0, 100]);
+    expect(rateDomain({ archive: [p(null)], gate: [] })).toEqual([60, 100]);
+  });
+  it("mixSeries follows the given order, appends unknown ids, and computes shares", () => {
+    const bs = [fb({}, { categories: { b: 1, zz: 1, a: 2 } }), fb({}, { categories: {} })];
+    const s = mixSeries(bs, ["a", "b", "c"], { a: "Alpha", b: "Beta" });
+    expect(s.map((x) => x.id)).toEqual(["a", "b", "zz"]);
+    expect(s.map((x) => x.name)).toEqual(["Alpha", "Beta", "Zz"]);
+    expect(s[0].counts).toEqual([2, 0]);
+    expect(s[0].values).toEqual([50, 0]);
+  });
+  it("gateNotLiveRun: no-activity leading buckets -> 0", () => {
+    expect(gateNotLiveRun([fb({}), fb({}), fb({ gate: 1 })])).toBe(0);
+  });
+  it("gateNotLiveRun: gate never live -> 0", () => {
+    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({ before_gate: 2 })])).toBe(0);
+  });
+  it("gateNotLiveRun: active captures, gate live later -> run length", () => {
+    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({}), fb({ rule_filter: 1 }), fb({ gate: 1 })])).toBe(3);
+    expect(gateNotLiveRun([fb({ gate: 1 }), fb({})])).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-import type { TimelineBucket, TimelineGranularity } from "./types";
+import type { FlowOutcomeKey, TimelineBucket, TimelineGranularity } from "./types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const BLOCKS = ["night", "morning", "afternoon", "evening"]; // 00-06, 06-12, 12-18, 18-24 local
@@ -62,4 +62,52 @@ export function categoryMix(buckets: TimelineBucket[], labels: Record<string, st
     };
   });
   return { series };
+}
+
+/** Stack order of the volume panel, bottom to top. */
+export const VOLUME_ORDER: FlowOutcomeKey[] = ["processed", "gate", "rule_filter", "before_gate", "pending"];
+
+export function hasFlowActivity(buckets: TimelineBucket[]): boolean {
+  return buckets.some((b) => b.total > 0);
+}
+
+/** y in percent (1 decimal); null where the denominator is 0 so the line breaks. */
+export interface RatePoint { y: number | null; n: number; d: number }
+const ratePoint = (n: number, d: number): RatePoint => ({ y: d > 0 ? round1(pct(n, d)) : null, n, d });
+
+/** archive = (before_gate + rule_filter + gate) / total; gate = gate / reached_gate. */
+export function rateSeries(buckets: TimelineBucket[]): { archive: RatePoint[]; gate: RatePoint[] } {
+  return {
+    archive: buckets.map((b) => ratePoint(b.outcomes.before_gate + b.outcomes.rule_filter + b.outcomes.gate, b.total)),
+    gate: buckets.map((b) => ratePoint(b.outcomes.gate, b.reached_gate)),
+  };
+}
+
+/** [min(60, lowest y rounded down to 20), 100]. */
+export function rateDomain(series: { archive: RatePoint[]; gate: RatePoint[] }): [number, number] {
+  const ys = [...series.archive, ...series.gate].map((p) => p.y).filter((y): y is number => y !== null);
+  if (ys.length === 0) return [60, 100];
+  return [Math.min(60, Math.floor(Math.min(...ys) / 20) * 20), 100];
+}
+
+/** 100%-stacked gate-category shares per bucket: ids in `order` first, unknown ids appended sorted; ids with no counts are dropped. */
+export function mixSeries(buckets: TimelineBucket[], order: string[], labels: Record<string, string>): { id: string; name: string; counts: number[]; values: number[] }[] {
+  const seen = new Set<string>();
+  for (const b of buckets) for (const [id, n] of Object.entries(b.categories)) if (n > 0) seen.add(id);
+  const ids = [...order.filter((id) => seen.has(id)), ...[...seen].filter((id) => !order.includes(id)).sort()];
+  const totals = buckets.map((b) => Object.values(b.categories).reduce((a, n) => a + n, 0));
+  return ids.map((id) => {
+    const counts = buckets.map((b) => b.categories[id] ?? 0);
+    const name = Object.hasOwn(labels, id) ? labels[id] : id.split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    return { id, name, counts, values: counts.map((n, i) => round1(pct(n, totals[i]))) };
+  });
+}
+
+/** Length of the leading run of buckets with no gate decisions, but only when the run had captures and the gate went live later; else 0. */
+export function gateNotLiveRun(buckets: TimelineBucket[]): number {
+  let run = 0;
+  while (run < buckets.length && buckets[run].reached_gate === 0) run++;
+  if (run === 0 || run === buckets.length) return 0;
+  const hadActivity = buckets.slice(0, run).some((b) => b.total > 0);
+  return hadActivity ? run : 0;
 }

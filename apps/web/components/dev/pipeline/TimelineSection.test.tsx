@@ -4,7 +4,7 @@ import * as api from "@/lib/api";
 import type { PipelineTimeline, TimelineBucket } from "@/lib/types";
 import TimelineSection from "./TimelineSection";
 vi.mock("@/lib/api");
-const bk = (start: string, o: Partial<TimelineBucket> = {}): TimelineBucket => ({ start, label_key: "day", kept: 0, archived: 0, evaluated: 0, skipped: 0, categories: {}, ...o });
+const bk = (start: string, o: Partial<TimelineBucket> = {}): TimelineBucket => ({ start, label_key: "day", kept: 0, archived: 0, evaluated: 0, skipped: 0, categories: {}, total: 0, outcomes: { before_gate: 0, rule_filter: 0, gate: 0, processed: 0, pending: 0 }, reached_gate: 0, ...o });
 const tl = (buckets: TimelineBucket[], granularity: PipelineTimeline["granularity"] = "day"): PipelineTimeline => ({ range: "30d", granularity, buckets });
 const labels = { login_wall: "Login Wall" };
 it("renders three full-width chart cells, each with its own title", async () => {

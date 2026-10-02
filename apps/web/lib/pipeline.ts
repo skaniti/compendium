@@ -1,4 +1,4 @@
-import type { PipelinePage, RangeKey, TimeWindow } from "./types";
+import type { FlowOutcomeKey, PipelinePage, RangeKey, TimeWindow } from "./types";
 
 // The shared TimeWindow ("365" has no pipeline bucket, so it widens to "all").
 export function rangeKeyFor(tw: TimeWindow): RangeKey {
@@ -13,6 +13,22 @@ export function deriveSkipColumns(p: PipelinePage): { skip: string; skipReason: 
   const skipReason = r === "domain_skip" ? "domain filter" : p.skip_reasoning ? p.skip_reasoning.slice(0, 80) : DASH;
   return { skip, skipReason };
 }
+
+/** Table cells for the flow redesign: decision / skip kind / skip reason (free text rides in the title). */
+export function flowColumns(p: PipelinePage): { decision: string; skip: string; skipReason: string; skipReasonTitle?: string } {
+  const decision = p.outcome === "processed" ? "keep" : p.outcome === "gate" || p.outcome === "rule_filter" ? "skip" : DASH;
+  const skip = p.outcome === "before_gate" ? "pre-gate" : p.outcome === "rule_filter" ? "rule" : p.outcome === "gate" ? "LLM gate" : DASH;
+  return { decision, skip, skipReason: p.fate === "active" ? DASH : p.detail_label, skipReasonTitle: p.skip_reasoning ?? undefined };
+}
+
+/** CSS custom-property references; the view's stylesheet defines the --flow-* variables. */
+export const OUTCOME_COLOR: Record<FlowOutcomeKey, string> = {
+  processed: "var(--flow-processed)",
+  gate: "var(--flow-gate)",
+  rule_filter: "var(--flow-rule)",
+  before_gate: "var(--flow-before)",
+  pending: "var(--flow-pending)",
+};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const two = (n: number) => String(n).padStart(2, "0");

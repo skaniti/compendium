@@ -3,7 +3,8 @@ import { deriveSkipColumns, formatVisited, percentOf, formatRatio, browserTimeZo
 import type { PipelinePage } from "./types";
 
 const base: PipelinePage = { id: 1, title: "T", domain: "example.org", status: "active", processing_depth: "processed",
-  archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null };
+  archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null,
+  outcome: "processed", detail: "active", detail_label: "Active", fate: "active" };
 
 describe("deriveSkipColumns (Dash pipeline_monitor.py:338-370)", () => {
   it("domain_skip -> domain / domain filter", () => {
@@ -54,5 +55,31 @@ describe("rangeKeyFor", () => {
     expect(rangeKeyFor("90")).toBe("90d");
     expect(rangeKeyFor("all")).toBe("all");
     expect(rangeKeyFor("365")).toBe("all");
+  });
+});
+
+import { flowColumns, OUTCOME_COLOR, DASH } from "./pipeline";
+import type { FateKey, FlowOutcomeKey } from "./types";
+
+describe("flowColumns", () => {
+  const outcomes: FlowOutcomeKey[] = ["before_gate", "rule_filter", "gate", "processed", "pending"];
+  const fateKeys: FateKey[] = ["archived", "active", "pending"];
+  const decision = { before_gate: DASH, rule_filter: "skip", gate: "skip", processed: "keep", pending: DASH };
+  const skip = { before_gate: "pre-gate", rule_filter: "rule", gate: "LLM gate", processed: DASH, pending: DASH };
+  for (const outcome of outcomes) for (const fate of fateKeys) {
+    it(`${outcome} x ${fate}`, () => {
+      const r = flowColumns({ ...base, outcome, fate, detail_label: "Label", skip_reasoning: null });
+      expect(r.decision).toBe(decision[outcome]);
+      expect(r.skip).toBe(skip[outcome]);
+      expect(r.skipReason).toBe(fate === "active" ? DASH : "Label");
+      expect(r.skipReasonTitle).toBeUndefined();
+    });
+  }
+  it("carries the gate free text as the title", () => {
+    expect(flowColumns({ ...base, outcome: "gate", fate: "archived", detail_label: "Login wall", skip_reasoning: "needs sign-in" }).skipReasonTitle).toBe("needs sign-in");
+  });
+  it("OUTCOME_COLOR references the --flow variables", () => {
+    expect(OUTCOME_COLOR.processed).toBe("var(--flow-processed)");
+    expect(Object.values(OUTCOME_COLOR).every((v) => /^var\(--flow-[a-z]+\)$/.test(v))).toBe(true);
   });
 });
