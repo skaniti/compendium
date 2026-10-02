@@ -59,6 +59,16 @@ PLAN = (
     (None, 4, None, "pending"),
 )
 
+# Flow-path rows (pipeline flow redesign): (kind, archive_reason, count, depth, human_status).
+# kind "url_pattern" rows are rule-filter skips recognised by content_summary;
+# the rest exercise before-gate manual archives and processed-then-archived pages.
+FLOW_PLAN = (
+    ("url_pattern", "skip_gate", 8, "skipped", None),
+    ("manual_early", None, 6, None, "archived"),
+    ("processed_manual", None, 3, "processed", "archived"),
+    ("processed_duplicate", "dedupe_fold", 2, "processed", None),
+)
+
 # Plausible public junk on the seed's own domains: (domain, url template, title template).
 JUNK = (
     (
@@ -147,6 +157,51 @@ def build_augment_rows(seed_pages: list[dict], seed_captures: list[dict]) -> lis
                     "skip_reasoning": reasoning,
                     "skip_category": category,
                     "content_summary": "Domain skipped" if reason == "domain_skip" else None,
+                    "page_content_id": None,
+                    "transition_type": "link",
+                    "processing_depth": depth,
+                    "is_tracked_domain": True,
+                    "dwell_time_seconds": 3,
+                    "flagged_for_review": False,
+                    "processing_metadata": None,
+                    "transition_qualifiers": None,
+                    "human_processing_depth": None,
+                }
+            )
+            next_id += 1
+    rows.extend(_flow_rows(next_id, user_id, captures, cap_cycle, junk_cycle, q_cycle))
+    return rows
+
+
+def _flow_rows(next_id, user_id, captures, cap_cycle, junk_cycle, q_cycle) -> list[dict]:
+    rows: list[dict] = []
+    for kind, reason, count, depth, human_status in FLOW_PLAN:
+        for i in range(count):
+            cap = next(cap_cycle)
+            domain, url_t, title_t = next(junk_cycle)
+            q = next(q_cycle)
+            url = url_t.format(q=q, Q=q.capitalize())
+            url_pattern = kind == "url_pattern"
+            rows.append(
+                {
+                    "id": next_id,
+                    "url": url,
+                    "title": title_t.format(q=q, Q=q.capitalize()),
+                    "domain": domain,
+                    "status": "archived",
+                    "user_id": user_id,
+                    "capture_id": cap["id"],
+                    "created_at": cap["started_at"],
+                    "visited_at": cap["started_at"],
+                    "human_status": human_status,
+                    "archive_reason": reason,
+                    "extracted_text": None,
+                    "normalized_url": url,
+                    "skip_reasoning": None,
+                    "skip_category": None,
+                    "content_summary": (
+                        f"URL pattern skipped: {domain} ({3 + i}s)" if url_pattern else None
+                    ),
                     "page_content_id": None,
                     "transition_type": "link",
                     "processing_depth": depth,

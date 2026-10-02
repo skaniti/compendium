@@ -55,7 +55,7 @@ blocking this task.
 
 ## Synthetic augment (temporary, D10 c-1)
 
-`demo_seed_augment.json` holds 94 SYNTHETIC page rows (archived, skipped and
+`demo_seed_augment.json` holds 113 SYNTHETIC page rows (archived, skipped and
 pending) attached to the seed's existing captures. The real seed has no such
 pages, so without it the Pipeline dev view's skip sections would render empty
 against the demo. Rows carry no page content, embeddings or clusters, use only

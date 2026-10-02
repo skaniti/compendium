@@ -29,17 +29,19 @@ def test_distribution_and_depths():
     rows = build_augment_rows(d["pages"], d["captures"])
     by_reason = Counter(r["archive_reason"] for r in rows)
     assert by_reason == {
-        "skip_gate": 40,
+        "skip_gate": 40 + 8,
         "domain_skip": 20,
         "placeholder_no_content": 10,
         "dedup": 6,
         "app_chrome_junk": 5,
-        "dedupe_fold": 4,
+        "dedupe_fold": 4 + 2,
         "manual_exclusion": 2,
         "trivial_capture": 3,
-        None: 4,
+        None: 4 + 6 + 3,
     }
     for r in rows:
+        if r["content_summary"] or r["human_status"] or r["processing_depth"] == "processed":
+            continue  # flow-path rows: covered by test_flow_path_rows
         if r["archive_reason"] in ("skip_gate", "domain_skip"):
             assert r["status"] == "archived" and r["processing_depth"] == "skipped"
         elif r["archive_reason"] is None:
@@ -50,7 +52,7 @@ def test_distribution_and_depths():
             )
         else:
             assert r["status"] == "archived" and r["processing_depth"] is None
-    gate = [r for r in rows if r["archive_reason"] == "skip_gate"]
+    gate = [r for r in rows if r["archive_reason"] == "skip_gate" and not r["content_summary"]]
     assert {r["skip_reasoning"] for r in gate} <= set(GATE_REASONS)
     assert all(
         r["skip_reasoning"].startswith("Domain skipped: ")
@@ -97,8 +99,34 @@ def test_skip_gate_rows_carry_a_valid_category_others_null():
     assert GATE_CATEGORY == EXPECTED_CATEGORY
     assert set(EXPECTED_CATEGORY) == set(GATE_REASONS)
     for r in rows:
-        if r["archive_reason"] == "skip_gate":
+        if r["archive_reason"] == "skip_gate" and not r["content_summary"]:
             assert r["skip_category"] in SKIP_CATEGORY_IDS
             assert r["skip_category"] == EXPECTED_CATEGORY[r["skip_reasoning"]]
         else:
             assert r["skip_category"] is None
+
+
+def test_flow_path_rows():
+    d = _seed()
+    rows = build_augment_rows(d["pages"], d["captures"])
+    url_pat = [r for r in rows if (r["content_summary"] or "").startswith("URL pattern skipped")]
+    assert len(url_pat) == 8
+    for r in url_pat:
+        assert r["status"] == "archived" and r["archive_reason"] == "skip_gate"
+        assert r["processing_depth"] == "skipped"
+        assert r["skip_reasoning"] is None and r["skip_category"] is None
+        assert r["content_summary"].startswith(f"URL pattern skipped: {r['domain']} (")
+    manual_early = [
+        r
+        for r in rows
+        if r["human_status"] == "archived"
+        and r["processing_depth"] is None
+        and r["archive_reason"] is None
+    ]
+    assert len(manual_early) == 6 and all(r["status"] == "archived" for r in manual_early)
+    processed = [r for r in rows if r["processing_depth"] == "processed"]
+    assert Counter((r["archive_reason"], r["human_status"]) for r in processed) == {
+        (None, "archived"): 3,
+        ("dedupe_fold", None): 2,
+    }
+    assert all(r["status"] == "archived" for r in processed)
