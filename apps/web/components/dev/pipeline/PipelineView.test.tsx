@@ -18,6 +18,9 @@ const flow = {
   ],
   details: [
     { outcome: "gate" as const, key: "login_wall", label: "Login Wall", count: 20, top_domains: [], fates: { archived: 20, active: 0, pending: 0 } },
+    { outcome: "gate" as const, key: "ads", label: "Ad Heavy", count: 5, top_domains: [], fates: { archived: 5, active: 0, pending: 0 } },
+    { outcome: "gate" as const, key: "cookie", label: "Cookie Wall", count: 4, top_domains: [], fates: { archived: 4, active: 0, pending: 0 } },
+    { outcome: "gate" as const, key: "thin", label: "Thin Content", count: 3, top_domains: [], fates: { archived: 3, active: 0, pending: 0 } },
     { outcome: "gate" as const, key: "paywall", label: "Paywall", count: 7, top_domains: [], fates: { archived: 7, active: 0, pending: 0 } },
     { outcome: "gate" as const, key: "uncategorized", label: "Uncategorized", count: 3, top_domains: [], fates: { archived: 3, active: 0, pending: 0 } },
   ],
@@ -42,11 +45,11 @@ it("loads, then shows the subtitle and a legend entry per category with counts",
   await loaded();
   expect(screen.getByText(PIPELINE_SUBTITLE)).toBeInTheDocument();
   const legend = document.querySelector(".chart-legend-flow") as HTMLElement;
-  for (const [name, n] of [["Login Wall", "20"], ["Paywall", "7"], ["Uncategorized", "3"]]) {
+  for (const [name, n] of [["Login Wall", "20"], ["Paywall", "7"], ["Ad Heavy", "5"], ["Cookie Wall", "4"], ["Thin Content", "3"], ["Uncategorized", "3"]]) {
     const li = within(legend).getByText(name).closest("li") as HTMLElement;
     expect(li).toHaveTextContent(n);
   }
-  expect(within(legend).getAllByRole("listitem")).toHaveLength(3);
+  expect(within(legend).getAllByRole("listitem")).toHaveLength(6);
 });
 it("section order: flow panel, filters row, pages; no old lists", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
@@ -59,6 +62,9 @@ it("section order: flow panel, filters row, pages; no old lists", async () => {
   expect(panel).toBeTruthy();
   expect(filters).toBeTruthy();
   expect(filters).toHaveTextContent("Skip gate · LLM");
+  const ruleHead = within(filters).getByText("Rule filter · no LLM");
+  const gateHead = within(filters).getByText("Skip gate · LLM");
+  expect(ruleHead.compareDocumentPosition(gateHead) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   const follows = (x: Node, y: Node) => Boolean(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
   expect(follows(panel, filters)).toBe(true);
   expect(follows(filters, pages)).toBe(true);
@@ -71,6 +77,7 @@ it("a summary without flow shows the stale-API message in the flow panel", async
   const msg = await screen.findByText("The API is older than this view; restart it to load the flow.");
   expect(msg).toHaveAttribute("role", "alert");
   expect(container.querySelector(".pipeline-flow-panel")).toContainElement(msg);
+  expect(container.querySelector(".pipeline-filters-row")).toHaveTextContent("Skip gate · LLM");
   expect(await screen.findByText("Row page")).toBeInTheDocument();
 });
 it("pills are sticky with the header and every section refetches on period change", async () => {
@@ -91,12 +98,17 @@ it("a failing summary alerts but the timeline and table still load", async () =>
   mount();
   expect(await screen.findByRole("alert")).toHaveTextContent("boom");
   expect(await screen.findByText("Row page")).toBeInTheDocument();
+  expect(await screen.findByText("No activity in this period.")).toBeInTheDocument();
 });
 it("a zero-page period renders empty states, never NaN", async () => {
   vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary({ status_counts: { active: 0, pending: 0, archived: 0 }, total_pages: 0, archive_ratio: 0, flow: { total: 0, outcomes: flow.outcomes.map((o) => ({ ...o, count: 0 })), details: [], fates: flow.fates.map((f) => ({ ...f, count: 0 })) } }));
   vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [], total: 0, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
   const { container } = mount();
   await screen.findAllByText("No pages in this period.");
+  const panel = container.querySelector(".pipeline-flow-panel") as HTMLElement;
+  expect(within(panel).getAllByText("No pages in this period.")).toHaveLength(1);
+  expect(container.textContent).not.toContain("No activity in this period.");
+  expect(panel.querySelector(".chart-legend-flow")).toBeNull();
   expect(container.textContent).not.toContain("NaN");
   await waitFor(() => expect(within(container).queryByText("Loading…")).toBeNull());
 });

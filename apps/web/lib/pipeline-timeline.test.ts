@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { axisLabels, bucketTitle } from "./pipeline-timeline";
+import { axisLabels, bucketTitle, VOLUME_ORDER, hasFlowActivity, rateSeries, rateDomain, mixSeries, gateNotLiveRun } from "./pipeline-timeline";
 import type { TimelineBucket } from "./types";
 
 const b = (start: string, o: Partial<TimelineBucket> = {}): TimelineBucket =>
@@ -26,8 +26,6 @@ describe("bucket labels", () => {
     expect(axisLabels([b("2026-09-28T00:00:00-05:00")], "day")).toEqual(["Sep 28"]);
   });
 });
-
-import { VOLUME_ORDER, hasFlowActivity, rateSeries, rateDomain, mixSeries, gateNotLiveRun } from "./pipeline-timeline";
 
 const fb = (o: Partial<Record<"before_gate" | "rule_filter" | "gate" | "processed" | "pending", number>>, extra: Partial<TimelineBucket> = {}): TimelineBucket => {
   const outcomes = { before_gate: 0, rule_filter: 0, gate: 0, processed: 0, pending: 0, ...o };

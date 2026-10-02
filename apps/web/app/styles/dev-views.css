@@ -141,25 +141,6 @@
 }
 
 
-/* ===== Two-Column Layout ===== */
-
-.dev-two-col {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 24px;
-}
-
-.dev-two-col > div {
-    flex: 1;
-    min-width: 0;
-}
-
-/* Narrow bodies: stack the columns so reason rows keep a readable bar and a one-line domains caption. */
-@media (max-width: 900px) {
-    .dev-two-col { flex-direction: column; gap: 0; }
-}
-
-
 /* ===== Noise Pages Table ===== */
 
 .dev-section-title {
@@ -319,14 +300,6 @@
     font-weight: 600;
 }
 
-/* One column: every timeline gets the full body width (horizontal space beats vertical for timelines). */
-.trends-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
 .trends-chart-cell {
     background: var(--surface);
     border-radius: 6px;
@@ -393,7 +366,7 @@
 .dev-config-panel.dev-panel[open] summary::before { transform: rotate(90deg); }
 .dev-config-panel.dev-panel .config-body { padding: 12px 0 0; }
 .dev-config-title { font-size: 0.78rem; font-weight: 600; color: var(--text); margin-right: 4px; }
-.pipeline-filters-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 24px; align-items: start; }
+.pipeline-filters-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 20px; align-items: start; }
 @media (max-width: 900px) { .pipeline-filters-row { grid-template-columns: minmax(0, 1fr); } }
 .dev-chip { font-family: monospace; font-size: 11px; color: var(--text); border-radius: 6px; padding: 2px 8px;
   background: color-mix(in oklch, var(--panel-caption) 14%, transparent); }
@@ -406,9 +379,13 @@
 .rule-filter-share, .rule-filter-split, .rule-filter-footnote { font-size: 0.72rem; color: var(--panel-caption); }
 .rule-filter-claim { font-size: 0.75rem; color: var(--text); margin: 12px 0; }
 .rule-filter-rules { margin: 12px 0; font-size: 0.72rem; }
-.rule-filter-rules summary { cursor: pointer; color: var(--text); }
+.rule-filter-rules summary { cursor: pointer; color: var(--text); list-style: none; display: flex; align-items: center; gap: 8px; }
+.rule-filter-rules summary::-webkit-details-marker { display: none; }
+.rule-filter-rules summary::before { content: "›"; font-size: 1rem; line-height: 1; margin: 0 2px 0 0; color: var(--panel-caption); transition: transform 0.15s ease; }
+.rule-filter-rules[open] summary::before { transform: rotate(90deg); }
 .rule-filter-rules ul { font-family: monospace; list-style: none; margin: 8px 0 0; padding: 0; }
 .rule-filter-domains { columns: 2 160px; column-gap: 16px; }
 .rule-filter-domains li, .rule-filter-patterns li, .rule-filter-paths li { overflow-wrap: anywhere; color: var(--text); }
 .rule-filter-patterns li span:last-child { color: var(--panel-caption); }
 .rule-filter-footnote { margin: 0; }
+.pipeline-flow-panel { margin-bottom: 20px; }

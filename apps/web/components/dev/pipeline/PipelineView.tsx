@@ -48,25 +48,22 @@ export default function PipelineView() {
       </div>
       <div className="dev-view-body">
         <div data-section="summary" className={busy ? "is-refreshing" : undefined} aria-busy={busy}>
-        {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pipeline summary ({error}).</p>
-         : !summary ? <p className="dev-empty">Loading…</p>
-         : (
-          <>
-            <section className="dev-panel pipeline-flow-panel">
-              {summary.flow ? (
-                <>
-                  <PipelineFlow flow={summary.flow} catColors={catColors} ratio={summary.archive_ratio} />
-                  <FlowTimeline range={range} tz={tz} order={order} labels={labels} catColors={catColors} />
-                  <CategoryLegend items={legend} />
-                </>
-              ) : <p className="dev-empty" role="alert">The API is older than this view; restart it to load the flow.</p>}
-            </section>
+          <section className="dev-panel pipeline-flow-panel">
+            {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pipeline summary ({error}).</p>
+             : !summary ? <p className="dev-empty">Loading…</p>
+             : !summary.flow ? <p className="dev-empty" role="alert">The API is older than this view; restart it to load the flow.</p>
+             : <PipelineFlow flow={summary.flow} catColors={catColors} ratio={summary.archive_ratio} />}
+            {!(summary && (!summary.flow || summary.flow.total === 0)) && (
+              <FlowTimeline range={range} tz={tz} order={order} labels={labels} catColors={catColors} />
+            )}
+            {summary?.flow && legend.length > 0 && <CategoryLegend items={legend} />}
+          </section>
+          {summary && (
             <div className="pipeline-filters-row">
               {summary.flow && summary.rule_filter_config && <RuleFilterPanel flow={summary.flow} config={summary.rule_filter_config} />}
               <SkipGateConfigPanel config={summary.skip_gate_config} />
             </div>
-          </>
-        )}
+          )}
         </div>
         <PagesTable range={range} tz={tz} />
       </div>
