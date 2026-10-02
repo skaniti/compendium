@@ -38,3 +38,9 @@ export function countTicks(max: number): { ticks: number[]; top: number } {
   const ticks = m <= 3 ? Array.from({ length: m + 1 }, (_, i) => i) : scaleLinear().domain([0, m]).nice(4).ticks(4).filter(Number.isInteger);
   return { ticks, top: ticks[ticks.length - 1] };
 }
+/** Y axis for non-integer values (dollars): about 4 nice ticks from 0 and the matching top; [0, 1] when there is nothing to show. */
+export function valueTicks(max: number): { ticks: number[]; top: number } {
+  if (!Number.isFinite(max) || max <= 0) return { ticks: [0, 1], top: 1 };
+  const s = scaleLinear().domain([0, max]).nice(4);
+  return { ticks: s.ticks(4), top: s.domain()[1] };
+}

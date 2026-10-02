@@ -34,14 +34,48 @@ it("TimelineBars renders axes only for no buckets", () => {
   expect(container.querySelector("svg")).toBeTruthy();
   expect(container.querySelectorAll("rect.bar-kept")).toHaveLength(0);
 });
-it("LineAreaChart breaks the line at null points and only dots real ones", () => {
-  const { container } = render(<LineAreaChart cats={cats(3)} yMax={100} yTicks={[0, 50, 100]} ySuffix="%"
-    points={[{ y: 20, tip: ["1 of 5 evaluated"] }, { y: null, tip: [] }, { y: 60, tip: ["3 of 5 evaluated"] }]} />);
-  expect(container.querySelectorAll("circle.chart-point")).toHaveLength(2);
-  expect((container.querySelector("path.chart-line")!.getAttribute("d")!.match(/M/g) ?? []).length).toBe(2);
-  expect(container.querySelector("path.chart-area")).toBeTruthy();
-  fireEvent.mouseMove(container.querySelectorAll(".chart-hit")[0]);
-  expect(container.querySelector('[role="tooltip"]')?.textContent).toContain("Sep 011 of 5 evaluated");
+it("LineAreaChart draws one line per series, breaks at nulls, fills only area series, tooltips per bucket", () => {
+  const { container } = render(<LineAreaChart cats={cats(3)} yMax={100} yTicks={[0, 50, 100]} yFormat={(v) => `${v}%`}
+    series={[{ name: "a", color: "var(--panel-caption)", values: [20, null, 60] }, { name: "b", color: "var(--highlight)", values: [5, 6, 7], area: true }]}
+    tip={(i) => [`bucket ${i}`]} />);
+  const lines = container.querySelectorAll("path.chart-line");
+  expect(lines).toHaveLength(2);
+  expect((lines[0].getAttribute("d")!.match(/M/g) ?? []).length).toBe(2);
+  expect(container.querySelectorAll("path.chart-area")).toHaveLength(1);
+  expect(container.querySelectorAll("circle.chart-point")).toHaveLength(5);
+  expect(Array.from(container.querySelectorAll("text.chart-tick")).map((t) => t.textContent)).toContain("50%");
+  fireEvent.mouseMove(container.querySelectorAll(".chart-hit")[1]);
+  expect(container.querySelector('[role="tooltip"]')?.textContent).toBe("Sep 02bucket 1");
+});
+it("LineAreaChart xAxis={false} draws no x labels and dots={false} no points", () => {
+  withWidth(1600, () => {
+    const { container } = render(<LineAreaChart cats={cats(5)} yMax={10} yTicks={[0, 10]} xAxis={false} dots={false} series={[{ name: "a", color: "red", values: [1, 2, 3, 4, 5] }]} />);
+    expect(axisTexts(container)).toHaveLength(0);
+    expect(container.querySelectorAll("circle.chart-point")).toHaveLength(0);
+  });
+});
+it("StackedBarChart count mode: stacks raw values on a count axis, explicit colours, one tooltip per column", () => {
+  const { container } = render(<StackedBarChart mode="count" cats={cats(2)} legend={false}
+    series={[{ name: "Desktop", color: "var(--panel-caption)", values: [3, 0] }, { name: "Phone", color: "var(--highlight)", values: [1, 0] }]}
+    tip={(i) => [`col ${i}`]} />);
+  const segs = container.querySelectorAll("rect.chart-seg");
+  expect(segs).toHaveLength(4);
+  expect((segs[0] as SVGElement).style.fill).toBe("var(--panel-caption)");
+  expect(container.querySelectorAll(".chart-seg-label")).toHaveLength(0);
+  expect(container.querySelector("ul.chart-legend-flow")).toBeNull();
+  expect(Array.from(container.querySelectorAll("text.chart-tick")).map((t) => t.textContent)).toContain("4");
+  fireEvent.mouseMove(container.querySelectorAll("rect.chart-hit")[1]);
+  expect(container.querySelector('[role="tooltip"]')?.textContent).toBe("Sep 02col 1");
+});
+it("StackedBarChart count mode formats a dollar axis", () => {
+  const { container } = render(<StackedBarChart mode="count" cats={cats(1)} yFormat={(v) => `$${v}`} series={[{ name: "a", color: "red", values: [0.012] }]} />);
+  expect(Array.from(container.querySelectorAll("text.chart-tick")).some((t) => t.textContent?.startsWith("$0.0"))).toBe(true);
+});
+it("valueTicks: nice non-integer ticks from zero covering the max", async () => {
+  const { valueTicks } = await import("./scales");
+  const { ticks, top } = valueTicks(0.0123);
+  expect(ticks[0]).toBe(0); expect(top).toBeGreaterThanOrEqual(0.0123); expect(ticks.length).toBeGreaterThanOrEqual(3);
+  expect(valueTicks(0)).toEqual({ ticks: [0, 1], top: 1 });
 });
 it("StackedBarChart stacks to 100, tooltips read 'name: n (pct%)', fills differ", () => {
   const series = Array.from({ length: 8 }, (_, i) => ({ name: `cat ${i}`, values: [12.5], counts: [i + 1] }));
@@ -65,7 +99,7 @@ it("StackedBarChart draws no in-bar labels when bands are narrow, some when wide
 });
 it("every chart sizes its viewBox to the measured width", () => {
   withWidth(900, () => {
-    const { container } = render(<><TimelineBars cats={cats(1)} bars={[{ kept: 1, archived: 0, rate: 0 }]} /><LineAreaChart cats={cats(1)} yMax={100} yTicks={[0]} points={[{ y: 1, tip: [] }]} /><StackedBarChart cats={cats(1)} series={[{ name: "a", values: [100], counts: [1] }]} /></>);
+    const { container } = render(<><TimelineBars cats={cats(1)} bars={[{ kept: 1, archived: 0, rate: 0 }]} /><LineAreaChart cats={cats(1)} yMax={100} yTicks={[0]} series={[{ name: "a", color: "red", values: [1] }]} /><StackedBarChart cats={cats(1)} series={[{ name: "a", values: [100], counts: [1] }]} /></>);
     expect(Array.from(container.querySelectorAll("svg")).map((s) => s.getAttribute("viewBox"))).toEqual(["0 0 900 240", "0 0 900 240", "0 0 900 240"]);
   });
 });

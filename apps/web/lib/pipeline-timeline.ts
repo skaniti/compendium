@@ -13,7 +13,7 @@ function wall(start: string) {
 const monthDay = (w: ReturnType<typeof wall>) => `${MONTHS[w.mo] ?? "???"} ${String(w.d).padStart(2, "0")}`;
 
 /** Hover title for one bucket. */
-export function bucketTitle(bucket: TimelineBucket, g: TimelineGranularity): string {
+export function bucketTitle(bucket: Pick<TimelineBucket, "start">, g: TimelineGranularity): string {
   const w = wall(bucket.start);
   if (g === "6h") return `${monthDay(w)} · ${BLOCKS[Math.min(3, Math.floor(w.h / 6))]}`;
   if (g === "week") return `wk of ${monthDay(w)}`;
@@ -22,7 +22,7 @@ export function bucketTitle(bucket: TimelineBucket, g: TimelineGranularity): str
 }
 
 /** x-axis label candidates, one per bucket (null = no label here). 6h blocks label only the first block of each day. */
-export function axisLabels(buckets: TimelineBucket[], g: TimelineGranularity): (string | null)[] {
+export function axisLabels(buckets: Pick<TimelineBucket, "start">[], g: TimelineGranularity): (string | null)[] {
   return buckets.map((bk, i) => {
     if (g !== "6h") return bucketTitle(bk, g);
     const w = wall(bk.start);
