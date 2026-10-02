@@ -484,3 +484,43 @@
 .clusters-note.is-featured { color: var(--highlight); background: color-mix(in oklch, var(--highlight) 18%, transparent); }
 .clusters-dist-row .clusters-caption { min-height: calc(2 * 1.4em); }
 .clusters-nowrap { white-space: nowrap; }
+
+/* ===== Prompts ===== */
+.prompts-body { display: flex; flex-direction: column; gap: 20px; }
+.prompts-caption { margin: 0 0 12px; font-size: 0.72rem; color: var(--panel-caption); }
+.prompts-note { margin: 8px 0 0; font-size: 0.72rem; color: var(--panel-caption); }
+.prompts-models-table td, .prompts-models-table th { vertical-align: top; }
+.prompts-models .cell-sans, .prompts-col-detail { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.prompts-col-source { color: var(--panel-caption); font-size: 0.66rem; overflow-wrap: anywhere; }
+.prompts-link { background: none; border: 0; padding: 0; color: var(--highlight); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.prompts-link:focus-visible, .prompts-version:focus-visible, .prompts-toolbar button:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.prompts-grid { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.prompts-nav { display: flex; flex-direction: column; gap: 12px; max-height: 70vh; overflow-y: auto; }
+.prompts-task-head { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72rem; }
+.prompts-task-label { font-weight: 600; }
+.prompts-task-live { color: var(--panel-caption); font-family: monospace; }
+.prompts-task ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.prompts-version { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 0; border-radius: 6px; background: color-mix(in oklch, var(--panel-caption) 14%, transparent); color: var(--text); font-family: monospace; font-size: 0.72rem; cursor: pointer; }
+.prompts-version[aria-pressed="true"] { background: color-mix(in oklch, var(--highlight) 28%, transparent); }
+.prompts-pill { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 0.62rem; line-height: 1.5; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: color-mix(in oklch, var(--panel-caption) 18%, transparent); }
+.prompts-pill.is-live { background: color-mix(in oklch, var(--highlight) 30%, transparent); }
+.prompts-pill.is-override { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--highlight) 60%, transparent); background: transparent; }
+.prompts-pill.is-muted { color: var(--panel-caption); }
+.prompts-viewer { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.prompts-viewer-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.prompts-name { font-size: 0.85rem; }
+.prompts-desc { margin: 0; font-size: 0.75rem; }
+.prompts-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.7rem; align-items: center; }
+.prompts-meta-label { color: var(--panel-caption); margin-right: 4px; }
+.prompts-template, .prompts-diff { max-height: 60vh; overflow: auto; }
+.prompts-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.prompts-toolbar button, .prompts-editor-actions button, .prompts-confirm button { padding: 4px 10px; border: 0; border-radius: 6px; background: color-mix(in oklch, var(--panel-caption) 18%, transparent); color: var(--text); font-size: 0.72rem; cursor: pointer; }
+.prompts-toolbar button[aria-pressed="true"] { background: color-mix(in oklch, var(--highlight) 28%, transparent); }
+.prompts-editor { width: 100%; box-sizing: border-box; min-height: 18rem; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-family: monospace; font-size: 0.7rem; line-height: 1.5; resize: vertical; }
+.prompts-editor-status, .prompts-status { font-size: 0.7rem; color: var(--panel-caption); font-family: monospace; }
+.prompts-editor-actions { display: flex; gap: 8px; }
+.prompts-diff-line { display: block; }
+.prompts-diff-line.is-add { background: color-mix(in oklch, var(--highlight) 18%, transparent); }
+.prompts-diff-line.is-del { background: color-mix(in oklch, var(--panel-caption) 22%, transparent); }
+@media (max-width: 1100px) { .prompts-col-detail, .prompts-col-source { display: none; } }
+@media (max-width: 900px) { .prompts-grid { grid-template-columns: minmax(0, 1fr); } .prompts-nav { max-height: none; } }
