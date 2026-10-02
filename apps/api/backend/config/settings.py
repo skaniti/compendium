@@ -260,6 +260,11 @@ class Settings(BaseSettings):
     repo. Empty: the Prompts dev view's editor is off, and reads fall back to the
     tracked backend/prompts/overrides.json. Env var ``PROMPT_OVERRIDES_PATH``."""
 
+    eval_runs_dir: str = ""
+    """Directory of evaluation-harness runs (<run_id>/run.json) outside the
+    repo. Empty: the Prompts dev view shows no evaluation history. Env var
+    ``EVAL_RUNS_DIR``."""
+
     cluster_naming_prompt_version: str = "v1a"
     """Selects the registry entry ``cluster_naming_{version}`` in
     ``backend/prompts/templates.py`` for
