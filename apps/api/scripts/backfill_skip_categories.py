@@ -1,7 +1,7 @@
 """Backfill ``pages.skip_category`` for historical skip-gate archives.
 
 Selects the DISTINCT ``skip_reasoning`` strings of ``skip_gate`` pages whose
-category is NULL (all users), classifies them in batches of 40 with one LLM
+category is NULL (all users), classifies them in small batches (BATCH_SIZE) with one LLM
 tool call per batch, writes a reviewable mapping file OUTSIDE the repo, and --
 only with ``--apply`` -- updates the pages.
 
@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -57,7 +58,7 @@ PER_USER_SQL = """
 UPDATE_SQL = (
     "UPDATE pages SET skip_category = %s "
     "WHERE archive_reason = 'skip_gate' AND skip_category IS NULL "
-    "AND skip_reasoning IS NOT DISTINCT FROM %s"
+    "AND skip_reasoning = %s"
 )
 
 
@@ -167,7 +168,8 @@ def _echo_matches(echo: object, reason: str) -> bool:
     if not isinstance(echo, str) or not echo.strip():
         return False
     norm = " ".join(reason.lower().split())
-    return norm.startswith(" ".join(echo.lower().split()))
+    e = " ".join(echo.lower().split())
+    return len(e) >= min(len(norm), ECHO_CHARS) - 3 and norm.startswith(e)
 
 
 def parse_response(arguments: object, reasons: list[str]) -> list[str | None]:
@@ -195,35 +197,74 @@ def _add_usage(total: dict, usage: dict) -> None:
         total[k] += usage[k]
 
 
-async def _ask(llm, reasons: list[str], model: str) -> tuple[list[str | None], dict]:
+def _estimate_usage(llm, model: str, prompt: str, max_tokens: int) -> dict:
+    """Usage for a call whose response never parsed: the prompt is billed, and a
+    truncated answer hit the output cap. Cost uses the service's price table."""
+    tin, tout = len(prompt) // 4, max_tokens
+    calc = getattr(llm, "_calculate_cost", None)
+    try:
+        cost = float(calc(model, tin, tout)) if calc else 0.0
+    except Exception:  # noqa: BLE001 - estimate only
+        cost = 0.0
+    return {"input_tokens": tin, "output_tokens": tout, "cost_usd": cost}
+
+
+def _merged_arguments(tool_calls) -> dict | None:
+    """Merge the items of every classify_skip_reasons call."""
+    if not tool_calls:
+        return None
+    items: list = []
+    for tc in tool_calls:
+        if tc.get("name") != TOOL_NAME:
+            continue
+        args = tc.get("arguments")
+        if isinstance(args, dict) and isinstance(args.get("items"), list):
+            items.extend(args["items"])
+    return {"items": items}
+
+
+async def _ask(llm, reasons: list[str], model: str, usage: dict) -> list[str | None]:
+    """One LLM call; its usage is added to ``usage`` even when parsing fails."""
+    prompt = build_prompt(reasons)
+    max_tokens = 40 * len(reasons) + 100
     try:
         resp, tool_calls = await llm.select_tool(
-            prompt=build_prompt(reasons), tools=[classify_tool()], model=model, temperature=0.0
+            prompt=prompt,
+            tools=[classify_tool()],
+            model=model,
+            temperature=0.0,
+            max_tokens=max_tokens,
         )
-    except ValueError:
-        # Malformed tool-call JSON (e.g. truncated output): treat as "no answer"
-        # so the retry path re-asks for these items.
+    except json.JSONDecodeError:
+        # Malformed/truncated tool-call JSON: billed but unusable. Treat as "no
+        # answer" so the retry path re-asks for these items.
         log("malformed tool-call JSON; will retry the affected items")
-        return [None] * len(reasons), {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
-    usage = {
-        "input_tokens": getattr(resp, "input_tokens", 0) or 0,
-        "output_tokens": getattr(resp, "output_tokens", 0) or 0,
-        "cost_usd": getattr(resp, "cost_usd", 0.0) or 0.0,
-    }
-    args = tool_calls[0]["arguments"] if tool_calls else None
-    return parse_response(args, reasons), usage
+        _add_usage(usage, _estimate_usage(llm, model, prompt, max_tokens))
+        return [None] * len(reasons)
+    _add_usage(
+        usage,
+        {
+            "input_tokens": getattr(resp, "input_tokens", 0) or 0,
+            "output_tokens": getattr(resp, "output_tokens", 0) or 0,
+            "cost_usd": getattr(resp, "cost_usd", 0.0) or 0.0,
+        },
+    )
+    return parse_response(_merged_arguments(tool_calls), reasons)
 
 
 async def classify_batch(
-    llm, reasons: list[str], model: str
+    llm, reasons: list[str], model: str, usage: dict | None = None
 ) -> tuple[list[str | None], dict, dict]:
     """Classify with retries for dropped items, then one call per leftover item.
 
-    Returns (categories, usage, stats). A category stays None only if the model
-    never produced a valid, echo-verified answer; it is NOT defaulted to 'other'.
+    ``usage`` (optional) is an accumulator updated after every call, so spend is
+    never lost if a later call raises. Returns (categories, usage, stats). A
+    category stays None only if the model never produced a valid, echo-verified
+    answer; it is NOT defaulted to 'other'.
     """
     cats: list[str | None] = [None] * len(reasons)
-    usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    if usage is None:
+        usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
     stats = {"retried": 0, "single": 0}
 
     def pending() -> list[int]:
@@ -233,23 +274,21 @@ async def classify_batch(
         todo = pending()
         if not todo:
             break
-        got, u = await _ask(llm, [reasons[i] for i in todo], model)
-        _add_usage(usage, u)
+        got = await _ask(llm, [reasons[i] for i in todo], model, usage)
         for i, c in zip(todo, got):
             if c is not None:
                 cats[i] = c
                 if attempt > 0:
                     stats["retried"] += 1
     for i in pending():
-        got, u = await _ask(llm, [reasons[i]], model)
-        _add_usage(usage, u)
+        got = await _ask(llm, [reasons[i]], model, usage)
         if got[0] is not None:
             cats[i] = got[0]
             stats["single"] += 1
     return cats, usage, stats
 
 
-_CUT_MARKERS = (" url clues", " -- ", "; ")
+_CUT_MARKERS = (" url clues", " -- ")
 
 
 def normalize_key(reason: str) -> str:
@@ -304,7 +343,8 @@ def build_mapping(model: str, rows: list[tuple], cats: list[str | None]) -> dict
     }
 
 
-def _repo_root() -> Path | None:
+def _repo_root() -> Path:
+    """Root of the repo this script lives in; fails closed if git cannot answer."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -312,17 +352,53 @@ def _repo_root() -> Path | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=15,
         ).stdout.strip()
-        return Path(out).resolve()
-    except Exception:  # noqa: BLE001 - no git means no repo to be inside
-        return None
+    except (OSError, subprocess.SubprocessError) as e:
+        raise SystemExit(f"cannot determine the git work tree ({e}); refusing") from e
+    return Path(out).resolve()
+
+
+def _inside_git_work_tree(directory: Path) -> bool:
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(directory), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        raise SystemExit(f"git probe failed ({e}); refusing") from e
+    if r.returncode == 0:
+        return True
+    if "not a git repository" in r.stderr.lower():
+        return False
+    raise SystemExit(f"git probe failed ({r.stderr.strip()[:80]}); refusing")
 
 
 def check_outside_repo(path: Path) -> None:
+    """Refuse a mapping path inside ANY git work tree (lexically, via symlinks, or
+    through its nearest existing ancestor). Fails closed."""
     root = _repo_root()
-    p = path.expanduser().resolve()
-    if root is not None and p.is_relative_to(root):
-        raise SystemExit(f"refusing mapping path inside the git work tree: {p}")
+    lexical = Path(os.path.abspath(os.path.expanduser(path)))
+    resolved = lexical.resolve()
+    for p in (lexical, resolved):
+        if p.is_relative_to(root):
+            raise SystemExit(f"refusing mapping path inside the git work tree: {p}")
+    anc = resolved
+    while not anc.exists() and anc != anc.parent:
+        anc = anc.parent
+    if _inside_git_work_tree(anc):
+        raise SystemExit(f"refusing mapping path inside a git work tree: {resolved}")
+
+
+def write_mapping(out: Path, mapping: dict) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(mapping, indent=1) + "\n")
+    os.chmod(out, 0o600)
 
 
 def default_mapping_path() -> Path:
@@ -331,15 +407,18 @@ def default_mapping_path() -> Path:
 
 
 def load_mapping(path: Path) -> list[dict]:
+    """Load a reviewed mapping; any null/blank reason or invalid category aborts."""
     data = json.loads(Path(path).read_text())
-    return [
-        {
-            "reason": it.get("reason"),
-            "category": normalize_category(it.get("category")),
-            "pages": it.get("pages", 0),
-        }
-        for it in data["items"]
-    ]
+    out = []
+    for n, it in enumerate(data["items"]):
+        reason = it.get("reason")
+        cat = _valid_category(it.get("category"))
+        if not isinstance(reason, str) or not reason.strip():
+            raise SystemExit(f"mapping item {n}: blank or missing reason")
+        if cat is None:
+            raise SystemExit(f"mapping item {n}: invalid category")
+        out.append({"reason": reason, "category": cat, "pages": it.get("pages", 0)})
+    return out
 
 
 def select_reasons(limit: int | None) -> tuple[list[tuple], list[tuple]]:
@@ -384,8 +463,13 @@ def record_cost(user_id: int, model: str, usage: dict) -> None:
         log(f"cost event insert failed: {e}")
 
 
-async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None], dict, dict, int]:
-    """Classify one representative per near-duplicate group; members inherit it."""
+async def classify_all(
+    rows: list[tuple], model: str, user_id: int | None = None
+) -> tuple[list[str | None], dict, dict, int]:
+    """Classify one representative per near-duplicate group; members inherit it.
+
+    Spend so far is recorded as a cost event even if the guard trips or the API
+    errors (when ``user_id`` is given)."""
     from backend.services.llm_service import LLMService
 
     llm = LLMService()
@@ -395,18 +479,21 @@ async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None],
     total = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
     stats = {"retried": 0, "single": 0}
     chunks = list(batches(reps, BATCH_SIZE))
-    for n, chunk in enumerate(chunks, 1):
-        got, usage, st = await classify_batch(llm, chunk, model)
-        rep_cats.extend(got)
-        _add_usage(total, usage)
-        for k in stats:
-            stats[k] += st[k]
-        log(
-            f"batch {n}/{len(chunks)}  classified {len(rep_cats)}/{len(reps)}  "
-            f"spend ${total['cost_usd']:.5f}"
-        )
-        if total["cost_usd"] > MAX_COST_USD:
-            raise SystemExit(f"spend guard tripped (> ${MAX_COST_USD}); stopping")
+    try:
+        for n, chunk in enumerate(chunks, 1):
+            got, _, st = await classify_batch(llm, chunk, model, total)
+            rep_cats.extend(got)
+            for k in stats:
+                stats[k] += st[k]
+            log(
+                f"batch {n}/{len(chunks)}  classified {len(rep_cats)}/{len(reps)}  "
+                f"spend ${total['cost_usd']:.5f}"
+            )
+            if total["cost_usd"] > MAX_COST_USD:
+                raise SystemExit(f"spend guard tripped (> ${MAX_COST_USD}); stopping")
+    finally:
+        if user_id is not None and (total["input_tokens"] or total["cost_usd"]):
+            record_cost(user_id, model, total)
     cats: list[str | None] = [None] * len(rows)
     for g, c in zip(groups, rep_cats):
         for i in g["members"]:
@@ -416,8 +503,11 @@ async def classify_all(rows: list[tuple], model: str) -> tuple[list[str | None],
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--dry-run", action="store_true", help="default: classify + write mapping only")
-    ap.add_argument("--apply", action="store_true", help="write categories to the pages table")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run", action="store_true", help="default: classify + write mapping only"
+    )
+    mode.add_argument("--apply", action="store_true", help="write categories to the pages table")
     ap.add_argument("--mapping-out", type=Path, default=None)
     ap.add_argument(
         "--mapping-in", type=Path, default=None, help="apply a reviewed mapping, no LLM"
@@ -457,13 +547,13 @@ def main(argv: list[str] | None = None) -> int:
         print("nothing to do")
         return 0
 
-    cats, usage, stats, ngroups = asyncio.run(classify_all(rows, TOOL_SELECTION_MODEL))
+    top_user = max(per_user, key=lambda x: x[1])[0] if per_user else 0
+    cats, usage, stats, ngroups = asyncio.run(
+        classify_all(rows, TOOL_SELECTION_MODEL, user_id=top_user)
+    )
     mapping = build_mapping(TOOL_SELECTION_MODEL, rows, cats)
     mapping["cost_usd"] = usage["cost_usd"]
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(mapping, indent=1) + "\n")
-    top_user = max(per_user, key=lambda x: x[1])[0] if per_user else 0
-    record_cost(top_user, TOOL_SELECTION_MODEL, usage)
+    write_mapping(out, mapping)
     print_summary(mapping)
     print(f"groups classified: {ngroups} (of {len(rows)} distinct reasons)")
     mixed = mapping["mixed_prefix_groups"]

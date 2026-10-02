@@ -77,15 +77,28 @@ def test_ids_captures_and_hygiene():
         assert bad not in text
 
 
+EXPECTED_CATEGORY = {
+    "login wall": "login_wall",
+    "disambiguation page": "disambiguation",
+    "search results page": "search_results",
+    "content-free stub": "content_free_stub",
+    "cookie consent redirect": "error_page",
+    "error page": "error_page",
+    "Marketplace / product / store listing": "store_listing",
+    "User-specific page (profile, dashboard)": "user_specific",
+}
+
+
 def test_skip_gate_rows_carry_a_valid_category_others_null():
     from backend.services.skip_categories import SKIP_CATEGORY_IDS
 
     d = _seed()
     rows = build_augment_rows(d["pages"], d["captures"])
-    assert set(GATE_CATEGORY) == set(GATE_REASONS)
+    assert GATE_CATEGORY == EXPECTED_CATEGORY
+    assert set(EXPECTED_CATEGORY) == set(GATE_REASONS)
     for r in rows:
         if r["archive_reason"] == "skip_gate":
             assert r["skip_category"] in SKIP_CATEGORY_IDS
-            assert r["skip_category"] == GATE_CATEGORY[r["skip_reasoning"]]
+            assert r["skip_category"] == EXPECTED_CATEGORY[r["skip_reasoning"]]
         else:
             assert r["skip_category"] is None

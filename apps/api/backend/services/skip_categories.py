@@ -2,7 +2,7 @@
 
 One module owns the list. The skip gate's ``skip_page`` tool constrains the
 model to these ids; an out-of-enum answer is stored as ``other``. The ids are
-mirrored in the ``pages_skip_category_check`` constraint (migration 046).
+mirrored in the ``pages_skip_category_check`` constraint (migrations 046, 047).
 """
 
 import logging

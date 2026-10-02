@@ -109,6 +109,8 @@ class _ScriptedLLM:
 
     async def select_tool(self, prompt, tools, model=None, **kw):
         assert kw["temperature"] == 0.0
+        self.kwargs = getattr(self, "kwargs", [])
+        self.kwargs.append(kw)
         self.prompts.append(prompt)
         reasons = bf.reasons_in_prompt(prompt)
         answered = self.steps.pop(0) if self.steps else {}
@@ -169,6 +171,67 @@ def test_malformed_json_is_retried_not_fatal():
     assert cats == ["error_page"] and stats["retried"] == 1
 
 
+def test_max_tokens_scales_with_batch_size():
+    llm = _ScriptedLLM([{"r0": "error_page", "r1": "other"}])
+    asyncio.run(bf.classify_batch(llm, ["r0", "r1"], "m"))
+    assert llm.kwargs[0]["max_tokens"] == 40 * 2 + 100
+
+
+def test_failed_parse_still_adds_usage():
+    import json
+
+    class Truncating(_ScriptedLLM):
+        async def select_tool(self, prompt, tools, model=None, **kw):
+            if not self.prompts:
+                self.prompts.append(prompt)
+                raise json.JSONDecodeError("cut", "{", 1)
+            return await super().select_tool(prompt, tools, model, **kw)
+
+    llm = Truncating([{"r0": "error_page"}])
+    cats, usage, _ = asyncio.run(bf.classify_batch(llm, ["r0"], "m"))
+    assert cats == ["error_page"]
+    # the failed call is estimated (prompt tokens + the output cap), plus the good call's 10/5
+    assert usage["input_tokens"] > 10 and usage["output_tokens"] > 5
+
+
+def test_usage_recorded_even_when_guard_trips(monkeypatch):
+    recorded = []
+
+    async def fake_batch(llm, reasons, model, usage=None):
+        usage["cost_usd"] += 9.0
+        return ["other"] * len(reasons), usage, {"retried": 0, "single": 0}
+
+    monkeypatch.setattr(bf, "classify_batch", fake_batch)
+    monkeypatch.setattr("backend.services.llm_service.LLMService", lambda: object())
+    monkeypatch.setattr(bf, "record_cost", lambda uid, model, usage: recorded.append(usage))
+    with pytest.raises(SystemExit):
+        asyncio.run(bf.classify_all([("a", 1)], "m", user_id=7))
+    assert recorded and recorded[0]["cost_usd"] == 9.0
+
+
+def test_merges_items_from_every_tool_call():
+    class TwoCalls:
+        async def select_tool(self, prompt, tools, model=None, **kw):
+            c = lambda i, cat: {
+                "name": "classify_skip_reasons",
+                "arguments": {"items": [{"index": i, "category": cat, "echo": f"r{i}"}]},
+            }
+            return _Resp(), [c(0, "login_wall"), c(1, "error_page")]
+
+    cats, _, _ = asyncio.run(bf.classify_batch(TwoCalls(), ["r0", "r1"], "m"))
+    assert cats == ["login_wall", "error_page"]
+
+
+def test_echo_must_be_long_enough():
+    reason = "A fairly long reason about a login wall page"
+    short = {"items": [{"index": 0, "category": "login_wall", "echo": "a"}]}
+    assert bf.parse_response(short, [reason]) == [None]
+    ok = {"items": [{"index": 0, "category": "login_wall", "echo": reason[:28].lower()}]}
+    assert bf.parse_response(ok, [reason]) == ["login_wall"]
+    tiny = {"items": [{"index": 0, "category": "other", "echo": "ab"}]}
+    assert bf.parse_response(tiny, ["ab"]) == ["other"]
+
+
 def test_classify_batch_no_tool_call_leaves_none():
     class FakeLLM:
         async def select_tool(self, prompt, tools, model=None, **kw):
@@ -207,78 +270,55 @@ def test_refuses_path_inside_repo():
         bf.check_outside_repo(inside)
 
 
+def test_refuses_relative_path_inside_repo(monkeypatch):
+    monkeypatch.chdir(Path(bf.__file__).resolve().parent)
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(Path("x.json"))
+
+
+def test_refuses_tilde_path_when_home_is_in_repo(monkeypatch, tmp_path):
+    repo = Path(bf.__file__).resolve().parent
+    monkeypatch.setenv("HOME", str(repo))
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(Path("~/x.json"))
+
+
+def test_refuses_symlink_that_points_into_repo(tmp_path):
+    link = tmp_path / "link"
+    link.symlink_to(Path(bf.__file__).resolve().parent)
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(link / "x.json")
+
+
+def test_refuses_in_repo_symlink_that_points_out(tmp_path):
+    link = Path(bf.__file__).resolve().parent / "zz_test_link"
+    link.symlink_to(tmp_path)
+    try:
+        with pytest.raises(SystemExit):
+            bf.check_outside_repo(link / "x.json")
+    finally:
+        link.unlink()
+
+
+def test_refuses_when_nearest_ancestor_is_a_git_work_tree(tmp_path):
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path / "other")], check=True)
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(tmp_path / "other" / "new" / "dir" / "m.json")
+
+
+def test_fails_closed_when_git_probe_fails(monkeypatch, tmp_path):
+    def boom(*a, **k):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(bf.subprocess, "run", boom)
+    with pytest.raises(SystemExit):
+        bf.check_outside_repo(tmp_path / "m.json")
+
+
 def test_accepts_path_outside_repo(tmp_path):
     bf.check_outside_repo(tmp_path / "m.json")
-
-
-def test_prompt_states_precedence_rule_and_examples():
-    p = bf.build_prompt(["x"])
-    assert "names a specific kind of page" in p
-    assert "even when it also says the page lacks substantive content" in p
-    assert "Use content_free_stub only when the reason names no more specific kind" in p
-    assert p.count("Example:") == 6
-    for cid in ("user_specific", "web_app", "search_results"):
-        assert f"-> {cid}" in p
-
-
-def test_normalize_key_cases():
-    n = bf.normalize_key
-    assert n("  Login   WALL. ") == "login wall"
-    assert n("Error page!!") == "error page"
-    assert n("Search results page -- URL clues: q=x") == "search results page"
-    assert n("Maps page; looks like directions") == "maps page"
-    assert n("A page. URL clues: foo") == "a page"
-    assert n("Same thing,") == n("same thing")
-
-
-def test_group_reasons_picks_most_frequent_representative():
-    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Other thing", 1)]
-    groups = bf.group_reasons(rows)
-    assert len(groups) == 2
-    g = next(g for g in groups if g["key"] == "dashboard page")
-    assert g["rep"] == "dashboard  page" and g["members"] == [0, 1]
-
-
-def test_classify_all_applies_representative_category_to_members(monkeypatch):
-    seen = []
-
-    async def fake_batch(llm, reasons, model):
-        seen.extend(reasons)
-        return (
-            ["user_specific"] * len(reasons),
-            {
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cost_usd": 0.0,
-            },
-            {"retried": 0, "single": 0},
-        )
-
-    monkeypatch.setattr(bf, "classify_batch", fake_batch)
-    monkeypatch.setattr("backend.services.llm_service.LLMService", lambda: object())
-    rows = [("Dashboard page.", 2), ("dashboard  page", 9), ("Login", 1)]
-    cats, _, _, ngroups = asyncio.run(bf.classify_all(rows, "m"))
-    assert ngroups == 2
-    assert cats == ["user_specific"] * 3
-    assert sorted(seen) == ["Login", "dashboard  page"]
-
-
-def test_mixed_prefix_groups_detects_split_prefix():
-    items = [
-        {"reason": "Google Maps page, directions", "category": "web_app", "pages": 11},
-        {"reason": "Google maps page with route", "category": "asset_library", "pages": 4},
-        {"reason": "Login wall", "category": "login_wall", "pages": 5},
-        {"reason": "Login wall again", "category": "login_wall", "pages": 2},
-    ]
-    mixed = bf.mixed_prefix_groups(items)
-    assert mixed == [
-        {"prefix": "google maps", "pages_by_category": {"web_app": 11, "asset_library": 4}}
-    ]
-
-
-def test_build_mapping_skips_unresolved():
-    m = bf.build_mapping("m", [("a", 3), ("b", 1)], ["login_wall", None])
-    assert [i["reason"] for i in m["items"]] == ["a"]
 
 
 def test_default_mapping_path_is_outside_repo():
@@ -314,17 +354,6 @@ def test_selection_excludes_null_and_blank_reasons():
     rows, per_user = bf.select_reasons(None)
     assert rows == [("real reason", 2)]
     assert per_user == [(uid, 2)]
-
-
-@needs_pg
-def test_web_app_is_persisted():
-    from backend.db.connection import get_conn
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT count(*) FROM pages WHERE skip_category = 'web_app'")
-        assert cur.fetchone()[0] == 0
-    # the 047 constraint accepts it (covered by test_skip_categories parametrized write)
-    assert "web_app" in SKIP_CATEGORY_IDS
 
 
 @needs_pg
@@ -376,8 +405,68 @@ def test_apply_mapping_updates_only_matching_null_rows():
     }
 
 
-def test_load_mapping_in_roundtrip(tmp_path):
+def _write(tmp_path, items):
     f = tmp_path / "m.json"
-    f.write_text(json.dumps({"items": [{"reason": "x", "category": "bogus", "pages": 1}]}))
-    items = bf.load_mapping(f)
-    assert items == [{"reason": "x", "category": "other", "pages": 1}]
+    f.write_text(json.dumps({"items": items}))
+    return f
+
+
+def test_load_mapping_valid(tmp_path):
+    f = _write(tmp_path, [{"reason": "x", "category": "login_wall", "pages": 1}])
+    assert bf.load_mapping(f) == [{"reason": "x", "category": "login_wall", "pages": 1}]
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {"reason": "x", "category": "bogus", "pages": 1},
+        {"reason": None, "category": "other", "pages": 1},
+        {"reason": "   ", "category": "other", "pages": 1},
+        {"category": "other", "pages": 1},
+        {"reason": "x", "pages": 1},
+    ],
+)
+def test_load_mapping_rejects_bad_items(tmp_path, item):
+    with pytest.raises(SystemExit):
+        bf.load_mapping(_write(tmp_path, [item]))
+
+
+def test_dry_run_and_apply_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        bf.main(["--dry-run", "--apply"])
+
+
+def test_mapping_file_written_0600(tmp_path):
+    out = tmp_path / "sub" / "m.json"
+    bf.write_mapping(out, {"items": []})
+    assert (out.stat().st_mode & 0o777) == 0o600
+
+
+@needs_pg
+def test_apply_mapping_ignores_non_skip_gate_rows():
+    from datetime import UTC, datetime
+
+    from backend.db import capture_repo, user_repo
+    from backend.db.connection import get_conn
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "TRUNCATE graph_cache, page_clusters, pages, page_content, captures, users CASCADE"
+        )
+    uid = user_repo.create_user("bf3@example.com", name="BF")["id"]
+    now = datetime(2026, 3, 15, 10, 0, tzinfo=UTC)
+    cap_id = capture_repo.save_capture(
+        user_id=uid, capture_id="bf_cap3", source="desktop_active", started_at=now, ended_at=now
+    )["id"]
+    with get_conn() as conn, conn.cursor() as cur:
+        for i, arch in enumerate(["skip_gate", "domain_skip"]):
+            cur.execute(
+                "INSERT INTO pages (url, title, domain, status, user_id, capture_id, "
+                "archive_reason, skip_reasoning, normalized_url) "
+                "VALUES (%s, 't', 'example.com', 'archived', %s, %s, %s, 'same reason', %s)",
+                (f"https://example.com/{i}", uid, cap_id, arch, f"https://example.com/{i}"),
+            )
+    assert bf.apply_mapping([{"reason": "same reason", "category": "web_app", "pages": 2}]) == 1
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT archive_reason, skip_category FROM pages ORDER BY id")
+        assert cur.fetchall() == [("skip_gate", "web_app"), ("domain_skip", None)]

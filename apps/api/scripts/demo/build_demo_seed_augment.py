@@ -38,7 +38,7 @@ GATE_CATEGORY = {
     "disambiguation page": "disambiguation",
     "search results page": "search_results",
     "content-free stub": "content_free_stub",
-    "cookie consent redirect": "other",
+    "cookie consent redirect": "error_page",
     "error page": "error_page",
     "Marketplace / product / store listing": "store_listing",
     "User-specific page (profile, dashboard)": "user_specific",
