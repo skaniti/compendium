@@ -59,7 +59,6 @@ class TestSkipMethods:
             {"key": "dedupe_fold", "label": "Dedupe Fold", "count": 1},
         ]
 
-
     def test_unknown_snake_case_falls_back_to_title_case(self):
         rows = ps.build_skip_method_rows({"some_new_reason": 3})
         assert rows[0]["label"] == "Some New Reason"
@@ -72,6 +71,19 @@ class TestSkipGateReasons:
         assert rows == [{"reason": "login wall", "count": 7}, {"reason": "stub", "count": 2}]
 
 
+class TestGroupRows:
+    def test_archive_reason_and_category_labels(self):
+        g = [{"key": "skip_gate", "count": 2, "top_domains": []}]
+        assert ps.build_archive_reason_rows(g)[0]["label"] == "LLM Skip Gate"
+        rows = ps.build_skip_category_rows(
+            [
+                {"key": "login_wall", "count": 1, "top_domains": []},
+                {"key": "uncategorized", "count": 1, "top_domains": []},
+            ]
+        )
+        assert [r["label"] for r in rows] == ["Login Wall", "Uncategorized"]
+
+
 class TestSkipGateConfig:
     def test_shape_from_live_registry(self):
         cfg = ps.build_skip_gate_config()
@@ -81,6 +93,12 @@ class TestSkipGateConfig:
         assert "{title}" in cfg["prompt"]  # unformatted template text
         assert [t["name"] for t in cfg["tools"]] == ["skip_page", "process_page"]
         assert all(t["description"] for t in cfg["tools"])
+
+    def test_categories_come_from_the_module(self):
+        from backend.services.skip_categories import SKIP_CATEGORIES
+
+        cats = ps.build_skip_gate_config()["categories"]
+        assert [(c["id"], c["label"], c["description"]) for c in cats] == list(SKIP_CATEGORIES)
 
     def test_override_wins(self, monkeypatch):
         from backend.prompts import templates

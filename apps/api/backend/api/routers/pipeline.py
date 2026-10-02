@@ -14,10 +14,10 @@ same pattern as routers/dq_bot.py.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.api.main import verify_api_key
-from backend.db import page_repo, trends_repo
+from backend.db import page_repo, pipeline_repo
 from backend.services import pipeline_summary as ps
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
@@ -25,21 +25,43 @@ router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
 _STATUS_KEYS = ("active", "pending", "archived")
 
 
+def _tz(tz: str = Query("UTC")) -> str:
+    try:
+        pipeline_repo.validate_tz(tz)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="invalid time zone") from None
+    return tz
+
+
 @router.get("/summary")
-async def pipeline_summary(user_id: int = Depends(verify_api_key)) -> dict:
-    status_counts = page_repo.get_page_status_counts(user_id)
-    depth_counts = page_repo.get_processing_depth_counts(user_id)
-    null_breakdown = page_repo.get_null_depth_breakdown(user_id) if depth_counts else {}
-    skip_methods = page_repo.get_skip_method_counts(user_id)
-    skip_reasons = page_repo.get_skip_reasoning_counts(user_id)
+async def pipeline_summary(
+    range: str | None = None,
+    tz: str = Depends(_tz),
+    user_id: int = Depends(verify_api_key),
+) -> dict:
+    key = pipeline_repo.normalize_range(range)
+    c = pipeline_repo.get_summary_counts(user_id, key)
+    status_counts = {k: int(c["status_counts"].get(k, 0)) for k in _STATUS_KEYS}
+    total = int(sum(c["status_counts"].values()))
     return {
-        "status_counts": {k: int(status_counts.get(k, 0)) for k in _STATUS_KEYS},
-        "total_pages": int(sum(status_counts.values())),
-        "decisions": ps.build_decision_rows(depth_counts, null_breakdown),
-        "skip_methods": ps.build_skip_method_rows(skip_methods),
-        "skip_gate_reasons": ps.build_skip_gate_reasons(skip_reasons),
+        "range": key,
+        "status_counts": status_counts,
+        "total_pages": total,
+        "archive_ratio": (status_counts["archived"] / total) if total else 0.0,
+        "decisions": ps.build_decision_rows(c["depth_counts"], c["null_breakdown"]),
+        "archive_reasons": ps.build_archive_reason_rows(c["archive_reasons"]),
+        "skip_categories": ps.build_skip_category_rows(c["skip_categories"]),
         "skip_gate_config": ps.build_skip_gate_config(),
     }
+
+
+@router.get("/timeline")
+async def pipeline_timeline(
+    range: str | None = None,
+    tz: str = Depends(_tz),
+    user_id: int = Depends(verify_api_key),
+) -> dict:
+    return pipeline_repo.get_timeline(user_id, pipeline_repo.normalize_range(range), tz)
 
 
 _SORT_PATTERN = "^(" + "|".join(page_repo.RECENT_PAGES_SORT_COLUMNS) + ")$"
@@ -51,10 +73,17 @@ async def pipeline_pages(
     offset: int = Query(0, ge=0),
     sort: str = Query("created_at", pattern=_SORT_PATTERN),
     dir: str = Query("desc", pattern="^(asc|desc)$"),
+    range: str | None = None,
+    tz: str = Depends(_tz),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
-    rows, total = page_repo.get_recent_pages(
-        user_id, limit=limit, offset=offset, sort=sort, direction=dir
+    rows, total = pipeline_repo.get_windowed_pages(
+        user_id,
+        pipeline_repo.normalize_range(range),
+        limit=limit,
+        offset=offset,
+        sort=sort,
+        direction=dir,
     )
     keep = (
         "id",
@@ -74,18 +103,4 @@ async def pipeline_pages(
         "offset": offset,
         "sort": sort,
         "dir": dir,
-    }
-
-
-@router.get("/skip-trends")
-async def pipeline_skip_trends(
-    range: str | None = None,
-    user_id: int = Depends(verify_api_key),
-) -> dict:
-    key = range or "all"
-    since = trends_repo.since_from_range(key)
-    return {
-        "range": key,
-        "skip_rate": trends_repo.get_daily_skip_rate(user_id, since),
-        "skip_reasons": trends_repo.get_daily_skip_reasons(user_id, since),
     }

@@ -10,6 +10,8 @@ Pure functions; no DB access."""
 
 from __future__ import annotations
 
+from backend.services.skip_categories import SKIP_CATEGORIES, SKIP_CATEGORY_LABELS
+
 SKIP_GATE_PROMPT_NAME = "skip_gate_v2_3"  # backend/api/main.py process path
 SKIP_GATE_TEMPERATURE = 0.0
 
@@ -29,6 +31,7 @@ SKIP_METHOD_LABELS = {
 def skip_method_label(key: str) -> str:
     """Known keys use SKIP_METHOD_LABELS; unknown snake_case values become Title Case."""
     return SKIP_METHOD_LABELS.get(key) or " ".join(w.capitalize() for w in key.split("_") if w)
+
 
 _DEPTH_LABELS = {"processed": "Processed", "skipped": "Skipped"}
 _NULL_KEYS = {"Pending": "pending", "Trivial Capture": "trivial_capture", "Other": "other"}
@@ -76,12 +79,24 @@ def build_decision_rows(depth_counts: dict[str, int], null_breakdown: dict[str, 
 
 
 def build_skip_method_rows(skip_methods: dict[str, int]) -> list[dict]:
-    rows = [
-        {"key": k, "label": skip_method_label(k), "count": c}
-        for k, c in skip_methods.items()
-    ]
+    rows = [{"key": k, "label": skip_method_label(k), "count": c} for k, c in skip_methods.items()]
     rows.sort(key=lambda r: r["count"], reverse=True)
     return rows
+
+
+def build_archive_reason_rows(groups: list[dict]) -> list[dict]:
+    """Archive-reason groups (key/count/top_domains) -> rows with method labels."""
+    return [{**g, "label": skip_method_label(g["key"])} for g in groups]
+
+
+def skip_category_label(key: str) -> str:
+    if key == "uncategorized":
+        return "Uncategorized"
+    return SKIP_CATEGORY_LABELS.get(key) or skip_method_label(key)
+
+
+def build_skip_category_rows(groups: list[dict]) -> list[dict]:
+    return [{**g, "label": skip_category_label(g["key"])} for g in groups]
 
 
 def build_skip_gate_reasons(rows: list[tuple[str, int]]) -> list[dict]:
@@ -99,6 +114,9 @@ def build_skip_gate_config() -> dict:
         "temperature": SKIP_GATE_TEMPERATURE,
         "prompt_name": SKIP_GATE_PROMPT_NAME,
         "prompt": get_prompt_template(SKIP_GATE_PROMPT_NAME),
+        "categories": [
+            {"id": cid, "label": label, "description": desc} for cid, label, desc in SKIP_CATEGORIES
+        ],
         "tools": [
             {"name": t["function"]["name"], "description": t["function"]["description"]}
             for t in PAGE_PROCESSING_TOOLS

@@ -118,21 +118,22 @@ class TestSummary:
     def test_empty_user(self, client):
         tc, _ = client
         body = tc.get("/api/pipeline/summary").json()
+        assert body["range"] == "all"
         assert body["status_counts"] == {"active": 0, "pending": 0, "archived": 0}
-        assert body["total_pages"] == 0
-        assert (
-            body["decisions"] == []
-            and body["skip_methods"] == []
-            and body["skip_gate_reasons"] == []
-        )
-        assert body["skip_gate_config"]["prompt_name"] == "skip_gate_v2_3"
+        assert body["total_pages"] == 0 and body["archive_ratio"] == 0.0
+        assert body["decisions"] == []
+        assert body["archive_reasons"] == [] and body["skip_categories"] == []
+        cfg = body["skip_gate_config"]
+        assert cfg["prompt_name"] == "skip_gate_v2_3"
+        assert {c["id"] for c in cfg["categories"]} >= {"login_wall", "web_app", "other"}
+        assert set(cfg["categories"][0]) == {"id", "label", "description"}
 
     def test_seeded_mix(self, client):
         tc, user = client
         _seed_mix(user["id"])
         body = tc.get("/api/pipeline/summary").json()
         assert body["status_counts"] == {"active": 2, "pending": 1, "archived": 3}
-        assert body["total_pages"] == 6
+        assert body["total_pages"] == 6 and body["archive_ratio"] == 0.5
         keys = {r["key"]: r for r in body["decisions"]}
         assert keys["processed"]["count"] == 2 and keys["processed"]["evaluated"] is True
         assert keys["skipped"]["count"] == 2
@@ -143,18 +144,62 @@ class TestSummary:
             "evaluated": False,
         }
         assert keys["trivial_capture"]["count"] == 1
-        assert [r["key"] for r in body["skip_methods"]][:1] in (
-            ["skip_gate"],
-            ["domain_skip"],
-            ["trivial_capture"],
-        )
-        assert {r["key"]: r["label"] for r in body["skip_methods"]} == {
+        assert {r["key"]: r["label"] for r in body["archive_reasons"]} == {
             "skip_gate": "LLM Skip Gate",
             "domain_skip": "Domain Filter",
             "trivial_capture": "Trivial Capture",
         }
-        reasons = {r["reason"]: r["count"] for r in body["skip_gate_reasons"]}
-        assert reasons == {"login wall": 1, "Domain skipped": 1}  # '(none)' (trivial) dropped
+        (cat,) = body["skip_categories"]
+        assert cat == {
+            "key": "uncategorized",
+            "label": "Uncategorized",
+            "count": 1,
+            "top_domains": [{"domain": "shop.example.com", "count": 1}],
+        }
+
+    def test_range_windows_and_unknown_range(self, client):
+        tc, user = client
+        ids = _seed_mix(user["id"])
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE pages SET visited_at = NOW() - interval '200 days' WHERE id = %s",
+                (ids[1],),
+            )
+        assert tc.get("/api/pipeline/summary?range=90d").json()["total_pages"] == 5
+        assert tc.get("/api/pipeline/summary?range=all").json()["total_pages"] == 6
+        body = tc.get("/api/pipeline/summary?range=bogus").json()
+        assert body["range"] == "all" and body["total_pages"] == 6
+
+    def test_invalid_tz_is_422(self, client):
+        tc, _ = client
+        for tz in ("Not/AZone", "x" * 300, "'; DROP TABLE pages;--"):
+            assert tc.get("/api/pipeline/summary", params={"tz": tz}).status_code == 422
+
+
+class TestTimeline:
+    def test_shape_and_ranges(self, client):
+        tc, user = client
+        _seed_mix(user["id"])
+        for rng, gran in (("7d", "6h"), ("30d", "day"), ("90d", "week"), ("all", "month")):
+            body = tc.get(f"/api/pipeline/timeline?range={rng}&tz=America/New_York").json()
+            assert body["range"] == rng and body["granularity"] == gran
+            b = body["buckets"][0]
+            assert set(b) == {
+                "start",
+                "label_key",
+                "kept",
+                "archived",
+                "evaluated",
+                "skipped",
+                "categories",
+            }
+            assert b["start"][-6] in "+-" and b["start"][-3] == ":"  # local offset present
+        body = tc.get("/api/pipeline/timeline?range=zzz").json()
+        assert body["range"] == "all" and body["granularity"] == "month"
+
+    def test_invalid_tz_is_422(self, client):
+        tc, _ = client
+        assert tc.get("/api/pipeline/timeline?tz=Mars/Base").status_code == 422
 
 
 class TestPages:
@@ -216,6 +261,18 @@ class TestPages:
         assert {r["id"] for r in a}.isdisjoint({r["id"] for r in b})
         assert len(a) + len(b) == 6
 
+    def test_range_window_and_invalid_tz(self, client):
+        tc, user = client
+        ids = _seed_mix(user["id"])
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE pages SET visited_at = NOW() - interval '200 days' WHERE id = %s",
+                (ids[0],),
+            )
+        assert tc.get("/api/pipeline/pages?range=90d").json()["total"] == 5
+        assert tc.get("/api/pipeline/pages?range=bogus&tz=UTC").json()["total"] == 6
+        assert tc.get("/api/pipeline/pages?tz=Nope/Zone").status_code == 422
+
     def test_disallowed_sort_or_dir_is_422(self, client):
         tc, _ = client
         assert tc.get("/api/pipeline/pages?sort=id").status_code == 422
@@ -223,27 +280,10 @@ class TestPages:
         assert tc.get("/api/pipeline/pages?dir=sideways").status_code == 422
 
 
-class TestSkipTrends:
-    def test_all_time_and_unknown_range(self, client):
-        tc, user = client
-        _seed_mix(user["id"])
-        for rng in ("all", "bogus", ""):
-            body = tc.get(f"/api/pipeline/skip-trends?range={rng}").json()
-            assert body["range"] == (rng or "all")
-            assert sum(p["skipped"] for p in body["skip_rate"]) == 2
-            assert sum(p["total"] for p in body["skip_rate"]) == 4  # evaluated pages only
-            assert {p["reason"] for p in body["skip_reasons"]} == {"login wall", "Domain skipped"}
-            assert all(len(p["day"]) == 10 for p in body["skip_rate"])  # YYYY-MM-DD
-
-    def test_7d_window_excludes_old_rows(self, client):
-        tc, user = client
-        ids = _seed_mix(user["id"])
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                "UPDATE pages SET created_at = NOW() - interval '30 days' WHERE id = %s", (ids[1],)
-            )
-        body = tc.get("/api/pipeline/skip-trends?range=7d").json()
-        assert sum(p["skipped"] for p in body["skip_rate"]) == 1
+class TestRemoved:
+    def test_skip_trends_is_gone(self, client):
+        tc, _ = client
+        assert tc.get("/api/pipeline/skip-trends").status_code == 404
 
 
 class TestAuth:
@@ -253,7 +293,11 @@ class TestAuth:
 
         monkeypatch.setattr(settings, "environment", "production")
         tc = TestClient(app)
-        for path in ("/api/pipeline/summary", "/api/pipeline/pages", "/api/pipeline/skip-trends"):
+        for path in (
+            "/api/pipeline/summary",
+            "/api/pipeline/timeline",
+            "/api/pipeline/pages",
+        ):
             assert tc.get(path).status_code == 401, path
 
     def test_demo_user_sees_only_own_rows(self, monkeypatch):
