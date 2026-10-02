@@ -890,6 +890,21 @@ describe("pipeline fetchers", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/summary?range=30d&tz=UTC");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/pipeline/timeline?range=all&tz=Europe%2FParis");
   });
+  it("fetchOverviewSummary and fetchOverviewTimeline send range and tz", async () => {
+    const fetchMock = ok({});
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchOverviewSummary, fetchOverviewTimeline } = await import("./api");
+    await fetchOverviewSummary("30d", "UTC");
+    await fetchOverviewTimeline("all", "Europe/Paris");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/overview/summary?range=30d&tz=UTC");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/overview/timeline?range=all&tz=Europe%2FParis");
+  });
+  it("overview fetchers reject with STALE_API_MESSAGE on 404", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("nf", { status: 404 })));
+    const { fetchOverviewSummary, fetchOverviewTimeline } = await import("./api");
+    await expect(fetchOverviewSummary("7d", "UTC")).rejects.toThrow("stale-api");
+    await expect(fetchOverviewTimeline("7d", "UTC")).rejects.toThrow("stale-api");
+  });
   it("fetchPipelineTimeline throws the house error on non-OK", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500, statusText: "Server Error" })));
     const { fetchPipelineTimeline } = await import("./api");

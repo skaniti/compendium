@@ -4,6 +4,8 @@ import type {
   GraphPayload,
   MemberExclusion,
   NodeDetail,
+  OverviewSummary,
+  OverviewTimeline,
   PageContent,
   PageSortColumn,
   PipelinePagesResponse,
@@ -16,6 +18,7 @@ import type {
   TopicInterest,
   TopicMember,
 } from "./types";
+import { STALE_API_MESSAGE } from "./overview";
 import { sessionMayResume } from "./session-policy-client";
 
 // D3 (session-expiry-tuning): module-level single-flight refresh, shared by
@@ -206,6 +209,18 @@ export async function fetchPipelineTimeline(range: RangeKey, tz: string): Promis
 export async function fetchPipelinePages(limit: number, offset: number, sort: PageSortColumn, dir: SortDir, range: RangeKey, tz: string): Promise<PipelinePagesResponse> {
   const res = await apiFetch(`/api/pipeline/pages?limit=${limit}&offset=${offset}&sort=${sort}&dir=${dir}&${periodQuery(range, tz)}`);
   if (!res.ok) throw new Error(`fetchPipelinePages failed: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+export async function fetchOverviewSummary(range: RangeKey, tz: string): Promise<OverviewSummary> {
+  const res = await apiFetch(`/api/overview/summary?${periodQuery(range, tz)}`);
+  if (res.status === 404) throw new Error(STALE_API_MESSAGE);
+  if (!res.ok) throw new Error(`fetchOverviewSummary failed: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+export async function fetchOverviewTimeline(range: RangeKey, tz: string): Promise<OverviewTimeline> {
+  const res = await apiFetch(`/api/overview/timeline?${periodQuery(range, tz)}`);
+  if (res.status === 404) throw new Error(STALE_API_MESSAGE);
+  if (!res.ok) throw new Error(`fetchOverviewTimeline failed: ${res.status} ${res.statusText}`);
   return res.json();
 }
 

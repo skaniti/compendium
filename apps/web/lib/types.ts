@@ -302,3 +302,26 @@ export interface PipelinePage {
 export type PageSortColumn = "title" | "domain" | "status" | "processing_depth" | "visited_at" | "created_at";
 export type SortDir = "asc" | "desc";
 export interface PipelinePagesResponse { rows: PipelinePage[]; total: number; limit: number; offset: number; sort: PageSortColumn; dir: SortDir }
+
+// Overview dev view (apps/api backend/api/routers/overview.py). Every endpoint takes the shared period (`range`, `tz`).
+export type SpendPurposeKey = "gates" | "clustering" | "chat" | "other";
+export interface SpendEventType { key: string; label: string; usd: number; calls: number }
+export interface SpendPurpose { key: SpendPurposeKey; label: string; usd: number; calls: number; event_types: SpendEventType[] }
+export interface OverviewSpend { usd: number; calls: number; all_time_usd: number; purposes: SpendPurpose[] }
+export interface OverviewClusters { run_completed_at: string | null; clusters: number; superclusters: number; topics: number }
+export interface OverviewSummary {
+  range: RangeKey;
+  pages: { captured: number; in_graph: number; all_time_captured: number };
+  captures: { total: number; desktop: number; phone: number };
+  spend: OverviewSpend;
+  clusters: OverviewClusters | null;
+}
+export interface OverviewBucket {
+  start: string; // ISO with the viewer's local offset
+  label_key: string;
+  captured: number; in_graph: number;
+  captures: { desktop: number; phone: number };
+  spend: Record<SpendPurposeKey, number>;
+  calls: number;
+}
+export interface OverviewTimeline { range: RangeKey; granularity: TimelineGranularity; baseline: { captured: number; in_graph: number }; buckets: OverviewBucket[] }
