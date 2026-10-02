@@ -6,34 +6,28 @@ window is on ``pages.visited_at``: ``7d``/``30d``/``90d`` bound it below by
 counts pages whose ``visited_at`` is NULL). ``now`` is an injectable keyword
 argument and is passed to SQL as a bound parameter, never ``now()``. ``tz`` is
 always a bound parameter (``AT TIME ZONE %s``); callers validate it first with
-``validate_tz``.
+``validate_tz``. The window and bucket helpers live in ``backend.db.period``.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import UTC, datetime
 
 from backend.db import page_repo
 from backend.db.connection import get_conn
+from backend.db.period import (
+    BUCKET_SQL,
+    GRANULARITY,
+    RANGE_DAYS,
+    bucket_starts,
+    normalize_range,
+    since_for,
+    validate_tz,
+)
+from backend.db.period import window as _window
 from backend.services.pipeline_summary import OUTCOME_ORDER
 
-RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90}
 TOP_DOMAINS = 3
-
-# range -> (granularity, label_key, SQL step). Constants only; never user input.
-_GRANULARITY = {
-    "7d": ("6h", "block", "interval '6 hours'"),
-    "30d": ("day", "day", "interval '1 day'"),
-    "90d": ("week", "week", "interval '1 week'"),
-    "all": ("month", "month", "interval '1 month'"),
-}
-_BUCKET_SQL = {
-    "6h": ("(date_trunc('day', {x}) + floor(extract(hour from {x}) / 6) * interval '6 hours')"),
-    "day": "date_trunc('day', {x})",
-    "week": "date_trunc('week', {x})",
-    "month": "date_trunc('month', {x})",
-}
 
 # Flow classification (spec §13.2) — the ONLY definition; summary, timeline and pages all use it.
 _EFFECTIVE_STATUS = "COALESCE(p.human_status, p.status)"
@@ -58,33 +52,6 @@ DETAIL_SQL = f"""(CASE {OUTCOME_SQL}
   ELSE CASE WHEN p.archive_reason = 'placeholder_no_content' THEN 'placeholder' ELSE {_ARCHIVE_KIND} END
 END)"""
 FATE_SQL = _EFFECTIVE_STATUS
-
-
-def normalize_range(range_key: str | None) -> str:
-    return range_key if range_key in RANGE_DAYS else "all"
-
-
-def validate_tz(tz: str) -> ZoneInfo:
-    """Return the ZoneInfo for ``tz`` or raise ValueError."""
-    try:
-        return ZoneInfo(tz)
-    except Exception as exc:
-        raise ValueError(f"invalid time zone: {tz!r}") from exc
-
-
-def since_for(range_key: str, now: datetime) -> datetime | None:
-    days = RANGE_DAYS.get(range_key)
-    return now - timedelta(days=days) if days else None
-
-
-def _window(since: datetime | None, now: datetime) -> tuple[str, list]:
-    """Window clause, capped at ``visited_at <= now`` so every section agrees.
-
-    ``all`` still counts pages whose ``visited_at`` is NULL.
-    """
-    if since is None:
-        return " AND (p.visited_at IS NULL OR p.visited_at <= %s)", [now]
-    return " AND p.visited_at >= %s AND p.visited_at <= %s", [since, now]
 
 
 def get_windowed_pages(
@@ -194,8 +161,8 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
     zone = validate_tz(tz)
     now = now or datetime.now(UTC)
     since = since_for(range_key, now)
-    granularity, label_key, step = _GRANULARITY[range_key]
-    bucket = _BUCKET_SQL[granularity]
+    granularity, label_key, _step = GRANULARITY[range_key]
+    bucket = BUCKET_SQL[granularity]
     wsql, wparams = _window(since, now)
     with get_conn() as conn, conn.cursor() as cur:
         if since is None:
@@ -207,18 +174,7 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
             first = cur.fetchone()[0] or now
         else:
             first = since
-        cur.execute(
-            f"""
-            SELECT generate_series(
-                (SELECT {bucket.format(x="lx")}
-                 FROM (SELECT %s::timestamptz AT TIME ZONE %s AS lx) f),
-                (SELECT {bucket.format(x="lx")}
-                 FROM (SELECT %s::timestamptz AT TIME ZONE %s AS lx) n),
-                {step}) AS b
-            """,
-            (first, tz, now, tz),
-        )
-        starts = [r[0] for r in cur.fetchall()]
+        starts = bucket_starts(cur, first, now, range_key, tz)
         local = bucket.format(x="l.lx")
         src = (
             "FROM pages p JOIN captures c ON p.capture_id = c.id "

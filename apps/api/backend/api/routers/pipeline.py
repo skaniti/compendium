@@ -15,40 +15,23 @@ same pattern as routers/dq_bot.py.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from psycopg2 import DataError
-from psycopg2.errors import InvalidParameterValue
 
 from backend.api.main import verify_api_key
+from backend.api.period_params import guard_tz, tz_param
 from backend.db import auth_repo, page_repo, pipeline_repo
 from backend.services import pipeline_summary as ps
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
 
 
-def _tz(tz: str = Query("UTC")) -> str:
-    try:
-        pipeline_repo.validate_tz(tz)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="invalid time zone") from None
-    return tz
-
-
-def _guard_tz(fn, *args, **kwargs):
-    """Run a repo call; a zone name Postgres doesn't know is a 422, not a 500."""
-    try:
-        return fn(*args, **kwargs)
-    except (InvalidParameterValue, DataError):
-        raise HTTPException(status_code=422, detail="invalid time zone") from None
-
-
 @router.get("/summary")
 async def pipeline_summary(
     range: str | None = None,
-    tz: str = Depends(_tz),
+    tz: str = Depends(tz_param),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
     key = pipeline_repo.normalize_range(range)
-    c = _guard_tz(pipeline_repo.get_flow_counts, user_id, key)
+    c = guard_tz(pipeline_repo.get_flow_counts, user_id, key)
     flow = ps.build_flow(c["cells"], c["outcome_domains"], c["detail_domains"])
     status_counts = {f["key"]: f["count"] for f in flow["fates"]}
     total = flow["total"]
@@ -66,10 +49,10 @@ async def pipeline_summary(
 @router.get("/timeline")
 async def pipeline_timeline(
     range: str | None = None,
-    tz: str = Depends(_tz),
+    tz: str = Depends(tz_param),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
-    return _guard_tz(pipeline_repo.get_timeline, user_id, pipeline_repo.normalize_range(range), tz)
+    return guard_tz(pipeline_repo.get_timeline, user_id, pipeline_repo.normalize_range(range), tz)
 
 
 _SORT_PATTERN = "^(" + "|".join(page_repo.RECENT_PAGES_SORT_COLUMNS) + ")$"
@@ -82,10 +65,10 @@ async def pipeline_pages(
     sort: str = Query("created_at", pattern=_SORT_PATTERN),
     dir: str = Query("desc", pattern="^(asc|desc)$"),
     range: str | None = None,
-    tz: str = Depends(_tz),
+    tz: str = Depends(tz_param),
     user_id: int = Depends(verify_api_key),
 ) -> dict:
-    rows, total = _guard_tz(
+    rows, total = guard_tz(
         pipeline_repo.get_windowed_pages,
         user_id,
         pipeline_repo.normalize_range(range),
