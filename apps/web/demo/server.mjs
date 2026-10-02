@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { computeDeltaDays, shiftDiaryWindow, shiftIsoDateTime } from "./lib/dates.mjs";
+import { computePages, computeSummary, computeTimeline, isValidTz, PAGE_SORTS } from "./lib/pipeline.mjs";
 import { bearerFromRequest, decodeToken, mintToken } from "./lib/tokens.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,11 +47,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // doesn't require reshaping this loader.
 // ---------------------------------------------------------------------------
 
-function loadFixtures(fixturesDir) {
+function loadFixtures(fixturesDir, now = new Date()) {
   const readJson = (relPath) => JSON.parse(readFileSync(path.join(fixturesDir, relPath), "utf8"));
 
   const meta = readJson("meta.json");
-  const deltaDays = computeDeltaDays(meta.anchor);
+  const deltaDays = computeDeltaDays(meta.anchor, now);
 
   const shiftGraphPayload = (payload) => ({
     ...payload,
@@ -149,33 +150,16 @@ function loadFixtures(fixturesDir) {
     internals: readJson("internals.json"),
     me: readJson("me.json"),
     preferences: readJson("preferences.json"),
-    // Pipeline dev view (recorded fixtures). Only page/capture timestamps are
-    // shifted; skip-trends day keys are date-only strings, shifted the same way.
-    pipelineSummary: readJson("pipeline/summary.json"),
-    pipelinePages: (() => {
-      const pages = readJson("pipeline/pages.json");
-      return {
-        ...pages,
-        rows: pages.rows.map((r) => ({
-          ...r,
-          created_at: shiftIsoDateTime(r.created_at, deltaDays),
-          visited_at: shiftIsoDateTime(r.visited_at, deltaDays),
-        })),
-      };
-    })(),
-    skipTrends: (() => {
-      const t = readJson("pipeline/skip-trends.json");
-      const day = (d) => shiftIsoDateTime(`${d}T00:00:00`, deltaDays).slice(0, 10);
-      return {
-        ...t,
-        skip_rate: t.skip_rate.map((r) => ({ ...r, day: day(r.day) })),
-        skip_reasons: t.skip_reasons.map((r) => ({ ...r, day: day(r.day) })),
-      };
-    })(),
-    archiveHealth: (() => {
-      const h = readJson("pipeline/archive-health.json");
-      return { ...h, per_capture: h.per_capture.map((c) => ({ ...c, started_at: shiftIsoDateTime(c.started_at, deltaDays) })) };
-    })(),
+    // Pipeline dev view (v2): the recorded pages (with skip_category) are
+    // shifted to "now"; summary / timeline / pages are computed from them per
+    // request (demo/lib/pipeline.mjs). Only skip_gate_config is replayed from
+    // the recorded summary.
+    pipelineSkipGateConfig: readJson("pipeline/summary.json").skip_gate_config,
+    pipelinePages: readJson("pipeline/pages.json").rows.map((r) => ({
+      ...r,
+      created_at: shiftIsoDateTime(r.created_at, deltaDays),
+      visited_at: shiftIsoDateTime(r.visited_at, deltaDays),
+    })),
   };
 }
 
@@ -475,7 +459,7 @@ function buildMeVariants(fixtures, accounts) {
   return { meDemo, meActing };
 }
 
-function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled }) {
+function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled, getNow }) {
   const accounts = buildAccounts(fixtures, roleToolingEnabled);
   const { meDemo, meActing } = buildMeVariants(fixtures, accounts);
 
@@ -952,47 +936,50 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
-    // Pipeline dev view: demo-visitable reads (no write gate). The router
-    // matches on pathname (query stripped), so patterns carry no query suffix.
+    // Pipeline dev view (v2): demo-visitable reads (no write gate), computed
+    // from the recorded pages. The router matches on pathname (query
+    // stripped), so patterns carry no query suffix. `tz` is validated like the
+    // real API (invalid -> 422); `range` falls back to "all".
     {
       method: "GET",
       pattern: /^\/api\/pipeline\/summary$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.pipelineSummary),
+      handler: (req, res, m, url) => {
+        const tz = url.searchParams.get("tz") ?? "UTC";
+        if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
+        sendJson(res, 200, computeSummary(fixtures.pipelinePages, url.searchParams.get("range"), getNow().getTime(), fixtures.pipelineSkipGateConfig));
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/pipeline\/timeline$/,
+      handler: (req, res, m, url) => {
+        const tz = url.searchParams.get("tz") ?? "UTC";
+        if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
+        sendJson(res, 200, computeTimeline(fixtures.pipelinePages, url.searchParams.get("range"), tz, getNow().getTime()));
+      },
     },
     {
       method: "GET",
       pattern: /^\/api\/pipeline\/pages$/,
       handler: (req, res, m, url) => {
-        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
-        const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
-        const SORTS = ["title", "domain", "status", "processing_depth", "visited_at", "created_at"];
-        const sort = url.searchParams.get("sort") ?? "created_at";
-        const dir = url.searchParams.get("dir") ?? "desc";
-        if (!SORTS.includes(sort) || !["asc", "desc"].includes(dir)) return sendJson(res, 422, { detail: "invalid sort" });
-        const sign = dir === "asc" ? 1 : -1;
-        const sorted = [...fixtures.pipelinePages.rows].sort((a, b) => {
-          const av = a[sort];
-          const bv = b[sort];
-          if (av === null && bv === null) return b.id - a.id;
-          if (av === null) return 1; // NULLS LAST both ways
-          if (bv === null) return -1;
-          return av < bv ? -sign : av > bv ? sign : b.id - a.id;
-        });
-        sendJson(res, 200, { rows: sorted.slice(offset, offset + limit), total: fixtures.pipelinePages.total, limit, offset, sort, dir });
+        const q = url.searchParams;
+        const intParam = (name, dflt, min, max) => {
+          const raw = q.get(name);
+          if (raw === null) return dflt;
+          const n = Number(raw);
+          return Number.isInteger(n) && n >= min && n <= max ? n : null;
+        };
+        const limit = intParam("limit", 50, 1, 200);
+        const offset = intParam("offset", 0, 0, Number.MAX_SAFE_INTEGER);
+        const sort = q.get("sort") ?? "created_at";
+        const dir = q.get("dir") ?? "desc";
+        const tz = q.get("tz") ?? "UTC";
+        if (limit === null || offset === null || !PAGE_SORTS.includes(sort) || !["asc", "desc"].includes(dir)) {
+          return sendJson(res, 422, { detail: "invalid query parameters" });
+        }
+        if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
+        sendJson(res, 200, computePages(fixtures.pipelinePages, q.get("range"), getNow().getTime(), { limit, offset, sort, dir }));
       },
-    },
-    {
-      method: "GET",
-      pattern: /^\/api\/pipeline\/skip-trends$/,
-      handler: (req, res, m, url) => {
-        const range = url.searchParams.get("range") || "all";
-        sendJson(res, 200, { ...fixtures.skipTrends, range });
-      },
-    },
-    {
-      method: "GET",
-      pattern: /^\/api\/analytics\/archive-health$/,
-      handler: (req, res) => sendJson(res, 200, fixtures.archiveHealth),
     },
 
     // POST /api/auth/view-as and POST /api/auth/return-to-admin -- the two
@@ -1077,11 +1064,16 @@ export function startServer({
   // rendering the view-as control in components/GraphCanvas.tsx); the two
   // are set together but read independently, one per process.
   roleToolingEnabled = false,
+  // Test seam: the clock (Date | ms | () => Date | ms) the fixtures are shifted
+  // to at boot and the pipeline windows are cut at per request. Default: the
+  // real clock.
+  now = undefined,
 } = {}) {
+  const getNow = () => (now === undefined ? new Date() : new Date(typeof now === "function" ? now() : now));
   const resolvedFixturesDir = path.resolve(process.cwd(), fixturesDir);
-  const fixtures = loadFixtures(resolvedFixturesDir);
+  const fixtures = loadFixtures(resolvedFixturesDir, getNow());
   const state = createMutableState(fixtures);
-  const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled });
+  const routes = buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, roleToolingEnabled, getNow });
 
   const onHandlerError = (req, res, url, err) => {
     // Malformed request body -- a caller mistake, not a handler bug -- gets

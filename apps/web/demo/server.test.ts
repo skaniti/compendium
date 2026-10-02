@@ -1545,22 +1545,158 @@ describe("isEnvFlagOn (env-flag parsing: DEMO_ROLE_TOOLING / NEXT_PUBLIC_DEMO_RO
   });
 });
 
-describe("pipeline routes", () => {
-  const json = async (p: string) => (await get(p)).json();
-  it("serves summary, paged pages, skip trends, archive health", async () => {
-    expect((await json("/api/pipeline/summary")).status_counts).toEqual({ active: 158, pending: 4, archived: 90 });
-    // The router caps limit at 200; the recorded set (252) is served across pages.
-    const first = await json("/api/pipeline/pages?limit=200");
-    expect(first.total).toBe(252);
-    expect(first.rows).toHaveLength(200);
-    const rest = await json("/api/pipeline/pages?limit=200&offset=200");
-    expect(rest.rows).toHaveLength(52);
-    const byDomain = await json("/api/pipeline/pages?limit=5&sort=domain&dir=asc");
-    expect(byDomain.sort).toBe("domain");
-    const domains = byDomain.rows.map((r: { domain: string }) => r.domain);
-    expect(domains).toEqual([...domains].sort());
-    expect((await get("/api/pipeline/pages?sort=id")).status).toBe(422);
-    expect((await json("/api/pipeline/skip-trends?range=7d")).range).toBe("7d");
-    expect((await json("/api/analytics/archive-health?range=30d")).by_reason.length).toBeGreaterThan(0);
+describe("pipeline routes (v2, computed from the recorded pages)", () => {
+  type Bucket = { start: string; label_key: string; kept: number; archived: number; evaluated: number; skipped: number; categories: Record<string, number> };
+  const NOW_EOD = new Date("2026-10-01T23:59:59Z"); // every fixture visit today is <= now
+  // Boots with the clock at `boot` (fixtures shift to that day), then lets a
+  // test move the clock via setClock() without re-shifting the data.
+  const withNow = <T,>(boot: Date, fn: (get: (p: string) => Promise<Response>, setClock: (d: Date) => void) => Promise<T>) => {
+    let clock = boot;
+    return withServer((base) => fn((p) => fetch(`${base}${p}`), (d) => { clock = d; }), { now: () => clock } as never);
+  };
+  const jget = async (g: (p: string) => Promise<Response>, p: string) => (await g(p)).json();
+
+  it("summary (all): status counts, ratio, decisions, top-3 domains, categories, gate config", async () => {
+    await withNow(NOW_EOD, async (g) => {
+      const s = await jget(g, "/api/pipeline/summary?range=all&tz=UTC");
+      expect(s.range).toBe("all");
+      expect(s.status_counts).toEqual({ active: 158, pending: 4, archived: 90 });
+      expect(s.total_pages).toBe(252);
+      expect(s.archive_ratio).toBeCloseTo(90 / 252);
+      expect(s.decisions.reduce((n: number, d: { count: number }) => n + d.count, 0)).toBe(252);
+      expect(s.decisions.map((d: { count: number }) => d.count)).toEqual([...s.decisions.map((d: { count: number }) => d.count)].sort((a: number, b: number) => b - a));
+      const gate = s.archive_reasons.find((r: { key: string }) => r.key === "skip_gate");
+      expect(gate.label).toBe("LLM Skip Gate");
+      for (const grp of [...s.archive_reasons, ...s.skip_categories]) {
+        expect(grp.top_domains.length).toBeLessThanOrEqual(3);
+        const keys = grp.top_domains.map((d: { domain: string; count: number }) => [-d.count, d.domain]);
+        expect(keys).toEqual([...keys].sort((a: [number, string], b: [number, string]) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1)));
+      }
+      expect(s.skip_categories.reduce((n: number, c: { count: number }) => n + c.count, 0)).toBe(gate.count);
+      expect(s.skip_categories.find((c: { key: string }) => c.key === "login_wall").label).toBe("Login Wall");
+      expect(s.skip_categories.some((c: { key: string }) => c.key === "uncategorized")).toBe(false);
+      expect(s.skip_gate_config.categories).toHaveLength(13);
+      expect(s.skip_gate_config.tools.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("summary 7d is a strict window of all, and an unknown range falls back to all", async () => {
+    await withNow(NOW_EOD, async (g) => {
+      const all = await jget(g, "/api/pipeline/summary");
+      const w = await jget(g, "/api/pipeline/summary?range=7d");
+      expect(w.range).toBe("7d");
+      expect(w.total_pages).toBeGreaterThan(0);
+      expect(w.total_pages).toBeLessThan(all.total_pages);
+      expect((await jget(g, "/api/pipeline/summary?range=bogus")).range).toBe("all");
+    });
+  });
+
+  it("empty period: zeros everywhere, ratio 0 (not NaN), zero-filled 6h buckets", async () => {
+    await withNow(NOW_EOD, async (g, setClock) => {
+      setClock(new Date("2027-06-01T12:00:00Z")); // a quiet stretch: every visit is >90 days old
+      const s = await jget(g, "/api/pipeline/summary?range=7d");
+      expect(s.status_counts).toEqual({ active: 0, pending: 0, archived: 0 });
+      expect(s.total_pages).toBe(0);
+      expect(s.archive_ratio).toBe(0);
+      expect([s.decisions, s.archive_reasons, s.skip_categories]).toEqual([[], [], []]);
+      const t = await jget(g, "/api/pipeline/timeline?range=7d&tz=UTC");
+      expect(t.buckets.length).toBeGreaterThan(24);
+      expect(t.buckets.every((b: Bucket) => b.kept + b.archived + b.evaluated + b.skipped === 0 && Object.keys(b.categories).length === 0)).toBe(true);
+      const p = await jget(g, "/api/pipeline/pages?range=7d");
+      expect(p).toMatchObject({ rows: [], total: 0 });
+    });
+  });
+
+  it("timeline 7d: 6h blocks aligned to local midnight in a non-UTC zone, offset-bearing ISO starts", async () => {
+    await withNow(new Date("2026-10-01T15:00:00Z"), async (g) => {
+      const t = await jget(g, "/api/pipeline/timeline?range=7d&tz=America/New_York");
+      expect(t.range).toBe("7d");
+      expect(t.granularity).toBe("6h");
+      expect(t.buckets).toHaveLength(29); // 7 days x 4 blocks + the current one
+      expect(t.buckets[0].start).toBe("2026-09-24T06:00:00-04:00");
+      expect(t.buckets[28].start).toBe("2026-10-01T06:00:00-04:00");
+      expect(t.buckets.every((b: Bucket) => b.label_key === "block" && /T(00|06|12|18):00:00-04:00$/.test(b.start))).toBe(true);
+      // Same data, windowed pages total == sum of kept + archived.
+      const pages = await jget(g, "/api/pipeline/pages?range=7d&tz=America/New_York&limit=1");
+      expect(t.buckets.reduce((n: number, b: Bucket) => n + b.kept + b.archived, 0)).toBe(pages.total);
+      for (const b of t.buckets as Bucket[]) {
+        expect(b.evaluated).toBeLessThanOrEqual(b.kept + b.archived);
+        expect(b.skipped).toBeLessThanOrEqual(b.evaluated);
+      }
+      const ist = await jget(g, "/api/pipeline/timeline?range=7d&tz=Asia/Kolkata");
+      expect(ist.buckets.every((b: Bucket) => /T(00|06|12|18):00:00\+05:30$/.test(b.start))).toBe(true);
+    });
+  });
+
+  it("timeline 7d across a DST change: no duplicated or missing 6h bucket", async () => {
+    await withNow(new Date("2026-11-03T15:00:00Z"), async (g) => {
+      const t = await jget(g, "/api/pipeline/timeline?range=7d&tz=America/New_York");
+      const starts = t.buckets.map((b: Bucket) => b.start);
+      expect(new Set(starts).size).toBe(starts.length);
+      expect(starts).toHaveLength(29);
+      expect(starts.some((x: string) => x.endsWith("-04:00"))).toBe(true);
+      expect(starts.some((x: string) => x.endsWith("-05:00"))).toBe(true);
+      expect(starts.every((x: string) => /T(00|06|12|18):00:00-0[45]:00$/.test(x))).toBe(true);
+    });
+  });
+
+  it("timeline 30d is daily, 90d weekly from Monday, all monthly from the first visited month", async () => {
+    await withNow(NOW_EOD, async (g) => {
+      const d = await jget(g, "/api/pipeline/timeline?range=30d&tz=UTC");
+      expect(d.granularity).toBe("day");
+      expect(d.buckets).toHaveLength(31);
+      expect(d.buckets.every((b: Bucket) => b.label_key === "day" && b.start.endsWith("T00:00:00+00:00"))).toBe(true);
+      const w = await jget(g, "/api/pipeline/timeline?range=90d&tz=UTC");
+      expect(w.granularity).toBe("week");
+      expect(w.buckets.every((b: Bucket) => b.label_key === "week" && new Date(b.start).getUTCDay() === 1)).toBe(true);
+      const m = await jget(g, "/api/pipeline/timeline?range=all&tz=UTC");
+      expect(m.granularity).toBe("month");
+      expect(m.buckets.every((b: Bucket) => b.label_key === "month" && /-01T00:00:00\+00:00$/.test(b.start))).toBe(true);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.kept + b.archived, 0)).toBe(252);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.skipped, 0)).toBeGreaterThan(0);
+      const cats = m.buckets.flatMap((b: Bucket) => Object.entries(b.categories));
+      expect(cats.reduce((n: number, [, c]: [string, number]) => n + c, 0)).toBe(40);
+    });
+  });
+
+  it("pages: windowed, paged, sorted, without skip_category; pages cap at now", async () => {
+    await withNow(new Date("2026-10-01T15:00:00Z"), async (g, setClock) => {
+      setClock(new Date("2026-09-30T12:00:00Z")); // mid-day: later visits that day are after `now`
+      const first = await jget(g, "/api/pipeline/pages?limit=200");
+      const all = await jget(g, "/api/pipeline/pages?limit=200&range=all");
+      expect(all.total).toBeLessThan(252); // later-today visits are after `now`
+      expect(first.rows).toHaveLength(Math.min(200, first.total));
+      expect(Object.keys(first.rows[0]).sort()).toEqual(
+        ["archive_reason", "created_at", "domain", "id", "processing_depth", "skip_reasoning", "status", "title", "visited_at"],
+      );
+      expect(first.rows.every((r: { visited_at: string | null }) => r.visited_at === null || Date.parse(r.visited_at) <= Date.parse("2026-09-30T12:00:00Z"))).toBe(true);
+      const seven = await jget(g, "/api/pipeline/pages?range=7d&limit=200");
+      expect(seven.total).toBeLessThan(first.total);
+      expect(seven.rows.every((r: { visited_at: string }) => Date.parse(r.visited_at) >= Date.parse("2026-09-23T12:00:00Z"))).toBe(true);
+      const byDomain = await jget(g, "/api/pipeline/pages?limit=5&sort=domain&dir=asc");
+      expect(byDomain).toMatchObject({ sort: "domain", dir: "asc", limit: 5, offset: 0 });
+      const domains = byDomain.rows.map((r: { domain: string }) => r.domain);
+      expect(domains).toEqual([...domains].sort());
+      const page2 = await jget(g, "/api/pipeline/pages?limit=5&offset=5&sort=domain&dir=asc");
+      expect(page2.offset).toBe(5);
+      expect((await g("/api/pipeline/pages?sort=id")).status).toBe(422);
+      expect((await g("/api/pipeline/pages?dir=sideways")).status).toBe(422);
+      expect((await g("/api/pipeline/pages?limit=0")).status).toBe(422);
+    });
+  });
+
+  it("an invalid time zone is a 422 on every route; a valid one is accepted", async () => {
+    await withNow(NOW_EOD, async (g) => {
+      for (const route of ["summary", "timeline", "pages"]) {
+        expect((await g(`/api/pipeline/${route}?tz=Not/AZone`)).status).toBe(422);
+        expect((await g(`/api/pipeline/${route}?tz=%2B05:00`)).status).toBe(422);
+        expect((await g(`/api/pipeline/${route}?tz=Europe/Berlin`)).status).toBe(200);
+      }
+    });
+  });
+
+  it("the retired skip-trends and archive-health routes are gone", async () => {
+    expect((await get("/api/pipeline/skip-trends")).status).toBe(404);
+    expect((await get("/api/analytics/archive-health")).status).toBe(404);
   });
 });

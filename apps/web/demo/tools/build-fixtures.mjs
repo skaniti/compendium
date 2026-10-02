@@ -270,8 +270,8 @@ const DAY_CYCLE = buildWeightedCycle(ACTIVE_DAY_OFFSETS);
 // ---------------------------------------------------------------------------
 // Pipeline dev-view fixtures (recorded from seed + synthetic augment).
 // Same ACTIVE_DAY_OFFSETS cadence as the diary so the stub's pipeline charts
-// and its diary agree; skip-trends are RECOMPUTED from the respread pages
-// (mirrors trends_repo.get_daily_skip_rate / get_daily_skip_reasons).
+// and its diary agree; the stub computes summary / timeline / pages from the
+// respread pages for any range + tz (mirrors pipeline_repo).
 // A hoisted function so --pipeline-only can invoke it without the rest of
 // the build; it is called once from the normal flow (after Step 9) or from
 // the early-exit right after DAY_CYCLE is defined.
@@ -284,33 +284,9 @@ function buildPipelineFixtures() {
     return { ...r, created_at: `${isoDateStr(d)}T${timeOf(r.created_at)}`, visited_at: r.visited_at ? `${isoDateStr(d)}T${timeOf(r.visited_at)}` : null };
   });
   writeJson('pipeline/pages.json', { rows: pipelinePages, total: rawPipelinePages.total });
-  writeJson('pipeline/summary.json', readJson('pipeline', 'summary.json'));  // all-time counts: no dates inside
+  writeJson('pipeline/summary.json', readJson('pipeline', 'summary.json'));  // stub reads only skip_gate_config from it; counts are computed from pages
 
-  const rawHealth = readJson('pipeline', 'archive-health.json');
-  const perCapture = rawHealth.per_capture
-    .map((c, i) => { const d = addDaysUTC(anchor, -DAY_CYCLE[i % DAY_CYCLE.length]); return { ...c, started_at: `${isoDateStr(d)}T${timeOf(c.started_at)}` }; })
-    .sort((a, b) => (a.started_at < b.started_at ? -1 : 1));
-  writeJson('pipeline/archive-health.json', { ...rawHealth, per_capture: perCapture });
-
-  const byDay = new Map();
-  for (const r of pipelinePages) {
-    if (r.processing_depth === null) continue;                         // evaluated pages only
-    const day = r.created_at.slice(0, 10);
-    const e = byDay.get(day) || { total: 0, skipped: 0, reasons: new Map() };
-    e.total += 1;
-    if (r.processing_depth === 'skipped') { e.skipped += 1; if (r.skip_reasoning) e.reasons.set(r.skip_reasoning, (e.reasons.get(r.skip_reasoning) || 0) + 1); }
-    byDay.set(day, e);
-  }
-  const days = [...byDay.keys()].sort();
-  const reasonTotals = new Map();
-  for (const e of byDay.values()) for (const [k, v] of e.reasons) reasonTotals.set(k, (reasonTotals.get(k) || 0) + v);
-  const top5 = [...reasonTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
-  writeJson('pipeline/skip-trends.json', {
-    range: 'all',
-    skip_rate: days.map((day) => ({ day, total: byDay.get(day).total, skipped: byDay.get(day).skipped })),
-    skip_reasons: days.flatMap((day) => top5.filter((r) => byDay.get(day).reasons.has(r)).map((reason) => ({ day, reason, cnt: byDay.get(day).reasons.get(reason) }))),
-  });
-  console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages, ${perCapture.length} captures, ${days.length} skip-trend days`);
+  console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages`);
 }
 
 // Hygiene gate: hoisted so both the full build (Step 11) and --pipeline-only

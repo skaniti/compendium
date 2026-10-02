@@ -1,7 +1,14 @@
 #!/usr/bin/env node
-// Records the four Pipeline dev-view GETs from a seeded backend into
-// demo/fixtures/raw/pipeline/. BACKEND defaults to the ad-hoc :8011 apps/api
-// (never :8001). Run `node demo/tools/build-fixtures.mjs` afterwards
+// Records the v2 Pipeline dev-view inputs from a seeded backend into
+// demo/fixtures/raw/pipeline/: every page (the stub computes summary counts,
+// timeline and windowed pages from them) plus one summary (for its
+// skip_gate_config). BACKEND defaults to the ad-hoc :8011 apps/api (never
+// :8001).
+//
+// /api/pipeline/pages does not return skip_category, which the stub needs to
+// compute the skip-category sections. Pass SKIP_CATEGORY_MAP=<json file of
+// {"<page id>": "<category>"|null}> (queried from the same seeded database)
+// and it is merged onto each recorded row. Run `node demo/tools/build-fixtures.mjs` afterwards
 // (or with --pipeline-only to rebuild just demo/fixtures/pipeline/).
 //
 // login()/writeJson() are trimmed copies of the same-named helpers in
@@ -10,7 +17,7 @@
 //
 // Usage: BACKEND=http://127.0.0.1:8011 CAPTURE_LOGIN_EMAIL=<email> \
 //          node demo/tools/capture-pipeline-fixtures.mjs
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,9 +30,7 @@ const LOGIN_PASSWORD = 'demo';
 let authHeader = {};
 
 const PATHS = {
-  'summary.json': '/api/pipeline/summary',
-  'skip-trends.json': '/api/pipeline/skip-trends?range=all',
-  'archive-health.json': '/api/analytics/archive-health?range=all',
+  'summary.json': '/api/pipeline/summary?range=all&tz=UTC',
 };
 
 async function writeJson(relPath, data) {
@@ -58,11 +63,15 @@ async function main() {
   const rows = [];
   let total = 0;
   do {
-    const { body } = await apiJson(`/api/pipeline/pages?limit=200&offset=${rows.length}&sort=created_at&dir=desc`);
+    const { body } = await apiJson(`/api/pipeline/pages?limit=200&offset=${rows.length}&sort=created_at&dir=desc&range=all&tz=UTC`);
     total = body.total;
     if (body.rows.length === 0) break;
     rows.push(...body.rows);
   } while (rows.length < total);
+  if (process.env.SKIP_CATEGORY_MAP) {
+    const map = JSON.parse(await readFile(process.env.SKIP_CATEGORY_MAP, 'utf8'));
+    for (const r of rows) r.skip_category = map[String(r.id)] ?? null;
+  }
   await writeJson('pipeline/pages.json', { rows, total });
   console.log(`[capture-pipeline] pages.json <- ${rows.length}/${total} rows`);
   for (const [file, p] of Object.entries(PATHS)) {

@@ -1,10 +1,12 @@
 {
+  "range": "all",
   "status_counts": {
     "active": 158,
     "pending": 4,
     "archived": 90
   },
   "total_pages": 252,
+  "archive_ratio": 0.35714285714285715,
   "decisions": [
     {
       "key": "processed",
@@ -37,96 +39,225 @@
       "evaluated": false
     }
   ],
-  "skip_methods": [
+  "archive_reasons": [
     {
       "key": "skip_gate",
-      "label": "LLM skip gate",
-      "count": 40
+      "count": 40,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 15
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 10
+        },
+        {
+          "domain": "github.com",
+          "count": 10
+        }
+      ],
+      "label": "LLM Skip Gate"
     },
     {
       "key": "domain_skip",
-      "label": "Domain filter",
-      "count": 20
+      "count": 20,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 9
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 5
+        },
+        {
+          "domain": "github.com",
+          "count": 4
+        }
+      ],
+      "label": "Domain Filter"
     },
     {
       "key": "placeholder_no_content",
-      "label": "placeholder_no_content",
-      "count": 10
+      "count": 10,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 3
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 3
+        },
+        {
+          "domain": "github.com",
+          "count": 3
+        }
+      ],
+      "label": "Placeholder No Content"
     },
     {
       "key": "dedup",
-      "label": "dedup",
-      "count": 6
+      "count": 6,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 3
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 1
+        },
+        {
+          "domain": "github.com",
+          "count": 1
+        }
+      ],
+      "label": "Dedup"
     },
     {
       "key": "app_chrome_junk",
-      "label": "app_chrome_junk",
-      "count": 5
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "github.com",
+          "count": 2
+        },
+        {
+          "domain": "arxiv.org",
+          "count": 1
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 1
+        }
+      ],
+      "label": "App Chrome Junk"
     },
     {
       "key": "dedupe_fold",
-      "label": "dedupe_fold",
-      "count": 4
+      "count": 4,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 2
+        },
+        {
+          "domain": "en.wikipedia.org",
+          "count": 2
+        }
+      ],
+      "label": "Dedupe Fold"
     },
     {
       "key": "trivial_capture",
-      "label": "Trivial capture",
-      "count": 3
+      "count": 3,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 2
+        },
+        {
+          "domain": "www.gutenberg.org",
+          "count": 1
+        }
+      ],
+      "label": "Trivial Capture"
     },
     {
       "key": "manual_exclusion",
-      "label": "Manual exclusion",
-      "count": 2
+      "count": 2,
+      "top_domains": [
+        {
+          "domain": "github.com",
+          "count": 2
+        }
+      ],
+      "label": "Manual Exclusion"
     }
   ],
-  "skip_gate_reasons": [
+  "skip_categories": [
     {
-      "reason": "Domain skipped: en.wikipedia.org",
-      "count": 9
+      "key": "error_page",
+      "count": 10,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 5
+        },
+        {
+          "domain": "github.com",
+          "count": 5
+        }
+      ],
+      "label": "Error Page"
     },
     {
-      "reason": "User-specific page (profile, dashboard)",
-      "count": 5
+      "key": "content_free_stub",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "arxiv.org",
+          "count": 5
+        }
+      ],
+      "label": "Content-Free Stub"
     },
     {
-      "reason": "content-free stub",
-      "count": 5
+      "key": "disambiguation",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 5
+        }
+      ],
+      "label": "Disambiguation Page"
     },
     {
-      "reason": "Marketplace / product / store listing",
-      "count": 5
+      "key": "login_wall",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 5
+        }
+      ],
+      "label": "Login Wall"
     },
     {
-      "reason": "disambiguation page",
-      "count": 5
+      "key": "search_results",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "en.wikipedia.org",
+          "count": 5
+        }
+      ],
+      "label": "Search Results"
     },
     {
-      "reason": "error page",
-      "count": 5
+      "key": "store_listing",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "github.com",
+          "count": 5
+        }
+      ],
+      "label": "Store / Pricing Page"
     },
     {
-      "reason": "Domain skipped: arxiv.org",
-      "count": 5
-    },
-    {
-      "reason": "login wall",
-      "count": 5
-    },
-    {
-      "reason": "cookie consent redirect",
-      "count": 5
-    },
-    {
-      "reason": "search results page",
-      "count": 5
-    },
-    {
-      "reason": "Domain skipped: github.com",
-      "count": 4
-    },
-    {
-      "reason": "Domain skipped: www.gutenberg.org",
-      "count": 2
+      "key": "user_specific",
+      "count": 5,
+      "top_domains": [
+        {
+          "domain": "www.gutenberg.org",
+          "count": 5
+        }
+      ],
+      "label": "User-Specific Page"
     }
   ],
   "skip_gate_config": {
@@ -134,6 +265,73 @@
     "temperature": 0,
     "prompt_name": "skip_gate_v2_3",
     "prompt": "Should this page be included in a knowledge compendium?\n\nTitle: {title}\nURL: {url}\nDomain: {domain}\nContent preview ({snippet_len} chars): {snippet}\n\nThe compendium captures pages the user actively learns from -- not a complete browse log. AI-chat conversations sit ABOVE this layer as a curatorial surface; pages a user only cared about because of a related chat (product picks, icon shortlists, font browsing) belong to the chat, not the destination page.\n\nURL semantics are a strong fast-filter signal. Use them as a PRIOR, then confirm with title and snippet. The snippet can override the URL prior.\n\nEVALUATE INCLUDE RULES FIRST. Only fall through to SKIP rules if no INCLUDE rule matches.\n\nINCLUDE if any of:\n- Substantive content the user could learn from: encyclopedic articles, blog posts, technical Q&A, tutorial content, in-depth reviews, research papers, news with analysis, documentation.\n- Individual ITEM pages (one specific model, font, icon, game, document, tool, library, etc.) with their own description, instructions, or content -- EVEN IF hosted on a marketplace, asset-library, or transactional platform. URL clue: a path with a specific item id-and-slug (e.g., /model/123-widget-stand-modular/, /boardgame/4567/star-freighter/, /filepage/8901/star-freighter-quick-reference). Confirm via snippet: substantive description of WHAT it is, HOW it works, materials, mechanics, build instructions, contents, or features.\n- URL-prior override: when the URL alone would match a SKIP rule below (youtube.com/watch/, youtube.com/shorts/, /products/, /pricing/, /shop/, /listing/, /@username, /profile/, /dashboard/, etc.) BUT the title or snippet clearly carries substantive learnable content -- a transcript narrating instruction, an analytical breakdown, an in-depth review or essay, a documentary explainer, a long-form analysis -- INCLUDE. The URL is a prior, not a verdict; concrete educational or analytical content in the snippet wins.\n\nSKIP only if no INCLUDE rule matched, AND the page is one of:\n- Homepage / index page with no article content (e.g., 'Wikipedia, the free encyclopedia')\n- Login wall, auth page, sign-in redirect\n- Search results page (no specific result selected)\n- Error page or HTTP error\n- Marketplace / product / store / listing / pricing page -- the page's PRIMARY purpose is to facilitate a purchase or acquisition. URL clues: /products/, /shop/, /cart/, /listing/, /pricing/, /plans/, /checkout/. SKIP signal in snippet: emphasis on price, ratings, \"buy now\", shipping, stock, store policies, \"Add to cart\".\n- User-specific page (profile, account, dashboard, settings, inbox). URL clues: /profile/, /account/, /@username, /settings/, /dashboard/.\n- Asset library browse / category / index page -- a flat list or grid of MULTIPLE items (icons, fonts, vectors, 3D models, templates) with no narrative description of any specific item.\n- Entertainment video (music videos, shorts, vlogs without educational narration). URL clues: youtube.com/shorts/, tiktok.com. Snippet clues: artist name, \"Official Video\", \"Official MV\", reaction content. Also: if a YouTube /watch/ video's snippet contains no narrative or instructional content (just descriptions, fan comments, artist names), default skip.\n- Local file URL (file:// scheme) -- not a captured web page.\n\nJudge ONLY on content + URL semantics, not on dwell time or user behavior. When in doubt about whether the page contains real learnable material, INCLUDE.",
+    "categories": [
+      {
+        "id": "login_wall",
+        "label": "Login Wall",
+        "description": "login wall, auth page, sign-in redirect"
+      },
+      {
+        "id": "user_specific",
+        "label": "User-Specific Page",
+        "description": "user-specific page (profile, account, dashboard, settings, inbox)"
+      },
+      {
+        "id": "store_listing",
+        "label": "Store / Pricing Page",
+        "description": "marketplace, product, store, listing, or pricing page"
+      },
+      {
+        "id": "homepage_index",
+        "label": "Homepage / Index",
+        "description": "site homepage or index/landing page of links"
+      },
+      {
+        "id": "search_results",
+        "label": "Search Results",
+        "description": "search results page"
+      },
+      {
+        "id": "asset_library",
+        "label": "Asset Library Listing",
+        "description": "asset library browse / category / index page listing multiple items (icons, fonts, vectors, 3D models, templates)"
+      },
+      {
+        "id": "entertainment_video",
+        "label": "Entertainment Video",
+        "description": "entertainment video (music, clips, vlog, streaming) with no learning content"
+      },
+      {
+        "id": "disambiguation",
+        "label": "Disambiguation Page",
+        "description": "disambiguation page listing other articles"
+      },
+      {
+        "id": "error_page",
+        "label": "Error Page",
+        "description": "error page (404, 500, access denied, cookie-consent redirect)"
+      },
+      {
+        "id": "content_free_stub",
+        "label": "Content-Free Stub",
+        "description": "stub or placeholder page with no substantive content"
+      },
+      {
+        "id": "local_file",
+        "label": "Local File",
+        "description": "local file or file:// page"
+      },
+      {
+        "id": "web_app",
+        "label": "Web App / Tool",
+        "description": "interactive web app or tool page (maps, directions, forms, editors, status pages) with no article content"
+      },
+      {
+        "id": "other",
+        "label": "Other",
+        "description": "none of the above"
+      }
+    ],
     "tools": [
       {
         "name": "skip_page",
