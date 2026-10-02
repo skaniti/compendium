@@ -59,12 +59,20 @@ def get_headline(user_id: int, range_key: str = "all", *, now: datetime | None =
             [user_id, *ep],
         )
         spend_rows = [(t, float(u), int(n)) for t, u, n in cur.fetchall()]
+        allw, allp = period.window(None, now, col="e.created_at", include_null=False)
+        cur.execute(
+            "SELECT COALESCE(SUM(e.cost_usd::double precision), 0) "
+            f"FROM cost_events e WHERE e.user_id = %s{allw}",
+            [user_id, *allp],
+        )
+        all_time_usd = float(cur.fetchone()[0])
     return {
         "captured": captured,
         "in_graph": in_graph,
         "all_time_captured": all_time,
         "captures": {"total": total, "desktop": desktop, "phone": phone},
         "spend_rows": spend_rows,
+        "all_time_usd": all_time_usd,
     }
 
 

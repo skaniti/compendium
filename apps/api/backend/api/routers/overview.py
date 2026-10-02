@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 
 from backend.api.main import verify_api_key
 from backend.api.period_params import guard_tz, tz_param
-from backend.db import overview_repo, period, trends_repo
+from backend.db import overview_repo, period
 from backend.services import overview_summary
 
 router = APIRouter(prefix="/api/overview", tags=["Overview"])
@@ -38,9 +38,7 @@ async def overview_summary_route(
             "all_time_captured": h["all_time_captured"],
         },
         "captures": h["captures"],
-        "spend": overview_summary.build_spend(
-            h["spend_rows"], trends_repo.get_total_cost_usd(user_id)
-        ),
+        "spend": overview_summary.build_spend(h["spend_rows"], h["all_time_usd"]),
         "clusters": overview_repo.get_latest_clusters(user_id),
     }
 

@@ -14,7 +14,7 @@ same pattern as routers/dq_bot.py.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from backend.api.main import verify_api_key
 from backend.api.period_params import guard_tz, tz_param

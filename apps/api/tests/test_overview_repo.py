@@ -124,6 +124,7 @@ def _seed(uid):
     _cost(uid, "skip_gate", 0.002, NOW - timedelta(days=1))
     _cost(uid, "agent_query", 0.01, NOW - timedelta(days=5))
     _cost(uid, "cluster_naming", 0.5, NOW - timedelta(days=60))
+    _cost(uid, "agent_query", 7.0, NOW + timedelta(hours=1))  # future: never counts
 
 
 def test_window_edges():
@@ -137,6 +138,8 @@ def test_window_edges():
         ("skip_gate", pytest.approx(0.002), 1),
     ]
     hall = overview_repo.get_headline(uid, "all", now=NOW)
+    assert hall["all_time_usd"] == pytest.approx(0.512)
+    assert h7["all_time_usd"] == pytest.approx(0.512)
     assert (hall["captured"], hall["in_graph"]) == (
         5,
         3,
@@ -168,6 +171,12 @@ def test_other_users_never_count():
         b_["captured"] == 0 and b_["calls"] == 0 and b_["captures"] == {"desktop": 0, "phone": 0}
         for b_ in tl["buckets"]
     )
+    assert tl["baseline"] == {"captured": 0, "in_graph": 0}
+    tla = overview_repo.get_timeline(a, "all", "UTC", now=NOW)
+    assert len(tla["buckets"]) == 1 and tla["buckets"][0]["start"].startswith("2026-09-01")
+    assert tla["buckets"][0]["captured"] == 0 and tla["buckets"][0]["calls"] == 0
+    assert tla["buckets"][0]["captures"] == {"desktop": 0, "phone": 0}
+    assert all(v == 0 for v in tla["buckets"][0]["spend"].values())
 
 
 def test_latest_clusters_counts_graph_superclusters():
@@ -236,6 +245,7 @@ def test_empty_user():
         "all_time_captured": 0,
         "captures": {"total": 0, "desktop": 0, "phone": 0},
         "spend_rows": [],
+        "all_time_usd": 0.0,
     }
     tl = overview_repo.get_timeline(uid, "all", "UTC", now=NOW)
     assert len(tl["buckets"]) == 1 and tl["buckets"][0]["captured"] == 0
