@@ -293,7 +293,7 @@ export type TimelineGranularity = "6h" | "day" | "week" | "month";
 export interface TimelineBucket {
   start: string; // ISO with the viewer's local offset
   label_key: string;
-  kept: number; archived: number; evaluated: number; skipped: number;
+  kept?: number; archived: number; evaluated?: number; skipped?: number;
   categories: Record<string, number>;
   total: number; outcomes: Record<FlowOutcomeKey, number>; reached_gate: number;
 }

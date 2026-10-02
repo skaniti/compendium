@@ -96,6 +96,32 @@ describe("layoutFlow", () => {
     expect(ns.every((n) => n.h >= 2)).toBe(true);
     expect(ns[ns.length - 1].y + ns[ns.length - 1].h).toBeLessThanOrEqual(FLOW_HEIGHT + 0.001);
   });
+  it("ribbons stay inside their nodes and nodes never overlap (many tiny categories)", () => {
+    const keys = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    const counts = [3, 2, 3, 1, 2, 1, 3, 2];
+    const gateTotal = counts.reduce((a, n) => a + n, 0) + 1;
+    const f = flow({
+      total: 6000,
+      outcomes: [{ key: "processed", label: "p", count: 6000 - gateTotal, top_domains: [] }, { key: "gate", label: "g", count: gateTotal, top_domains: [] }],
+      details: [d("processed", "active", 6000 - gateTotal, fates(0, 6000 - gateTotal)), ...keys.map((k, i) => d("gate", k, counts[i], fates(counts[i]))), d("gate", "uncategorized", 1, fates(1))],
+      fates: [{ key: "archived", label: "A", count: gateTotal }, { key: "active", label: "B", count: 6000 - gateTotal }, { key: "pending", label: "P", count: 0 }],
+    });
+    const L = layoutFlow(f, cats, 1300);
+    const by = new Map(L.nodes.map((n) => [n.id, n]));
+    const eps = 1e-6;
+    for (const l of L.links) {
+      const s = by.get(l.source)!, t = by.get(l.target)!;
+      expect(l.y0).toBeGreaterThanOrEqual(s.y - eps);
+      expect(l.y0 + l.h).toBeLessThanOrEqual(s.y + s.h + eps);
+      expect(l.y1).toBeGreaterThanOrEqual(t.y - eps);
+      expect(l.y1 + l.h).toBeLessThanOrEqual(t.y + t.h + eps);
+    }
+    for (const c of [0, 1, 2, 3]) {
+      const ns = L.nodes.filter((n) => n.column === c).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < ns.length; i++) expect(ns[i].y).toBeGreaterThanOrEqual(ns[i - 1].y + ns[i - 1].h - eps);
+      if (ns.length) expect(ns[ns.length - 1].y + ns[ns.length - 1].h).toBeLessThanOrEqual(FLOW_HEIGHT + eps);
+    }
+  });
   it("breakdown labels are ≥ 14px apart after declutter", () => {
     const L = layoutFlow(flow(), cats, 1400);
     const ys = L.labels.filter((l) => L.nodes.find((n) => n.id === l.nodeId)!.column === 2).map((l) => l.y);

@@ -27,7 +27,7 @@ const CAPTURED_COLOR = "var(--highlight)";
 function mergeDomains(lists: TopDomain[][]): TopDomain[] {
   const m = new Map<string, number>();
   for (const l of lists) for (const d of l) m.set(d.domain, (m.get(d.domain) ?? 0) + d.count);
-  return [...m].map(([domain, count]) => ({ domain, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  return [...m].map(([domain, count]) => ({ domain, count })).sort((a, b) => b.count - a.count).slice(0, 3); // a merged bundle ranks from the members' top-3 lists, so it is approximate
 }
 const sumFates = (ds: FlowDetail[]): Record<FateKey, number> => {
   const out: Record<FateKey, number> = { archived: 0, active: 0, pending: 0 };
@@ -101,7 +101,7 @@ export function buildFlowModel(flow: PipelineFlow, catColors: Record<string, str
   return { nodes: nodes.map(({ group: _g, ...n }) => { void _g; return n; }), links };
 }
 
-/** Monotone, >= pitch apart, clamped to [top, bottom]; pushed up from the bottom when it would overflow. */
+/** Monotone and >= pitch apart; the first value is at least `top`, the last at most `bottom`. When the run does not fit, the back-sweep pushes earlier values up, possibly above `top`. */
 export function declutter(ys: number[], pitch: number, top: number, bottom: number): number[] {
   const out = ys.map((y, i) => {
     return i === 0 ? Math.max(y, top) : y;
@@ -119,11 +119,18 @@ export function ribbonPath(l: FlowLink): string {
   return `M${r(x0)},${r(y0)} C${r(mx)},${r(y0)} ${r(mx)},${r(y1)} ${r(x1)},${r(y1)} L${r(x1)},${r(y1 + h)} C${r(mx)},${r(y1 + h)} ${r(mx)},${r(y0 + h)} ${r(x0)},${r(y0 + h)} Z`;
 }
 
-/** Scale (px per page) so the column fits FLOW_HEIGHT once every node is at least MIN_H tall. */
-function fitScale(counts: number[], gaps: number): number {
-  const total = counts.reduce((a, c) => a + c, 0);
+type Port = { count: number };
+const linkThickness = (c: number, k: number) => Math.max(1, c * k);
+/** A node is at least MIN_H and tall enough to hold both its stacked incoming and its stacked outgoing ribbons. */
+function nodeHeight(count: number, ins: Port[], outs: Port[], k: number): number {
+  const sum = (ps: Port[]) => ps.reduce((a, p) => a + linkThickness(p.count, k), 0);
+  return Math.max(MIN_H, count * k, sum(ins), sum(outs));
+}
+
+/** Largest scale (px per page) at which the column, with ribbon-sized nodes and gaps, still fits FLOW_HEIGHT. */
+function fitScale(heightAt: ((k: number) => number)[], total: number, gaps: number): number {
   if (total <= 0) return Infinity;
-  const fits = (k: number) => counts.reduce((a, c) => a + Math.max(MIN_H, c * k), 0) + gaps <= FLOW_HEIGHT;
+  const fits = (k: number) => heightAt.reduce((a, f) => a + f(k), 0) + gaps <= FLOW_HEIGHT;
   let lo = 0, hi = Math.max(0, FLOW_HEIGHT - gaps) / total;
   if (fits(hi)) return hi;
   for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
@@ -148,14 +155,17 @@ export function layoutFlow(flow: PipelineFlow, catColors: Record<string, string>
   const cols: Omit<FlowNode, "x" | "y" | "h">[][] = [[], [], [], []];
   for (const n of model.nodes) cols[n.column].push(n);
   const gaps = cols.map((c) => c.reduce((a, n, i) => a + gapBefore(n.column, c[i - 1], n), 0));
-  const k = Math.min(...cols.map((c, i) => fitScale(c.map((n) => n.count), gaps[i])));
+  const insOf = (id: string) => model.links.filter((l) => l.target === id);
+  const outsOf = (id: string) => model.links.filter((l) => l.source === id);
+  const heightFns = (c: typeof cols[number]) => c.map((n) => { const i = insOf(n.id), o = outsOf(n.id); return (k: number) => nodeHeight(n.count, i, o, k); });
+  const k = Math.min(...cols.map((c, i) => fitScale(heightFns(c), c.reduce((a, n) => a + n.count, 0), gaps[i])));
 
   const nodes: FlowNode[] = [];
   cols.forEach((c, ci) => {
     let y = 0;
     c.forEach((n, i) => {
       y += gapBefore(n.column, c[i - 1], n);
-      const h = Math.max(MIN_H, n.count * k);
+      const h = nodeHeight(n.count, insOf(n.id), outsOf(n.id), k);
       nodes.push({ ...n, x: columnX[ci], y, h });
       y += h;
     });
@@ -164,7 +174,7 @@ export function layoutFlow(flow: PipelineFlow, catColors: Record<string, string>
   const order = new Map(nodes.map((n, i) => [n.id, i]));
 
   // Ribbon ports: stacked in target order at each source, in source order at each target.
-  const linkH = (l: { count: number }) => Math.max(1, l.count * k);
+  const linkH = (l: { count: number }) => linkThickness(l.count, k);
   const bySource = new Map<string, typeof model.links>();
   const byTarget = new Map<string, typeof model.links>();
   for (const l of model.links) {

@@ -76,7 +76,8 @@ describe("flow timeline helpers", () => {
     expect(hasFlowActivity([fb({}), fb({ processed: 1 })])).toBe(true);
   });
   it("rateSeries: null on a zero denominator, 1 decimal otherwise", () => {
-    const s = rateSeries([fb({}), fb({ before_gate: 1, gate: 1, processed: 1 }), fb({ before_gate: 2 })]);
+    // archived is by fate: a restored gate page is not archived; a later-archived processed page is.
+    const s = rateSeries([fb({}), fb({ before_gate: 1, gate: 1, processed: 1 }, { archived: 2 }), fb({ before_gate: 2 }, { archived: 2 })]);
     expect(s.archive).toEqual([{ y: null, n: 0, d: 0 }, { y: 66.7, n: 2, d: 3 }, { y: 100, n: 2, d: 2 }]);
     expect(s.gate).toEqual([{ y: null, n: 0, d: 0 }, { y: 50, n: 1, d: 2 }, { y: null, n: 0, d: 0 }]);
   });

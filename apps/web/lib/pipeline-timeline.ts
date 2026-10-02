@@ -34,16 +34,16 @@ const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0);
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 export function hasActivity(buckets: TimelineBucket[]): boolean {
-  return buckets.some((b) => b.kept + b.archived > 0 || b.evaluated > 0 || b.skipped > 0);
+  return buckets.some((b) => (b.kept ?? 0) + b.archived > 0 || (b.evaluated ?? 0) > 0 || (b.skipped ?? 0) > 0);
 }
 
 export function archiveBars(buckets: TimelineBucket[]) {
-  return buckets.map((b) => ({ kept: b.kept, archived: b.archived, rate: round1(pct(b.archived, b.kept + b.archived)) }));
+  return buckets.map((b) => ({ kept: b.kept ?? 0, archived: b.archived, rate: round1(pct(b.archived, (b.kept ?? 0) + b.archived)) }));
 }
 
 /** y is null where nothing was evaluated, so the line breaks instead of reading 0%. */
 export function skipRateSeries(buckets: TimelineBucket[]) {
-  return buckets.map((b) => ({ y: b.evaluated > 0 ? round1(pct(b.skipped, b.evaluated)) : null, skipped: b.skipped, evaluated: b.evaluated }));
+  return buckets.map((b) => ({ y: (b.evaluated ?? 0) > 0 ? round1(pct(b.skipped ?? 0, b.evaluated ?? 0)) : null, skipped: b.skipped ?? 0, evaluated: b.evaluated ?? 0 }));
 }
 
 /** 100%-stacked category shares per bucket (0 across the board for a bucket with no gate skips). `labels` maps category id -> display label, in display order. */
@@ -75,10 +75,10 @@ export function hasFlowActivity(buckets: TimelineBucket[]): boolean {
 export interface RatePoint { y: number | null; n: number; d: number }
 const ratePoint = (n: number, d: number): RatePoint => ({ y: d > 0 ? round1(pct(n, d)) : null, n, d });
 
-/** archive = (before_gate + rule_filter + gate) / total; gate = gate / reached_gate. */
+/** archive = archived (by fate, i.e. effective status) / total; gate = gate / reached_gate. */
 export function rateSeries(buckets: TimelineBucket[]): { archive: RatePoint[]; gate: RatePoint[] } {
   return {
-    archive: buckets.map((b) => ratePoint(b.outcomes.before_gate + b.outcomes.rule_filter + b.outcomes.gate, b.total)),
+    archive: buckets.map((b) => ratePoint(b.archived, b.total)),
     gate: buckets.map((b) => ratePoint(b.outcomes.gate, b.reached_gate)),
   };
 }
