@@ -22,6 +22,7 @@ EXPECTED_IDS = (
     "error_page",
     "content_free_stub",
     "local_file",
+    "web_app",
     "other",
 )
 

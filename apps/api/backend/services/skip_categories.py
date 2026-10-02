@@ -46,6 +46,14 @@ SKIP_CATEGORIES: tuple[tuple[str, str, str], ...] = (
         "stub or placeholder page with no substantive content",
     ),
     ("local_file", "Local File", "local file or file:// page"),
+    (
+        "web_app",
+        "Web App / Tool",
+        (
+            "interactive web app or tool page (maps, directions, forms, editors, "
+            "status pages) with no article content"
+        ),
+    ),
     ("other", "Other", "none of the above"),
 )
 
