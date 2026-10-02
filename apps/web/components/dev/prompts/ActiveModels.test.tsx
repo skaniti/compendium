@@ -29,7 +29,7 @@ it("source and prompt keep their text, with break hints after . and _", () => {
   expect(container.querySelector("td.prompts-col-source")?.textContent).toBe("settings.model_x");
   expect(container.querySelector("button.prompts-link")?.textContent).toBe("alpha_task_v2");
   expect(container.querySelectorAll("button.prompts-link wbr")).toHaveLength(2);
-  expect(container.querySelectorAll("td.prompts-col-source wbr")).toHaveLength(1);
+  expect(container.querySelectorAll("td.prompts-col-source wbr")).toHaveLength(2);
 });
 it("footnote exact, omitted when empty", () => {
   const { rerender } = render(<ActiveModels models={[modelRow()]} unused={[{ model: "model-u", source: "settings.u" }, { model: "model-v", source: "settings.v" }]} onSelectPrompt={() => {}} />);
