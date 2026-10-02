@@ -294,3 +294,49 @@ def test_find_run_refuses(tmp_path):
     ]:
         assert er.find_run(tmp_path, bad) is None, bad
         assert er.load_detail(tmp_path, bad) is None, bad
+
+
+def test_count_helper():
+    assert er._count(3) == 3
+    assert er._count(3.0) == 3 and isinstance(er._count(3.0), int)
+    assert er._count(2.5) is None
+    assert er._count(True) is None
+    assert er._count(float("nan")) is None
+    assert er._count(float("inf")) is None
+    assert er._count("3") is None
+    assert er._count(None) is None
+
+
+def test_float_counts_are_read_as_integers(tmp_path):
+    m = _metric(0.5)
+    m.update({"n_fixtures": 10.0, "n_correct": 5.0, "n_wrong": 4.0, "n_errored": 1.0})
+    m["confusion"] = {"keep": {"keep": 3.0, "drop": 1.5}, "drop": {"keep": 0.0, "drop": 6.0}}
+    m["per_class"] = {
+        "keep": {"tp": 3.0, "fp": 2.5, "fn": 0.0, "precision": 0.75, "recall": 1.0, "f1": 0.857}
+    }
+    d = _run(
+        tmp_path,
+        "r1",
+        results=[{"fixture_id": "fx-1", "input_tokens": 10.0, "output_tokens": 2.5}],
+    )
+    data = json.loads((d / "run.json").read_text())
+    data["metrics"]["selection"] = m
+    data["totals"].update({"llm_calls": 10.0, "cache_hits": 2.0, "cache_misses": 8.0})
+    data["type_counts"] = {"selection": 10.0, "stress": 1.5}
+    (d / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+    row = er.scan(tmp_path)["runs"][0]
+    assert row["selection"]["n"] == 10
+    assert row["cache_hits"] == 2 and row["cache_misses"] == 8
+    detail = er.load_detail(tmp_path, "r1")
+    sel = detail["metrics"]["selection"]
+    assert (sel["n_fixtures"], sel["n_correct"], sel["n_wrong"], sel["n_errored"]) == (10, 5, 4, 1)
+    assert sel["per_class"]["keep"]["tp"] == 3
+    assert sel["per_class"]["keep"]["fp"] is None
+    assert sel["per_class"]["keep"]["fn"] == 0
+    assert sel["confusion"]["keep"] == {"keep": 3}
+    assert sel["confusion"]["drop"] == {"keep": 0, "drop": 6}
+    assert detail["totals"]["llm_calls"] == 10
+    assert detail["type_counts"] == {"selection": 10}
+    fx = detail["fixtures"][0]
+    assert fx["input_tokens"] == 10 and fx["output_tokens"] is None

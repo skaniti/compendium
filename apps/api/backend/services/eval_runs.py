@@ -54,8 +54,15 @@ def _num(v):
     return float(v) if math.isfinite(v) else None
 
 
-def _int(v):
-    return v if isinstance(v, int) and not isinstance(v, bool) else None
+def _count(v):
+    """A count: an int, or an integral finite float (JSON writers emit 3.0); else None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and math.isfinite(v) and v.is_integer():
+        return int(v)
+    return None
 
 
 def _str(v):
@@ -112,7 +119,7 @@ def _score(metrics: dict, kind: str) -> dict | None:
     m = metrics.get(kind)
     if not isinstance(m, dict):
         return None
-    return {"accuracy": _num(m.get("accuracy")), "n": _int(m.get("n_fixtures"))}
+    return {"accuracy": _num(m.get("accuracy")), "n": _count(m.get("n_fixtures"))}
 
 
 def _row(run_id: str, data: dict) -> dict:
@@ -129,8 +136,8 @@ def _row(run_id: str, data: dict) -> dict:
         "stress": _score(metrics, "stress"),
         "cost_usd": _num(totals.get("cost_usd")),
         "wall_time_s": _num(totals.get("wall_time_s")),
-        "cache_hits": _int(totals.get("cache_hits")),
-        "cache_misses": _int(totals.get("cache_misses")),
+        "cache_hits": _count(totals.get("cache_hits")),
+        "cache_misses": _count(totals.get("cache_misses")),
         "delta": None,
     }
 
@@ -208,7 +215,7 @@ def _counts(v) -> dict:
     for pred, row in _dict(v).items():
         if isinstance(pred, str) and isinstance(row, dict):
             out[pred] = {
-                exp: n for exp, n in row.items() if isinstance(exp, str) and _int(n) is not None
+                exp: n for exp, n in row.items() if isinstance(exp, str) and _count(n) is not None
             }
     return out
 
@@ -218,7 +225,7 @@ def _per_class(v) -> dict:
     for cls, d in _dict(v).items():
         if isinstance(cls, str) and isinstance(d, dict):
             out[cls] = {
-                **{k: _int(d.get(k)) for k in ("tp", "fp", "fn")},
+                **{k: _count(d.get(k)) for k in ("tp", "fp", "fn")},
                 **{k: _num(d.get(k)) for k in ("precision", "recall", "f1")},
             }
     return out
@@ -227,10 +234,10 @@ def _per_class(v) -> dict:
 def _metric(m: dict) -> dict:
     return {
         "accuracy": _num(m.get("accuracy")),
-        "n_fixtures": _int(m.get("n_fixtures")),
-        "n_correct": _int(m.get("n_correct")),
-        "n_wrong": _int(m.get("n_wrong")),
-        "n_errored": _int(m.get("n_errored")),
+        "n_fixtures": _count(m.get("n_fixtures")),
+        "n_correct": _count(m.get("n_correct")),
+        "n_wrong": _count(m.get("n_wrong")),
+        "n_errored": _count(m.get("n_errored")),
         "confusion": _counts(m.get("confusion")),
         "per_class": _per_class(m.get("per_class")),
         "per_threat_recall": {
@@ -266,8 +273,8 @@ def _fixture(item: dict) -> dict:
         "from_cache": from_cache if isinstance(from_cache, bool) else None,
         "cost_usd": _num(item.get("cost_usd")),
         "latency_ms": _num(item.get("latency_ms")),
-        "input_tokens": _int(item.get("input_tokens")),
-        "output_tokens": _int(item.get("output_tokens")),
+        "input_tokens": _count(item.get("input_tokens")),
+        "output_tokens": _count(item.get("output_tokens")),
         "detail": {
             "actual_output": _clean(actual),
             "expected_output": _clean(expected),
@@ -301,14 +308,14 @@ def load_detail(root: Path, run_id: str) -> dict | None:
         "totals": {
             "cost_usd": row["cost_usd"],
             "wall_time_s": row["wall_time_s"],
-            "llm_calls": _int(totals.get("llm_calls")),
+            "llm_calls": _count(totals.get("llm_calls")),
             "cache_hits": row["cache_hits"],
             "cache_misses": row["cache_misses"],
         },
         "type_counts": {
             k: v
             for k, v in _dict(data.get("type_counts")).items()
-            if isinstance(k, str) and _int(v) is not None
+            if isinstance(k, str) and _count(v) is not None
         },
         "metrics": {
             k: _metric(metrics[k]) for k in METRIC_TYPES if isinstance(metrics.get(k), dict)
