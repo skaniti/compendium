@@ -3570,3 +3570,7 @@ app.include_router(_pipeline_router.router)
 from backend.api.routers import overview as _overview_router  # noqa: E402
 
 app.include_router(_overview_router.router)
+
+from backend.api.routers import clusters as _clusters_router  # noqa: E402
+
+app.include_router(_clusters_router.router)
