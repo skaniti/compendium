@@ -19,7 +19,7 @@ from psycopg2 import DataError
 from psycopg2.errors import InvalidParameterValue
 
 from backend.api.main import verify_api_key
-from backend.db import page_repo, pipeline_repo
+from backend.db import auth_repo, page_repo, pipeline_repo
 from backend.services import pipeline_summary as ps
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
@@ -58,7 +58,7 @@ async def pipeline_summary(
         "status_counts": status_counts,
         "archive_ratio": (status_counts["archived"] / total) if total else 0.0,
         "flow": flow,
-        "rule_filter_config": ps.build_rule_filter_config(),
+        "rule_filter_config": ps.build_rule_filter_config(auth_repo.get_role(user_id)),
         "skip_gate_config": ps.build_skip_gate_config(),
     }
 

@@ -12,6 +12,8 @@ from backend.services.skip_categories import SKIP_CATEGORIES, SKIP_CATEGORY_LABE
 SKIP_GATE_PROMPT_NAME = "skip_gate_v2_3"  # backend/api/main.py process path
 SKIP_GATE_TEMPERATURE = 0.0
 
+# TWIN: these label/order constants are mirrored in apps/web/demo/lib/pipeline.mjs
+# and in FlowTimeline's outcome labels; change them together.
 OUTCOME_ORDER = ("before_gate", "rule_filter", "gate", "processed", "pending")
 FATE_ORDER = ("archived", "active", "pending")
 
@@ -122,7 +124,9 @@ def build_flow(cells: list, outcome_domains: list[dict], detail_domains: list[di
     }
 
 
-def build_rule_filter_config() -> dict:
+def build_rule_filter_config(role: str = "user") -> dict:
+    """Counts always; the lists themselves only for admins (they can hold
+    per-deployment personal entries, and Pipeline is demo-visitable)."""
     # Lazy import: main.py imports this module's router.
     from backend.api.main import (
         SKIP_DOMAIN_SUFFIXES,
@@ -131,11 +135,19 @@ def build_rule_filter_config() -> dict:
         SKIP_URL_PATTERNS,
     )
 
+    counts = {
+        "domains": len(SKIP_DOMAINS) + len(SKIP_DOMAIN_SUFFIXES),
+        "url_patterns": len(SKIP_URL_PATTERNS),
+        "path_rules": len(SKIP_URL_PATH_RULES),
+    }
+    visible = role == "admin"
     return {
-        "domains": sorted(SKIP_DOMAINS),
-        "domain_suffixes": list(SKIP_DOMAIN_SUFFIXES),
-        "url_patterns": [{"domain": d, "path": p} for d, p in SKIP_URL_PATTERNS],
-        "path_rules": list(SKIP_URL_PATH_RULES),
+        "counts": counts,
+        "lists_visible": visible,
+        "domains": sorted(SKIP_DOMAINS) if visible else [],
+        "domain_suffixes": list(SKIP_DOMAIN_SUFFIXES) if visible else [],
+        "url_patterns": [{"domain": d, "path": p} for d, p in SKIP_URL_PATTERNS] if visible else [],
+        "path_rules": list(SKIP_URL_PATH_RULES) if visible else [],
     }
 
 

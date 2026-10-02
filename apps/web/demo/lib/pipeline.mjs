@@ -1,4 +1,4 @@
-// demo/lib/pipeline.mjs -- the stub's v2 Pipeline dev-view computation.
+// demo/lib/pipeline.mjs -- the stub's Pipeline dev-view computation.
 //
 // Mirrors apps/api/backend/db/pipeline_repo.py + services/pipeline_summary.py
 // in plain JS over the recorded pages fixture, so summary / timeline / pages
@@ -10,7 +10,7 @@
 //     7d -> 6h blocks aligned 00/06/12/18, 30d -> days, 90d -> weeks starting
 //     Monday, all -> months from the first visited month; empty buckets are
 //     zeros; each `start` is ISO with the zone's UTC offset;
-//   - top-3 domains per group, ordered n DESC, domain; groups total DESC, key.
+//   - top-3 domains per group, ordered n DESC, domain.
 //
 // Flow classification (outcome / detail / fate) is NOT recomputed here: each
 // recorded page row already carries the backend SQL's verdict (`outcome`,
@@ -21,8 +21,8 @@
 // detail ordering in detailSortKey() duplicate OUTCOME_ORDER / FATE_ORDER /
 // OUTCOME_LABELS / FATE_LABELS / _DETAIL_ORDER / _detail_sort_key in
 // apps/api/backend/services/pipeline_summary.py (build_flow); keep them in
-// step. Detail labels come from the recorded rows. rule_filter_config and
-// skip_gate_config are replayed from the recorded summary.
+// step. Detail labels come from the recorded rows. rule_filter_config (redacted
+// to counts, as for non-admins) and skip_gate_config are replayed from the recorded summary.
 
 const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90 };
 const GRANULARITY = { "7d": ["6h", "block"], "30d": ["day", "day"], "90d": ["week", "week"], all: ["month", "month"] };
@@ -237,6 +237,25 @@ function buildFlow(rows) {
   };
 }
 
+/**
+ * The stub serves demo visitors, so the rule lists are redacted exactly like the
+ * real API does for non-admins: counts computed from the recorded lists, lists emptied.
+ */
+function redactRuleFilterConfig(cfg) {
+  const domains = cfg.domains ?? [];
+  const suffixes = cfg.domain_suffixes ?? [];
+  const patterns = cfg.url_patterns ?? [];
+  const paths = cfg.path_rules ?? [];
+  return {
+    counts: { domains: domains.length + suffixes.length, url_patterns: patterns.length, path_rules: paths.length },
+    lists_visible: false,
+    domains: [],
+    domain_suffixes: [],
+    url_patterns: [],
+    path_rules: [],
+  };
+}
+
 /** `configs` = { rule_filter_config, skip_gate_config }, replayed from the recorded summary. */
 export function computeSummary(allRows, range, nowMs, configs) {
   const key = normalizeRange(range);
@@ -249,7 +268,7 @@ export function computeSummary(allRows, range, nowMs, configs) {
     status_counts,
     archive_ratio: flow.total ? status_counts.archived / flow.total : 0,
     flow,
-    rule_filter_config: configs.rule_filter_config,
+    rule_filter_config: redactRuleFilterConfig(configs.rule_filter_config),
     skip_gate_config: configs.skip_gate_config,
   };
 }

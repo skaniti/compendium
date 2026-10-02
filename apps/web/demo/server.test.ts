@@ -1602,8 +1602,12 @@ describe("pipeline routes (flow contract, computed from the recorded pages)", ()
       expect(gate.map((d: Cnt) => d.count)).toEqual([...gate.map((d: Cnt) => d.count)].sort((x: number, y: number) => y - x));
       expect(gate.find((d: { key: string }) => d.key === "login_wall").label).toBe("Login Wall");
       expect(gate.every((d: { key: string }) => d.key !== "uncategorized")).toBe(true);
-      expect(s.rule_filter_config.url_patterns.length).toBeGreaterThan(0);
-      expect(JSON.stringify(s.rule_filter_config)).not.toContain("claude" + ".ai");
+      // demo visitors are non-admin: counts only, lists redacted.
+      expect(s.rule_filter_config.lists_visible).toBe(false);
+      expect(s.rule_filter_config.counts.url_patterns).toBeGreaterThan(0);
+      expect(s.rule_filter_config.counts.domains).toBeGreaterThan(0);
+      expect(s.rule_filter_config.counts.path_rules).toBe(4);
+      for (const k of ["domains", "domain_suffixes", "url_patterns", "path_rules"]) expect(s.rule_filter_config[k]).toEqual([]);
       expect(s.skip_gate_config.categories).toHaveLength(13);
       expect(s.skip_gate_config.tools.length).toBeGreaterThan(0);
     });

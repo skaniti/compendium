@@ -40,7 +40,11 @@ def test_distribution_and_depths():
         None: 4 + 6 + 3,
     }
     for r in rows:
-        if r["content_summary"] or r["human_status"] or r["processing_depth"] == "processed":
+        if (
+            (r["content_summary"] or "").startswith("URL pattern skipped")
+            or r["human_status"]
+            or r["processing_depth"] == "processed"
+        ):
             continue  # flow-path rows: covered by test_flow_path_rows
         if r["archive_reason"] in ("skip_gate", "domain_skip"):
             assert r["status"] == "archived" and r["processing_depth"] == "skipped"

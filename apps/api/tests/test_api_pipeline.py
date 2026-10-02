@@ -126,8 +126,12 @@ class TestSummary:
         assert not {"decisions", "archive_reasons", "skip_categories"} & set(body)
         from backend.api import main
 
-        assert body["rule_filter_config"]["domains"] == sorted(main.SKIP_DOMAINS)
+        assert body["rule_filter_config"]["lists_visible"] is False  # default role: user
+        assert body["rule_filter_config"]["domains"] == []
+        assert body["rule_filter_config"]["counts"]["path_rules"] == 4
         assert set(body["rule_filter_config"]) == {
+            "counts",
+            "lists_visible",
             "domains",
             "domain_suffixes",
             "url_patterns",
@@ -137,6 +141,25 @@ class TestSummary:
         assert cfg["prompt_name"] == "skip_gate_v2_3"
         assert {c["id"] for c in cfg["categories"]} >= {"login_wall", "web_app", "other"}
         assert set(cfg["categories"][0]) == {"id", "label", "description"}
+
+    def test_rule_lists_admin_only(self, client):
+        from backend.api import main
+        from backend.db import auth_repo
+
+        tc, user = client
+        for role in ("demo", "user"):
+            auth_repo.set_role(user["id"], role)
+            cfg = tc.get("/api/pipeline/summary").json()["rule_filter_config"]
+            assert cfg["lists_visible"] is False
+            assert cfg["domains"] == [] and cfg["url_patterns"] == []
+            assert cfg["domain_suffixes"] == [] and cfg["path_rules"] == []
+            assert cfg["counts"]["path_rules"] == 4
+        auth_repo.set_role(user["id"], "admin")
+        cfg = tc.get("/api/pipeline/summary").json()["rule_filter_config"]
+        assert cfg["lists_visible"] is True
+        assert cfg["domains"] == sorted(main.SKIP_DOMAINS)
+        assert cfg["counts"]["domains"] == len(main.SKIP_DOMAINS) + len(main.SKIP_DOMAIN_SUFFIXES)
+        assert len(cfg["path_rules"]) == 4
 
     def test_seeded_mix(self, client):
         tc, user = client

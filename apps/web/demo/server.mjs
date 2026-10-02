@@ -937,7 +937,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
-    // Pipeline dev view (v2): demo-visitable reads (no write gate), computed
+    // Pipeline dev view: demo-visitable reads (no write gate), computed
     // from the recorded pages. The router matches on pathname (query
     // stripped), so patterns carry no query suffix. `tz` is validated like the
     // real API (invalid -> 422); `range` falls back to "all".

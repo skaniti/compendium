@@ -61,7 +61,13 @@ class TestRuleFilterConfig:
     def test_built_live_from_main(self):
         from backend.api import main
 
-        cfg = ps.build_rule_filter_config()
+        cfg = ps.build_rule_filter_config("admin")
+        assert cfg["lists_visible"] is True
+        assert cfg["counts"] == {
+            "domains": len(main.SKIP_DOMAINS) + len(main.SKIP_DOMAIN_SUFFIXES),
+            "url_patterns": len(main.SKIP_URL_PATTERNS),
+            "path_rules": len(main.SKIP_URL_PATH_RULES),
+        }
         assert cfg["domains"] == sorted(main.SKIP_DOMAINS)
         assert cfg["domain_suffixes"] == list(main.SKIP_DOMAIN_SUFFIXES)
         assert cfg["url_patterns"] == [{"domain": d, "path": p} for d, p in main.SKIP_URL_PATTERNS]
@@ -71,7 +77,16 @@ class TestRuleFilterConfig:
         # Pins the twin of main._is_skip_url: it has 4 special cases after the
         # SKIP_URL_PATTERNS loop (reddit, youtube, instructure, claude.ai chrome).
         # Adding or removing one there means updating SKIP_URL_PATH_RULES and this count.
-        assert len(ps.build_rule_filter_config()["path_rules"]) == 4
+        assert len(ps.build_rule_filter_config("admin")["path_rules"]) == 4
+        assert ps.build_rule_filter_config("user")["counts"]["path_rules"] == 4
+
+    def test_non_admin_gets_counts_and_empty_lists(self):
+        for role in ("user", "demo", "anything"):
+            cfg = ps.build_rule_filter_config(role)
+            assert cfg["lists_visible"] is False
+            assert cfg["domains"] == [] and cfg["domain_suffixes"] == []
+            assert cfg["url_patterns"] == [] and cfg["path_rules"] == []
+            assert cfg["counts"]["domains"] > 0
 
 
 class TestSkipGateConfig:

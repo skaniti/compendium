@@ -283,7 +283,7 @@ export interface FlowOutcome { key: FlowOutcomeKey; label: string; count: number
 export interface FlowDetail { outcome: FlowOutcomeKey; key: string; label: string; count: number; top_domains: TopDomain[]; fates: Record<FateKey, number> }
 export interface FlowFate { key: FateKey; label: string; count: number }
 export interface PipelineFlow { total: number; outcomes: FlowOutcome[]; details: FlowDetail[]; fates: FlowFate[] }
-export interface RuleFilterConfig { domains: string[]; domain_suffixes: string[]; url_patterns: { domain: string; path: string }[]; path_rules: string[] }
+export interface RuleFilterConfig { counts: { domains: number; url_patterns: number; path_rules: number }; lists_visible: boolean; domains: string[]; domain_suffixes: string[]; url_patterns: { domain: string; path: string }[]; path_rules: string[] }
 export type TimelineGranularity = "6h" | "day" | "week" | "month";
 export interface TimelineBucket {
   start: string; // ISO with the viewer's local offset

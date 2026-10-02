@@ -60,7 +60,7 @@ pending) attached to the seed's existing captures. The real seed has no such
 pages, so without it the Pipeline dev view's skip sections would render empty
 against the demo. Rows carry no page content, embeddings or clusters, use only
 the seed's own domains, and never appear in the graph or diary (both count
-active pages only). Each `skip_gate` row also carries a `skip_category` matching its reason (others are null). `scripts/demo/load_demo_seed.py` inserts them right after
+active pages only). Each LLM-gate `skip_gate` row also carries a `skip_category` matching its reason; URL-pattern `skip_gate` rows (summary "URL pattern skipped: ...") and all other rows have a NULL one. `scripts/demo/load_demo_seed.py` inserts them right after
 the `pages` table, in the same transaction and under the same user_id remap.
 
 Regenerate (deterministic; rewrites an identical file for the same seed):
