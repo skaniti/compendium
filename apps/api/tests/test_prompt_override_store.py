@@ -41,6 +41,9 @@ def test_template_fields():
         ("{}", "Unknown placeholder {}."),
         ("{0}", "Unknown placeholder {0}."),
         ("{title.upper}", "Unknown placeholder {title.upper}."),
+        ("{title:{nope}}", "The template can't be filled ("),
+        ("{title!x}", "The template can't be filled ("),
+        ("{title:d}", "The template can't be filled ("),
     ],
 )
 def test_validate_messages(text, message):

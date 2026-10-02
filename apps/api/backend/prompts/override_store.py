@@ -102,6 +102,10 @@ def validate(name: str, text: str) -> list[str]:
         raise InvalidTemplate(
             f"Unknown placeholder {{{unknown[0]}}}. {name} is filled with: {listed}."
         )
+    try:
+        text.format(**{f: "" for f in allowed})
+    except (ValueError, KeyError, IndexError, AttributeError) as exc:
+        raise InvalidTemplate(f"The template can't be filled ({exc}).") from exc
     return [f for f in allowed if f not in fields]
 
 
