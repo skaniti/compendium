@@ -1,6 +1,22 @@
 {
   "rows": [
     {
+      "id": 13185,
+      "title": "Sign in to GitHub",
+      "domain": "github.com",
+      "status": "archived",
+      "processing_depth": "processed",
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-14T00:23:09Z",
+      "created_at": "2026-08-14T00:23:09Z",
+      "outcome": "processed",
+      "detail": "later_manual",
+      "fate": "archived",
+      "detail_label": "Archived later · manual"
+    },
+    {
       "id": 13163,
       "title": "Search results for graph | Project Gutenberg",
       "domain": "www.gutenberg.org",
@@ -8,9 +24,13 @@
       "processing_depth": null,
       "archive_reason": "trivial_capture",
       "skip_reasoning": null,
-      "visited_at": "2026-08-14T00:23:09Z",
-      "created_at": "2026-08-14T00:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T00:23:09Z",
+      "created_at": "2026-08-13T00:23:09Z",
+      "outcome": "before_gate",
+      "detail": "other",
+      "fate": "archived",
+      "detail_label": "Other"
     },
     {
       "id": 13141,
@@ -20,9 +40,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-13T00:23:09Z",
-      "created_at": "2026-08-13T00:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T00:23:09Z",
+      "created_at": "2026-08-09T00:23:09Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13119,
@@ -32,9 +56,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: arxiv.org",
-      "visited_at": "2026-08-09T00:23:09Z",
-      "created_at": "2026-08-09T00:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T00:23:09Z",
+      "created_at": "2026-08-07T00:23:09Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13097,
@@ -44,9 +72,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "error page",
-      "visited_at": "2026-08-07T00:23:09Z",
-      "created_at": "2026-08-07T00:23:09Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-08-06T00:23:09Z",
+      "created_at": "2026-08-06T00:23:09Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
+    },
+    {
+      "id": 13184,
+      "title": "Login | arXiv",
+      "domain": "arxiv.org",
+      "status": "archived",
+      "processing_depth": "processed",
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-02T23:23:09Z",
+      "created_at": "2026-08-02T23:23:09Z",
+      "outcome": "processed",
+      "detail": "later_manual",
+      "fate": "archived",
+      "detail_label": "Archived later · manual"
     },
     {
       "id": 13162,
@@ -56,9 +104,13 @@
       "processing_depth": null,
       "archive_reason": "manual_exclusion",
       "skip_reasoning": null,
-      "visited_at": "2026-08-06T23:23:09Z",
-      "created_at": "2026-08-06T23:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T23:23:09Z",
+      "created_at": "2026-07-31T23:23:09Z",
+      "outcome": "before_gate",
+      "detail": "other",
+      "fate": "archived",
+      "detail_label": "Other"
     },
     {
       "id": 13140,
@@ -68,9 +120,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-02T23:23:09Z",
-      "created_at": "2026-08-02T23:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T23:23:09Z",
+      "created_at": "2026-07-30T23:23:09Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13118,
@@ -80,9 +136,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-07-31T23:23:09Z",
-      "created_at": "2026-07-31T23:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T23:23:09Z",
+      "created_at": "2026-07-26T23:23:09Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13096,
@@ -92,9 +152,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "cookie consent redirect",
-      "visited_at": "2026-07-30T23:23:09Z",
-      "created_at": "2026-07-30T23:23:09Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-07-24T23:23:09Z",
+      "created_at": "2026-07-24T23:23:09Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
+    },
+    {
+      "id": 13174,
+      "title": "Log in - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-23T23:20:56Z",
+      "created_at": "2026-07-23T23:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13152,
@@ -104,9 +184,13 @@
       "processing_depth": null,
       "archive_reason": "app_chrome_junk",
       "skip_reasoning": null,
-      "visited_at": "2026-07-26T23:20:56Z",
-      "created_at": "2026-07-26T23:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T23:20:56Z",
+      "created_at": "2026-07-19T23:20:56Z",
+      "outcome": "before_gate",
+      "detail": "chrome",
+      "fate": "archived",
+      "detail_label": "App chrome junk"
     },
     {
       "id": 13130,
@@ -116,9 +200,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: github.com",
-      "visited_at": "2026-07-24T23:20:56Z",
-      "created_at": "2026-07-24T23:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T23:20:56Z",
+      "created_at": "2026-07-16T23:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13108,
@@ -128,9 +216,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "login wall",
-      "visited_at": "2026-07-23T23:20:56Z",
-      "created_at": "2026-07-23T23:20:56Z",
-      "skip_category": "login_wall"
+      "skip_category": "login_wall",
+      "visited_at": "2026-07-13T23:20:56Z",
+      "created_at": "2026-07-13T23:20:56Z",
+      "outcome": "gate",
+      "detail": "login_wall",
+      "fate": "archived",
+      "detail_label": "Login Wall"
     },
     {
       "id": 13086,
@@ -140,9 +232,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "search results page",
-      "visited_at": "2026-07-19T23:20:56Z",
-      "created_at": "2026-07-19T23:20:56Z",
-      "skip_category": "search_results"
+      "skip_category": "search_results",
+      "visited_at": "2026-08-14T23:20:56Z",
+      "created_at": "2026-08-14T23:20:56Z",
+      "outcome": "gate",
+      "detail": "search_results",
+      "fate": "archived",
+      "detail_label": "Search Results"
+    },
+    {
+      "id": 13183,
+      "title": "Search | arXiv e-print repository",
+      "domain": "arxiv.org",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-13T22:23:09Z",
+      "created_at": "2026-08-13T22:23:09Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13161,
@@ -152,9 +264,13 @@
       "processing_depth": null,
       "archive_reason": "manual_exclusion",
       "skip_reasoning": null,
-      "visited_at": "2026-07-16T22:23:09Z",
-      "created_at": "2026-07-16T22:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T22:23:09Z",
+      "created_at": "2026-08-07T22:23:09Z",
+      "outcome": "before_gate",
+      "detail": "other",
+      "fate": "archived",
+      "detail_label": "Other"
     },
     {
       "id": 13139,
@@ -164,9 +280,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-07-13T22:23:09Z",
-      "created_at": "2026-07-13T22:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T22:23:09Z",
+      "created_at": "2026-08-06T22:23:09Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13117,
@@ -176,9 +296,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-08-14T22:23:09Z",
-      "created_at": "2026-08-14T22:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T22:23:09Z",
+      "created_at": "2026-07-31T22:23:09Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13095,
@@ -188,9 +312,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "content-free stub",
-      "visited_at": "2026-08-13T22:23:09Z",
-      "created_at": "2026-08-13T22:23:09Z",
-      "skip_category": "content_free_stub"
+      "skip_category": "content_free_stub",
+      "visited_at": "2026-07-30T22:23:09Z",
+      "created_at": "2026-07-30T22:23:09Z",
+      "outcome": "gate",
+      "detail": "content_free_stub",
+      "fate": "archived",
+      "detail_label": "Content-Free Stub"
+    },
+    {
+      "id": 13173,
+      "title": "Mercury (disambiguation) - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-24T22:20:56Z",
+      "created_at": "2026-07-24T22:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13151,
@@ -200,9 +344,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
-      "visited_at": "2026-08-07T22:20:56Z",
-      "created_at": "2026-08-07T22:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T22:20:56Z",
+      "created_at": "2026-07-23T22:20:56Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13129,
@@ -212,9 +360,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: github.com",
-      "visited_at": "2026-08-06T22:20:56Z",
-      "created_at": "2026-08-06T22:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T22:20:56Z",
+      "created_at": "2026-08-14T22:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13107,
@@ -224,9 +376,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "User-specific page (profile, dashboard)",
-      "visited_at": "2026-07-31T22:20:56Z",
-      "created_at": "2026-07-31T22:20:56Z",
-      "skip_category": "user_specific"
+      "skip_category": "user_specific",
+      "visited_at": "2026-08-13T22:20:56Z",
+      "created_at": "2026-08-13T22:20:56Z",
+      "outcome": "gate",
+      "detail": "user_specific",
+      "fate": "archived",
+      "detail_label": "User-Specific Page"
     },
     {
       "id": 13085,
@@ -236,9 +392,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "disambiguation page",
-      "visited_at": "2026-07-30T22:20:56Z",
-      "created_at": "2026-07-30T22:20:56Z",
-      "skip_category": "disambiguation"
+      "skip_category": "disambiguation",
+      "visited_at": "2026-08-07T22:20:56Z",
+      "created_at": "2026-08-07T22:20:56Z",
+      "outcome": "gate",
+      "detail": "disambiguation",
+      "fate": "archived",
+      "detail_label": "Disambiguation Page"
+    },
+    {
+      "id": 13182,
+      "title": "Log in - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-06T21:23:09Z",
+      "created_at": "2026-08-06T21:23:09Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13160,
@@ -248,9 +424,13 @@
       "processing_depth": null,
       "archive_reason": "dedupe_fold",
       "skip_reasoning": null,
-      "visited_at": "2026-07-24T21:23:09Z",
-      "created_at": "2026-07-24T21:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T21:23:09Z",
+      "created_at": "2026-08-14T21:23:09Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13138,
@@ -260,9 +440,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-07-23T21:23:09Z",
-      "created_at": "2026-07-23T21:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T21:23:09Z",
+      "created_at": "2026-08-13T21:23:09Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13116,
@@ -272,9 +456,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-08-14T21:23:09Z",
-      "created_at": "2026-08-14T21:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T21:23:09Z",
+      "created_at": "2026-08-09T21:23:09Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13094,
@@ -284,9 +472,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "search results page",
-      "visited_at": "2026-08-13T21:23:09Z",
-      "created_at": "2026-08-13T21:23:09Z",
-      "skip_category": "search_results"
+      "skip_category": "search_results",
+      "visited_at": "2026-08-07T21:23:09Z",
+      "created_at": "2026-08-07T21:23:09Z",
+      "outcome": "gate",
+      "detail": "search_results",
+      "fate": "archived",
+      "detail_label": "Search Results"
+    },
+    {
+      "id": 13172,
+      "title": "Search results for \"diffusion\" - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-06T21:20:56Z",
+      "created_at": "2026-08-06T21:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13150,
@@ -296,9 +504,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
-      "visited_at": "2026-08-07T21:20:56Z",
-      "created_at": "2026-08-07T21:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T21:20:56Z",
+      "created_at": "2026-08-02T21:20:56Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13128,
@@ -308,9 +520,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: arxiv.org",
-      "visited_at": "2026-08-06T21:20:56Z",
-      "created_at": "2026-08-06T21:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T21:20:56Z",
+      "created_at": "2026-07-31T21:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13106,
@@ -320,9 +536,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "Marketplace / product / store listing",
-      "visited_at": "2026-08-14T21:20:56Z",
-      "created_at": "2026-08-14T21:20:56Z",
-      "skip_category": "store_listing"
+      "skip_category": "store_listing",
+      "visited_at": "2026-07-30T21:20:56Z",
+      "created_at": "2026-07-30T21:20:56Z",
+      "outcome": "gate",
+      "detail": "store_listing",
+      "fate": "archived",
+      "detail_label": "Store / Pricing Page"
     },
     {
       "id": 13084,
@@ -332,9 +552,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "login wall",
-      "visited_at": "2026-08-13T21:20:56Z",
-      "created_at": "2026-08-13T21:20:56Z",
-      "skip_category": "login_wall"
+      "skip_category": "login_wall",
+      "visited_at": "2026-07-26T21:20:56Z",
+      "created_at": "2026-07-26T21:20:56Z",
+      "outcome": "gate",
+      "detail": "login_wall",
+      "fate": "archived",
+      "detail_label": "Login Wall"
+    },
+    {
+      "id": 13180,
+      "title": "Search results for \"quasar\" - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-24T21:03:53Z",
+      "created_at": "2026-07-24T21:03:53Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13158,
@@ -344,9 +584,13 @@
       "processing_depth": null,
       "archive_reason": "dedupe_fold",
       "skip_reasoning": null,
-      "visited_at": "2026-08-09T21:03:53Z",
-      "created_at": "2026-08-09T21:03:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T21:03:53Z",
+      "created_at": "2026-07-23T21:03:53Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13136,
@@ -356,9 +600,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-07T21:03:53Z",
-      "created_at": "2026-08-07T21:03:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T21:03:53Z",
+      "created_at": "2026-07-19T21:03:53Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13114,
@@ -368,9 +616,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "Marketplace / product / store listing",
-      "visited_at": "2026-08-06T21:03:53Z",
-      "created_at": "2026-08-06T21:03:53Z",
-      "skip_category": "store_listing"
+      "skip_category": "store_listing",
+      "visited_at": "2026-07-16T21:03:53Z",
+      "created_at": "2026-07-16T21:03:53Z",
+      "outcome": "gate",
+      "detail": "store_listing",
+      "fate": "archived",
+      "detail_label": "Store / Pricing Page"
     },
     {
       "id": 13092,
@@ -380,9 +632,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "login wall",
-      "visited_at": "2026-08-02T21:03:53Z",
-      "created_at": "2026-08-02T21:03:53Z",
-      "skip_category": "login_wall"
+      "skip_category": "login_wall",
+      "visited_at": "2026-07-13T21:03:53Z",
+      "created_at": "2026-07-13T21:03:53Z",
+      "outcome": "gate",
+      "detail": "login_wall",
+      "fate": "archived",
+      "detail_label": "Login Wall"
+    },
+    {
+      "id": 13177,
+      "title": "Sign in to GitHub",
+      "domain": "github.com",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:50:53Z",
+      "created_at": "2026-08-14T20:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13155,
@@ -392,9 +664,13 @@
       "processing_depth": null,
       "archive_reason": "app_chrome_junk",
       "skip_reasoning": null,
-      "visited_at": "2026-07-31T20:50:53Z",
-      "created_at": "2026-07-31T20:50:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:50:53Z",
+      "created_at": "2026-08-13T20:50:53Z",
+      "outcome": "before_gate",
+      "detail": "chrome",
+      "fate": "archived",
+      "detail_label": "App chrome junk"
     },
     {
       "id": 13133,
@@ -404,9 +680,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-07-30T20:50:53Z",
-      "created_at": "2026-07-30T20:50:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:50:53Z",
+      "created_at": "2026-08-07T20:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13111,
@@ -416,9 +696,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "content-free stub",
-      "visited_at": "2026-07-26T20:50:53Z",
-      "created_at": "2026-07-26T20:50:53Z",
-      "skip_category": "content_free_stub"
+      "skip_category": "content_free_stub",
+      "visited_at": "2026-08-06T20:50:53Z",
+      "created_at": "2026-08-06T20:50:53Z",
+      "outcome": "gate",
+      "detail": "content_free_stub",
+      "fate": "archived",
+      "detail_label": "Content-Free Stub"
     },
     {
       "id": 13089,
@@ -428,9 +712,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "error page",
-      "visited_at": "2026-07-24T20:50:53Z",
-      "created_at": "2026-07-24T20:50:53Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-07-31T20:50:53Z",
+      "created_at": "2026-07-31T20:50:53Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13075,
@@ -440,9 +728,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Scylla, a figure from Greek mythology, including her characteristics, significance, and context within literature, particularly in Homer's Odyssey. This information is educational and relevant for those interested in mythology.",
-      "visited_at": "2026-07-23T00:24:09Z",
-      "created_at": "2026-07-23T20:25:08.757875Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T00:24:09Z",
+      "created_at": "2026-07-30T20:25:08.757875Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13074,
@@ -452,9 +744,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about protein language models and structure prediction, which is relevant for learning in the fields of biology and computational biology. It discusses the importance of proteins, their structure, and the challenges in predicting protein structures, making it a valuable resource for educational purposes.",
-      "visited_at": "2026-07-19T00:23:09Z",
-      "created_at": "2026-07-19T20:25:08.757875Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T00:23:09Z",
+      "created_at": "2026-07-24T20:25:08.757875Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13073,
@@ -464,9 +760,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about whales, including their classification, characteristics, and biological relationships, which is educational and informative.",
-      "visited_at": "2026-07-16T23:32:09Z",
-      "created_at": "2026-07-16T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T23:32:09Z",
+      "created_at": "2026-07-23T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13072,
@@ -476,9 +776,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Gothic architecture, including its historical context, evolution, and characteristics, making it a valuable resource for learning.",
-      "visited_at": "2026-07-13T23:31:09Z",
-      "created_at": "2026-07-13T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T23:31:09Z",
+      "created_at": "2026-08-14T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13071,
@@ -488,9 +792,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the study of etymology, including its definition, significance, and connections to other fields of linguistics, making it a valuable resource for learning.",
-      "visited_at": "2026-08-14T23:30:09Z",
-      "created_at": "2026-08-14T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T23:30:09Z",
+      "created_at": "2026-08-13T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13070,
@@ -500,9 +808,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about the Mediterranean diet, including its origins, characteristics, and cultural significance, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T23:29:09Z",
-      "created_at": "2026-08-13T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T23:29:09Z",
+      "created_at": "2026-08-07T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13069,
@@ -512,9 +824,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about the Pacific Ring of Fire, including its geographical characteristics, the number of volcanoes, and its significance in terms of tectonic activity, making it a valuable resource for learning.",
-      "visited_at": "2026-08-07T23:28:09Z",
-      "created_at": "2026-08-07T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T23:28:09Z",
+      "created_at": "2026-08-06T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13068,
@@ -524,9 +840,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page on vernacular architecture contains substantive content that provides an overview of the concept, its characteristics, and examples from around the world. This information is educational and can be learned from, making it suitable for inclusion in a knowledge compendium.",
-      "visited_at": "2026-08-06T23:27:09Z",
-      "created_at": "2026-08-06T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T23:27:09Z",
+      "created_at": "2026-08-14T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13067,
@@ -536,9 +856,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about Brutalist architecture, including its definition, characteristics, and historical context, making it a valuable resource for learning.",
-      "visited_at": "2026-07-31T23:26:09Z",
-      "created_at": "2026-07-31T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T23:26:09Z",
+      "created_at": "2026-08-13T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13066,
@@ -548,9 +872,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about antibiotics, including their definition, function, and usage in treating bacterial infections, which is educational and informative.",
-      "visited_at": "2026-07-30T23:25:09Z",
-      "created_at": "2026-07-30T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T23:25:09Z",
+      "created_at": "2026-08-09T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13065,
@@ -560,9 +888,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Silk Road, detailing its historical significance, trade routes, and cultural interactions, which are valuable for learning.",
-      "visited_at": "2026-07-24T23:24:09Z",
-      "created_at": "2026-07-24T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T23:24:09Z",
+      "created_at": "2026-08-07T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13064,
@@ -572,9 +904,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Roman roads, including their historical significance, construction, and role in the Roman Empire, which is educational and informative.",
-      "visited_at": "2026-07-23T23:23:09Z",
-      "created_at": "2026-07-23T20:24:11.708185Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T23:23:09Z",
+      "created_at": "2026-08-06T20:24:11.708185Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13063,
@@ -584,9 +920,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about coral reefs, including their definition, characteristics, and biological classification, which is educational and informative.",
-      "visited_at": "2026-08-14T22:25:09Z",
-      "created_at": "2026-08-14T20:23:54.247775Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T22:25:09Z",
+      "created_at": "2026-08-02T20:23:54.247775Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13062,
@@ -596,9 +936,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about the Mariana Trench, including its location, dimensions, and depth, which are educational and informative.",
-      "visited_at": "2026-08-13T22:24:09Z",
-      "created_at": "2026-08-13T20:23:54.247775Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T22:24:09Z",
+      "created_at": "2026-07-31T20:23:54.247775Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13061,
@@ -608,9 +952,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about thermohaline circulation, including its definition, significance, and the factors that influence it, making it a valuable resource for learning.",
-      "visited_at": "2026-08-07T22:23:09Z",
-      "created_at": "2026-08-07T20:23:54.247775Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T22:23:09Z",
+      "created_at": "2026-07-30T20:23:54.247775Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13060,
@@ -620,9 +968,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the concept of composition in visual arts, including definitions, context, and distinctions from related terms. This information is educational and can be learned from, making it suitable for inclusion in a knowledge compendium.",
-      "visited_at": "2026-08-06T21:25:09Z",
-      "created_at": "2026-08-06T20:23:36.779974Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T21:25:09Z",
+      "created_at": "2026-07-26T20:23:36.779974Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13059,
@@ -632,9 +984,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the concept of aperture in optics, explaining its definition and significance in optical systems, which is educational and informative.",
-      "visited_at": "2026-08-14T21:24:09Z",
-      "created_at": "2026-08-14T20:23:36.779974Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T21:24:09Z",
+      "created_at": "2026-07-24T20:23:36.779974Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13058,
@@ -644,9 +1000,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the rule of thirds, a fundamental concept in visual art composition. It explains how to apply this guideline in various forms of art, making it educational and informative.",
-      "visited_at": "2026-08-13T21:23:09Z",
-      "created_at": "2026-08-13T20:23:36.779974Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T21:23:09Z",
+      "created_at": "2026-07-23T20:23:36.779974Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13057,
@@ -656,9 +1016,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the concept of tempo in music, including its definition, measurement, and significance in musical compositions, which is educational and informative.",
-      "visited_at": "2026-08-09T20:25:09Z",
-      "created_at": "2026-08-09T20:23:09.938904Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T20:25:09Z",
+      "created_at": "2026-07-19T20:23:09.938904Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13056,
@@ -668,9 +1032,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the major scale in music, including its definition, characteristics, and significance in Western music, making it a valuable resource for learning.",
-      "visited_at": "2026-08-07T20:24:09Z",
-      "created_at": "2026-08-07T20:23:09.938904Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T20:24:09Z",
+      "created_at": "2026-07-16T20:23:09.938904Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13055,
@@ -680,9 +1048,29 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about musical chords, including definitions, types of chords, and related concepts, which are educational and informative.",
-      "visited_at": "2026-08-06T20:23:09Z",
-      "created_at": "2026-08-06T20:23:09.938904Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T20:23:09Z",
+      "created_at": "2026-07-13T20:23:09.938904Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
+    },
+    {
+      "id": 13181,
+      "title": "Tensor (disambiguation) - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:23:09Z",
+      "created_at": "2026-08-14T20:23:09Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13159,
@@ -692,9 +1080,13 @@
       "processing_depth": null,
       "archive_reason": "dedupe_fold",
       "skip_reasoning": null,
-      "visited_at": "2026-08-02T20:23:09Z",
-      "created_at": "2026-08-02T20:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:23:09Z",
+      "created_at": "2026-08-13T20:23:09Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13137,
@@ -704,9 +1096,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-07-31T20:23:09Z",
-      "created_at": "2026-07-31T20:23:09Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:23:09Z",
+      "created_at": "2026-08-07T20:23:09Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13115,
@@ -716,9 +1112,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "User-specific page (profile, dashboard)",
-      "visited_at": "2026-07-30T20:23:09Z",
-      "created_at": "2026-07-30T20:23:09Z",
-      "skip_category": "user_specific"
+      "skip_category": "user_specific",
+      "visited_at": "2026-08-06T20:23:09Z",
+      "created_at": "2026-08-06T20:23:09Z",
+      "outcome": "gate",
+      "detail": "user_specific",
+      "fate": "archived",
+      "detail_label": "User-Specific Page"
     },
     {
       "id": 13093,
@@ -728,9 +1128,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "disambiguation page",
-      "visited_at": "2026-07-26T20:23:09Z",
-      "created_at": "2026-07-26T20:23:09Z",
-      "skip_category": "disambiguation"
+      "skip_category": "disambiguation",
+      "visited_at": "2026-07-31T20:23:09Z",
+      "created_at": "2026-07-31T20:23:09Z",
+      "outcome": "gate",
+      "detail": "disambiguation",
+      "fate": "archived",
+      "detail_label": "Disambiguation Page"
+    },
+    {
+      "id": 13171,
+      "title": "Search results for comet | Project Gutenberg",
+      "domain": "www.gutenberg.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-30T20:20:56Z",
+      "created_at": "2026-07-30T20:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13149,
@@ -740,9 +1160,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
+      "skip_category": null,
       "visited_at": "2026-07-24T20:20:56Z",
       "created_at": "2026-07-24T20:20:56Z",
-      "skip_category": null
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13127,
@@ -752,9 +1176,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: arxiv.org",
+      "skip_category": null,
       "visited_at": "2026-07-23T20:20:56Z",
       "created_at": "2026-07-23T20:20:56Z",
-      "skip_category": null
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13105,
@@ -764,9 +1192,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "error page",
-      "visited_at": "2026-07-19T20:20:56Z",
-      "created_at": "2026-07-19T20:20:56Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-08-14T20:20:56Z",
+      "created_at": "2026-08-14T20:20:56Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13083,
@@ -776,9 +1208,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "User-specific page (profile, dashboard)",
-      "visited_at": "2026-07-16T20:20:56Z",
-      "created_at": "2026-07-16T20:20:56Z",
-      "skip_category": "user_specific"
+      "skip_category": "user_specific",
+      "visited_at": "2026-08-13T20:20:56Z",
+      "created_at": "2026-08-13T20:20:56Z",
+      "outcome": "gate",
+      "detail": "user_specific",
+      "fate": "archived",
+      "detail_label": "User-Specific Page"
+    },
+    {
+      "id": 13179,
+      "title": "Search results for prism | Project Gutenberg",
+      "domain": "www.gutenberg.org",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:03:53Z",
+      "created_at": "2026-08-07T20:03:53Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13157,
@@ -788,9 +1240,13 @@
       "processing_depth": null,
       "archive_reason": "dedupe_fold",
       "skip_reasoning": null,
-      "visited_at": "2026-07-13T20:03:53Z",
-      "created_at": "2026-07-13T20:03:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T20:03:53Z",
+      "created_at": "2026-08-06T20:03:53Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13135,
@@ -800,9 +1256,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: arxiv.org",
+      "skip_category": null,
       "visited_at": "2026-08-14T20:03:53Z",
       "created_at": "2026-08-14T20:03:53Z",
-      "skip_category": null
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13113,
@@ -812,9 +1272,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "error page",
+      "skip_category": "error_page",
       "visited_at": "2026-08-13T20:03:53Z",
       "created_at": "2026-08-13T20:03:53Z",
-      "skip_category": "error_page"
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13091,
@@ -824,9 +1288,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "User-specific page (profile, dashboard)",
-      "visited_at": "2026-08-07T20:03:53Z",
-      "created_at": "2026-08-07T20:03:53Z",
-      "skip_category": "user_specific"
+      "skip_category": "user_specific",
+      "visited_at": "2026-08-09T20:03:53Z",
+      "created_at": "2026-08-09T20:03:53Z",
+      "outcome": "gate",
+      "detail": "user_specific",
+      "fate": "archived",
+      "detail_label": "User-Specific Page"
+    },
+    {
+      "id": 13176,
+      "title": "Login | arXiv",
+      "domain": "arxiv.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-07T19:50:53Z",
+      "created_at": "2026-08-07T19:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13154,
@@ -836,9 +1320,13 @@
       "processing_depth": null,
       "archive_reason": "app_chrome_junk",
       "skip_reasoning": null,
+      "skip_category": null,
       "visited_at": "2026-08-06T19:50:53Z",
       "created_at": "2026-08-06T19:50:53Z",
-      "skip_category": null
+      "outcome": "before_gate",
+      "detail": "chrome",
+      "fate": "archived",
+      "detail_label": "App chrome junk"
     },
     {
       "id": 13132,
@@ -848,9 +1336,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-07-31T19:50:53Z",
-      "created_at": "2026-07-31T19:50:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T19:50:53Z",
+      "created_at": "2026-08-02T19:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13110,
@@ -860,9 +1352,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "search results page",
-      "visited_at": "2026-07-30T19:50:53Z",
-      "created_at": "2026-07-30T19:50:53Z",
-      "skip_category": "search_results"
+      "skip_category": "search_results",
+      "visited_at": "2026-07-31T19:50:53Z",
+      "created_at": "2026-07-31T19:50:53Z",
+      "outcome": "gate",
+      "detail": "search_results",
+      "fate": "archived",
+      "detail_label": "Search Results"
     },
     {
       "id": 13088,
@@ -872,9 +1368,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "cookie consent redirect",
-      "visited_at": "2026-07-24T19:50:53Z",
-      "created_at": "2026-07-24T19:50:53Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-07-30T19:50:53Z",
+      "created_at": "2026-07-30T19:50:53Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
+    },
+    {
+      "id": 13170,
+      "title": "Search: isotope",
+      "domain": "github.com",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-26T19:20:56Z",
+      "created_at": "2026-07-26T19:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13148,
@@ -884,9 +1400,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
-      "visited_at": "2026-07-23T19:20:56Z",
-      "created_at": "2026-07-23T19:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T19:20:56Z",
+      "created_at": "2026-07-24T19:20:56Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13126,
@@ -896,9 +1416,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-08-14T19:20:56Z",
-      "created_at": "2026-08-14T19:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T19:20:56Z",
+      "created_at": "2026-07-23T19:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13104,
@@ -908,9 +1432,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "cookie consent redirect",
-      "visited_at": "2026-08-13T19:20:56Z",
-      "created_at": "2026-08-13T19:20:56Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-07-19T19:20:56Z",
+      "created_at": "2026-07-19T19:20:56Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13082,
@@ -920,9 +1448,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "Marketplace / product / store listing",
-      "visited_at": "2026-08-07T19:20:56Z",
-      "created_at": "2026-08-07T19:20:56Z",
-      "skip_category": "store_listing"
+      "skip_category": "store_listing",
+      "visited_at": "2026-07-16T19:20:56Z",
+      "created_at": "2026-07-16T19:20:56Z",
+      "outcome": "gate",
+      "detail": "store_listing",
+      "fate": "archived",
+      "detail_label": "Store / Pricing Page"
     },
     {
       "id": 13054,
@@ -932,9 +1464,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about gardens, including their definition, design features, and the elements involved in garden cultivation and enjoyment. This information is educational and can be learned from.",
-      "visited_at": "2026-08-06T21:09:53Z",
-      "created_at": "2026-08-06T19:06:37.688106Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T21:09:53Z",
+      "created_at": "2026-07-13T19:06:37.688106Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13053,
@@ -944,9 +1480,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about rivers, including their definition, characteristics, and the water cycle, which is educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-08-14T21:08:53Z",
       "created_at": "2026-08-14T19:06:37.688106Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13052,
@@ -956,9 +1496,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about mountains, including definitions, characteristics, and height requirements, which are educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-08-13T21:07:53Z",
       "created_at": "2026-08-13T19:06:37.688106Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13051,
@@ -968,9 +1512,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about calendars, including their definition, organization of time, and various types of calendars, which is educational and informative.",
-      "visited_at": "2026-08-09T21:06:53Z",
-      "created_at": "2026-08-09T19:06:37.688106Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T21:06:53Z",
+      "created_at": "2026-08-07T19:06:37.688106Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13050,
@@ -980,9 +1528,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about evolution, including definitions, processes, and implications, which are educational and informative.",
-      "visited_at": "2026-08-07T21:05:53Z",
-      "created_at": "2026-08-07T19:06:37.688106Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T21:05:53Z",
+      "created_at": "2026-08-06T19:06:37.688106Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13049,
@@ -992,9 +1544,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about medicine, including its definition, practices, and applications, which is educational and informative.",
-      "visited_at": "2026-08-06T21:04:53Z",
-      "created_at": "2026-08-06T19:06:37.688106Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T21:04:53Z",
+      "created_at": "2026-07-31T19:06:37.688106Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13048,
@@ -1004,9 +1560,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about DNA, including its structure, function, and significance in biology, making it a valuable resource for learning.",
-      "visited_at": "2026-08-02T21:03:53Z",
-      "created_at": "2026-08-02T19:06:37.688106Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T21:03:53Z",
+      "created_at": "2026-07-30T19:06:37.688106Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13047,
@@ -1016,9 +1576,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about salt, including its composition, types, and significance in human diet and culture, making it a valuable resource for learning.",
-      "visited_at": "2026-07-31T20:07:53Z",
-      "created_at": "2026-07-31T19:06:03.402273Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T20:07:53Z",
+      "created_at": "2026-07-24T19:06:03.402273Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13046,
@@ -1028,9 +1592,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about wood, including its definition, characteristics, and composition, which is educational and informative.",
-      "visited_at": "2026-07-30T20:06:53Z",
-      "created_at": "2026-07-30T19:06:03.402273Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T20:06:53Z",
+      "created_at": "2026-07-23T19:06:03.402273Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13045,
@@ -1040,9 +1608,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about glass, including its properties, uses, and formation, which is educational and fits the criteria for inclusion in a knowledge compendium.",
-      "visited_at": "2026-07-26T20:05:53Z",
-      "created_at": "2026-07-26T19:06:03.402273Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:05:53Z",
+      "created_at": "2026-08-14T19:06:03.402273Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13044,
@@ -1052,9 +1624,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about rocks in geology, including definitions, classifications, and the study of rocks, which is educational and informative.",
-      "visited_at": "2026-07-24T20:04:53Z",
-      "created_at": "2026-07-24T19:06:03.402273Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:04:53Z",
+      "created_at": "2026-08-13T19:06:03.402273Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13043,
@@ -1064,9 +1640,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about iron, including its chemical properties, significance, and abundance on Earth, which is educational and relevant for learning.",
-      "visited_at": "2026-07-23T20:03:53Z",
-      "created_at": "2026-07-23T19:06:03.402273Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:03:53Z",
+      "created_at": "2026-08-07T19:06:03.402273Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13042,
@@ -1076,9 +1656,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about education, including definitions, types of education, and levels of education, which are all learnable topics.",
-      "visited_at": "2026-07-19T19:10:53Z",
-      "created_at": "2026-07-19T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T19:10:53Z",
+      "created_at": "2026-08-06T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13041,
@@ -1088,9 +1672,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about literature, including its definition, forms, and roles in society, which can be educational and informative for users.",
-      "visited_at": "2026-07-16T19:09:53Z",
-      "created_at": "2026-07-16T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T19:09:53Z",
+      "created_at": "2026-08-14T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13040,
@@ -1100,9 +1688,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about sociology, including its definition, focus areas, and methods of study, making it a valuable resource for learning.",
-      "visited_at": "2026-07-13T19:08:53Z",
-      "created_at": "2026-07-13T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T19:08:53Z",
+      "created_at": "2026-08-13T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13039,
@@ -1112,9 +1704,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the concept of law, including its definitions, functions, and the various ways laws are created and enforced. This information is educational and relevant for users seeking to understand legal principles.",
-      "visited_at": "2026-08-14T19:07:53Z",
-      "created_at": "2026-08-14T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T19:07:53Z",
+      "created_at": "2026-08-09T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13038,
@@ -1124,9 +1720,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about politics, including definitions, methods, and the study of political science, which are all learnable topics.",
-      "visited_at": "2026-08-13T19:06:53Z",
-      "created_at": "2026-08-13T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T19:06:53Z",
+      "created_at": "2026-08-07T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13037,
@@ -1136,9 +1736,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about economics, including definitions, concepts, and the distinction between microeconomics and macroeconomics, which are valuable for learning.",
-      "visited_at": "2026-08-07T19:05:53Z",
-      "created_at": "2026-08-07T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T19:05:53Z",
+      "created_at": "2026-08-06T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13036,
@@ -1148,9 +1752,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about psychology, including its definition, scope, and connections to other disciplines, making it a valuable resource for learning.",
-      "visited_at": "2026-08-06T19:04:53Z",
-      "created_at": "2026-08-06T19:03:53.589810Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T19:04:53Z",
+      "created_at": "2026-08-02T19:03:53.589810Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13035,
@@ -1160,9 +1768,29 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about philosophy, including its definition, historical context, and its relation to other sciences, making it a valuable resource for learning.",
+      "skip_category": null,
       "visited_at": "2026-07-31T19:03:53Z",
       "created_at": "2026-07-31T19:03:53.589810Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
+    },
+    {
+      "id": 13178,
+      "title": "Search: cipher",
+      "domain": "github.com",
+      "status": "archived",
+      "processing_depth": null,
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-30T19:03:53Z",
+      "created_at": "2026-07-30T19:03:53Z",
+      "outcome": "before_gate",
+      "detail": "manual",
+      "fate": "archived",
+      "detail_label": "Archived manually (early)"
     },
     {
       "id": 13156,
@@ -1172,9 +1800,13 @@
       "processing_depth": null,
       "archive_reason": "app_chrome_junk",
       "skip_reasoning": null,
-      "visited_at": "2026-07-30T19:03:53Z",
-      "created_at": "2026-07-30T19:03:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T19:03:53Z",
+      "created_at": "2026-07-26T19:03:53Z",
+      "outcome": "before_gate",
+      "detail": "chrome",
+      "fate": "archived",
+      "detail_label": "App chrome junk"
     },
     {
       "id": 13134,
@@ -1184,9 +1816,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
+      "skip_category": null,
       "visited_at": "2026-07-24T19:03:53Z",
       "created_at": "2026-07-24T19:03:53Z",
-      "skip_category": null
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13112,
@@ -1196,9 +1832,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "cookie consent redirect",
+      "skip_category": "error_page",
       "visited_at": "2026-07-23T19:03:53Z",
       "created_at": "2026-07-23T19:03:53Z",
-      "skip_category": "error_page"
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13090,
@@ -1208,9 +1848,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "Marketplace / product / store listing",
-      "visited_at": "2026-08-14T19:03:53Z",
-      "created_at": "2026-08-14T19:03:53Z",
-      "skip_category": "store_listing"
+      "skip_category": "store_listing",
+      "visited_at": "2026-07-19T19:03:53Z",
+      "created_at": "2026-07-19T19:03:53Z",
+      "outcome": "gate",
+      "detail": "store_listing",
+      "fate": "archived",
+      "detail_label": "Store / Pricing Page"
     },
     {
       "id": 13034,
@@ -1220,9 +1864,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about fashion, including its definition, cultural significance, and historical origins, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T21:01:53Z",
-      "created_at": "2026-08-13T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T21:01:53Z",
+      "created_at": "2026-07-16T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13033,
@@ -1232,9 +1880,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about dreams, including their definition, characteristics, and historical significance, making it a valuable resource for learning.",
-      "visited_at": "2026-08-07T21:00:53Z",
-      "created_at": "2026-08-07T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T21:00:53Z",
+      "created_at": "2026-07-13T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13032,
@@ -1244,9 +1896,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about theatre as a performing art, including its definition, elements, and historical context, making it educational and informative.",
-      "visited_at": "2026-08-06T20:59:53Z",
-      "created_at": "2026-08-06T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:59:53Z",
+      "created_at": "2026-08-14T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13031,
@@ -1256,9 +1912,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about painting as a visual art form, including definitions, techniques, and the role of a painter, which is educational and informative.",
-      "visited_at": "2026-08-14T20:58:53Z",
-      "created_at": "2026-08-14T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:58:53Z",
+      "created_at": "2026-08-13T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13030,
@@ -1268,9 +1928,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about travel, including its definition, means of transportation, and etymology, which provides educational value.",
-      "visited_at": "2026-08-13T20:57:53Z",
-      "created_at": "2026-08-13T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:57:53Z",
+      "created_at": "2026-08-07T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13029,
@@ -1280,9 +1944,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about spices, including their definitions, uses in culinary arts, and distinctions from herbs. This information is educational and relevant for learning about spices.",
-      "visited_at": "2026-08-09T20:56:53Z",
-      "created_at": "2026-08-09T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T20:56:53Z",
+      "created_at": "2026-08-06T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13028,
@@ -1292,9 +1960,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about wine, including its production, history, and various styles, which is educational and informative.",
-      "visited_at": "2026-08-07T20:55:53Z",
-      "created_at": "2026-08-07T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T20:55:53Z",
+      "created_at": "2026-07-31T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13027,
@@ -1304,9 +1976,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about language, including its definition, characteristics, and cultural significance, which is educational and informative.",
-      "visited_at": "2026-08-06T20:54:53Z",
-      "created_at": "2026-08-06T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T20:54:53Z",
+      "created_at": "2026-07-30T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13026,
@@ -1316,9 +1992,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about robotics, including its definition, components, and applications, which are valuable for learning.",
-      "visited_at": "2026-08-02T20:53:53Z",
-      "created_at": "2026-08-02T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T20:53:53Z",
+      "created_at": "2026-07-24T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13025,
@@ -1328,9 +2008,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Ancient Greece, including its historical context, cultural significance, and timeline, which is educational and informative.",
-      "visited_at": "2026-07-31T20:52:53Z",
-      "created_at": "2026-07-31T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T20:52:53Z",
+      "created_at": "2026-07-23T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13024,
@@ -1340,9 +2024,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page on linear algebra contains substantive educational content about a fundamental branch of mathematics, including definitions, concepts, and equations that users can learn from.",
-      "visited_at": "2026-07-30T20:51:53Z",
-      "created_at": "2026-07-30T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:51:53Z",
+      "created_at": "2026-08-14T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13023,
@@ -1352,9 +2040,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about marine biology, including definitions, classifications, and the significance of marine life, which is educational and informative.",
-      "visited_at": "2026-07-26T20:50:53Z",
-      "created_at": "2026-07-26T18:53:05.468611Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:50:53Z",
+      "created_at": "2026-08-13T18:53:05.468611Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13022,
@@ -1364,9 +2056,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about geography, including its definition, scope, and significance, making it a valuable resource for learning.",
-      "visited_at": "2026-07-24T19:59:53Z",
-      "created_at": "2026-07-24T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T19:59:53Z",
+      "created_at": "2026-08-07T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13021,
@@ -1376,9 +2072,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about astronomy, including definitions, objects of study, and relevant phenomena, making it a valuable resource for learning.",
-      "visited_at": "2026-07-23T19:58:53Z",
-      "created_at": "2026-07-23T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T19:58:53Z",
+      "created_at": "2026-08-06T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13020,
@@ -1388,9 +2088,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about architecture, including its definition, significance, and historical context, making it a valuable resource for learning.",
-      "visited_at": "2026-07-19T19:57:53Z",
-      "created_at": "2026-07-19T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T19:57:53Z",
+      "created_at": "2026-08-14T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13019,
@@ -1400,9 +2104,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about religion, including its definitions, elements, and cultural significance, which is educational and informative.",
-      "visited_at": "2026-07-16T19:56:53Z",
-      "created_at": "2026-07-16T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T19:56:53Z",
+      "created_at": "2026-08-13T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13018,
@@ -1412,9 +2120,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the systematic study of history, its academic discipline, and its purpose, which is valuable for learning.",
-      "visited_at": "2026-07-13T19:55:53Z",
-      "created_at": "2026-07-13T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T19:55:53Z",
+      "created_at": "2026-08-09T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13017,
@@ -1424,9 +2136,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about music, including its definition, cultural significance, and various elements that characterize it. This information is educational and can be learned from, making it suitable for inclusion in a knowledge compendium.",
-      "visited_at": "2026-08-14T19:54:53Z",
-      "created_at": "2026-08-14T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T19:54:53Z",
+      "created_at": "2026-08-07T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13016,
@@ -1436,9 +2152,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the concept of art, its definitions, and its historical and cultural significance, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T19:53:53Z",
-      "created_at": "2026-08-13T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T19:53:53Z",
+      "created_at": "2026-08-06T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13015,
@@ -1448,9 +2168,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about mathematics, including its various branches and theories, which is educational and informative.",
-      "visited_at": "2026-08-07T19:52:53Z",
-      "created_at": "2026-08-07T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T19:52:53Z",
+      "created_at": "2026-08-02T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13014,
@@ -1460,9 +2184,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about computers, including definitions, functions, and descriptions of computer systems, which are valuable for learning.",
-      "visited_at": "2026-08-06T19:51:53Z",
-      "created_at": "2026-08-06T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T19:51:53Z",
+      "created_at": "2026-07-31T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13013,
@@ -1472,9 +2200,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about animals, including their biological classification, characteristics, and development, which is educational and informative.",
-      "visited_at": "2026-07-31T19:50:53Z",
-      "created_at": "2026-07-31T18:51:49.848730Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T19:50:53Z",
+      "created_at": "2026-07-30T18:51:49.848730Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13012,
@@ -1484,9 +2216,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about memory, including its definition, functions, and implications for personal identity and relationships. This information is educational and can be learned from, making it suitable for inclusion in a knowledge compendium.",
-      "visited_at": "2026-07-30T18:57:53Z",
-      "created_at": "2026-07-30T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T18:57:53Z",
+      "created_at": "2026-07-26T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13011,
@@ -1496,9 +2232,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about color, including its definition, perception, and the science behind it, which is educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-07-24T18:56:53Z",
       "created_at": "2026-07-24T18:50:53.725884Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13010,
@@ -1508,9 +2248,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the concept of mass in physics, including its definition, historical context, and implications in modern physics, making it a valuable resource for learning.",
+      "skip_category": null,
       "visited_at": "2026-07-23T18:55:53Z",
       "created_at": "2026-07-23T18:50:53.725884Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13009,
@@ -1520,9 +2264,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about heat in thermodynamics, including definitions, concepts, and related topics that are educational and informative.",
-      "visited_at": "2026-08-14T18:54:53Z",
-      "created_at": "2026-08-14T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T18:54:53Z",
+      "created_at": "2026-07-19T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13008,
@@ -1532,9 +2280,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about sound, including its definition, characteristics, and physiological aspects, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T18:53:53Z",
-      "created_at": "2026-08-13T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T18:53:53Z",
+      "created_at": "2026-07-16T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13007,
@@ -1544,9 +2296,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about light, including its definition, properties, and the visible spectrum, which is educational and informative.",
-      "visited_at": "2026-08-07T18:52:53Z",
-      "created_at": "2026-08-07T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T18:52:53Z",
+      "created_at": "2026-07-13T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13006,
@@ -1556,9 +2312,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about energy, including its definition, properties, forms, and the law of conservation of energy, which are all educational and informative topics.",
-      "visited_at": "2026-08-06T18:51:53Z",
-      "created_at": "2026-08-06T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T18:51:53Z",
+      "created_at": "2026-08-14T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13005,
@@ -1568,9 +2328,29 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the concept of time, including its definition, significance, and implications in various contexts, making it a valuable resource for learning.",
-      "visited_at": "2026-08-14T18:50:53Z",
-      "created_at": "2026-08-14T18:50:53.725884Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T18:50:53Z",
+      "created_at": "2026-08-13T18:50:53.725884Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
+    },
+    {
+      "id": 13175,
+      "title": "Search | arXiv e-print repository",
+      "domain": "arxiv.org",
+      "status": "archived",
+      "processing_depth": "skipped",
+      "archive_reason": "skip_gate",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-07T18:50:53Z",
+      "created_at": "2026-08-07T18:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "url_pattern",
+      "fate": "archived",
+      "detail_label": "URL pattern rule"
     },
     {
       "id": 13153,
@@ -1580,9 +2360,13 @@
       "processing_depth": null,
       "archive_reason": "app_chrome_junk",
       "skip_reasoning": null,
-      "visited_at": "2026-08-13T18:50:53Z",
-      "created_at": "2026-08-13T18:50:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T18:50:53Z",
+      "created_at": "2026-08-06T18:50:53Z",
+      "outcome": "before_gate",
+      "detail": "chrome",
+      "fate": "archived",
+      "detail_label": "App chrome junk"
     },
     {
       "id": 13131,
@@ -1592,9 +2376,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: www.gutenberg.org",
-      "visited_at": "2026-08-09T18:50:53Z",
-      "created_at": "2026-08-09T18:50:53Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T18:50:53Z",
+      "created_at": "2026-07-31T18:50:53Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13109,
@@ -1604,9 +2392,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "disambiguation page",
-      "visited_at": "2026-08-07T18:50:53Z",
-      "created_at": "2026-08-07T18:50:53Z",
-      "skip_category": "disambiguation"
+      "skip_category": "disambiguation",
+      "visited_at": "2026-07-30T18:50:53Z",
+      "created_at": "2026-07-30T18:50:53Z",
+      "outcome": "gate",
+      "detail": "disambiguation",
+      "fate": "archived",
+      "detail_label": "Disambiguation Page"
     },
     {
       "id": 13087,
@@ -1616,9 +2408,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "content-free stub",
-      "visited_at": "2026-08-06T18:50:53Z",
-      "created_at": "2026-08-06T18:50:53Z",
-      "skip_category": "content_free_stub"
+      "skip_category": "content_free_stub",
+      "visited_at": "2026-07-24T18:50:53Z",
+      "created_at": "2026-07-24T18:50:53Z",
+      "outcome": "gate",
+      "detail": "content_free_stub",
+      "fate": "archived",
+      "detail_label": "Content-Free Stub"
     },
     {
       "id": 13169,
@@ -1628,9 +2424,13 @@
       "processing_depth": null,
       "archive_reason": null,
       "skip_reasoning": null,
-      "visited_at": "2026-08-02T18:20:56Z",
-      "created_at": "2026-08-02T18:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T18:20:56Z",
+      "created_at": "2026-07-23T18:20:56Z",
+      "outcome": "pending",
+      "detail": "waiting",
+      "fate": "pending",
+      "detail_label": "Not yet processed"
     },
     {
       "id": 13147,
@@ -1640,9 +2440,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
-      "visited_at": "2026-07-31T18:20:56Z",
-      "created_at": "2026-07-31T18:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T18:20:56Z",
+      "created_at": "2026-08-14T18:20:56Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13125,
@@ -1652,9 +2456,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-07-30T18:20:56Z",
-      "created_at": "2026-07-30T18:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T18:20:56Z",
+      "created_at": "2026-08-13T18:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13103,
@@ -1664,9 +2472,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "content-free stub",
-      "visited_at": "2026-07-26T18:20:56Z",
-      "created_at": "2026-07-26T18:20:56Z",
-      "skip_category": "content_free_stub"
+      "skip_category": "content_free_stub",
+      "visited_at": "2026-08-07T18:20:56Z",
+      "created_at": "2026-08-07T18:20:56Z",
+      "outcome": "gate",
+      "detail": "content_free_stub",
+      "fate": "archived",
+      "detail_label": "Content-Free Stub"
     },
     {
       "id": 13081,
@@ -1676,9 +2488,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "error page",
-      "visited_at": "2026-07-24T18:20:56Z",
-      "created_at": "2026-07-24T18:20:56Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-08-06T18:20:56Z",
+      "created_at": "2026-08-06T18:20:56Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13002,
@@ -1688,9 +2504,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the kraken, a legendary sea monster, including its origins, descriptions, and cultural significance, which is educational and informative.",
-      "visited_at": "2026-07-23T23:21:56Z",
-      "created_at": "2026-07-23T17:24:58.515930Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T23:21:56Z",
+      "created_at": "2026-08-14T17:24:58.515930Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13001,
@@ -1700,9 +2520,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Antikythera mechanism, an ancient Greek analogue computer, detailing its function, historical significance, and applications in predicting astronomical events and tracking athletic games. This information is educational and relevant for learning.",
-      "visited_at": "2026-07-19T23:20:56Z",
-      "created_at": "2026-07-19T17:24:58.515930Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T23:20:56Z",
+      "created_at": "2026-08-13T17:24:58.515930Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13000,
@@ -1712,9 +2536,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about octopus as food, including cultural practices, preparation methods, and specific dishes from various geographies, which are all learnable aspects.",
-      "visited_at": "2026-07-16T22:23:56Z",
-      "created_at": "2026-07-16T17:24:35.546998Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T22:23:56Z",
+      "created_at": "2026-08-09T17:24:35.546998Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12999,
@@ -1724,9 +2552,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about squid as food, including its culinary uses, preparation methods, and cultural significance in various cuisines, which is educational and informative.",
-      "visited_at": "2026-07-13T22:22:56Z",
-      "created_at": "2026-07-13T17:24:35.546998Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T22:22:56Z",
+      "created_at": "2026-08-07T17:24:35.546998Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12998,
@@ -1736,9 +2568,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about Takoyaki, including its ingredients, preparation method, and cultural significance, making it a valuable resource for learning.",
-      "visited_at": "2026-08-14T22:21:56Z",
-      "created_at": "2026-08-14T17:24:35.546998Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T22:21:56Z",
+      "created_at": "2026-08-06T17:24:35.546998Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12997,
@@ -1748,9 +2584,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about sushi, including its definition, ingredients, and preparation methods, which are educational and informative.",
-      "visited_at": "2026-08-13T22:20:56Z",
-      "created_at": "2026-08-13T17:24:35.546998Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T22:20:56Z",
+      "created_at": "2026-08-02T17:24:35.546998Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12996,
@@ -1760,9 +2600,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper on variational inference with normalizing flows, which is substantive content that users can learn from. It discusses the application of variational inference in probabilistic modeling and its relevance in various complex problems, making it valuable for educational purposes.",
-      "visited_at": "2026-08-07T21:22:56Z",
-      "created_at": "2026-08-07T17:24:20.974167Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T21:22:56Z",
+      "created_at": "2026-07-31T17:24:20.974167Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12995,
@@ -1772,9 +2616,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper titled 'Auto-Encoding Variational Bayes' which discusses efficient approximate inference and learning with directed probabilistic models. This is substantive content that users can learn from, making it suitable for inclusion in a knowledge compendium.",
-      "visited_at": "2026-08-06T21:21:56Z",
-      "created_at": "2026-08-06T17:24:20.974167Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T21:21:56Z",
+      "created_at": "2026-07-30T17:24:20.974167Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12994,
@@ -1784,9 +2632,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Generative Adversarial Networks, which is a significant topic in deep learning and artificial intelligence. It discusses the promise of deep learning in discovering hierarchical models and represents probability distributions over various types of data, making it educational and relevant for users interested in AI and machine learning.",
-      "visited_at": "2026-07-31T21:20:56Z",
-      "created_at": "2026-07-31T17:24:20.974167Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T21:20:56Z",
+      "created_at": "2026-07-26T17:24:20.974167Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12993,
@@ -1796,9 +2648,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about sleep, including its definition, characteristics, and differences from wakefulness, which are educational and informative.",
-      "visited_at": "2026-07-30T20:29:56Z",
-      "created_at": "2026-07-30T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T20:29:56Z",
+      "created_at": "2026-07-24T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12992,
@@ -1808,9 +2664,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about the Indo-European languages, including their geographical distribution, historical context, and classification into various branches, making it a valuable resource for learning.",
-      "visited_at": "2026-07-24T20:28:56Z",
-      "created_at": "2026-07-24T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T20:28:56Z",
+      "created_at": "2026-07-23T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12991,
@@ -1820,9 +2680,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about coffee, including its production, characteristics, and effects, which is educational and informative.",
-      "visited_at": "2026-07-23T20:27:56Z",
-      "created_at": "2026-07-23T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T20:27:56Z",
+      "created_at": "2026-07-19T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12990,
@@ -1832,9 +2696,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about tea, including its preparation, origin, and types, which provides educational value.",
-      "visited_at": "2026-08-14T20:26:56Z",
-      "created_at": "2026-08-14T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T20:26:56Z",
+      "created_at": "2026-07-16T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12989,
@@ -1844,9 +2712,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about the Sahara Desert, including its size, geographical significance, and etymology, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T20:25:56Z",
-      "created_at": "2026-08-13T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T20:25:56Z",
+      "created_at": "2026-07-13T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12988,
@@ -1856,9 +2728,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Bauhaus, an influential art school that combined crafts and fine arts, providing historical context and details about its founding and design principles.",
-      "visited_at": "2026-08-07T20:24:56Z",
-      "created_at": "2026-08-07T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T20:24:56Z",
+      "created_at": "2026-08-14T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12987,
@@ -1868,9 +2744,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the scientific theory of continental drift, its historical context, and its relation to plate tectonics, making it a valuable resource for learning.",
-      "visited_at": "2026-08-06T20:23:56Z",
-      "created_at": "2026-08-06T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T20:23:56Z",
+      "created_at": "2026-08-13T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12986,
@@ -1880,9 +2760,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about photosynthesis, explaining the biological processes by which organisms convert light energy into chemical energy, which is essential for understanding this fundamental scientific concept.",
-      "visited_at": "2026-08-14T20:22:56Z",
-      "created_at": "2026-08-14T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T20:22:56Z",
+      "created_at": "2026-08-07T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12985,
@@ -1892,9 +2776,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Industrial Revolution, including its historical context, significance, and impact on the global economy, making it a valuable resource for learning.",
-      "visited_at": "2026-08-13T20:21:56Z",
-      "created_at": "2026-08-13T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T20:21:56Z",
+      "created_at": "2026-08-06T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12984,
@@ -1904,9 +2792,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive historical content about the Edo period in Japan, detailing its significance, characteristics, and context within Japanese history, which is valuable for learning.",
-      "visited_at": "2026-08-09T20:20:56Z",
-      "created_at": "2026-08-09T17:22:10.737326Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T20:20:56Z",
+      "created_at": "2026-07-31T17:22:10.737326Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12983,
@@ -1916,9 +2808,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about statistical hypothesis testing, which is a method of statistical inference. It provides meaningful information that can be learned from, including definitions, methods, and the context of use in statistics.",
-      "visited_at": "2026-08-07T19:22:56Z",
-      "created_at": "2026-08-07T17:21:51.497759Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T19:22:56Z",
+      "created_at": "2026-07-30T17:21:51.497759Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12982,
@@ -1928,9 +2824,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about Markov chains, a fundamental concept in probability theory and statistics. It explains the nature of Markov processes, their properties, and applications, making it a valuable resource for learning.",
-      "visited_at": "2026-08-06T19:21:56Z",
-      "created_at": "2026-08-06T17:21:51.497759Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T19:21:56Z",
+      "created_at": "2026-07-24T17:21:51.497759Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12981,
@@ -1940,9 +2840,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Bayesian inference, a method of statistical inference that is important in statistics and mathematical statistics. It explains the concept, its significance, and how it works, making it a valuable resource for learning.",
-      "visited_at": "2026-08-02T19:20:56Z",
-      "created_at": "2026-08-02T17:21:51.497759Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T19:20:56Z",
+      "created_at": "2026-07-23T17:21:51.497759Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12980,
@@ -1952,9 +2856,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about calderas, including their formation and geological significance, which is educational and fits the criteria for inclusion in a knowledge compendium.",
-      "visited_at": "2026-07-31T18:22:56Z",
-      "created_at": "2026-07-31T17:21:27.695966Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T18:22:56Z",
+      "created_at": "2026-08-14T17:21:27.695966Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12979,
@@ -1964,9 +2872,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about volcanoes, including their definition, characteristics, and geological context, which is educational and informative.",
-      "visited_at": "2026-07-30T18:21:56Z",
-      "created_at": "2026-07-30T17:21:27.695966Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T18:21:56Z",
+      "created_at": "2026-08-13T17:21:27.695966Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12978,
@@ -1976,9 +2888,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about plate tectonics, a scientific theory that is foundational in geology and earth sciences. It provides an overview of the theory, its historical development, and its significance, making it a valuable resource for learning.",
-      "visited_at": "2026-07-26T18:20:56Z",
-      "created_at": "2026-07-26T17:21:27.695966Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T18:20:56Z",
+      "created_at": "2026-08-07T17:21:27.695966Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12977,
@@ -1988,9 +2904,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about bread, including its definition, cultural significance, historical context, and various aspects of its production and consumption, making it a valuable resource for learning.",
-      "visited_at": "2026-07-24T17:22:56Z",
-      "created_at": "2026-07-24T17:20:56.263922Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T17:22:56Z",
+      "created_at": "2026-08-06T17:20:56.263922Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12976,
@@ -2000,9 +2920,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about yeast, including its classification, characteristics, and reproduction methods, which are valuable for learning.",
-      "visited_at": "2026-07-23T17:21:56Z",
-      "created_at": "2026-07-23T17:20:56.263922Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T17:21:56Z",
+      "created_at": "2026-08-14T17:20:56.263922Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12975,
@@ -2012,9 +2936,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about sourdough, including its definition, historical context, and the fermentation process, which provides valuable information for learning.",
-      "visited_at": "2026-07-19T17:20:56Z",
-      "created_at": "2026-07-19T17:20:56.263922Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T17:20:56Z",
+      "created_at": "2026-08-13T17:20:56.263922Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 13168,
@@ -2024,9 +2952,13 @@
       "processing_depth": null,
       "archive_reason": null,
       "skip_reasoning": null,
-      "visited_at": "2026-07-16T17:20:56Z",
-      "created_at": "2026-07-16T17:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T17:20:56Z",
+      "created_at": "2026-08-09T17:20:56Z",
+      "outcome": "pending",
+      "detail": "waiting",
+      "fate": "pending",
+      "detail_label": "Not yet processed"
     },
     {
       "id": 13146,
@@ -2036,9 +2968,13 @@
       "processing_depth": null,
       "archive_reason": "dedup",
       "skip_reasoning": null,
-      "visited_at": "2026-07-13T17:20:56Z",
-      "created_at": "2026-07-13T17:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T17:20:56Z",
+      "created_at": "2026-08-07T17:20:56Z",
+      "outcome": "before_gate",
+      "detail": "duplicate",
+      "fate": "archived",
+      "detail_label": "Duplicate"
     },
     {
       "id": 13124,
@@ -2048,9 +2984,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: en.wikipedia.org",
-      "visited_at": "2026-08-14T17:20:56Z",
-      "created_at": "2026-08-14T17:20:56Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T17:20:56Z",
+      "created_at": "2026-08-06T17:20:56Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13102,
@@ -2060,9 +3000,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "search results page",
-      "visited_at": "2026-08-13T17:20:56Z",
-      "created_at": "2026-08-13T17:20:56Z",
-      "skip_category": "search_results"
+      "skip_category": "search_results",
+      "visited_at": "2026-08-02T17:20:56Z",
+      "created_at": "2026-08-02T17:20:56Z",
+      "outcome": "gate",
+      "detail": "search_results",
+      "fate": "archived",
+      "detail_label": "Search Results"
     },
     {
       "id": 13080,
@@ -2072,9 +3016,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "cookie consent redirect",
-      "visited_at": "2026-08-07T17:20:56Z",
-      "created_at": "2026-08-07T17:20:56Z",
-      "skip_category": "error_page"
+      "skip_category": "error_page",
+      "visited_at": "2026-07-31T17:20:56Z",
+      "created_at": "2026-07-31T17:20:56Z",
+      "outcome": "gate",
+      "detail": "error_page",
+      "fate": "archived",
+      "detail_label": "Error Page"
     },
     {
       "id": 13167,
@@ -2084,9 +3032,13 @@
       "processing_depth": null,
       "archive_reason": null,
       "skip_reasoning": null,
-      "visited_at": "2026-08-06T02:31:45Z",
-      "created_at": "2026-08-06T02:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T02:31:45Z",
+      "created_at": "2026-07-30T02:31:45Z",
+      "outcome": "pending",
+      "detail": "waiting",
+      "fate": "pending",
+      "detail_label": "Not yet processed"
     },
     {
       "id": 13145,
@@ -2096,9 +3048,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-07-31T02:31:45Z",
-      "created_at": "2026-07-31T02:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T02:31:45Z",
+      "created_at": "2026-07-26T02:31:45Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13123,
@@ -2108,9 +3064,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: www.gutenberg.org",
-      "visited_at": "2026-07-30T02:31:45Z",
-      "created_at": "2026-07-30T02:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T02:31:45Z",
+      "created_at": "2026-07-24T02:31:45Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13101,
@@ -2120,9 +3080,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "disambiguation page",
-      "visited_at": "2026-07-24T02:31:45Z",
-      "created_at": "2026-07-24T02:31:45Z",
-      "skip_category": "disambiguation"
+      "skip_category": "disambiguation",
+      "visited_at": "2026-07-23T02:31:45Z",
+      "created_at": "2026-07-23T02:31:45Z",
+      "outcome": "gate",
+      "detail": "disambiguation",
+      "fate": "archived",
+      "detail_label": "Disambiguation Page"
     },
     {
       "id": 13079,
@@ -2132,9 +3096,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "content-free stub",
-      "visited_at": "2026-07-23T02:31:45Z",
-      "created_at": "2026-07-23T02:31:45Z",
-      "skip_category": "content_free_stub"
+      "skip_category": "content_free_stub",
+      "visited_at": "2026-07-19T02:31:45Z",
+      "created_at": "2026-07-19T02:31:45Z",
+      "outcome": "gate",
+      "detail": "content_free_stub",
+      "fate": "archived",
+      "detail_label": "Content-Free Stub"
+    },
+    {
+      "id": 13188,
+      "title": "Search results for \"lattice\" - Wikipedia",
+      "domain": "en.wikipedia.org",
+      "status": "archived",
+      "processing_depth": "processed",
+      "archive_reason": "dedupe_fold",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-16T01:31:45Z",
+      "created_at": "2026-07-16T01:31:45Z",
+      "outcome": "processed",
+      "detail": "later_duplicate",
+      "fate": "archived",
+      "detail_label": "Archived later · duplicate"
     },
     {
       "id": 13166,
@@ -2144,9 +3128,13 @@
       "processing_depth": null,
       "archive_reason": null,
       "skip_reasoning": null,
-      "visited_at": "2026-08-14T01:31:45Z",
-      "created_at": "2026-08-14T01:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T01:31:45Z",
+      "created_at": "2026-07-13T01:31:45Z",
+      "outcome": "pending",
+      "detail": "waiting",
+      "fate": "pending",
+      "detail_label": "Not yet processed"
     },
     {
       "id": 13144,
@@ -2156,9 +3144,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-13T01:31:45Z",
-      "created_at": "2026-08-13T01:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T01:31:45Z",
+      "created_at": "2026-08-14T01:31:45Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13122,
@@ -2168,9 +3160,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: github.com",
-      "visited_at": "2026-08-07T01:31:45Z",
-      "created_at": "2026-08-07T01:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T01:31:45Z",
+      "created_at": "2026-08-13T01:31:45Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13100,
@@ -2180,9 +3176,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "login wall",
-      "visited_at": "2026-08-06T01:31:45Z",
-      "created_at": "2026-08-06T01:31:45Z",
-      "skip_category": "login_wall"
+      "skip_category": "login_wall",
+      "visited_at": "2026-08-07T01:31:45Z",
+      "created_at": "2026-08-07T01:31:45Z",
+      "outcome": "gate",
+      "detail": "login_wall",
+      "fate": "archived",
+      "detail_label": "Login Wall"
     },
     {
       "id": 13078,
@@ -2192,9 +3192,29 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "search results page",
-      "visited_at": "2026-08-14T01:31:45Z",
-      "created_at": "2026-08-14T01:31:45Z",
-      "skip_category": "search_results"
+      "skip_category": "search_results",
+      "visited_at": "2026-08-06T01:31:45Z",
+      "created_at": "2026-08-06T01:31:45Z",
+      "outcome": "gate",
+      "detail": "search_results",
+      "fate": "archived",
+      "detail_label": "Search Results"
+    },
+    {
+      "id": 13187,
+      "title": "Search results for graph | Project Gutenberg",
+      "domain": "www.gutenberg.org",
+      "status": "archived",
+      "processing_depth": "processed",
+      "archive_reason": "dedupe_fold",
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-07-31T00:31:45Z",
+      "created_at": "2026-07-31T00:31:45Z",
+      "outcome": "processed",
+      "detail": "later_duplicate",
+      "fate": "archived",
+      "detail_label": "Archived later · duplicate"
     },
     {
       "id": 13165,
@@ -2204,9 +3224,13 @@
       "processing_depth": null,
       "archive_reason": "trivial_capture",
       "skip_reasoning": null,
-      "visited_at": "2026-08-13T00:31:45Z",
-      "created_at": "2026-08-13T00:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T00:31:45Z",
+      "created_at": "2026-07-30T00:31:45Z",
+      "outcome": "before_gate",
+      "detail": "other",
+      "fate": "archived",
+      "detail_label": "Other"
     },
     {
       "id": 13143,
@@ -2216,9 +3240,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-09T00:31:45Z",
-      "created_at": "2026-08-09T00:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T00:31:45Z",
+      "created_at": "2026-07-24T00:31:45Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13121,
@@ -2228,9 +3256,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: github.com",
-      "visited_at": "2026-08-07T00:31:45Z",
-      "created_at": "2026-08-07T00:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T00:31:45Z",
+      "created_at": "2026-07-23T00:31:45Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13099,
@@ -2240,9 +3272,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "User-specific page (profile, dashboard)",
-      "visited_at": "2026-08-06T00:31:45Z",
-      "created_at": "2026-08-06T00:31:45Z",
-      "skip_category": "user_specific"
+      "skip_category": "user_specific",
+      "visited_at": "2026-08-14T00:31:45Z",
+      "created_at": "2026-08-14T00:31:45Z",
+      "outcome": "gate",
+      "detail": "user_specific",
+      "fate": "archived",
+      "detail_label": "User-Specific Page"
     },
     {
       "id": 13077,
@@ -2252,9 +3288,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "disambiguation page",
-      "visited_at": "2026-08-02T00:31:45Z",
-      "created_at": "2026-08-02T00:31:45Z",
-      "skip_category": "disambiguation"
+      "skip_category": "disambiguation",
+      "visited_at": "2026-08-13T00:31:45Z",
+      "created_at": "2026-08-13T00:31:45Z",
+      "outcome": "gate",
+      "detail": "disambiguation",
+      "fate": "archived",
+      "detail_label": "Disambiguation Page"
     },
     {
       "id": 12964,
@@ -2264,9 +3304,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a technical Q&A about using a capacitor to debounce a button, which is substantive content that users can learn from regarding electronics design and circuit simulation.",
-      "visited_at": "2026-07-31T02:49:45Z",
-      "created_at": "2026-07-31T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T02:49:45Z",
+      "created_at": "2026-08-07T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12963,
@@ -2276,9 +3320,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a tutorial on using PWM and the analogWrite function in Arduino programming, which provides substantive educational content that users can learn from.",
-      "visited_at": "2026-07-30T02:48:45Z",
-      "created_at": "2026-07-30T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T02:48:45Z",
+      "created_at": "2026-08-06T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12962,
@@ -2288,9 +3336,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper discussing a model for including Arduino microcontroller programming in introductory physics labs, which is substantive educational content that can be learned from.",
-      "visited_at": "2026-07-26T02:47:45Z",
-      "created_at": "2026-07-26T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T02:47:45Z",
+      "created_at": "2026-08-14T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12961,
@@ -2300,9 +3352,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about declarative programming for microcontrollers, specifically discussing the use of Datalog on Arduino. This is a technical topic that can provide valuable insights and knowledge to users interested in programming and microcontroller applications.",
-      "visited_at": "2026-07-24T02:46:45Z",
-      "created_at": "2026-07-24T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T02:46:45Z",
+      "created_at": "2026-08-13T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12960,
@@ -2312,9 +3368,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper analyzing the implementation of Arduino microcontroller boards in various scientific applications, which provides substantive content that can be learned from.",
-      "visited_at": "2026-07-23T02:45:45Z",
-      "created_at": "2026-07-23T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T02:45:45Z",
+      "created_at": "2026-08-09T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12959,
@@ -2324,9 +3384,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the evolution of timekeeping, specifically discussing the Bulova ACCUTRON 214, which is a significant topic in horology. This aligns with the criteria for inclusion as it provides educational and analytical insights.",
-      "visited_at": "2026-07-19T02:44:45Z",
-      "created_at": "2026-07-19T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T02:44:45Z",
+      "created_at": "2026-08-07T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12958,
@@ -2336,9 +3400,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the legacy Arduino IDE 1.x, including important notices and links to the latest version, which is relevant for users interested in Arduino development and programming.",
-      "visited_at": "2026-07-16T02:43:45Z",
-      "created_at": "2026-07-16T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T02:43:45Z",
+      "created_at": "2026-08-06T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12957,
@@ -2348,9 +3416,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Bounce2 library for Arduino and Wiring, including its purpose, functionality, and a link to learn more about debouncing, which is educational and relevant for users interested in programming and electronics.",
-      "visited_at": "2026-07-13T02:42:45Z",
-      "created_at": "2026-07-13T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T02:42:45Z",
+      "created_at": "2026-08-02T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12956,
@@ -2360,9 +3432,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a tutorial on using RGB LEDs with Arduino, providing substantive educational content on how to control LED colors, which aligns with the criteria for inclusion.",
-      "visited_at": "2026-08-14T02:41:45Z",
-      "created_at": "2026-08-14T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T02:41:45Z",
+      "created_at": "2026-07-31T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12955,
@@ -2372,9 +3448,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about Pulse Width Modulation (PWM), explaining its definition, applications, and how it is used in controlling devices like RGB LEDs and servos. This information is educational and relevant for users interested in electronics and programming.",
-      "visited_at": "2026-08-13T02:40:45Z",
-      "created_at": "2026-08-13T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T02:40:45Z",
+      "created_at": "2026-07-30T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12954,
@@ -2384,9 +3464,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the Homebrew Computer Club, detailing its historical significance, influential members, and its role in the microcomputer revolution, which is valuable information for learning about early computing history.",
-      "visited_at": "2026-08-07T02:39:45Z",
-      "created_at": "2026-08-07T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T02:39:45Z",
+      "created_at": "2026-07-26T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12953,
@@ -2396,9 +3480,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about Arduino, an open-source hardware and software company, detailing its products, licensing, and community involvement, which is valuable for learning.",
-      "visited_at": "2026-08-06T02:38:45Z",
-      "created_at": "2026-08-06T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T02:38:45Z",
+      "created_at": "2026-07-24T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12952,
@@ -2408,9 +3496,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about microcontrollers, including their definition, components, and applications, which is valuable for learning.",
-      "visited_at": "2026-07-31T02:37:45Z",
-      "created_at": "2026-07-31T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T02:37:45Z",
+      "created_at": "2026-07-23T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12951,
@@ -2420,9 +3512,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about integrated circuits, including their definition, components, and applications in various electronic devices. This content is educational and relevant for users seeking to learn about integrated circuits.",
-      "visited_at": "2026-07-30T02:36:45Z",
-      "created_at": "2026-07-30T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T02:36:45Z",
+      "created_at": "2026-07-19T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12950,
@@ -2432,9 +3528,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Bell Labs, including its history, contributions to technology, and current operations, making it a valuable resource for learning.",
-      "visited_at": "2026-07-24T02:35:45Z",
-      "created_at": "2026-07-24T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T02:35:45Z",
+      "created_at": "2026-07-16T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12949,
@@ -2444,9 +3544,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about William Shockley, an important figure in physics and the development of semiconductors and transistors, which is educational and informative.",
-      "visited_at": "2026-07-23T02:34:45Z",
-      "created_at": "2026-07-23T23:40:06.784317Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T02:34:45Z",
+      "created_at": "2026-07-13T23:40:06.784317Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12948,
@@ -2456,9 +3560,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the history and function of transistors, which is educational and informative. It discusses the significance of transistors in electronics, their role in amplification and switching, and their replacement of vacuum tubes, making it a valuable resource for learning.",
+      "skip_category": null,
       "visited_at": "2026-08-14T02:33:45Z",
       "created_at": "2026-08-14T23:40:06.784317Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12947,
@@ -2468,9 +3576,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about transistors, including their definition, function, and significance in modern electronics, making it a valuable resource for learning.",
+      "skip_category": null,
       "visited_at": "2026-08-13T02:32:45Z",
       "created_at": "2026-08-13T23:40:06.784317Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12946,
@@ -2480,9 +3592,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about pulse-width modulation (PWM), including its definition, applications, and technical details, making it a valuable resource for learning.",
+      "skip_category": null,
       "visited_at": "2026-08-07T02:31:45Z",
       "created_at": "2026-08-07T23:40:06.784317Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12945,
@@ -2492,9 +3608,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper discussing Dido's Problem in the context of variational calculus, which provides substantive content that can be learned from.",
+      "skip_category": null,
       "visited_at": "2026-08-06T01:46:45Z",
       "created_at": "2026-08-06T23:37:56.043829Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12944,
@@ -2504,9 +3624,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper analyzing communities in a mythological social network, which provides substantive content that can be learned from, fitting the criteria for inclusion in a knowledge compendium.",
-      "visited_at": "2026-08-14T01:45:45Z",
-      "created_at": "2026-08-14T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T01:45:45Z",
+      "created_at": "2026-07-31T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12943,
@@ -2516,9 +3640,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about ancient Greek poetry, specifically works by Hesiod and Homer, which includes themes of morality and the origins of the gods. This is educational material that users can learn from.",
-      "visited_at": "2026-08-13T01:44:45Z",
-      "created_at": "2026-08-13T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T01:44:45Z",
+      "created_at": "2026-07-30T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12942,
@@ -2528,9 +3656,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about 'The Aeneid' by Virgil, including a description of the poem's themes, characters, and historical context, which provides educational value.",
-      "visited_at": "2026-08-09T01:43:45Z",
-      "created_at": "2026-08-09T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T01:43:45Z",
+      "created_at": "2026-07-24T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12941,
@@ -2540,9 +3672,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about 'The Iliad' by Homer, including a description of the epic poem, its themes, and its historical context, making it educational and informative.",
-      "visited_at": "2026-08-07T01:42:45Z",
-      "created_at": "2026-08-07T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T01:42:45Z",
+      "created_at": "2026-07-23T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12940,
@@ -2552,9 +3688,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Homer, an ancient Greek poet, including information about his life, works, and significance in literature, which is educational and learnable.",
-      "visited_at": "2026-08-06T01:41:45Z",
-      "created_at": "2026-08-06T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T01:41:45Z",
+      "created_at": "2026-08-14T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12939,
@@ -2564,9 +3704,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The Theogony is a significant poem by Hesiod that provides substantial information about the origins and genealogies of the Greek gods, making it an important source for understanding early Greek cosmology. This content is educational and encyclopedic in nature.",
-      "visited_at": "2026-08-02T01:40:45Z",
-      "created_at": "2026-08-02T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T01:40:45Z",
+      "created_at": "2026-08-13T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12938,
@@ -2576,9 +3720,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The Aeneid is a significant Latin epic poem that provides substantial historical and literary content about Aeneas and the origins of Rome, making it a valuable educational resource.",
-      "visited_at": "2026-07-31T01:39:45Z",
-      "created_at": "2026-07-31T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T01:39:45Z",
+      "created_at": "2026-08-07T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12937,
@@ -2588,9 +3736,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The Iliad is a significant ancient Greek epic poem attributed to Homer, containing substantial literary and historical content that is educational and informative. It is one of the oldest works of literature and is widely studied, making it valuable for learning.",
-      "visited_at": "2026-07-30T01:38:45Z",
-      "created_at": "2026-07-30T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T01:38:45Z",
+      "created_at": "2026-08-06T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12936,
@@ -2600,9 +3752,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the Trojan War, a significant event in Greek mythology, including its historical context, key figures, and literary references, making it educational and informative.",
-      "visited_at": "2026-07-26T01:37:45Z",
-      "created_at": "2026-07-26T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T01:37:45Z",
+      "created_at": "2026-08-14T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12935,
@@ -2612,9 +3768,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about the twelve Olympians in ancient Greek religion and mythology, detailing their identities and significance, which is educational and informative.",
-      "visited_at": "2026-07-24T01:36:45Z",
-      "created_at": "2026-07-24T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T01:36:45Z",
+      "created_at": "2026-08-13T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12934,
@@ -2624,9 +3784,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Minerva, the Roman goddess of wisdom, justice, and warfare, which is educational and informative.",
-      "visited_at": "2026-07-23T01:35:45Z",
-      "created_at": "2026-07-23T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T01:35:45Z",
+      "created_at": "2026-08-09T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12933,
@@ -2636,9 +3800,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Athena, an ancient Greek goddess, including her associations, symbols, and cultural significance, which is educational and informative.",
-      "visited_at": "2026-07-19T01:34:45Z",
-      "created_at": "2026-07-19T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T01:34:45Z",
+      "created_at": "2026-08-07T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12932,
@@ -2648,9 +3816,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about 'Interpretatio graeca', explaining its meaning, significance, and methodology in understanding ancient Greek religion and mythology. This is educational and relevant for those interested in comparative mythology and ancient cultures.",
-      "visited_at": "2026-07-16T01:33:45Z",
-      "created_at": "2026-07-16T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T01:33:45Z",
+      "created_at": "2026-08-06T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12931,
@@ -2660,9 +3832,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Roman mythology, including its origins, characteristics, and cultural significance, making it a valuable resource for learning.",
-      "visited_at": "2026-07-13T01:32:45Z",
-      "created_at": "2026-07-13T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-02T01:32:45Z",
+      "created_at": "2026-08-02T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12930,
@@ -2672,9 +3848,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Greek mythology, including its origins, deities, heroes, and cultural significance, which is educational and informative.",
-      "visited_at": "2026-08-14T01:31:45Z",
-      "created_at": "2026-08-14T23:37:56.043829Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T01:31:45Z",
+      "created_at": "2026-07-31T23:37:56.043829Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12929,
@@ -2684,9 +3864,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about the neuromuscular control system of an octopus arm, which is a research paper that provides valuable insights into the biomechanics and control of flexible appendages. This aligns with the criteria for inclusion as it offers educational and analytical content.",
-      "visited_at": "2026-08-13T00:42:45Z",
-      "created_at": "2026-08-13T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T00:42:45Z",
+      "created_at": "2026-07-30T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12928,
@@ -2696,9 +3880,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about metabolic efficiency and action potentials in neurons, which is relevant for learning in neuroscience and biology.",
-      "visited_at": "2026-08-07T00:41:45Z",
-      "created_at": "2026-08-07T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T00:41:45Z",
+      "created_at": "2026-07-26T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12927,
@@ -2708,9 +3896,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper discussing a Turing-based bimodal population code related to cephalopod chromatic skin displays, which includes substantive scientific content that can be learned from.",
-      "visited_at": "2026-08-06T00:40:45Z",
-      "created_at": "2026-08-06T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T00:40:45Z",
+      "created_at": "2026-07-24T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12926,
@@ -2720,9 +3912,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about reproductive strategies in organisms, specifically explaining the concepts of semelparity and iteroparity, which are important biological concepts. This information is educational and can be learned from.",
-      "visited_at": "2026-07-31T00:39:45Z",
-      "created_at": "2026-07-31T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T00:39:45Z",
+      "created_at": "2026-07-23T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12925,
@@ -2732,9 +3928,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about the squid giant axon, including its size, function, historical context, and significance in neurophysiology, making it a valuable educational resource.",
-      "visited_at": "2026-07-30T00:38:45Z",
-      "created_at": "2026-07-30T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-19T00:38:45Z",
+      "created_at": "2026-07-19T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12924,
@@ -2744,9 +3944,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about chromatophores, including their function, types, and significance in various animals, which is educational and relevant for learning.",
-      "visited_at": "2026-07-24T00:37:45Z",
-      "created_at": "2026-07-24T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-16T00:37:45Z",
+      "created_at": "2026-07-16T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12923,
@@ -2756,9 +3960,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about cephalopod intelligence, including definitions, cognitive abilities, and comparative aspects of animal cognition, making it a valuable resource for learning.",
-      "visited_at": "2026-07-23T00:36:45Z",
-      "created_at": "2026-07-23T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-13T00:36:45Z",
+      "created_at": "2026-07-13T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12922,
@@ -2768,9 +3976,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive information about cephalopod ink, including its function, composition, and the mechanism of release, which is educational and relevant for learning.",
+      "skip_category": null,
       "visited_at": "2026-08-14T00:35:45Z",
       "created_at": "2026-08-14T23:35:08.688624Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12921,
@@ -2780,9 +3992,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about squids, including their biological classification, physical characteristics, and general information about their anatomy and behavior, which is educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-08-13T00:34:45Z",
       "created_at": "2026-08-13T23:35:08.688624Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12920,
@@ -2792,9 +4008,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about cuttlefish, including their classification, physical characteristics, and behavior, which is educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-08-07T00:33:45Z",
       "created_at": "2026-08-07T23:35:08.688624Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12919,
@@ -2804,9 +4024,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive content about octopuses, including their classification, characteristics, and biological features, which is educational and informative.",
+      "skip_category": null,
       "visited_at": "2026-08-06T00:32:45Z",
       "created_at": "2026-08-06T23:35:08.688624Z",
-      "skip_category": null
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12918,
@@ -2816,9 +4040,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page provides substantive information about cephalopods, including their classification, characteristics, and biological features, which are valuable for educational purposes.",
-      "visited_at": "2026-08-14T00:31:45Z",
-      "created_at": "2026-08-14T23:35:08.688624Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T00:31:45Z",
+      "created_at": "2026-07-31T23:35:08.688624Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12917,
@@ -2828,9 +4056,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about diffusion models, including updates on various generative modeling techniques, which is educational and informative for users interested in this topic.",
-      "visited_at": "2026-08-13T23:42:45Z",
-      "created_at": "2026-08-13T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T23:42:45Z",
+      "created_at": "2026-07-30T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12916,
@@ -2840,9 +4072,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about diffusion models in machine learning, explaining their components and purpose, which is educational and informative.",
-      "visited_at": "2026-08-09T23:41:45Z",
-      "created_at": "2026-08-09T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-24T23:41:45Z",
+      "created_at": "2026-07-24T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12915,
@@ -2852,9 +4088,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content in the form of a research paper discussing diffusion models, which are relevant to generative models in image and audio synthesis. This aligns with the criteria for inclusion as it provides educational and analytical insights.",
-      "visited_at": "2026-08-07T23:40:45Z",
-      "created_at": "2026-08-07T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-23T23:40:45Z",
+      "created_at": "2026-07-23T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12914,
@@ -2864,9 +4104,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about diffusion-based generative models, which is a relevant topic in neural image synthesis and other domains. It discusses the framework's applications and comparisons to GANs, making it educational and informative.",
-      "visited_at": "2026-08-06T23:39:45Z",
-      "created_at": "2026-08-06T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T23:39:45Z",
+      "created_at": "2026-08-14T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12913,
@@ -2876,9 +4120,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content in the form of a research paper discussing photorealistic text-to-image diffusion models and their implications in multimodal learning, which is valuable for educational purposes.",
-      "visited_at": "2026-08-02T23:38:45Z",
-      "created_at": "2026-08-02T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T23:38:45Z",
+      "created_at": "2026-08-13T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12912,
@@ -2888,9 +4136,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content related to hierarchical text-conditional image generation using CLIP latents, which is a research paper that provides valuable insights into advancements in computer vision and representation learning.",
-      "visited_at": "2026-07-31T23:37:45Z",
-      "created_at": "2026-07-31T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T23:37:45Z",
+      "created_at": "2026-08-07T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12911,
@@ -2900,9 +4152,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content related to high-resolution image synthesis using latent diffusion models, which is a research paper that provides valuable insights into advancements in computer vision and image synthesis techniques.",
-      "visited_at": "2026-07-30T23:36:45Z",
-      "created_at": "2026-07-30T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T23:36:45Z",
+      "created_at": "2026-08-06T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12910,
@@ -2912,9 +4168,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper discussing the advancements of diffusion models in image synthesis, which is substantive content that can be learned from.",
-      "visited_at": "2026-07-26T23:35:45Z",
-      "created_at": "2026-07-26T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-14T23:35:45Z",
+      "created_at": "2026-08-14T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12909,
@@ -2924,9 +4184,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper on Score-Based Generative Modeling through Stochastic Differential Equations, which includes substantive content that can be learned from, such as methodologies and theoretical insights into generative models.",
-      "visited_at": "2026-07-24T23:34:45Z",
-      "created_at": "2026-07-24T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-13T23:34:45Z",
+      "created_at": "2026-08-13T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12908,
@@ -2936,9 +4200,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper on Denoising Diffusion Implicit Models, which is substantive content that can provide valuable insights into deep generative models and their applications in image generation.",
-      "visited_at": "2026-07-23T23:33:45Z",
-      "created_at": "2026-07-23T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-09T23:33:45Z",
+      "created_at": "2026-08-09T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12907,
@@ -2948,9 +4216,13 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains substantive content about Denoising Diffusion Probabilistic Models, which is a research paper discussing deep generative models and their applications in synthesizing high-quality samples across various data modalities. This aligns with the criteria for inclusion as it provides educational and analytical insights.",
-      "visited_at": "2026-07-19T23:32:45Z",
-      "created_at": "2026-07-19T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-07T23:32:45Z",
+      "created_at": "2026-08-07T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
     },
     {
       "id": 12906,
@@ -2960,9 +4232,29 @@
       "processing_depth": "processed",
       "archive_reason": null,
       "skip_reasoning": "The page contains a research paper on deep unsupervised learning using nonequilibrium thermodynamics, which provides substantive content that can be learned from, including insights into probabilistic models and their tradeoffs.",
-      "visited_at": "2026-07-16T23:31:45Z",
-      "created_at": "2026-07-16T23:31:45.418470Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-08-06T23:31:45Z",
+      "created_at": "2026-08-06T23:31:45.418470Z",
+      "outcome": "processed",
+      "detail": "active",
+      "fate": "active",
+      "detail_label": "Still active"
+    },
+    {
+      "id": 13186,
+      "title": "Search: entropy",
+      "domain": "github.com",
+      "status": "archived",
+      "processing_depth": "processed",
+      "archive_reason": null,
+      "skip_reasoning": null,
+      "skip_category": null,
+      "visited_at": "2026-08-02T23:31:45Z",
+      "created_at": "2026-08-02T23:31:45Z",
+      "outcome": "processed",
+      "detail": "later_manual",
+      "fate": "archived",
+      "detail_label": "Archived later · manual"
     },
     {
       "id": 13164,
@@ -2972,9 +4264,13 @@
       "processing_depth": null,
       "archive_reason": "trivial_capture",
       "skip_reasoning": null,
-      "visited_at": "2026-07-13T23:31:45Z",
-      "created_at": "2026-07-13T23:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-31T23:31:45Z",
+      "created_at": "2026-07-31T23:31:45Z",
+      "outcome": "before_gate",
+      "detail": "other",
+      "fate": "archived",
+      "detail_label": "Other"
     },
     {
       "id": 13142,
@@ -2984,9 +4280,13 @@
       "processing_depth": null,
       "archive_reason": "placeholder_no_content",
       "skip_reasoning": null,
-      "visited_at": "2026-08-14T23:31:45Z",
-      "created_at": "2026-08-14T23:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-30T23:31:45Z",
+      "created_at": "2026-07-30T23:31:45Z",
+      "outcome": "before_gate",
+      "detail": "placeholder",
+      "fate": "archived",
+      "detail_label": "Placeholder, no content"
     },
     {
       "id": 13120,
@@ -2996,9 +4296,13 @@
       "processing_depth": "skipped",
       "archive_reason": "domain_skip",
       "skip_reasoning": "Domain skipped: arxiv.org",
-      "visited_at": "2026-08-13T23:31:45Z",
-      "created_at": "2026-08-13T23:31:45Z",
-      "skip_category": null
+      "skip_category": null,
+      "visited_at": "2026-07-26T23:31:45Z",
+      "created_at": "2026-07-26T23:31:45Z",
+      "outcome": "rule_filter",
+      "detail": "domain",
+      "fate": "archived",
+      "detail_label": "Domain rule"
     },
     {
       "id": 13098,
@@ -3008,9 +4312,13 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "Marketplace / product / store listing",
-      "visited_at": "2026-08-07T23:31:45Z",
-      "created_at": "2026-08-07T23:31:45Z",
-      "skip_category": "store_listing"
+      "skip_category": "store_listing",
+      "visited_at": "2026-07-24T23:31:45Z",
+      "created_at": "2026-07-24T23:31:45Z",
+      "outcome": "gate",
+      "detail": "store_listing",
+      "fate": "archived",
+      "detail_label": "Store / Pricing Page"
     },
     {
       "id": 13076,
@@ -3020,10 +4328,14 @@
       "processing_depth": "skipped",
       "archive_reason": "skip_gate",
       "skip_reasoning": "login wall",
-      "visited_at": "2026-08-06T23:31:45Z",
-      "created_at": "2026-08-06T23:31:45Z",
-      "skip_category": "login_wall"
+      "skip_category": "login_wall",
+      "visited_at": "2026-07-23T23:31:45Z",
+      "created_at": "2026-07-23T23:31:45Z",
+      "outcome": "gate",
+      "detail": "login_wall",
+      "fate": "archived",
+      "detail_label": "Login Wall"
     }
   ],
-  "total": 252
+  "total": 271
 }

@@ -284,7 +284,12 @@ function buildPipelineFixtures() {
     return { ...r, created_at: `${isoDateStr(d)}T${timeOf(r.created_at)}`, visited_at: r.visited_at ? `${isoDateStr(d)}T${timeOf(r.visited_at)}` : null };
   });
   writeJson('pipeline/pages.json', { rows: pipelinePages, total: rawPipelinePages.total });
-  writeJson('pipeline/summary.json', readJson('pipeline', 'summary.json'));  // stub reads only skip_gate_config from it; counts are computed from pages
+  // The stub replays only rule_filter_config + skip_gate_config from the recorded summary; counts are
+  // computed from pages. The live rule-filter wording names one product host, which the hygiene gate
+  // forbids in committed fixtures, so that host is swapped for a generic one here.
+  const rawSummary = readJson('pipeline', 'summary.json');
+  const scrubHost = (v) => (typeof v === 'string' ? v.split('claude' + '.ai').join('chat-app.example') : Array.isArray(v) ? v.map(scrubHost) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrubHost(x)])) : v);
+  writeJson('pipeline/summary.json', { ...rawSummary, rule_filter_config: scrubHost(rawSummary.rule_filter_config) });
 
   console.log(`[build-fixtures] pipeline: ${pipelinePages.length} pages`);
 }

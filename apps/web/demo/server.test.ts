@@ -1545,8 +1545,11 @@ describe("isEnvFlagOn (env-flag parsing: DEMO_ROLE_TOOLING / NEXT_PUBLIC_DEMO_RO
   });
 });
 
-describe("pipeline routes (v2, computed from the recorded pages)", () => {
-  type Bucket = { start: string; label_key: string; kept: number; archived: number; evaluated: number; skipped: number; categories: Record<string, number> };
+describe("pipeline routes (flow contract, computed from the recorded pages)", () => {
+  type Outcomes = { before_gate: number; rule_filter: number; gate: number; processed: number; pending: number };
+  type Bucket = { start: string; label_key: string; total: number; archived: number; outcomes: Outcomes; reached_gate: number; categories: Record<string, number> };
+  type Cnt = { count: number };
+  const sum = (xs: Cnt[]) => xs.reduce((n, x) => n + x.count, 0);
   const NOW_EOD = new Date("2026-10-01T23:59:59Z"); // every fixture visit today is <= now
   // Boots with the clock at `boot` (fixtures shift to that day), then lets a
   // test move the clock via setClock() without re-shifting the data.
@@ -1556,25 +1559,51 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
   };
   const jget = async (g: (p: string) => Promise<Response>, p: string) => (await g(p)).json();
 
-  it("summary (all): status counts, ratio, decisions, top-3 domains, categories, gate config", async () => {
+  it("summary (all): flow reconciles, every outcome present, ordered details, configs replayed", async () => {
     await withNow(NOW_EOD, async (g) => {
       const s = await jget(g, "/api/pipeline/summary?range=all&tz=UTC");
       expect(s.range).toBe("all");
-      expect(s.status_counts).toEqual({ active: 158, pending: 4, archived: 90 });
-      expect(s.total_pages).toBe(252);
-      expect(s.archive_ratio).toBeCloseTo(90 / 252);
-      expect(s.decisions.reduce((n: number, d: { count: number }) => n + d.count, 0)).toBe(252);
-      expect(s.decisions.map((d: { count: number }) => d.count)).toEqual([...s.decisions.map((d: { count: number }) => d.count)].sort((a: number, b: number) => b - a));
-      const gate = s.archive_reasons.find((r: { key: string }) => r.key === "skip_gate");
-      expect(gate.label).toBe("LLM Skip Gate");
-      for (const grp of [...s.archive_reasons, ...s.skip_categories]) {
-        expect(grp.top_domains.length).toBeLessThanOrEqual(3);
-        const keys = grp.top_domains.map((d: { domain: string; count: number }) => [-d.count, d.domain]);
-        expect(keys).toEqual([...keys].sort((a: [number, string], b: [number, string]) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1)));
+      expect(s.status_counts).toEqual({ archived: 109, active: 158, pending: 4 });
+      expect(s.total_pages).toBe(271);
+      expect(s.archive_ratio).toBeCloseTo(109 / 271);
+      expect(Object.keys(s).sort()).toEqual(["archive_ratio", "flow", "range", "rule_filter_config", "skip_gate_config", "status_counts", "total_pages"]);
+      const f = s.flow;
+      expect(f.total).toBe(271);
+      expect(f.outcomes.map((o: { key: string }) => o.key)).toEqual(["before_gate", "rule_filter", "gate", "processed", "pending"]);
+      expect(f.outcomes.map((o: { label: string }) => o.label)).toEqual(["Archived before gate", "Rule filter \u00b7 no LLM", "Skipped by LLM gate", "Processed \u00b7 kept", "Pending"]);
+      expect(f.outcomes.every((o: Cnt) => o.count > 0)).toBe(true);
+      expect(f.outcomes.find((o: { key: string }) => o.key === "pending").count).toBe(4);
+      expect(f.fates.map((x: { key: string }) => x.key)).toEqual(["archived", "active", "pending"]);
+      expect(f.fates.map((x: Cnt) => x.count)).toEqual([109, 158, 4]);
+      // Totals reconcile: outcomes = total = fates; per outcome details; per detail fates.
+      expect(sum(f.outcomes)).toBe(f.total);
+      expect(sum(f.fates)).toBe(f.total);
+      for (const o of f.outcomes) {
+        const ds = f.details.filter((d: { outcome: string }) => d.outcome === o.key);
+        expect(sum(ds)).toBe(o.count);
+        expect(o.top_domains.length).toBeLessThanOrEqual(3);
       }
-      expect(s.skip_categories.reduce((n: number, c: { count: number }) => n + c.count, 0)).toBe(gate.count);
-      expect(s.skip_categories.find((c: { key: string }) => c.key === "login_wall").label).toBe("Login Wall");
-      expect(s.skip_categories.some((c: { key: string }) => c.key === "uncategorized")).toBe(false);
+      for (const d of f.details) {
+        expect(d.count).toBeGreaterThan(0);
+        expect(Object.values(d.fates).reduce((n: number, v) => n + (v as number), 0)).toBe(d.count);
+        expect(Object.keys(d.fates)).toEqual(["archived", "active", "pending"]);
+        expect(d.top_domains.length).toBeLessThanOrEqual(3);
+        const keys = d.top_domains.map((x: { domain: string; count: number }) => [-x.count, x.domain]);
+        expect(keys).toEqual([...keys].sort((x: [number, string], y: [number, string]) => x[0] - y[0] || (x[1] < y[1] ? -1 : 1)));
+      }
+      const det = (o: string) => f.details.filter((d: { outcome: string }) => d.outcome === o).map((d: { key: string }) => d.key);
+      expect(det("rule_filter")).toEqual(["domain", "url_pattern"]);
+      expect(det("before_gate")).toEqual(["placeholder", "manual", "chrome", "duplicate", "other"]);
+      expect(det("processed")).toEqual(["later_manual", "later_duplicate", "active"]);
+      expect(det("pending")).toEqual(["waiting"]);
+      expect(f.details.find((d: { key: string }) => d.key === "url_pattern").label).toBe("URL pattern rule");
+      // gate details: count desc, uncategorized (if any) last, labelled from the skip categories.
+      const gate = f.details.filter((d: { outcome: string }) => d.outcome === "gate");
+      expect(gate.map((d: Cnt) => d.count)).toEqual([...gate.map((d: Cnt) => d.count)].sort((x: number, y: number) => y - x));
+      expect(gate.find((d: { key: string }) => d.key === "login_wall").label).toBe("Login Wall");
+      expect(gate.every((d: { key: string }) => d.key !== "uncategorized")).toBe(true);
+      expect(s.rule_filter_config.url_patterns.length).toBeGreaterThan(0);
+      expect(JSON.stringify(s.rule_filter_config)).not.toContain("claude" + ".ai");
       expect(s.skip_gate_config.categories).toHaveLength(13);
       expect(s.skip_gate_config.tools.length).toBeGreaterThan(0);
     });
@@ -1598,10 +1627,13 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
       expect(s.status_counts).toEqual({ active: 0, pending: 0, archived: 0 });
       expect(s.total_pages).toBe(0);
       expect(s.archive_ratio).toBe(0);
-      expect([s.decisions, s.archive_reasons, s.skip_categories]).toEqual([[], [], []]);
+      expect(s.flow.total).toBe(0);
+      expect(s.flow.details).toEqual([]);
+      expect(s.flow.outcomes.map((o: Cnt) => o.count)).toEqual([0, 0, 0, 0, 0]);
+      expect(s.flow.fates.map((x: Cnt) => x.count)).toEqual([0, 0, 0]);
       const t = await jget(g, "/api/pipeline/timeline?range=7d&tz=UTC");
       expect(t.buckets.length).toBeGreaterThan(24);
-      expect(t.buckets.every((b: Bucket) => b.kept + b.archived + b.evaluated + b.skipped === 0 && Object.keys(b.categories).length === 0)).toBe(true);
+      expect(t.buckets.every((b: Bucket) => b.total + b.archived + b.reached_gate === 0 && Object.values(b.outcomes).every((n) => n === 0) && Object.keys(b.categories).length === 0)).toBe(true);
       const p = await jget(g, "/api/pipeline/pages?range=7d");
       expect(p).toMatchObject({ rows: [], total: 0 });
     });
@@ -1616,12 +1648,16 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
       expect(t.buckets[0].start).toBe("2026-09-24T06:00:00-04:00");
       expect(t.buckets[28].start).toBe("2026-10-01T06:00:00-04:00");
       expect(t.buckets.every((b: Bucket) => b.label_key === "block" && /T(00|06|12|18):00:00-04:00$/.test(b.start))).toBe(true);
-      // Same data, windowed pages total == sum of kept + archived.
+      // Same data: windowed pages total == sum of bucket totals; each bucket reconciles.
       const pages = await jget(g, "/api/pipeline/pages?range=7d&tz=America/New_York&limit=1");
-      expect(t.buckets.reduce((n: number, b: Bucket) => n + b.kept + b.archived, 0)).toBe(pages.total);
+      expect(t.buckets.reduce((n: number, b: Bucket) => n + b.total, 0)).toBe(pages.total);
       for (const b of t.buckets as Bucket[]) {
-        expect(b.evaluated).toBeLessThanOrEqual(b.kept + b.archived);
-        expect(b.skipped).toBeLessThanOrEqual(b.evaluated);
+        expect(Object.keys(b.outcomes)).toEqual(["before_gate", "rule_filter", "gate", "processed", "pending"]);
+        expect(Object.values(b.outcomes).reduce((n, v) => n + v, 0)).toBe(b.total);
+        expect(b.archived).toBeLessThanOrEqual(b.total);
+        expect(b.reached_gate).toBeLessThanOrEqual(b.total);
+        expect(b.reached_gate).toBeGreaterThanOrEqual(b.outcomes.gate);
+        expect(Object.values(b.categories).reduce((n, v) => n + v, 0)).toBe(b.outcomes.gate);
       }
       const ist = await jget(g, "/api/pipeline/timeline?range=7d&tz=Asia/Kolkata");
       expect(ist.buckets.every((b: Bucket) => /T(00|06|12|18):00:00\+05:30$/.test(b.start))).toBe(true);
@@ -1652,23 +1688,28 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
       const m = await jget(g, "/api/pipeline/timeline?range=all&tz=UTC");
       expect(m.granularity).toBe("month");
       expect(m.buckets.every((b: Bucket) => b.label_key === "month" && /-01T00:00:00\+00:00$/.test(b.start))).toBe(true);
-      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.kept + b.archived, 0)).toBe(252);
-      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.skipped, 0)).toBeGreaterThan(0);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.total, 0)).toBe(271);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.archived, 0)).toBe(109);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.outcomes.rule_filter, 0)).toBe(28);
+      // Gate categories count LLM-gate skips only: the 8 URL-pattern rows are rule-filter, not categories.
       const cats = m.buckets.flatMap((b: Bucket) => Object.entries(b.categories));
       expect(cats.reduce((n: number, [, c]: [string, number]) => n + c, 0)).toBe(40);
+      expect(m.buckets.reduce((n: number, b: Bucket) => n + b.outcomes.gate, 0)).toBe(40);
     });
   });
 
-  it("pages: windowed, paged, sorted, without skip_category; pages cap at now", async () => {
+  it("pages: windowed, paged, sorted, carrying the flow fields; pages cap at now", async () => {
     await withNow(new Date("2026-10-01T15:00:00Z"), async (g, setClock) => {
       setClock(new Date("2026-09-30T12:00:00Z")); // mid-day: later visits that day are after `now`
       const first = await jget(g, "/api/pipeline/pages?limit=200");
       const all = await jget(g, "/api/pipeline/pages?limit=200&range=all");
-      expect(all.total).toBeLessThan(252); // later-today visits are after `now`
+      expect(all.total).toBeLessThan(271); // later-today visits are after `now`
       expect(first.rows).toHaveLength(Math.min(200, first.total));
       expect(Object.keys(first.rows[0]).sort()).toEqual(
-        ["archive_reason", "created_at", "domain", "id", "processing_depth", "skip_category", "skip_reasoning", "status", "title", "visited_at"],
+        ["archive_reason", "created_at", "detail", "detail_label", "domain", "fate", "id", "outcome", "processing_depth", "skip_category", "skip_reasoning", "status", "title", "visited_at"],
       );
+      const OUTCOMES = ["before_gate", "rule_filter", "gate", "processed", "pending"];
+      expect(first.rows.every((r: { outcome: string; detail: string; detail_label: string; fate: string }) => OUTCOMES.includes(r.outcome) && r.detail.length > 0 && r.detail_label.length > 0 && ["archived", "active", "pending"].includes(r.fate))).toBe(true);
       expect(first.rows.every((r: { visited_at: string | null }) => r.visited_at === null || Date.parse(r.visited_at) <= Date.parse("2026-09-30T12:00:00Z"))).toBe(true);
       const seven = await jget(g, "/api/pipeline/pages?range=7d&limit=200");
       expect(seven.total).toBeLessThan(first.total);

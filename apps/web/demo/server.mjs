@@ -150,11 +150,12 @@ function loadFixtures(fixturesDir, now = new Date()) {
     internals: readJson("internals.json"),
     me: readJson("me.json"),
     preferences: readJson("preferences.json"),
-    // Pipeline dev view (v2): the recorded pages (with skip_category) are
-    // shifted to "now"; summary / timeline / pages are computed from them per
-    // request (demo/lib/pipeline.mjs). Only skip_gate_config is replayed from
+    // Pipeline dev view (flow contract): the recorded pages (each carrying the
+    // backend's outcome / detail / detail_label / fate) are shifted to "now";
+    // summary / timeline / pages are computed from them per request
+    // (demo/lib/pipeline.mjs). Only the two config panels are replayed from
     // the recorded summary.
-    pipelineSkipGateConfig: readJson("pipeline/summary.json").skip_gate_config,
+    pipelineConfigs: (({ rule_filter_config, skip_gate_config }) => ({ rule_filter_config, skip_gate_config }))(readJson("pipeline/summary.json")),
     pipelinePages: readJson("pipeline/pages.json").rows.map((r) => ({
       ...r,
       created_at: shiftIsoDateTime(r.created_at, deltaDays),
@@ -946,7 +947,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       handler: (req, res, m, url) => {
         const tz = url.searchParams.get("tz") ?? "UTC";
         if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
-        sendJson(res, 200, computeSummary(fixtures.pipelinePages, url.searchParams.get("range"), getNow().getTime(), fixtures.pipelineSkipGateConfig));
+        sendJson(res, 200, computeSummary(fixtures.pipelinePages, url.searchParams.get("range"), getNow().getTime(), fixtures.pipelineConfigs));
       },
     },
     {

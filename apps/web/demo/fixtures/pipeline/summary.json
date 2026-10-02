@@ -1,265 +1,598 @@
 {
   "range": "all",
+  "total_pages": 271,
   "status_counts": {
+    "archived": 109,
     "active": 158,
-    "pending": 4,
-    "archived": 90
+    "pending": 4
   },
-  "total_pages": 252,
-  "archive_ratio": 0.35714285714285715,
-  "decisions": [
-    {
-      "key": "processed",
-      "label": "Processed",
-      "count": 158,
-      "evaluated": true
-    },
-    {
-      "key": "skipped",
-      "label": "Skipped",
-      "count": 60,
-      "evaluated": true
-    },
-    {
-      "key": "other",
-      "label": "Other",
-      "count": 27,
-      "evaluated": false
-    },
-    {
-      "key": "pending",
-      "label": "Pending",
-      "count": 4,
-      "evaluated": false
-    },
-    {
-      "key": "trivial_capture",
-      "label": "Trivial Capture",
-      "count": 3,
-      "evaluated": false
-    }
-  ],
-  "archive_reasons": [
-    {
-      "key": "skip_gate",
-      "count": 40,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 15
-        },
-        {
-          "domain": "arxiv.org",
-          "count": 10
-        },
-        {
-          "domain": "github.com",
-          "count": 10
+  "archive_ratio": 0.4022140221402214,
+  "flow": {
+    "total": 271,
+    "outcomes": [
+      {
+        "key": "before_gate",
+        "label": "Archived before gate",
+        "count": 36,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 14
+          },
+          {
+            "domain": "github.com",
+            "count": 9
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 8
+          }
+        ]
+      },
+      {
+        "key": "rule_filter",
+        "label": "Rule filter · no LLM",
+        "count": 28,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 12
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 7
+          },
+          {
+            "domain": "github.com",
+            "count": 6
+          }
+        ]
+      },
+      {
+        "key": "gate",
+        "label": "Skipped by LLM gate",
+        "count": 40,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 15
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 10
+          },
+          {
+            "domain": "github.com",
+            "count": 10
+          }
+        ]
+      },
+      {
+        "key": "processed",
+        "label": "Processed · kept",
+        "count": 163,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 126
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 24
+          },
+          {
+            "domain": "github.com",
+            "count": 4
+          }
+        ]
+      },
+      {
+        "key": "pending",
+        "label": "Pending",
+        "count": 4,
+        "top_domains": [
+          {
+            "domain": "arxiv.org",
+            "count": 2
+          },
+          {
+            "domain": "en.wikipedia.org",
+            "count": 1
+          },
+          {
+            "domain": "github.com",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "details": [
+      {
+        "outcome": "before_gate",
+        "key": "placeholder",
+        "label": "Placeholder, no content",
+        "count": 10,
+        "top_domains": [
+          {
+            "domain": "arxiv.org",
+            "count": 3
+          },
+          {
+            "domain": "en.wikipedia.org",
+            "count": 3
+          },
+          {
+            "domain": "github.com",
+            "count": 3
+          }
+        ],
+        "fates": {
+          "archived": 10,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "LLM Skip Gate"
-    },
-    {
-      "key": "domain_skip",
-      "count": 20,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 9
-        },
-        {
-          "domain": "arxiv.org",
-          "count": 5
-        },
-        {
-          "domain": "github.com",
-          "count": 4
+      },
+      {
+        "outcome": "before_gate",
+        "key": "manual",
+        "label": "Archived manually (early)",
+        "count": 6,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 3
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 1
+          },
+          {
+            "domain": "github.com",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 6,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Domain Filter"
-    },
-    {
-      "key": "placeholder_no_content",
-      "count": 10,
-      "top_domains": [
-        {
-          "domain": "arxiv.org",
-          "count": 3
-        },
-        {
-          "domain": "en.wikipedia.org",
-          "count": 3
-        },
-        {
-          "domain": "github.com",
-          "count": 3
+      },
+      {
+        "outcome": "before_gate",
+        "key": "chrome",
+        "label": "App chrome junk",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "github.com",
+            "count": 2
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 1
+          },
+          {
+            "domain": "en.wikipedia.org",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Placeholder No Content"
-    },
-    {
-      "key": "dedup",
-      "count": 6,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 3
-        },
-        {
-          "domain": "arxiv.org",
-          "count": 1
-        },
-        {
-          "domain": "github.com",
-          "count": 1
+      },
+      {
+        "outcome": "before_gate",
+        "key": "duplicate",
+        "label": "Duplicate",
+        "count": 10,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 5
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 3
+          },
+          {
+            "domain": "github.com",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 10,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Dedup"
-    },
-    {
-      "key": "app_chrome_junk",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "github.com",
-          "count": 2
-        },
-        {
-          "domain": "arxiv.org",
-          "count": 1
-        },
-        {
-          "domain": "en.wikipedia.org",
-          "count": 1
+      },
+      {
+        "outcome": "before_gate",
+        "key": "other",
+        "label": "Other",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 2
+          },
+          {
+            "domain": "github.com",
+            "count": 2
+          },
+          {
+            "domain": "www.gutenberg.org",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "App Chrome Junk"
-    },
-    {
-      "key": "dedupe_fold",
-      "count": 4,
-      "top_domains": [
-        {
-          "domain": "arxiv.org",
-          "count": 2
-        },
-        {
-          "domain": "en.wikipedia.org",
-          "count": 2
+      },
+      {
+        "outcome": "rule_filter",
+        "key": "domain",
+        "label": "Domain rule",
+        "count": 20,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 9
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 5
+          },
+          {
+            "domain": "github.com",
+            "count": 4
+          }
+        ],
+        "fates": {
+          "archived": 20,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Dedupe Fold"
-    },
-    {
-      "key": "trivial_capture",
-      "count": 3,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 2
-        },
-        {
-          "domain": "www.gutenberg.org",
-          "count": 1
+      },
+      {
+        "outcome": "rule_filter",
+        "key": "url_pattern",
+        "label": "URL pattern rule",
+        "count": 8,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 3
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 2
+          },
+          {
+            "domain": "github.com",
+            "count": 2
+          }
+        ],
+        "fates": {
+          "archived": 8,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Trivial Capture"
-    },
-    {
-      "key": "manual_exclusion",
-      "count": 2,
-      "top_domains": [
-        {
-          "domain": "github.com",
-          "count": 2
+      },
+      {
+        "outcome": "gate",
+        "key": "error_page",
+        "label": "Error Page",
+        "count": 10,
+        "top_domains": [
+          {
+            "domain": "arxiv.org",
+            "count": 5
+          },
+          {
+            "domain": "github.com",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 10,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Manual Exclusion"
-    }
-  ],
-  "skip_categories": [
-    {
-      "key": "error_page",
-      "count": 10,
-      "top_domains": [
-        {
-          "domain": "arxiv.org",
-          "count": 5
-        },
-        {
-          "domain": "github.com",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "content_free_stub",
+        "label": "Content-Free Stub",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "arxiv.org",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Error Page"
-    },
-    {
-      "key": "content_free_stub",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "arxiv.org",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "disambiguation",
+        "label": "Disambiguation Page",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Content-Free Stub"
-    },
-    {
-      "key": "disambiguation",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "login_wall",
+        "label": "Login Wall",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Disambiguation Page"
-    },
-    {
-      "key": "login_wall",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "search_results",
+        "label": "Search Results",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Login Wall"
-    },
-    {
-      "key": "search_results",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "en.wikipedia.org",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "store_listing",
+        "label": "Store / Pricing Page",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "github.com",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Search Results"
-    },
-    {
-      "key": "store_listing",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "github.com",
-          "count": 5
+      },
+      {
+        "outcome": "gate",
+        "key": "user_specific",
+        "label": "User-Specific Page",
+        "count": 5,
+        "top_domains": [
+          {
+            "domain": "www.gutenberg.org",
+            "count": 5
+          }
+        ],
+        "fates": {
+          "archived": 5,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "Store / Pricing Page"
-    },
-    {
-      "key": "user_specific",
-      "count": 5,
-      "top_domains": [
-        {
-          "domain": "www.gutenberg.org",
-          "count": 5
+      },
+      {
+        "outcome": "processed",
+        "key": "later_manual",
+        "label": "Archived later · manual",
+        "count": 3,
+        "top_domains": [
+          {
+            "domain": "github.com",
+            "count": 2
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 3,
+          "active": 0,
+          "pending": 0
         }
-      ],
-      "label": "User-Specific Page"
-    }
-  ],
+      },
+      {
+        "outcome": "processed",
+        "key": "later_duplicate",
+        "label": "Archived later · duplicate",
+        "count": 2,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 1
+          },
+          {
+            "domain": "www.gutenberg.org",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 2,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      {
+        "outcome": "processed",
+        "key": "active",
+        "label": "Still active",
+        "count": 158,
+        "top_domains": [
+          {
+            "domain": "en.wikipedia.org",
+            "count": 125
+          },
+          {
+            "domain": "arxiv.org",
+            "count": 23
+          },
+          {
+            "domain": "www.gutenberg.org",
+            "count": 3
+          }
+        ],
+        "fates": {
+          "archived": 0,
+          "active": 158,
+          "pending": 0
+        }
+      },
+      {
+        "outcome": "pending",
+        "key": "waiting",
+        "label": "Not yet processed",
+        "count": 4,
+        "top_domains": [
+          {
+            "domain": "arxiv.org",
+            "count": 2
+          },
+          {
+            "domain": "en.wikipedia.org",
+            "count": 1
+          },
+          {
+            "domain": "github.com",
+            "count": 1
+          }
+        ],
+        "fates": {
+          "archived": 0,
+          "active": 0,
+          "pending": 4
+        }
+      }
+    ],
+    "fates": [
+      {
+        "key": "archived",
+        "label": "Archived",
+        "count": 109
+      },
+      {
+        "key": "active",
+        "label": "Active",
+        "count": 158
+      },
+      {
+        "key": "pending",
+        "label": "Pending",
+        "count": 4
+      }
+    ]
+  },
+  "rule_filter_config": {
+    "domains": [
+      "127.0.0.1",
+      "account.microsoft.com",
+      "account.samsung.com",
+      "accounts.google.com",
+      "analytics.google.com",
+      "app.adjust.com",
+      "app.zoom.us",
+      "auth.wikimedia.org",
+      "calendar.google.com",
+      "chromewebstore.google.com",
+      "code.claude.com",
+      "drive.google.com",
+      "duckduckgo.com",
+      "localhost",
+      "login.live.com",
+      "login.microsoftonline.com",
+      "mail.google.com",
+      "myaccount.microsoft.com",
+      "platform.claude.com",
+      "play.google.com",
+      "portal.azure.com",
+      "privacy.claude.com",
+      "s3.amazonaws.com",
+      "status.claude.com",
+      "support.claude.com",
+      "wsl.localhost",
+      "www.awesomescreenshot.com",
+      "www.facebook.com",
+      "www.instagram.com",
+      "www.myworkday.com",
+      "www.paypal.com",
+      "x.com"
+    ],
+    "domain_suffixes": [],
+    "url_patterns": [
+      {
+        "domain": "www.google.com",
+        "path": "/maps/"
+      },
+      {
+        "domain": "www.google.com",
+        "path": "/maps?"
+      },
+      {
+        "domain": "www.google.com",
+        "path": "/search?"
+      },
+      {
+        "domain": "www.youtube.com",
+        "path": "/results"
+      },
+      {
+        "domain": "www.youtube.com",
+        "path": "/feed/"
+      },
+      {
+        "domain": "www.reddit.com",
+        "path": "/search"
+      },
+      {
+        "domain": "github.com",
+        "path": "/blob/"
+      },
+      {
+        "domain": "github.com",
+        "path": "/tree/"
+      }
+    ],
+    "path_rules": [
+      "reddit.com subreddit listings (/r/<name>), not posts",
+      "youtube.com channel pages (/@<handle>)",
+      "instructure.com module listings (/modules), not module items",
+      "chat-app.example app chrome (root, /new, /recents, /settings, /projects, /downloads, sign-in pages), never /chat/<id> transcripts"
+    ]
+  },
   "skip_gate_config": {
     "model": "gpt-4o-mini",
     "temperature": 0,

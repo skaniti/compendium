@@ -12,44 +12,40 @@
 //     zeros; each `start` is ISO with the zone's UTC offset;
 //   - top-3 domains per group, ordered n DESC, domain; groups total DESC, key.
 //
-// TWIN: SKIP_CATEGORY_LABELS and SKIP_METHOD_LABELS below duplicate
-// apps/api/backend/services/skip_categories.py and
-// apps/api/backend/services/pipeline_summary.py; keep them in step.
-// (skip_gate_config itself is replayed from the recorded summary.)
+// Flow classification (outcome / detail / fate) is NOT recomputed here: each
+// recorded page row already carries the backend SQL's verdict (`outcome`,
+// `detail`, `detail_label`, `fate`), so summary / timeline aggregate those.
+// Only the display constants below are mirrored.
+//
+// TWIN: OUTCOME_ORDER, FATE_ORDER, OUTCOME_LABELS, FATE_LABELS and the
+// detail ordering in detailSortKey() duplicate OUTCOME_ORDER / FATE_ORDER /
+// OUTCOME_LABELS / FATE_LABELS / _DETAIL_ORDER / _detail_sort_key in
+// apps/api/backend/services/pipeline_summary.py (build_flow); keep them in
+// step. Detail labels come from the recorded rows. rule_filter_config and
+// skip_gate_config are replayed from the recorded summary.
 
 const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90 };
 const GRANULARITY = { "7d": ["6h", "block"], "30d": ["day", "day"], "90d": ["week", "week"], all: ["month", "month"] };
 const TOP_DOMAINS = 3;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-const STATUS_KEYS = ["active", "pending", "archived"];
 
-export const SKIP_CATEGORY_LABELS = {
-  login_wall: "Login Wall",
-  user_specific: "User-Specific Page",
-  store_listing: "Store / Pricing Page",
-  homepage_index: "Homepage / Index",
-  search_results: "Search Results",
-  asset_library: "Asset Library Listing",
-  entertainment_video: "Entertainment Video",
-  disambiguation: "Disambiguation Page",
-  error_page: "Error Page",
-  content_free_stub: "Content-Free Stub",
-  local_file: "Local File",
-  web_app: "Web App / Tool",
-  other: "Other",
+export const OUTCOME_ORDER = ["before_gate", "rule_filter", "gate", "processed", "pending"];
+export const FATE_ORDER = ["archived", "active", "pending"];
+const OUTCOME_LABELS = {
+  before_gate: "Archived before gate",
+  rule_filter: "Rule filter \u00b7 no LLM",
+  gate: "Skipped by LLM gate",
+  processed: "Processed \u00b7 kept",
+  pending: "Pending",
 };
-
-const SKIP_METHOD_LABELS = {
-  skip_gate: "LLM Skip Gate",
-  domain_skip: "Domain Filter",
-  manual_exclusion: "Manual Exclusion",
-  trivial_capture: "Trivial Capture",
-  placeholder_no_content: "Placeholder No Content",
-  dedup: "Dedup",
-  app_chrome_junk: "App Chrome Junk",
-  dedupe_fold: "Dedupe Fold",
-  other: "Other",
+const FATE_LABELS = { archived: "Archived", active: "Active", pending: "Pending" };
+// Display order of the fixed detail keys per outcome; gate is dynamic (count desc).
+const DETAIL_ORDER = {
+  before_gate: ["placeholder", "manual", "chrome", "duplicate", "other"],
+  rule_filter: ["domain", "url_pattern"],
+  processed: ["later_manual", "later_duplicate", "later_chrome", "later_other", "active"],
+  pending: ["waiting"],
 };
 
 export function normalizeRange(range) {
@@ -183,91 +179,78 @@ function windowRows(rows, range, nowMs) {
 // Summary
 // ---------------------------------------------------------------------------
 
-function skipMethodLabel(key) {
-  return SKIP_METHOD_LABELS[key] || key.split("_").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-}
-
-function skipCategoryLabel(key) {
-  if (key === "uncategorized") return "Uncategorized";
-  return SKIP_CATEGORY_LABELS[key] || skipMethodLabel(key);
-}
-
 function byCodePoint(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function groupedWithTopDomains(rows, keyOf) {
-  const groups = new Map();
+function topDomains(rows) {
+  const counts = new Map();
   for (const r of rows) {
-    const key = keyOf(r);
-    const g = groups.get(key) ?? { total: 0, domains: new Map() };
     const domain = r.domain ?? "(unknown)";
-    g.total += 1;
-    g.domains.set(domain, (g.domains.get(domain) ?? 0) + 1);
-    groups.set(key, g);
+    counts.set(domain, (counts.get(domain) ?? 0) + 1);
   }
-  return [...groups.entries()]
-    .sort(([ka, a], [kb, b]) => b.total - a.total || byCodePoint(ka, kb))
-    .map(([key, g]) => ({
-      key,
-      count: g.total,
-      top_domains: [...g.domains.entries()]
-        .sort(([da, na], [db, nb]) => nb - na || byCodePoint(da, db))
-        .slice(0, TOP_DOMAINS)
-        .map(([domain, count]) => ({ domain, count })),
-    }));
+  return [...counts.entries()]
+    .sort(([da, na], [db, nb]) => nb - na || byCodePoint(da, db))
+    .slice(0, TOP_DOMAINS)
+    .map(([domain, count]) => ({ domain, count }));
 }
 
-const NULL_KEYS = { Pending: "pending", "Trivial Capture": "trivial_capture", Other: "other" };
+function detailSortKey(outcome, key, count) {
+  if (outcome === "gate") return [key === "uncategorized" ? 1 : 0, -count, key];
+  const order = DETAIL_ORDER[outcome] ?? [];
+  const i = order.indexOf(key);
+  return [i === -1 ? order.length : i, 0, key];
+}
 
-function buildDecisionRows(rows) {
-  const depthCounts = new Map();
-  const nullBreakdown = new Map();
+function compareKeys(a, b) {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] < b[i]) return -1;
+    if (a[i] > b[i]) return 1;
+  }
+  return 0;
+}
+
+function buildFlow(rows) {
+  const outCounts = Object.fromEntries(OUTCOME_ORDER.map((k) => [k, 0]));
+  const fateCounts = Object.fromEntries(FATE_ORDER.map((k) => [k, 0]));
+  const outRows = new Map();
+  const details = new Map();
   for (const r of rows) {
-    const depth = r.processing_depth ?? "null";
-    depthCounts.set(depth, (depthCounts.get(depth) ?? 0) + 1);
-    if (r.processing_depth === null || r.processing_depth === undefined) {
-      const reason =
-        r.status === "active" ? "legacy_active" : r.status === "pending" ? "Pending" : r.archive_reason === "trivial_capture" ? "Trivial Capture" : "Other";
-      nullBreakdown.set(reason, (nullBreakdown.get(reason) ?? 0) + 1);
-    }
+    outCounts[r.outcome] = (outCounts[r.outcome] ?? 0) + 1;
+    fateCounts[r.fate] = (fateCounts[r.fate] ?? 0) + 1;
+    (outRows.get(r.outcome) ?? outRows.set(r.outcome, []).get(r.outcome)).push(r);
+    const dk = `${r.outcome}\0${r.detail}`;
+    const d = details.get(dk) ?? { outcome: r.outcome, key: r.detail, label: r.detail_label, count: 0, rows: [], fates: Object.fromEntries(FATE_ORDER.map((k) => [k, 0])) };
+    d.count += 1;
+    d.rows.push(r);
+    d.fates[r.fate] = (d.fates[r.fate] ?? 0) + 1;
+    details.set(dk, d);
   }
-  const legacyActive = nullBreakdown.get("legacy_active") ?? 0;
-  nullBreakdown.delete("legacy_active");
-  const out = [];
-  for (const [raw, count] of depthCounts) {
-    if (raw === "null") {
-      for (const [label, n] of nullBreakdown) out.push({ key: NULL_KEYS[label] ?? label.toLowerCase(), label, count: n, evaluated: false });
-    } else if (raw === "processed") {
-      out.push({ key: "processed", label: "Processed", count: count + legacyActive, evaluated: true });
-    } else {
-      out.push({ key: raw, label: raw.split("_").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" "), count, evaluated: true });
-    }
-  }
-  if (!depthCounts.has("processed") && legacyActive > 0) out.push({ key: "processed", label: "Processed", count: legacyActive, evaluated: true });
-  return out.sort((a, b) => b.count - a.count);
+  const ordered = [...details.values()].sort(
+    (a, b) => OUTCOME_ORDER.indexOf(a.outcome) - OUTCOME_ORDER.indexOf(b.outcome) || compareKeys(detailSortKey(a.outcome, a.key, a.count), detailSortKey(b.outcome, b.key, b.count)),
+  );
+  return {
+    total: rows.length,
+    outcomes: OUTCOME_ORDER.map((k) => ({ key: k, label: OUTCOME_LABELS[k], count: outCounts[k], top_domains: topDomains(outRows.get(k) ?? []) })),
+    details: ordered.map(({ rows: dr, ...d }) => ({ ...d, top_domains: topDomains(dr) })),
+    fates: FATE_ORDER.map((k) => ({ key: k, label: FATE_LABELS[k], count: fateCounts[k] })),
+  };
 }
 
-export function computeSummary(allRows, range, nowMs, skipGateConfig) {
+/** `configs` = { rule_filter_config, skip_gate_config }, replayed from the recorded summary. */
+export function computeSummary(allRows, range, nowMs, configs) {
   const key = normalizeRange(range);
   const rows = windowRows(prepare(allRows), key, nowMs);
-  const status_counts = Object.fromEntries(STATUS_KEYS.map((k) => [k, rows.filter((r) => r.status === k).length]));
-  const total = rows.length;
+  const flow = buildFlow(rows);
+  const status_counts = Object.fromEntries(flow.fates.map((f) => [f.key, f.count]));
   return {
     range: key,
+    total_pages: flow.total,
     status_counts,
-    total_pages: total,
-    archive_ratio: total ? status_counts.archived / total : 0,
-    decisions: buildDecisionRows(rows),
-    archive_reasons: groupedWithTopDomains(
-      rows.filter((r) => r.status === "archived"),
-      (r) => r.archive_reason ?? "other",
-    ).map((g) => ({ ...g, label: skipMethodLabel(g.key) })),
-    skip_categories: groupedWithTopDomains(
-      rows.filter((r) => r.archive_reason === "skip_gate"),
-      (r) => r.skip_category ?? "uncategorized",
-    ).map((g) => ({ ...g, label: skipCategoryLabel(g.key) })),
-    skip_gate_config: skipGateConfig,
+    archive_ratio: flow.total ? status_counts.archived / flow.total : 0,
+    flow,
+    rule_filter_config: configs.rule_filter_config,
+    skip_gate_config: configs.skip_gate_config,
   };
 }
 
@@ -289,19 +272,16 @@ export function computeTimeline(allRows, range, tz, nowMs) {
   const last = floorWall(wallOf(nowMs, tz), granularity);
   const slots = new Map();
   for (let w = floorWall(wallOf(firstMs, tz), granularity); w <= last; w = stepWall(w, granularity)) {
-    slots.set(w, { kept: 0, archived: 0, evaluated: 0, skipped: 0, categories: {} });
+    slots.set(w, { total: 0, archived: 0, outcomes: Object.fromEntries(OUTCOME_ORDER.map((k) => [k, 0])), reached_gate: 0, categories: {} });
   }
   for (const r of rows) {
     const b = slots.get(floorWall(wallOf(r._visited, tz), granularity));
     if (!b) continue;
-    if (r.status === "archived") b.archived += 1;
-    else b.kept += 1;
-    if (r.processing_depth !== null && r.processing_depth !== undefined) b.evaluated += 1;
-    if (r.processing_depth === "skipped") b.skipped += 1;
-    if (r.archive_reason === "skip_gate") {
-      const cat = r.skip_category ?? "uncategorized";
-      b.categories[cat] = (b.categories[cat] ?? 0) + 1;
-    }
+    b.total += 1;
+    if (r.fate === "archived") b.archived += 1;
+    b.outcomes[r.outcome] += 1;
+    if (r.outcome === "gate" || (r.outcome === "processed" && r.processing_depth !== null && r.processing_depth !== undefined)) b.reached_gate += 1;
+    if (r.outcome === "gate") b.categories[r.detail] = (b.categories[r.detail] ?? 0) + 1;
   }
   return {
     range: key,
@@ -315,7 +295,7 @@ export function computeTimeline(allRows, range, tz, nowMs) {
 // ---------------------------------------------------------------------------
 
 export const PAGE_SORTS = ["title", "domain", "status", "processing_depth", "visited_at", "created_at"];
-const PAGE_KEEP = ["id", "title", "domain", "status", "processing_depth", "archive_reason", "skip_reasoning", "skip_category", "visited_at", "created_at"];
+const PAGE_KEEP = ["id", "title", "domain", "status", "processing_depth", "archive_reason", "skip_reasoning", "skip_category", "visited_at", "created_at", "outcome", "detail", "detail_label", "fate"];
 
 export function computePages(allRows, range, nowMs, { limit, offset, sort, dir }) {
   const rows = windowRows(prepare(allRows), normalizeRange(range), nowMs);
