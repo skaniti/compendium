@@ -1766,6 +1766,17 @@ describe("overview routes (computed from the pipeline pages + seed captures)", (
     });
   });
 
+  it("clusters block counts the graph's superclusters and the topics fixture", async () => {
+    const fx = (f: string) => JSON.parse(readFileSync(`demo/fixtures/${f}`, "utf8"));
+    const sc = new Set(fx("graph.json").clusters.map((c: { super_cluster?: string }) => c.super_cluster).filter(Boolean)).size;
+    await withNow(async (g) => {
+      const s = await jget(g, "/api/overview/summary");
+      expect(s.clusters.superclusters).toBe(sc);
+      expect(s.clusters.topics).toBe(fx("topics.json").topics.length);
+      expect(sc).toBeGreaterThan(0);
+    });
+  });
+
   it("captured agrees with the pipeline summary for the same range", async () => {
     await withNow(async (g) => {
       for (const range of ["7d", "30d", "90d", "all"]) {

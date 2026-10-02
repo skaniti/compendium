@@ -313,7 +313,15 @@ function buildOverviewFixtures() {
     .map((c, i) => ({ started_at: `${isoDateStr(addDaysUTC(anchor, -DAY_CYCLE[i % DAY_CYCLE.length]))}T${timeOf(c.started_at)}`, source: c.source }));
   writeJson('overview/captures.json', captures);
   const { clusters } = readJson('overview', 'summary.json');
-  writeJson('overview/summary.json', { clusters: clusters && { ...clusters, run_completed_at: `${isoDateStr(anchor)}T${timeOf(clusters.run_completed_at)}` } });
+  // The seeded test DB carries no topic preferences, so the recording reads
+  // superclusters 0 / topics 0. Keep the recorded run's cluster count and date, but take
+  // superclusters and topics from the committed graph / topics fixtures so the Overview
+  // card agrees with the stub's own graph and header (graph.json only carries
+  // super_cluster for topic-backed clusters, like backend/utils/graph_export.py).
+  const outJson = (f) => JSON.parse(readFileSync(path.join(OUT_DIR, f), 'utf8'));
+  const superclusters = new Set(outJson('graph.json').clusters.map((c) => c.super_cluster).filter(Boolean)).size;
+  const topics = outJson('topics.json').topics.length;
+  writeJson('overview/summary.json', { clusters: clusters && { ...clusters, superclusters, topics, run_completed_at: `${isoDateStr(anchor)}T${timeOf(clusters.run_completed_at)}` } });
   console.log(`[build-fixtures] overview: ${captures.length} captures, clusters ${clusters ? clusters.clusters : 'none'}`);
 }
 
