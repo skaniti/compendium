@@ -71,6 +71,15 @@ it("fixtures_total note", async () => {
   await open();
   expect(screen.getByText("Showing the first 3 of 500 fixtures.")).toBeInTheDocument();
 });
+it("compare sits before the fixtures table, notes last", async () => {
+  vi.mocked(api.fetchEvalRun).mockResolvedValue(evalDetail({ notes: "hello there" }));
+  const { container } = await open();
+  const compare = container.querySelector(".prompts-compare-block") as Element;
+  const fixtures = container.querySelector(".prompts-fixtures") as Element;
+  const notes = screen.getByText("Notes: hello there");
+  expect(compare.compareDocumentPosition(fixtures) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(fixtures.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
 it("notes line", async () => {
   vi.mocked(api.fetchEvalRun).mockResolvedValue(evalDetail({ notes: "hello there" }));
   await open();

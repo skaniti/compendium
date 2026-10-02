@@ -79,7 +79,7 @@ export default function PromptViewer({ name, admin, onChanged }: Props) {
       {admin && admin.overrides.configured && !admin.overrides.readable && (
         <p className="prompts-note">The override file can&apos;t be read, so LLM calls use the registry text. Fix or remove it on the server to edit overrides.</p>
       )}
-      {admin && admin.overrides.configured && admin.overrides.readable && (
+      {admin && admin.overrides.configured && admin.overrides.readable && !editing && (
         <div className="prompts-toolbar">
           <button type="button" onClick={() => { setEditing(true); setComparing(false); setConfirming(false); }}>Edit override</button>
           {override !== null && (

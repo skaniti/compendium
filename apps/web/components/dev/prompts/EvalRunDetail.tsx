@@ -132,6 +132,7 @@ export default function EvalRunDetail({ run, runs }: { run: EvalRunRow; runs: Ev
     <div className="prompts-detail">
       <p className="prompts-detail-meta">{parts.join(" · ")}</p>
       {types.map((k) => <Metric key={k} type={k} m={detail.metrics[k] as EvalMetrics} />)}
+      {others.length > 0 && <Compare detail={detail} others={others} />}
       <div className="prompts-chips">
         <button type="button" aria-pressed={mode === "all"} onClick={() => setMode("all")}>All fixtures</button>
         <button type="button" aria-pressed={mode === "misses"} onClick={() => setMode("misses")}>Wrong and errors</button>
@@ -158,7 +159,6 @@ export default function EvalRunDetail({ run, runs }: { run: EvalRunRow; runs: Ev
         <p className="prompts-note">Showing the first {detail.fixtures.length} of {detail.fixtures_total} fixtures.</p>
       )}
       {detail.notes && <p className="prompts-note">Notes: {detail.notes}</p>}
-      {others.length > 0 && <Compare detail={detail} others={others} />}
     </div>
   );
 }

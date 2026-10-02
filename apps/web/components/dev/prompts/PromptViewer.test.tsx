@@ -96,6 +96,14 @@ it("save refetches detail, reports missing placeholders, leaves edit mode", asyn
   await vi.waitFor(() => expect(api.fetchPromptDetail).toHaveBeenCalledTimes(2));
   expect(onChanged).toHaveBeenCalled();
 });
+it("toolbar is hidden while editing and returns after cancel", async () => {
+  vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail());
+  render(<PromptViewer name="alpha_task_v2" admin={adminStatus()} onChanged={() => {}} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Edit override" }));
+  expect(screen.queryByRole("button", { name: "Edit override" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.getByRole("button", { name: "Edit override" })).toBeInTheDocument();
+});
 it("cleared save message", async () => {
   vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail());
   vi.mocked(api.savePromptOverride).mockResolvedValue({ ...detail(), cleared: true, missing_placeholders: [] });

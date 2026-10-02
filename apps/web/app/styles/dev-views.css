@@ -492,7 +492,8 @@
 .prompts-models-table td, .prompts-models-table th { vertical-align: top; }
 .prompts-models .cell-sans, .prompts-col-detail { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .prompts-col-source { color: var(--panel-caption); font-size: 0.66rem; overflow-wrap: anywhere; }
-.prompts-link { background: none; border: 0; padding: 0; color: var(--highlight); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.prompts-link { background: none; border: 0; padding: 0; color: var(--highlight); font: inherit; cursor: pointer; text-decoration: none; }
+.prompts-link:hover, .prompts-link:focus-visible { text-decoration: underline; text-underline-offset: 0.35em; }
 .prompts-link:focus-visible, .prompts-version:focus-visible, .prompts-toolbar button:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 .prompts-grid { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .prompts-nav { display: flex; flex-direction: column; gap: 12px; max-height: 70vh; overflow-y: auto; }
@@ -522,8 +523,6 @@
 .prompts-diff-line { display: block; }
 .prompts-diff-line.is-add { background: color-mix(in oklch, var(--highlight) 18%, transparent); }
 .prompts-diff-line.is-del { background: color-mix(in oklch, var(--panel-caption) 22%, transparent); }
-@media (max-width: 1100px) { .prompts-col-detail, .prompts-col-source { display: none; } }
-@media (max-width: 900px) { .prompts-grid { grid-template-columns: minmax(0, 1fr); } .prompts-nav { max-height: none; } }
 .prompts-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .prompts-chips button { padding: 2px 10px; border: 0; border-radius: 999px; background: color-mix(in oklch, var(--panel-caption) 14%, transparent); color: var(--text); font-family: monospace; font-size: 0.7rem; cursor: pointer; }
 .prompts-chips button[aria-pressed="true"] { background: color-mix(in oklch, var(--highlight) 28%, transparent); }
@@ -542,4 +541,43 @@
 .prompts-pill.is-wrong { background: color-mix(in oklch, var(--text) 22%, transparent); }
 .prompts-pill.is-error { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--text) 55%, transparent); background: transparent; }
 .prompts-fixtures details pre { max-height: 40vh; overflow: auto; }
-@media (max-width: 900px) { .prompts-evals-table th:nth-child(4), .prompts-evals-table td:nth-child(4) { display: none; } }
+.prompts-models-table, .prompts-evals-table { table-layout: fixed; width: 100%; min-width: 0; }
+.prompts-models-table th, .prompts-models-table td, .prompts-evals-table th, .prompts-evals-table td { max-width: none; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.prompts-models-table col.col-stage { width: 12%; }
+.prompts-models-table col.col-detail { width: 24%; }
+.prompts-models-table col.col-model { width: 17%; }
+.prompts-models-table col.col-provider { width: 7%; }
+.prompts-models-table col.col-price { width: 10%; }
+.prompts-models-table col.col-prompt { width: 14%; }
+.prompts-models-table col.col-source { width: 16%; }
+.prompts-evals-table col.col-run { width: 10%; }
+.prompts-evals-table col.col-prompt { width: 12%; }
+.prompts-evals-table col.col-set { width: 11%; }
+.prompts-evals-table col.col-model { width: 14%; }
+.prompts-evals-table col.col-selection, .prompts-evals-table col.col-stress { width: 9%; }
+.prompts-evals-table col.col-cost { width: 7%; }
+.prompts-evals-table col.col-time { width: 6%; }
+.prompts-evals-table col.col-vs { width: 16%; }
+.prompts-evals-table col.col-action { width: 6%; }
+.prompts-editor:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.prompts-editor-actions button:first-child { background: color-mix(in oklch, var(--highlight) 32%, transparent); }
+.prompts-editor-actions button:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 1100px) {
+  .prompts-models-table .prompts-col-detail, .prompts-models-table .prompts-col-source { display: none; }
+  .prompts-models-table col.col-stage { width: 20%; }
+  .prompts-models-table col.col-model { width: 28%; }
+  .prompts-models-table col.col-provider { width: 12%; }
+  .prompts-models-table col.col-price { width: 17%; }
+  .prompts-models-table col.col-prompt { width: 23%; }
+}
+@media (max-width: 900px) {
+  .prompts-grid { grid-template-columns: minmax(0, 1fr); }
+  .prompts-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: none; overflow-y: visible; }
+  .prompts-evals-table .col-model, .prompts-evals-table .col-cost, .prompts-evals-table .col-time { display: none; }
+  .prompts-evals-table col.col-run { width: 14%; }
+  .prompts-evals-table col.col-prompt { width: 17%; }
+  .prompts-evals-table col.col-set { width: 15%; }
+  .prompts-evals-table col.col-selection, .prompts-evals-table col.col-stress { width: 13%; }
+  .prompts-evals-table col.col-vs { width: 22%; }
+  .prompts-evals-table col.col-action { width: 6%; }
+}

@@ -46,10 +46,23 @@ it("meta, rows, deltas", async () => {
   expect(rows).toHaveLength(3);
   expect(rows[0]).toHaveTextContent("92.0% (50)");
   expect(rows[0]).toHaveTextContent("—");
-  expect(rows[0]).toHaveTextContent("vs v1.0: sel +2.0 pts · str —");
+  expect(rows[0]).toHaveTextContent("vs v1.0: sel +2.0 pts");
   expect(rows[0].querySelector(".prompts-delta.is-up")).toBeTruthy();
   expect(rows[1]).toHaveTextContent("$0.25");
   expect(rows[0].querySelector("td")).toHaveAttribute("title", "run-001");
+});
+it("vs previous omits a null side", async () => {
+  const d = (selection: number | null, stress: number | null) => ({ vs_version: "v1.0", vs_run_id: "r0", selection, stress });
+  vi.mocked(api.fetchEvalRuns).mockResolvedValue(evalRuns({ configured: true, runs: [
+    evalRow({ run_id: "a", delta: d(0, null) }),
+    evalRow({ run_id: "b", delta: d(null, 0.02) }),
+    evalRow({ run_id: "c", delta: d(0.02, -0.01) }),
+    evalRow({ run_id: "d", delta: d(null, null) }),
+  ] }));
+  const { container } = render(<EvalHistory />);
+  await screen.findByText("4 runs");
+  const vs = [...container.querySelectorAll("tbody tr")].map((r) => r.querySelectorAll("td")[8].textContent);
+  expect(vs).toEqual(["vs v1.0: sel ±0.0 pts", "vs v1.0: str +2.0 pts", "vs v1.0: sel +2.0 pts · str \u22121.0 pts", "vs v1.0: —"]);
 });
 it("family chips filter", async () => {
   vi.mocked(api.fetchEvalRuns).mockResolvedValue(evalRuns({ configured: true, runs: three }));

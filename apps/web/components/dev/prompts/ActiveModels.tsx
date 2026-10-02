@@ -13,6 +13,15 @@ export default function ActiveModels({ models, unused, onSelectPrompt }: Props) 
       <p className="prompts-caption">Read from the constants and settings each stage calls, so this list follows the code.</p>
       <div className="dev-table-wrap">
         <table className="dev-table prompts-models-table">
+          <colgroup>
+            <col className="col-stage" />
+            <col className="col-detail prompts-col-detail" />
+            <col className="col-model" />
+            <col className="col-provider" />
+            <col className="col-price" />
+            <col className="col-prompt" />
+            <col className="col-source prompts-col-source" />
+          </colgroup>
           <thead>
             <tr>
               <th>Stage</th><th className="prompts-col-detail">What it does</th><th>Model</th><th>Provider</th>
