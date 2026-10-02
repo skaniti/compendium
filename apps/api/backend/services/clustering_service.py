@@ -50,6 +50,14 @@ comparison scripts). The runtime path reads ``settings.hdbscan_selection_method`
 (same default) since increment 2 exposed the knob."""
 NAMING_MODEL = "gpt-4o-mini"
 SIMILARITY_THRESHOLD = 0.15
+NAMING_TEMPERATURE = 0.3
+NAMING_MAX_TOKENS = 30
+NAMING_SAMPLE_SIZE = 10
+"""Pages per cluster shown to the naming model (``_build_naming_prompt``)."""
+MAX_EDGES_PER_CLUSTER = 3
+"""Similarity edges kept per cluster, strongest first."""
+MIN_CLUSTER_SIZE_DIVISOR = 150
+"""HDBSCAN's min cluster size scales as max(setting, n_pages // this)."""
 FEATURED_SINGLETONS_DENSITY_PCT = 0.20
 """Fraction of real cluster count to surface as featured singletons (the
 "starfield" of representative HDBSCAN-noise pages). At 20% with N=65 real
@@ -1568,15 +1576,15 @@ class ClusteringService:
         """
         n_pages = len(embeddings)
         # Read tunable floor from settings; runtime scales up with corpus
-        # size via n_pages // 150 (so very large compendiums get tighter
+        # size via n_pages // MIN_CLUSTER_SIZE_DIVISOR (so very large compendiums get tighter
         # clusters automatically). Override via HDBSCAN_MIN_CLUSTER_SIZE env
         # var. See backend/config/settings.py::Settings.hdbscan_min_cluster_size
         # for the gate-permissiveness x cluster-size coupling rationale.
-        min_size = max(settings.hdbscan_min_cluster_size, n_pages // 150)
+        min_size = max(settings.hdbscan_min_cluster_size, n_pages // MIN_CLUSTER_SIZE_DIVISOR)
         umap_dims = settings.clustering_umap_dims
         logger.info(
             f"HDBSCAN: min_cluster_size={min_size} (settings floor "
-            f"{settings.hdbscan_min_cluster_size} vs scaled {n_pages // 150}), "
+            f"{settings.hdbscan_min_cluster_size} vs scaled {n_pages // MIN_CLUSTER_SIZE_DIVISOR}), "
             f"min_samples={settings.hdbscan_min_samples}, "
             f"selection={settings.hdbscan_selection_method}, "
             f"epsilon={settings.hdbscan_selection_epsilon}, "
@@ -1789,7 +1797,7 @@ class ClusteringService:
         mask = labels == cid
         cluster_pages = [pages[i] for i in range(len(pages)) if mask[i]]
 
-        sample = cluster_pages[:10]
+        sample = cluster_pages[:NAMING_SAMPLE_SIZE]
         page_lines = []
         for p in sample:
             title = (p["title"] or "(no title)")[:100]
@@ -1821,8 +1829,8 @@ class ClusteringService:
         response = await self._llm.complete(
             prompt=prompt,
             model=NAMING_MODEL,
-            temperature=0.3,
-            max_tokens=30,
+            temperature=NAMING_TEMPERATURE,
+            max_tokens=NAMING_MAX_TOKENS,
         )
         name = response.content.strip().strip("\"'")
         return cid, name, response.cost_usd
@@ -1933,8 +1941,8 @@ class ClusteringService:
                     "body": {
                         "model": NAMING_MODEL,
                         "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3,
-                        "max_tokens": 30,
+                        "temperature": NAMING_TEMPERATURE,
+                        "max_tokens": NAMING_MAX_TOKENS,
                     },
                 }
             )
@@ -2165,7 +2173,6 @@ class ClusteringService:
                         )
 
             # Cap edges: keep top-3 most similar neighbors per cluster
-            MAX_EDGES_PER_CLUSTER = 3
             from collections import defaultdict
 
             edge_count: dict[int, int] = defaultdict(int)
