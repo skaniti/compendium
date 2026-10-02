@@ -239,7 +239,8 @@ function buildFlow(rows) {
 
 /**
  * The stub serves demo visitors, so the rule lists are redacted exactly like the
- * real API does for non-admins: counts computed from the recorded lists, lists emptied.
+ * real API does for non-admins: counts kept from the recorded `counts` (a demo-account capture is already
+ * redacted), else computed from legacy recorded lists; lists emptied.
  */
 function redactRuleFilterConfig(cfg) {
   const domains = cfg.domains ?? [];
@@ -247,7 +248,7 @@ function redactRuleFilterConfig(cfg) {
   const patterns = cfg.url_patterns ?? [];
   const paths = cfg.path_rules ?? [];
   return {
-    counts: { domains: domains.length + suffixes.length, url_patterns: patterns.length, path_rules: paths.length },
+    counts: cfg.counts ?? { domains: domains.length + suffixes.length, url_patterns: patterns.length, path_rules: paths.length },
     lists_visible: false,
     domains: [],
     domain_suffixes: [],
