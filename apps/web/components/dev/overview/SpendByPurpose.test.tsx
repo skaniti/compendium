@@ -8,9 +8,9 @@ it("two purposes: bar segments, ordered list, shares and event types", () => {
   expect(container.querySelectorAll(".overview-spend-bar > span")).toHaveLength(2);
   const items = [...container.querySelectorAll(".overview-spend-list > li")] as HTMLElement[];
   expect(items.map((li) => li.querySelector(".overview-spend-label")?.textContent)).toEqual(["Skip & learning gates", "Chat"]);
-  for (const t of ["$1.04", "68.3%", "7,348 calls"]) expect(items[0]).toHaveTextContent(t);
+  for (const t of ["$0.61", "72.4%", "3,000 calls"]) expect(items[0]).toHaveTextContent(t);
   const lines = [...items[0].querySelectorAll(".overview-spend-types li")].map((e) => e.textContent);
-  expect(lines).toEqual(["Skip gate $1.03 · 7,067 calls", "Learning gate $0.01 · 281 calls"]);
+  expect(lines).toEqual(["Skip gate $0.59 · 2,900 calls", "Learning gate $0.02 · 100 calls"]);
 });
 it("no spend", () => {
   const { container } = render(<SpendByPurpose spend={{ usd: 0, calls: 0, all_time_usd: 0, purposes: [] }} />);

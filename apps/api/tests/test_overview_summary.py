@@ -35,25 +35,25 @@ def test_labels():
 
 def test_build_spend_groups_orders_and_rounds():
     rows = [
-        ("agent_query", 0.0482, 104),
-        ("skip_gate", 1.02514159, 7067),
-        ("learning_gate", 0.0144, 281),
+        ("agent_query", 0.2321, 250),
+        ("skip_gate", 0.59324159, 2900),
+        ("learning_gate", 0.0168, 100),
         ("skip_gate_deterministic", 0.0, 12),
-        ("cluster_naming", 0.2475, 107),
+        ("cluster_naming", 0.1475, 40),
     ]
     s = os_.build_spend(rows, all_time_usd=2.5)
     assert [p["key"] for p in s["purposes"]] == ["gates", "clustering", "chat"]
     gates = s["purposes"][0]
-    assert gates["calls"] == 7067 + 281 + 12
-    assert gates["usd"] == round(1.02514159 + 0.0144, 6)
+    assert gates["calls"] == 2900 + 100 + 12
+    assert gates["usd"] == round(0.59324159 + 0.0168, 6)
     assert [t["key"] for t in gates["event_types"]] == [
         "skip_gate",
         "learning_gate",
         "skip_gate_deterministic",
     ]
-    assert gates["event_types"][0]["usd"] == 1.025142
-    assert s["calls"] == 7067 + 281 + 12 + 107 + 104
-    assert s["usd"] == round(1.02514159 + 0.0144 + 0.2475 + 0.0482, 6)
+    assert gates["event_types"][0]["usd"] == 0.593242
+    assert s["calls"] == 2900 + 100 + 12 + 40 + 250
+    assert s["usd"] == round(0.59324159 + 0.0168 + 0.1475 + 0.2321, 6)
     assert s["all_time_usd"] == 2.5
 
 

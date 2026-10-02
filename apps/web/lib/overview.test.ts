@@ -13,7 +13,7 @@ describe("overview lib", () => {
     expect(formatUsd(Number.NaN)).toBe("$0.00");
     expect(formatUsd(0.0031)).toBe("$0.0031");
     expect(formatUsd(0.01)).toBe("$0.01");
-    expect(formatUsd(1.5234)).toBe("$1.52");
+    expect(formatUsd(0.8421)).toBe("$0.84");
   });
   it("formatUsdTick keeps axis labels short", () => {
     expect(formatUsdTick(0)).toBe("$0");
@@ -22,14 +22,14 @@ describe("overview lib", () => {
     expect(formatUsdTick(10)).toBe("$10");
   });
   it("formatCount and plural", () => {
-    expect(formatCount(10094)).toBe("10,094");
+    expect(formatCount(4812)).toBe("4,812");
     expect(plural(1, "capture")).toBe("1 capture");
-    expect(plural(1072, "capture")).toBe("1,072 captures");
+    expect(plural(512, "capture")).toBe("512 captures");
     expect(plural(0, "call")).toBe("0 calls");
   });
   it("shareOf never NaN", () => {
     expect(shareOf(0, 0)).toBe("0.0%");
-    expect(shareOf(1276, 10094)).toBe("12.6%");
+    expect(shareOf(731, 4812)).toBe("15.2%");
   });
   it("formatRunDate", () => {
     expect(formatRunDate("2026-09-23T12:00:00+00:00")).toBe("Sep 23");
