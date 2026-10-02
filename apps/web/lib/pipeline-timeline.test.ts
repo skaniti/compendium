@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { axisLabels, bucketTitle, VOLUME_ORDER, hasFlowActivity, rateSeries, rateDomain, mixSeries, gateNotLiveRun } from "./pipeline-timeline";
+import { axisLabels, bucketTitle, VOLUME_ORDER, hasFlowActivity, rateSeries, rateDomain, mixSeries, gateNotLiveRun, isSparse } from "./pipeline-timeline";
 import type { TimelineBucket } from "./types";
 
 const b = (start: string, o: Partial<TimelineBucket> = {}): TimelineBucket =>
@@ -48,11 +48,18 @@ describe("flow timeline helpers", () => {
     expect(s.gate).toEqual([{ y: null, n: 0, d: 0 }, { y: 50, n: 1, d: 2 }, { y: null, n: 0, d: 0 }]);
   });
   it("rateDomain floors to 20 and never exceeds a 60 floor", () => {
-    const p = (y: number | null) => ({ y, n: 0, d: 0 });
+    const p = (y: number | null) => ({ y, n: 0, d: 10 });
     expect(rateDomain({ archive: [p(95), p(null)], gate: [p(88)] })).toEqual([60, 100]);
     expect(rateDomain({ archive: [p(47.2)], gate: [p(80)] })).toEqual([40, 100]);
     expect(rateDomain({ archive: [p(5)], gate: [] })).toEqual([0, 100]);
     expect(rateDomain({ archive: [p(null)], gate: [] })).toEqual([60, 100]);
+  });
+  it("rateDomain ignores points over fewer than 10 pages; isSparse flags them", () => {
+    const q = (y: number, d: number) => ({ y, n: 0, d });
+    expect(rateDomain({ archive: [q(5, 3), q(95, 40)], gate: [] })).toEqual([60, 100]);
+    expect(rateDomain({ archive: [q(5, 10)], gate: [] })).toEqual([0, 100]);
+    expect(isSparse(q(5, 9))).toBe(true);
+    expect(isSparse(q(5, 10))).toBe(false);
   });
   it("mixSeries follows the given order, appends unknown ids, and computes shares", () => {
     const bs = [fb({}, { categories: { b: 1, zz: 1, a: 2 } }), fb({}, { categories: {} })];
@@ -63,13 +70,17 @@ describe("flow timeline helpers", () => {
     expect(s[0].values).toEqual([50, 0]);
   });
   it("gateNotLiveRun: no-activity leading buckets -> 0", () => {
-    expect(gateNotLiveRun([fb({}), fb({}), fb({ gate: 1 })])).toBe(0);
+    expect(gateNotLiveRun([fb({}), fb({}), fb({ gate: 1 })], "month")).toBe(0);
   });
   it("gateNotLiveRun: gate never live -> 0", () => {
-    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({ before_gate: 2 })])).toBe(0);
+    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({ before_gate: 2 })], "month")).toBe(0);
   });
   it("gateNotLiveRun: active captures, gate live later -> run length", () => {
-    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({}), fb({ rule_filter: 1 }), fb({ gate: 1 })])).toBe(3);
-    expect(gateNotLiveRun([fb({ gate: 1 }), fb({})])).toBe(0);
+    expect(gateNotLiveRun([fb({ before_gate: 1 }), fb({}), fb({ rule_filter: 1 }), fb({ gate: 1 })], "month")).toBe(3);
+    expect(gateNotLiveRun([fb({ gate: 1 }), fb({})], "month")).toBe(0);
+  });
+  it("gateNotLiveRun: finer than month is never 'not live'", () => {
+    const bs = [fb({ before_gate: 1 }), fb({}), fb({ rule_filter: 1 }), fb({ gate: 1 })];
+    for (const g of ["6h", "day", "week"] as const) expect(gateNotLiveRun(bs, g)).toBe(0);
   });
 });

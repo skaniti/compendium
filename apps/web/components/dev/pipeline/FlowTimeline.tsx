@@ -8,7 +8,7 @@ import { countTicks, frame, xBand, yLinear, type BandCat } from "@/components/ch
 import { useContainerWidth } from "@/components/charts/useContainerWidth";
 import { fetchPipelineTimeline } from "@/lib/api";
 import { OUTCOME_COLOR } from "@/lib/pipeline";
-import { axisLabels, bucketTitle, gateNotLiveRun, hasFlowActivity, mixSeries, rateDomain, rateSeries, VOLUME_ORDER } from "@/lib/pipeline-timeline";
+import { axisLabels, bucketTitle, gateNotLiveRun, hasFlowActivity, isSparse, mixSeries, rateDomain, rateSeries, VOLUME_ORDER } from "@/lib/pipeline-timeline";
 import type { FlowOutcomeKey, RangeKey } from "@/lib/types";
 import { usePeriodFetch } from "./usePeriodFetch";
 
@@ -16,6 +16,7 @@ const EMPTY_ACTIVITY = "No activity in this period.";
 const EMPTY_GATE = "No gate skips in this period.";
 const LABEL_W = 180, ML = 44, MR = 48, MT = 8, MB = 8;
 const H_VOL = 112, H_RATE = 82, H_MIX = 70, AXIS_H = 22;
+// TWIN of OUTCOME_LABELS in apps/api/backend/services/pipeline_summary.py: keep the labels in sync.
 const OUTCOME_LABEL: Record<FlowOutcomeKey, string> = {
   processed: "Processed · kept", gate: "Skipped by LLM gate", rule_filter: "Rule filter · no LLM", before_gate: "Archived before gate", pending: "Pending",
 };
@@ -90,7 +91,13 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
       {([[rs.archive, ARCHIVE_COLOR], [rs.gate, GATE_COLOR]] as const).map(([pts, color], k) => (
         <g key={k} pointerEvents="none">
           <path className="flow-rate-line" d={path(pts)} fill="none" style={{ stroke: color }} strokeWidth={1.5} />
-          {pts.map((p, i) => p.y === null ? null : <circle key={i} className="flow-rate-dot" cx={cx(i)} cy={yr(p.y)} r={2.5} style={{ fill: color }} />)}
+          {pts.map((p, i) => {
+            if (p.y === null) return null;
+            // under MIN_RATE_DENOM pages the point is noise: hollow, and the line still runs through it
+            return isSparse(p)
+              ? <circle key={i} className="flow-rate-dot flow-rate-dot-sparse" cx={cx(i)} cy={yr(p.y)} r={2.5} fill="none" strokeWidth={1.25} style={{ stroke: color }} />
+              : <circle key={i} className="flow-rate-dot" cx={cx(i)} cy={yr(p.y)} r={2.5} style={{ fill: color }} />;
+          })}
           {endLabel(k, color)}
         </g>
       ))}
@@ -101,7 +108,7 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   // Skip mix
   const mix = mixSeries(buckets, order, labels);
   const ym = yLinear(100, H_MIX);
-  const notLive = gateNotLiveRun(buckets);
+  const notLive = gateNotLiveRun(buckets, granularity);
   const notLiveW = notLive > 0 ? bx(notLive - 1) + x.bandwidth() - bx(0) : 0;
   const mixBody = (
     <g transform={`translate(${ML},${MT})`}>

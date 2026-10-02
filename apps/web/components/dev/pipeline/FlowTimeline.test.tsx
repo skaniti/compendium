@@ -37,10 +37,28 @@ it("rates hover shows both rates with n/d", async () => {
   const lines = Array.from(container.querySelectorAll('[role="tooltip"] div')).map((d) => d.textContent);
   expect(lines).toEqual(["Sep 01", "archive rate: 80.0% (8/10)", "skip rate (gate): 80.0% (4/5)"]);
 });
-it("marks a leading run with no gate decisions as gate not live", async () => {
-  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, { reached_gate: 0, categories: {}, outcomes: { before_gate: 5, rule_filter: 5, gate: 0, processed: 0, pending: 0 } }), live(2), live(3)]));
+it("marks a leading run with no gate decisions as gate not live (monthly buckets only)", async () => {
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue({ ...tl([live(1, { reached_gate: 0, categories: {}, outcomes: { before_gate: 5, rule_filter: 5, gate: 0, processed: 0, pending: 0 } }), live(2), live(3)]), granularity: "month" });
   render(<FlowTimeline {...props} />);
   expect(await screen.findByText("gate not live")).toBeInTheDocument();
+});
+it("does not claim gate not live at day granularity", async () => {
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, { reached_gate: 0, categories: {}, outcomes: { before_gate: 5, rule_filter: 5, gate: 0, processed: 0, pending: 0 } }), live(2), live(3)]));
+  const { container } = render(<FlowTimeline {...props} />);
+  await screen.findByText("Volume");
+  expect(screen.queryByText("gate not live")).toBeNull();
+  expect(container.querySelectorAll("path.flow-rate-line")).toHaveLength(2);
+});
+it("draws rate points over fewer than 10 pages hollow, and keeps the line through them", async () => {
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([live(1, { total: 12, reached_gate: 12 }), live(2, { total: 4, archived: 2, reached_gate: 3, outcomes: { before_gate: 1, rule_filter: 0, gate: 1, processed: 2, pending: 0 } }), live(3, { total: 12, reached_gate: 12 })]));
+  const { container } = render(<FlowTimeline {...props} />);
+  await screen.findByText("Volume");
+  const dots = Array.from(container.querySelectorAll("circle.flow-rate-dot"));
+  expect(dots).toHaveLength(6);
+  const hollow = dots.filter((c) => c.classList.contains("flow-rate-dot-sparse"));
+  expect(hollow).toHaveLength(2); // archive (4 pages) and gate (3 pages) on the sparse bucket
+  expect(hollow.every((c) => c.getAttribute("fill") === "none")).toBe(true);
+  for (const line of Array.from(container.querySelectorAll("path.flow-rate-line"))) expect((line.getAttribute("d") ?? "").match(/L/g)?.length).toBe(2);
 });
 it("shows the empty copy and no NaN for an inactive period", async () => {
   vi.mocked(api.fetchPipelineTimeline).mockResolvedValue(tl([bk("2026-09-01T00:00:00Z"), bk("2026-09-02T00:00:00Z")]));

@@ -52,9 +52,13 @@ export function rateSeries(buckets: TimelineBucket[]): { archive: RatePoint[]; g
   };
 }
 
-/** [min(60, lowest y rounded down to 20), 100]. */
+/** Rate points over fewer pages than this are noise: drawn hollow and kept out of the axis domain. */
+export const MIN_RATE_DENOM = 10;
+export const isSparse = (p: RatePoint): boolean => p.d < MIN_RATE_DENOM;
+
+/** [min(60, lowest y rounded down to 20), 100]; points with a denominator below MIN_RATE_DENOM do not count. */
 export function rateDomain(series: { archive: RatePoint[]; gate: RatePoint[] }): [number, number] {
-  const ys = [...series.archive, ...series.gate].map((p) => p.y).filter((y): y is number => y !== null);
+  const ys = [...series.archive, ...series.gate].filter((p) => !isSparse(p)).map((p) => p.y).filter((y): y is number => y !== null);
   if (ys.length === 0) return [60, 100];
   return [Math.min(60, Math.floor(Math.min(...ys) / 20) * 20), 100];
 }
@@ -72,8 +76,9 @@ export function mixSeries(buckets: TimelineBucket[], order: string[], labels: Re
   });
 }
 
-/** Length of the leading run of buckets with no gate decisions, but only when the run had captures and the gate went live later; else 0. */
-export function gateNotLiveRun(buckets: TimelineBucket[]): number {
+/** Length of the leading run of buckets with no gate decisions, but only for monthly (All time) buckets, when the run had captures and the gate went live later; else 0. Finer buckets lacking gate decisions are ordinary. */
+export function gateNotLiveRun(buckets: TimelineBucket[], g: TimelineGranularity): number {
+  if (g !== "month") return 0;
   let run = 0;
   while (run < buckets.length && buckets[run].reached_gate === 0) run++;
   if (run === 0 || run === buckets.length) return 0;
