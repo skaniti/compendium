@@ -154,6 +154,21 @@ def test_single_call_resolves():
     assert stats == {"retried": 0, "single": 1}
 
 
+def test_malformed_json_is_retried_not_fatal():
+    import json
+
+    class Flaky(_ScriptedLLM):
+        async def select_tool(self, prompt, tools, model=None, **kw):
+            if not self.prompts:
+                self.prompts.append(prompt)
+                json.loads('{"items": [{"index": 0, "cat')  # raises JSONDecodeError
+            return await super().select_tool(prompt, tools, model, **kw)
+
+    llm = Flaky([{"r0": "error_page"}])
+    cats, _, stats = asyncio.run(bf.classify_batch(llm, ["r0"], "m"))
+    assert cats == ["error_page"] and stats["retried"] == 1
+
+
 def test_classify_batch_no_tool_call_leaves_none():
     class FakeLLM:
         async def select_tool(self, prompt, tools, model=None, **kw):

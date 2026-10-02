@@ -174,9 +174,15 @@ def _add_usage(total: dict, usage: dict) -> None:
 
 
 async def _ask(llm, reasons: list[str], model: str) -> tuple[list[str | None], dict]:
-    resp, tool_calls = await llm.select_tool(
-        prompt=build_prompt(reasons), tools=[classify_tool()], model=model, temperature=0.0
-    )
+    try:
+        resp, tool_calls = await llm.select_tool(
+            prompt=build_prompt(reasons), tools=[classify_tool()], model=model, temperature=0.0
+        )
+    except ValueError:
+        # Malformed tool-call JSON (e.g. truncated output): treat as "no answer"
+        # so the retry path re-asks for these items.
+        log("malformed tool-call JSON; will retry the affected items")
+        return [None] * len(reasons), {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
     usage = {
         "input_tokens": getattr(resp, "input_tokens", 0) or 0,
         "output_tokens": getattr(resp, "output_tokens", 0) or 0,
