@@ -10,6 +10,7 @@ const CLUSTERS_COLOR = "var(--highlight)";
 const NOISE_COLOR = "color-mix(in oklch, var(--text) 70%, var(--surface))";
 const FAILED_COLOR = categoryFill(0);
 const PREVIEW = 10;
+const PLOT = 110;
 const count = (v: number | null) => (v === null ? "—" : formatCount(v));
 
 export default function RunHistory({ runs, currentId }: { runs: ClustersSummary["runs"]; currentId: number | null }) {
@@ -19,7 +20,15 @@ export default function RunHistory({ runs, currentId }: { runs: ClustersSummary[
   const cats: BandCat[] = finished.map((r) => ({ title: `Run #${r.id} · ${formatRunDateTime(r.started_at)}`, axis: formatRunDate(r.started_at) }));
   const clusters = finished.map((r) => r.cluster_count);
   const noise = finished.map((r) => r.noise_count);
-  const ticks = countTicks(Math.max(0, ...clusters.map((v) => v ?? 0), ...noise.map((v) => v ?? 0)));
+  const tickOf = (vs: (number | null)[]) => countTicks(Math.max(0, ...vs.map((v) => v ?? 0)));
+  const rowsDef = [
+    { title: "Clusters", aria: "Clusters per run", color: CLUSTERS_COLOR, values: clusters, ticks: tickOf(clusters), axis: false, area: true },
+    { title: "Noise pages", aria: "Noise pages per run", color: NOISE_COLOR, values: noise, ticks: tickOf(noise), axis: true, area: false },
+  ];
+  const tip = (i: number) => { const r = finished[i]; return [
+    `clusters: ${count(r.cluster_count)}`, `noise pages: ${count(r.noise_count)}`, runStatusLabel(r, currentId),
+    `took ${formatDuration(r.elapsed_seconds)}`, `naming ${r.naming_cost === null ? "—" : formatUsd(r.naming_cost)}`,
+  ]; };
   const rows = all ? runs.items : runs.items.slice(0, PREVIEW);
   return (
     <section className="dev-panel clusters-runs">
@@ -29,17 +38,18 @@ export default function RunHistory({ runs, currentId }: { runs: ClustersSummary[
       </div>
       {finished.length > 0 ? (
         <div className="clusters-runs-chart">
-          <ul className="clusters-legend">
-            <li><span className="swatch" style={{ background: CLUSTERS_COLOR }} />Clusters</li>
-            <li><span className="swatch" style={{ background: NOISE_COLOR }} />Noise pages</li>
-          </ul>
-          <LineAreaChart cats={cats} ariaLabel="Clusters and noise pages per run" height={190} dots={finished.length <= 16}
-            yMax={ticks.top} yTicks={ticks.ticks} yFormat={formatCount}
-            series={[{ name: "Clusters", color: CLUSTERS_COLOR, values: clusters, area: true }, { name: "Noise pages", color: NOISE_COLOR, values: noise }]}
-            tip={(i) => { const r = finished[i]; return [
-              `clusters: ${count(r.cluster_count)}`, `noise pages: ${count(r.noise_count)}`, runStatusLabel(r, currentId),
-              `took ${formatDuration(r.elapsed_seconds)}`, `naming ${r.naming_cost === null ? "—" : formatUsd(r.naming_cost)}`,
-            ]; }} />
+          {rowsDef.map((d) => (
+            <div key={d.title} className="clusters-runs-row">
+              <div className="clusters-runs-label">
+                <span className="clusters-runs-title"><span className="swatch" style={{ background: d.color }} />{d.title}</span>
+                <span className="clusters-runs-figure">{count(d.values[d.values.length - 1])}</span>
+                <span className="clusters-runs-caption">latest run</span>
+              </div>
+              <LineAreaChart cats={cats} ariaLabel={d.aria} height={d.axis ? PLOT + 6 + 22 : PLOT + 6 + 4} margin={{ top: 6, right: 16, bottom: d.axis ? 22 : 4, left: 48 }}
+                xAxis={d.axis} dots={finished.length <= 16} yMax={d.ticks.top} yTicks={d.ticks.ticks} yFormat={formatCount}
+                series={[{ name: d.title, color: d.color, values: d.values, area: d.area }]} tip={tip} />
+            </div>
+          ))}
         </div>
       ) : <p className="dev-empty dev-empty-inline">No finished runs yet.</p>}
       <div className="dev-table-wrap">

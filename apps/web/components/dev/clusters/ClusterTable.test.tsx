@@ -66,3 +66,19 @@ it("member load error", async () => {
   await userEvent.click(screen.getByRole("button", { name: /Cluster 1/ }));
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load pages (fetchClusterMembers failed: 404 Err)."));
 });
+it("one Supercluster column merges the group", () => {
+  const g = { label: "Night sky", source: "suggested", tier: "casual" } as const;
+  const clusters = [
+    row(1, 9, { super_cluster: "Night sky", group: g }),
+    row(2, 8, { super_cluster: "orbits", group: g }),
+    row(3, 7, { super_cluster: null, group: g }),
+    row(4, 6, { super_cluster: null, group: null }),
+  ];
+  const { container } = render(<ClusterTable clusters={clusters} runId={1} />);
+  expect(Array.from(container.querySelectorAll("thead th")).map((t) => t.textContent?.trim())).toEqual(["Cluster", "Pages", "Confidence", "Supercluster"]);
+  const cell = (i: number) => container.querySelectorAll("tbody tr")[i].querySelectorAll("td")[3].textContent;
+  expect(cell(0)).toBe("Night sky suggested");
+  expect(cell(1)).toBe("orbits Night sky · suggested");
+  expect(cell(2)).toBe("Night sky suggested");
+  expect(cell(3)).toBe("—");
+});

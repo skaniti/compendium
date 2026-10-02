@@ -25,9 +25,13 @@ it("status pills, cost, duration and dashes", () => {
   expect(cells(0)[5]).toBe("7.5s");
   expect([cells(1)[2], cells(1)[3], cells(1)[4], cells(1)[5]]).toEqual(["—", "—", "—", "—"]);
 });
-it("renders the labelled chart", () => {
+it("renders two labelled charts and the latest cluster count", () => {
   const { container } = render(<RunHistory runs={summary().runs} currentId={40} />);
-  expect(container.querySelector('svg[aria-label="Clusters and noise pages per run"]')).toBeTruthy();
+  expect(container.querySelectorAll("svg")).toHaveLength(2);
+  expect(container.querySelector('svg[aria-label="Clusters per run"]')).toBeTruthy();
+  expect(container.querySelector('svg[aria-label="Noise pages per run"]')).toBeTruthy();
+  const latest = summary().runs.items.find((r) => r.status === "completed")!;
+  expect(container.querySelector(".clusters-runs-figure")?.textContent).toBe(String(latest.cluster_count));
 });
 it("says when the list is capped", () => {
   const items = Array.from({ length: 200 }, (_, i) => runOf(300 - i, "completed"));

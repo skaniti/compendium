@@ -8,10 +8,16 @@ import ClusterMembers from "./ClusterMembers";
 const PREVIEW = 25;
 const DASH = "—";
 const HEADERS: { label: string; key?: ClusterSortKey }[] = [
-  { label: "Cluster", key: "name" }, { label: "Pages", key: "size" }, { label: "Confidence", key: "confidence" }, { label: "Supercluster" }, { label: "Group" },
+  { label: "Cluster", key: "name" }, { label: "Pages", key: "size" }, { label: "Confidence", key: "confidence" }, { label: "Supercluster" },
 ];
-const COL_WIDTHS = ["34%", "18%", "12%", "16%", "20%"];
+const COL_WIDTHS = ["36%", "20%", "14%", "30%"];
 export const CLUSTERS_CAPTION = "Confidence is HDBSCAN's mean membership probability for the cluster's pages. Expand a cluster to see its pages.";
+
+function superCell(c: ClusterRow) {
+  const shown = c.super_cluster ?? c.group?.label ?? DASH;
+  if (!c.group) return shown;
+  return <>{shown} <span className="clusters-muted">{c.group.label === shown ? c.group.source : `${c.group.label} · ${c.group.source}`}</span></>;
+}
 
 export default function ClusterTable({ clusters, runId }: { clusters: ClusterRow[]; runId: number }) {
   const [sort, setSort] = useState<{ key: ClusterSortKey; dir: "asc" | "desc" }>({ key: "size", dir: "desc" });
@@ -56,12 +62,11 @@ export default function ClusterTable({ clusters, runId }: { clusters: ClusterRow
                       </span>
                     </td>
                     <td>{percent(c.confidence)}</td>
-                    <td className="clusters-sans">{c.super_cluster ?? DASH}</td>
-                    <td className="clusters-sans">{c.group ? <>{c.group.label} <span className="clusters-muted">{c.group.source}</span></> : DASH}</td>
+                    <td className="clusters-sans">{superCell(c)}</td>
                   </tr>
                   {isOpen && (
                     <tr className="clusters-members-row">
-                      <td colSpan={5} id={`cluster-members-${c.id}`}><ClusterMembers clusterId={c.id} /></td>
+                      <td colSpan={4} id={`cluster-members-${c.id}`}><ClusterMembers clusterId={c.id} /></td>
                     </tr>
                   )}
                 </Fragment>); })}
