@@ -16,6 +16,15 @@ export interface FlowLayout { width: number; height: number; columnX: [number, n
 export const FLOW_MIN_WIDTH = 1100, FLOW_HEIGHT = 380, BAR_W = 8, LABEL_PITCH = 14;
 /** Reserved label heights: outcome labels are two lines (label + count); a breakdown label with a `sub` is two lines, others one. */
 export const OUTCOME_LABEL_H = 30, SUB_LABEL_H = 2 * LABEL_PITCH;
+/** Fate label boxes (centred on the label y): ARCHIVED = caption + 32px count + ratio line, ACTIVE = caption + 22px count, PENDING = one line. */
+export const FATE_LABEL_H: Record<FateKey, number> = { archived: 72, active: 44, pending: LABEL_PITCH };
+/** Extra gap between the last label of one outcome's breakdown group and the first of the next. */
+export const DETAIL_GROUP_EXTRA = 8;
+/** The fate column header sits at svg y=14 (group y = -22); label boxes start below it. */
+export const FATE_LABEL_TOP = -8;
+const GREY_COLORS = new Set(["var(--flow-captured)", "var(--flow-rule)", "var(--flow-before)", "var(--flow-archived)", "var(--flow-pending)"]);
+/** Grey-sourced ribbons need more opacity to read against the panel; cyan/teal ones stay light so they do not overpower. */
+export const ribbonOpacity = (color: string): number => (GREY_COLORS.has(color) ? 0.55 : 0.35);
 const OUTCOME_GAP = 10, GROUP_GAP = 10, IN_GROUP_GAP = 3, FATE_GAP = 10, MIN_H = 2, MAX_NAMED_GATE = 3;
 
 type ModelNode = Omit<FlowNode, "x" | "y" | "h"> & { group: string };
@@ -26,7 +35,8 @@ const FATE_COLOR: Record<FateKey, string> = { archived: "var(--flow-archived)", 
 const LATER_PARTS: [string, string][] = [["later_manual", "manual"], ["later_duplicate", "duplicate"], ["later_chrome", "chrome"], ["later_other", "other"]];
 const CAPTURED_COLOR = "var(--flow-captured)";
 
-function mergeDomains(lists: TopDomain[][]): TopDomain[] {
+/** A merged bundle ranks from the members' top-3 lists, so the result is approximate. */
+export function mergeDomains(lists: TopDomain[][]): TopDomain[] {
   const m = new Map<string, number>();
   for (const l of lists) for (const d of l) m.set(d.domain, (m.get(d.domain) ?? 0) + d.count);
   return [...m].map(([domain, count]) => ({ domain, count })).sort((a, b) => b.count - a.count).slice(0, 3); // a merged bundle ranks from the members' top-3 lists, so it is approximate
@@ -84,7 +94,7 @@ export function buildFlowModel(flow: PipelineFlow, catColors: Record<string, str
         if (laterDone) continue;
         laterDone = true;
         const sub = LATER_PARTS.map(([k, name]) => [name, laterParts.find((x) => x.key === k)?.count ?? 0] as const).filter(([, n]) => n > 0).map(([name, n]) => `${n} ${name}`).join(" · ");
-        add({ id: "processed:later", label: "Archived later", count: laterParts.reduce((a, x) => a + x.count, 0), color: OUTCOME_COLOR.processed, sub, topDomains: mergeDomains(laterParts.map((x) => x.top_domains)) }, sumFates(laterParts));
+        add({ id: "processed:later", label: "Archived later", count: laterParts.reduce((a, x) => a + x.count, 0), color: "var(--flow-archived)", sub, topDomains: mergeDomains(laterParts.map((x) => x.top_domains)) }, sumFates(laterParts));
         continue;
       }
       add({ id: `${o.key}:${d.key}`, label: d.label, count: d.count, color: colorOf(d), dashed: dashedOf(o.key), topDomains: d.top_domains }, sumFates([d]));
@@ -108,10 +118,11 @@ export function buildFlowModel(flow: PipelineFlow, catColors: Record<string, str
  * The first box starts at or below `top - pitch/2` and the last ends at or above `bottom + pitch/2` (for default heights: first y >= top, last y <= bottom).
  * When the run does not fit, the back-sweep pushes earlier values up, possibly above `top`.
  */
-export function declutter(ys: number[], pitch: number, top: number, bottom: number, heights?: number[]): number[] {
+export function declutter(ys: number[], pitch: number, top: number, bottom: number, heights?: number[], extra?: number[]): number[] {
   const h = (i: number) => heights?.[i] ?? pitch;
+  const ex = (i: number) => extra?.[i] ?? 0; // additional gap between box i and box i+1
   const out = ys.map((y, i) => (i === 0 ? Math.max(y, top + (h(0) - pitch) / 2) : y));
-  const gap = (i: number) => (h(i) + h(i + 1)) / 2;
+  const gap = (i: number) => (h(i) + h(i + 1)) / 2 + ex(i);
   for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1] + gap(i - 1));
   const last = out.length - 1;
   if (last >= 0 && out[last] > bottom - (h(last) - pitch) / 2) out[last] = bottom - (h(last) - pitch) / 2;
@@ -212,8 +223,13 @@ export function layoutFlow(flow: PipelineFlow, catColors: Record<string, string>
   // A breakdown label with a sub-line reserves two lines; its box is centred 7px below the label's own y.
   const mid = nodes.filter((x) => x.column === 2);
   const shift = (n: FlowNode) => (n.sub ? (SUB_LABEL_H - LABEL_PITCH) / 2 : 0);
-  const ys = declutter(mid.map((n) => centre(n) + shift(n)), LABEL_PITCH, LABEL_PITCH / 2, FLOW_HEIGHT - LABEL_PITCH / 2, mid.map((n) => (n.sub ? SUB_LABEL_H : LABEL_PITCH)));
+  const ys = declutter(mid.map((n) => centre(n) + shift(n)), LABEL_PITCH, LABEL_PITCH / 2, FLOW_HEIGHT - LABEL_PITCH / 2, mid.map((n) => (n.sub ? SUB_LABEL_H : LABEL_PITCH)),
+    mid.map((n, i) => (i + 1 < mid.length && outcomeOf.get(mid[i + 1].id) !== outcomeOf.get(n.id) ? DETAIL_GROUP_EXTRA : 0)));
   mid.forEach((n, i) => labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: ys[i] - shift(n), anchor: "start" }));
-  for (const n of nodes.filter((x) => x.column === 3)) labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: centre(n), anchor: "start" });
+  // Fate labels reserve their full box so a tiny ARCHIVED node never pushes its caption into the FATE header.
+  const fates = nodes.filter((x) => x.column === 3);
+  const fh = fates.map((n) => FATE_LABEL_H[n.id.slice("fate:".length) as FateKey] ?? LABEL_PITCH);
+  const fys = declutter(fates.map(centre), LABEL_PITCH, FATE_LABEL_TOP + LABEL_PITCH / 2, FLOW_HEIGHT - LABEL_PITCH / 2, fh);
+  fates.forEach((n, i) => labels.push({ nodeId: n.id, x: n.x + BAR_W + 8, y: fys[i], anchor: "start" }));
   return { width: W, height: FLOW_HEIGHT, columnX, nodes, links, labels };
 }

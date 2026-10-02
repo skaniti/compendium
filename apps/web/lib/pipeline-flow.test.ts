@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonPath } from "./pipeline-flow";
+import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonPath, ribbonOpacity, mergeDomains, FATE_LABEL_H, FATE_LABEL_TOP, DETAIL_GROUP_EXTRA } from "./pipeline-flow";
 import type { FateKey, FlowDetail, FlowOutcomeKey, PipelineFlow } from "./types";
 
 const fates = (archived: number, active = 0, pending = 0): Record<FateKey, number> => ({ archived, active, pending });
@@ -204,6 +204,48 @@ describe("label reserved boxes", () => {
     const b = boxes(1, () => OUTCOME_LABEL_H, () => 0);
     expect(b).toHaveLength(4);
     for (let i = 1; i < b.length; i++) expect(b[i].c - b[i - 1].c).toBeGreaterThanOrEqual(OUTCOME_LABEL_H - 1e-9);
+  });
+  it("archived later is grey; only Still active and the Active fate stay cyan", () => {
+    const m = buildFlowModel(flow(), cats);
+    expect(m.nodes.find((n) => n.id === "processed:later")!.color).toBe("var(--flow-archived)");
+    expect(m.links.filter((l) => l.target === "processed:later" || l.source === "processed:later").every((l) => l.color === "var(--flow-archived)")).toBe(true);
+    expect(m.nodes.find((n) => n.id === "processed:active")!.color).toBe("var(--flow-processed)");
+    expect(m.nodes.find((n) => n.id === "fate:active")!.color).toBe("var(--flow-processed)");
+  });
+  it("fate label boxes stay below the FATE header even when the archived node is tiny", () => {
+    const f = flow({
+      total: 1000,
+      outcomes: [{ key: "processed", label: "Processed · kept", count: 1000, top_domains: [] }],
+      details: [d("processed", "later_manual", 2, fates(2)), d("processed", "active", 998, fates(0, 998))],
+      fates: [{ key: "archived", label: "Archived", count: 2 }, { key: "active", label: "Active", count: 998 }, { key: "pending", label: "Pending", count: 0 }],
+    });
+    const L = layoutFlow(f, cats, 1400);
+    const fl = L.labels.map((l) => ({ l, n: L.nodes.find((n) => n.id === l.nodeId)! })).filter((x) => x.n.column === 3);
+    expect(fl).toHaveLength(2);
+    const boxes = fl.map(({ l, n }) => ({ top: l.y - FATE_LABEL_H[n.id.slice(5) as "archived" | "active"] / 2, bottom: l.y + FATE_LABEL_H[n.id.slice(5) as "archived" | "active"] / 2 }));
+    expect(boxes[0].top).toBeGreaterThanOrEqual(FATE_LABEL_TOP - 1e-9);
+    expect(boxes[1].top).toBeGreaterThanOrEqual(boxes[0].bottom - 1e-9);
+  });
+  it("detail groups get extra clearance between consecutive outcomes", () => {
+    const L = layoutFlow(small(), cats, 1400);
+    const mid = L.nodes.filter((n) => n.column === 2).map((n) => ({ n, y: L.labels.find((l) => l.nodeId === n.id)!.y }));
+    // before_gate's last label and rule_filter's first label belong to different groups
+    const a = mid.find((x) => x.n.id === "before_gate:manual")!, b = mid.find((x) => x.n.id === "rule_filter:domain")!;
+    expect(b.y - a.y).toBeGreaterThanOrEqual(LABEL_PITCH + DETAIL_GROUP_EXTRA - 1e-9);
+  });
+  it("declutter adds extra gap where asked", () => {
+    expect(declutter([20, 22, 24], 14, 7, 300, undefined, [0, 8])).toEqual([20, 34, 56]);
+  });
+  it("grey-sourced ribbons are more opaque than cyan and teal ones", () => {
+    expect(ribbonOpacity("var(--flow-rule)")).toBe(0.55);
+    expect(ribbonOpacity("var(--flow-before)")).toBe(0.55);
+    expect(ribbonOpacity("var(--flow-archived)")).toBe(0.55);
+    expect(ribbonOpacity("var(--flow-processed)")).toBe(0.35);
+    expect(ribbonOpacity("var(--flow-gate)")).toBe(0.35);
+  });
+  it("mergeDomains sums per domain and keeps the top 3", () => {
+    const m = mergeDomains([[{ domain: "a", count: 3 }, { domain: "b", count: 1 }], [{ domain: "a", count: 2 }, { domain: "c", count: 4 }, { domain: "d", count: 1 }]]);
+    expect(m).toEqual([{ domain: "a", count: 5 }, { domain: "c", count: 4 }, { domain: "b", count: 1 }]);
   });
   it("declutter honours per-label heights", () => {
     expect(declutter([20, 22], 14, 7, 300, [14, 28])).toEqual([20, 41]);

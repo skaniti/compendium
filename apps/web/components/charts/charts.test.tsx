@@ -104,10 +104,20 @@ it("week labels get wider spacing so 'wk of Sep 22' never runs together at 700px
   expect(labelSpacing(["Sep 22", null])).toBe(76);
 });
 
-it("categoryColors: named ids rotate in order, uncategorized is the neutral grey", async () => {
-  const { categoryColors, UNCATEGORIZED_FILL } = await import("./palette");
+it("categoryColors: named ids take their index's colour, uncategorized is the neutral grey", async () => {
+  const { categoryColors, categoryFill, UNCATEGORIZED_FILL } = await import("./palette");
   const c = categoryColors(["a", "uncategorized", "b"]);
   expect(c.uncategorized).toBe(UNCATEGORIZED_FILL);
-  expect(c.a).toBe(seriesFill(0, 2));
-  expect(c.b).toBe(seriesFill(1, 2));
+  expect(c.a).toBe(categoryFill(0));
+  expect(c.b).toBe(categoryFill(1));
+});
+it("categoryColors: no hue within 30 degrees of the highlight, 13 distinct colours, neighbours far apart", async () => {
+  const { categoryColors } = await import("./palette");
+  const ids = Array.from({ length: 13 }, (_, i) => `c${i}`);
+  const c = categoryColors(ids);
+  const hues = ids.map((id) => Number(/calc\(h \+ (\d+)\)/.exec(c[id])![1]));
+  for (const h of hues) { const d = Math.min(h % 360, 360 - (h % 360)); expect(d).toBeGreaterThanOrEqual(30); expect(h).toBeGreaterThanOrEqual(60); }
+  expect(new Set(ids.map((id) => c[id])).size).toBe(13);
+  for (let i = 1; i < hues.length; i++) expect(Math.abs(hues[i] - hues[i - 1])).toBeGreaterThanOrEqual(15);
+  expect(c.c0).not.toBe(c.c1);
 });

@@ -1,8 +1,8 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import type { FlowDetail, PipelineFlow as Flow } from "@/lib/types";
 import { FLOW_MIN_WIDTH } from "@/lib/pipeline-flow";
-import PipelineFlow from "./PipelineFlow";
+import PipelineFlow, { canScrollRight } from "./PipelineFlow";
 
 const dom = (a: number, b: number, c: number) => [{ domain: "a.example", count: a }, { domain: "b.example", count: b }, { domain: "c.example", count: c }];
 const det = (outcome: FlowDetail["outcome"], key: string, label: string, count: number, archived: number, active: number): FlowDetail =>
@@ -87,4 +87,62 @@ it("an empty period renders the empty copy without NaN", () => {
   const { container } = mount({ total: 0, outcomes: [], details: [], fates: [] });
   expect(screen.getByText("No pages in this period.")).toBeInTheDocument();
   expect(container.innerHTML).not.toContain("NaN");
+});
+it("fate hierarchy: ARCHIVED count is the large headline, ACTIVE the smaller one", () => {
+  const { container } = mount();
+  const heads = Array.from(container.querySelectorAll("text.flow-headline"));
+  expect(heads.find((h) => h.textContent === "70")).toHaveClass("flow-headline-lg");
+  const active = heads.find((h) => h.textContent === "30")!;
+  expect(active).toHaveClass("flow-headline-active");
+  expect(active).not.toHaveClass("flow-headline-lg");
+});
+it("fate captions stay below the column header when the archived node is tiny", () => {
+  const f: Flow = {
+    total: 1000,
+    outcomes: [{ key: "processed", label: "Processed · kept", count: 1000, top_domains: [] }],
+    details: [det("processed", "later_manual", "Archived later", 2, 2, 0), det("processed", "kept", "Still active", 998, 0, 998)],
+    fates: [{ key: "archived", label: "Archived", count: 2 }, { key: "active", label: "Active", count: 998 }],
+  };
+  const { container } = mount(f);
+  const cap = Array.from(container.querySelectorAll("text.flow-cap")).find((t) => t.textContent === "ARCHIVED")!;
+  const headY = Number(container.querySelector("text.flow-colhead:last-of-type")!.getAttribute("y")); // svg coords
+  const capY = Number(cap.getAttribute("y")) + 36; // group offset TOP
+  expect(capY - 10).toBeGreaterThan(headY); // cap text (10px) top clears the header baseline
+});
+it("grey ribbons are more opaque than cyan ones, and archived-later is grey", () => {
+  const { container } = mount();
+  const op = (sel: string) => Number(container.querySelector(sel)!.getAttribute("fill-opacity"));
+  expect(op('path[data-link="captured>rule_filter"]')).toBe(0.55);
+  expect(op('path[data-link="captured>processed"]')).toBe(0.35);
+  expect(container.querySelector('rect[data-node="processed:later"]')).toHaveStyle({ fill: "var(--flow-archived)" });
+});
+it("captured tooltip marks merged top domains approximate", () => {
+  const { container } = mount();
+  fireEvent.mouseMove(container.querySelector('rect[data-node="captured"]')!);
+  const lines = Array.from(container.querySelectorAll('[role="tooltip"] div')).map((d) => d.textContent);
+  expect(lines).toContain("TOP DOMAINS (approx.)");
+});
+it("flags overflow with a right-edge fade until scrolled to the end", () => {
+  const sw = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(1200);
+  const cw = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
+  try {
+    const { container } = mount();
+    const fadeEl = container.querySelector(".pipeline-flow-fade")!;
+    const scroll = container.querySelector(".pipeline-flow-scroll") as HTMLElement;
+    expect(fadeEl).toHaveClass("is-overflowing");
+    scroll.scrollLeft = 600;
+    fireEvent.scroll(scroll);
+    expect(fadeEl).not.toHaveClass("is-overflowing");
+    scroll.scrollLeft = 100;
+    fireEvent.scroll(scroll);
+    expect(fadeEl).toHaveClass("is-overflowing");
+  } finally { sw.mockRestore(); cw.mockRestore(); }
+});
+it("no fade when the flow fits", () => {
+  const { container } = mount();
+  expect(container.querySelector(".pipeline-flow-fade")).not.toHaveClass("is-overflowing");
+});
+it("canScrollRight is false at the end and true before it", () => {
+  expect(canScrollRight({ scrollWidth: 1200, clientWidth: 600, scrollLeft: 600 })).toBe(false);
+  expect(canScrollRight({ scrollWidth: 1200, clientWidth: 600, scrollLeft: 0 })).toBe(true);
 });

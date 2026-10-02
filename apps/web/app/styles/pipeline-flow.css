@@ -3,21 +3,25 @@
   --flow-captured: color-mix(in oklch, var(--panel-caption) 70%, var(--surface));
   --flow-processed: var(--highlight);
   --flow-gate: color-mix(in oklch, var(--highlight) 40%, var(--surface));
-  --flow-rule: color-mix(in oklch, var(--panel-caption) 45%, var(--surface));
+  --flow-rule: color-mix(in oklch, var(--panel-caption) 60%, var(--surface)); /* cooler/lighter than before-gate so the privacy-story band stands apart */
   --flow-before: color-mix(in oklch, var(--panel-caption) 28%, var(--surface));
-  --flow-archived: color-mix(in oklch, var(--panel-caption) 60%, var(--surface));
+  --flow-archived: color-mix(in oklch, var(--panel-caption) 50%, var(--surface));
   --flow-pending: var(--panel-caption);
 }
-.pipeline-flow-scroll { overflow-x: auto; max-width: 100%; }
+.pipeline-flow-fade { position: relative; max-width: 100%; }
+.pipeline-flow-fade::after { content: ""; position: absolute; top: 0; right: 0; bottom: 14px; width: 48px; pointer-events: none; opacity: 0; transition: opacity 0.15s; background: linear-gradient(to right, transparent, var(--surface)); }
+.pipeline-flow-fade.is-overflowing::after { opacity: 1; }
+.pipeline-flow-scroll { overflow-x: auto; max-width: 100%; scrollbar-width: thin; scrollbar-color: var(--panel-caption) transparent; }
 .pipeline-flow-svg { display: block; font-family: inherit; }
-.flow-colhead { fill: var(--panel-caption); font-size: 11px; letter-spacing: 0.12em; }
+.flow-colhead { fill: var(--panel-caption); font-family: monospace; font-size: 11px; letter-spacing: 0.12em; }
 .flow-cap { fill: var(--panel-caption); font-size: 10px; letter-spacing: 0.1em; }
 .flow-cap-active { fill: var(--highlight); }
 .flow-cap-pending { font-family: monospace; }
-.flow-headline { fill: var(--text); font-family: monospace; font-size: 28px; font-weight: 600; }
+.flow-headline { fill: var(--text); font-family: monospace; font-size: 22px; font-weight: 600; }
+.flow-headline-lg { font-size: 32px; }
 .flow-headline-active { fill: var(--highlight); }
-.flow-ratio { fill: var(--panel-caption); font-size: 11px; }
-.flow-ratio-pct { fill: var(--text); font-family: monospace; font-weight: 600; }
+.flow-ratio { fill: var(--panel-caption); font-size: 14px; }
+.flow-ratio-pct { fill: var(--text); font-family: monospace; font-weight: 700; }
 .flow-label { fill: var(--text); font-size: 12px; }
 .flow-label, .flow-num, .flow-sub, .flow-cap, .flow-ratio, .flow-headline, .flow-pending-marker { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .flow-num { fill: var(--text); font-family: monospace; font-weight: 600; }
@@ -39,6 +43,7 @@
 .flow-not-live { fill: var(--panel-caption); font-family: monospace; font-size: 11px; }
 .flow-tl-hit { cursor: default; }
 
-.chart-legend-flow.chart-legend-flat { padding-left: 0; font-size: 12px; font-family: inherit; }
+.chart-legend-flow.chart-legend-flat { padding-left: 180px; /* aligns with the plot's left edge (the 180px label column) */ font-size: 12px; font-family: inherit; }
 .chart-legend-flow.chart-legend-flat .flow-count { color: var(--text); font-family: monospace; font-weight: 600; }
+@media (max-width: 700px) { .chart-legend-flow.chart-legend-flat { padding-left: 0; } }
 .flow-tl-empty-svg { fill: var(--panel-caption); font-family: inherit; font-size: 12px; }

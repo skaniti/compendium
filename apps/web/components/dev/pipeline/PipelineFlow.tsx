@@ -1,24 +1,36 @@
 "use client";
-import type { MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useChartTooltip } from "@/components/charts/ChartTooltip";
 import { useContainerWidth } from "@/components/charts/useContainerWidth";
-import { BAR_W, FLOW_MIN_WIDTH, OUTCOME_LABEL_H, layoutFlow, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
+import { BAR_W, FLOW_MIN_WIDTH, OUTCOME_LABEL_H, layoutFlow, mergeDomains, ribbonOpacity, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
 import { formatRatio, percentOf } from "@/lib/pipeline";
-import type { PipelineFlow as Flow, TopDomain } from "@/lib/types";
+import type { PipelineFlow as Flow } from "@/lib/types";
 
 const TOP = 36; // room for the column headers above the bars
 const BOTTOM = 26; // room for the "Pending 0" markers under the last nodes
 const HEADERS = ["CAPTURED", "OUTCOME", "BREAKDOWN", "FATE"];
 const num = (n: number) => n.toLocaleString("en-US");
 
-function mergeTop(lists: TopDomain[][]): TopDomain[] {
-  const m = new Map<string, number>();
-  for (const l of lists) for (const d of l) m.set(d.domain, (m.get(d.domain) ?? 0) + d.count);
-  return [...m].map(([domain, count]) => ({ domain, count })).sort((a, b) => b.count - a.count).slice(0, 3);
+/** True while the scroller has more content to its right. */
+export function canScrollRight(el: { scrollWidth: number; clientWidth: number; scrollLeft: number }): boolean {
+  return el.scrollWidth - el.clientWidth - el.scrollLeft > 1;
 }
 
 export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; catColors: Record<string, string>; ratio: number }) {
-  const [ref, measured] = useContainerWidth();
+  const [widthRef, measured] = useContainerWidth();
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const [fade, setFade] = useState(false);
+  const ref = useCallback((el: HTMLDivElement | null) => { scroller.current = el; return widthRef(el); }, [widthRef]);
+  useEffect(() => { // right-edge fade while the flow overflows its panel and is not scrolled to the end
+    const el = scroller.current;
+    if (!el) return;
+    const check = () => setFade(canScrollRight(el));
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
+    ro?.observe(el);
+    return () => { el.removeEventListener("scroll", check); ro?.disconnect(); };
+  }, [measured, flow.total]);
   const { tooltip, show, hide } = useChartTooltip();
   if (!(flow.total > 0)) return <p className="dev-empty dev-empty-inline">No pages in this period.</p>;
   const layout = layoutFlow(flow, catColors, measured);
@@ -29,9 +41,9 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
   const captured = flow.total;
 
   const nodeTip = (n: FlowNode) => (e: MouseEvent) => {
-    const domains = n.id === "captured" ? mergeTop(flow.outcomes.map((o) => o.top_domains)) : n.topDomains;
+    const domains = n.id === "captured" ? mergeDomains(flow.outcomes.map((o) => o.top_domains)) : n.topDomains;
     const lines = [n.label, `${num(n.count)} · ${percentOf(n.count, captured).toFixed(1)}% of captured`];
-    if (domains.length > 0) lines.push("TOP DOMAINS", ...domains.slice(0, 3).map((d) => `${d.domain}  ${num(d.count)}`));
+    if (domains.length > 0) lines.push(n.id === "captured" ? "TOP DOMAINS (approx.)" : "TOP DOMAINS", ...domains.slice(0, 3).map((d) => `${d.domain}  ${num(d.count)}`));
     show(e, lines);
   };
   const strandTip = (nodeId: string, linkId: string) => (e: MouseEvent) => {
@@ -43,6 +55,7 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
   const lblOf = new Map(layout.labels.map((l) => [l.nodeId, l]));
 
   return (
+    <div className={`pipeline-flow-fade${fade ? " is-overflowing" : ""}`}>
     <div className="pipeline-flow-scroll" ref={ref}>
       <div className="chart-wrap" style={{ position: "relative", width, minWidth: FLOW_MIN_WIDTH }}>
         <svg className="pipeline-flow-svg" viewBox={`0 0 ${width} ${height + TOP + BOTTOM}`} width={width} height={height + TOP + BOTTOM} role="img" aria-label={summary}>
@@ -51,7 +64,7 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
           ))}
           <g transform={`translate(0,${TOP})`}>
             {layout.links.map((l) => (
-              <path key={l.id} data-link={l.id} d={ribbonPath(l)} className="flow-ribbon" style={{ fill: l.color }} fillOpacity={0.35}
+              <path key={l.id} data-link={l.id} d={ribbonPath(l)} className="flow-ribbon" style={{ fill: l.color }} fillOpacity={ribbonOpacity(l.color)}
                 stroke={l.dashed ? l.color : undefined} strokeDasharray={l.dashed ? "4 3" : undefined} strokeOpacity={l.dashed ? 0.6 : undefined}
                 onMouseEnter={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
                 onMouseMove={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
@@ -90,10 +103,10 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
               return (
                 <g key={n.id} pointerEvents="none">
                   {key === "archived"
-                    ? <text className="flow-cap" x={l.x} y={l.y - 20}>ARCHIVED</text>
-                    : <text className="flow-cap flow-cap-active" x={l.x} y={l.y - 20}>ACTIVE · in your graph</text>}
-                  <text className={`flow-headline${key === "active" ? " flow-headline-active" : ""}`} x={l.x} y={l.y + 8}>{num(n.count)}</text>
-                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 26}><tspan className="flow-ratio-pct">{formatRatio(ratio)}</tspan><tspan>{" archive ratio"}</tspan></text>}
+                    ? <text className="flow-cap" x={l.x} y={l.y - 26}>ARCHIVED</text>
+                    : <text className="flow-cap flow-cap-active" x={l.x} y={l.y - 12}>ACTIVE · in your graph</text>}
+                  <text className={key === "active" ? "flow-headline flow-headline-active" : "flow-headline flow-headline-lg"} x={l.x} y={l.y + (key === "active" ? 14 : 6)}>{num(n.count)}</text>
+                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 28}><tspan className="flow-ratio-pct">{formatRatio(ratio)}</tspan><tspan>{" archive ratio"}</tspan></text>}
                 </g>
               );
             })}
@@ -107,6 +120,7 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
         </svg>
         {tooltip}
       </div>
+    </div>
     </div>
   );
 }
