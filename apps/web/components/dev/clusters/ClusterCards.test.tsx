@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { it, expect } from "vitest";
 import ClusterCards from "./ClusterCards";
+import { formatRunDate } from "@/lib/overview";
 import { summary } from "./test-fixtures";
 
 const card = (container: HTMLElement, label: string) =>
@@ -16,9 +17,12 @@ it("shows the five cards with values and lines", () => {
   expect(value("Superclusters")).toBe("3");
   expect(value("Similarity edges")).toBe("41");
   for (const line of [
-    "run #40 · Sep 1", "176 of 400 pages in your graph", "224 not in a cluster", "12 of 192 pages clustering considered",
+    "176 of 400 pages in your graph", "224 not in a cluster", "12 of 192 pages clustering considered",
     "6 featured on the graph", "4 topics · 5 suggested groups", "mean 47% · range 18–86%", "kept above 15%, at most 3 per cluster",
   ]) expect(container.textContent).toContain(line);
+  // zone-independent: the date text depends on the host time zone
+  expect(container.textContent).toContain(`run #40 · ${formatRunDate(summary().run!.completed_at)}`);
+  expect(container.textContent).toMatch(/run #40 · \S/);
 });
 it("links: loose pages anchor and a plain graph anchor", () => {
   render(<ClusterCards summary={summary()} />);

@@ -345,7 +345,9 @@ def test_members_other_users_cluster_is_404(client):
 def test_members_unknown_and_out_of_range(client):
     tc, uid = client
     _world(uid)
-    assert tc.get("/api/clusters/999999/pages").status_code == 404
+    r = tc.get("/api/clusters/999999/pages")
+    assert r.status_code == 404
+    assert r.json() == {"detail": "cluster not found"}
     assert tc.get(f"/api/clusters/{2**31}/pages").status_code == 422
     assert tc.get("/api/clusters/0/pages").status_code == 422
     assert tc.get("/api/clusters/abc/pages").status_code == 422

@@ -33,6 +33,8 @@
 //   raw/overview/ plus the committed demo seed).
 //   --clusters-only does the same for demo/fixtures/clusters/ (from
 //   raw/clusters/ plus the committed graph / topics fixtures).
+//   NOTE: a FULL build (no flag) now also needs fixtures/raw/clusters/, recorded
+//   first with demo/tools/capture-clusters-fixtures.mjs.
 
 import {
   mkdirSync,
