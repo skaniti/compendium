@@ -65,7 +65,13 @@ class TestRuleFilterConfig:
         assert cfg["domains"] == sorted(main.SKIP_DOMAINS)
         assert cfg["domain_suffixes"] == list(main.SKIP_DOMAIN_SUFFIXES)
         assert cfg["url_patterns"] == [{"domain": d, "path": p} for d, p in main.SKIP_URL_PATTERNS]
-        assert cfg["path_rules"] == list(main.SKIP_URL_PATH_RULES) and cfg["path_rules"]
+        assert cfg["path_rules"] == list(main.SKIP_URL_PATH_RULES)
+
+    def test_path_rules_cover_every_special_case(self):
+        # Pins the twin of main._is_skip_url: it has 4 special cases after the
+        # SKIP_URL_PATTERNS loop (reddit, youtube, instructure, claude.ai chrome).
+        # Adding or removing one there means updating SKIP_URL_PATH_RULES and this count.
+        assert len(ps.build_rule_filter_config()["path_rules"]) == 4
 
 
 class TestSkipGateConfig:

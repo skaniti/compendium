@@ -945,6 +945,7 @@ SKIP_URL_PATH_RULES: tuple[str, ...] = (
     "reddit.com subreddit listings (/r/<name>), not posts",
     "youtube.com channel pages (/@<handle>)",
     "instructure.com module listings (/modules), not module items",
+    "claude.ai app chrome (root, /new, /recents, /settings, /projects, /downloads, sign-in pages), never /chat/<id> transcripts",
 )
 
 

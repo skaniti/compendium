@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from backend.db import page_repo
 from backend.db.connection import get_conn
+from backend.services.pipeline_summary import OUTCOME_ORDER
 
 RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90}
 TOP_DOMAINS = 3
@@ -57,7 +58,6 @@ DETAIL_SQL = f"""(CASE {OUTCOME_SQL}
   ELSE CASE WHEN p.archive_reason = 'placeholder_no_content' THEN 'placeholder' ELSE {_ARCHIVE_KIND} END
 END)"""
 FATE_SQL = _EFFECTIVE_STATUS
-_OUTCOMES = ("before_gate", "rule_filter", "gate", "processed", "pending")
 
 
 def normalize_range(range_key: str | None) -> str:
@@ -225,7 +225,7 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
             "CROSS JOIN LATERAL (SELECT p.visited_at AT TIME ZONE %s AS lx) l"
         )
         outcome_cols = ", ".join(
-            f"COUNT(*) FILTER (WHERE {OUTCOME_SQL} = '{k}') AS {k}" for k in _OUTCOMES
+            f"COUNT(*) FILTER (WHERE {OUTCOME_SQL} = '{k}') AS {k}" for k in OUTCOME_ORDER
         )
         cur.execute(
             f"""
@@ -259,7 +259,7 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
     buckets = []
     for b in starts:
         total, archived, *per_outcome, reached = (
-            int(v) for v in counts.get(b, (0,) * (len(_OUTCOMES) + 3))
+            int(v) for v in counts.get(b, (0,) * (len(OUTCOME_ORDER) + 3))
         )
         buckets.append(
             {
@@ -267,7 +267,7 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
                 "label_key": label_key,
                 "total": total,
                 "archived": archived,
-                "outcomes": dict(zip(_OUTCOMES, per_outcome)),
+                "outcomes": dict(zip(OUTCOME_ORDER, per_outcome)),
                 "reached_gate": reached,
                 "categories": cats.get(b, {}),
             }
