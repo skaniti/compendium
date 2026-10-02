@@ -542,7 +542,7 @@
 .prompts-pill.is-error { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--text) 55%, transparent); background: transparent; }
 .prompts-fixtures details pre { max-height: 40vh; overflow: auto; }
 .prompts-models-table, .prompts-evals-table { table-layout: fixed; width: 100%; min-width: 0; }
-.prompts-models-table th, .prompts-models-table td, .prompts-evals-table th, .prompts-evals-table td { max-width: none; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.prompts-models-table > thead > tr > th, .prompts-models-table > tbody > tr > td, .prompts-evals-table > thead > tr > th, .prompts-evals-table > tbody > tr > td { max-width: none; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .prompts-models-table col.col-stage { width: 12%; }
 .prompts-models-table col.col-detail { width: 24%; }
 .prompts-models-table col.col-model { width: 17%; }
