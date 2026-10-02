@@ -1,5 +1,13 @@
 "use client";
+import { Fragment } from "react";
 import { formatPriceCell, type ModelRow, type UnusedModel } from "@/lib/prompts";
+
+/** Text with a <wbr /> after every `ch`, so long identifiers wrap at token boundaries. */
+function breakAfter(text: string, ch: string) {
+  return text.split(ch).map((part, i, all) => (
+    <Fragment key={i}>{part}{i < all.length - 1 && <>{ch}<wbr /></>}</Fragment>
+  ));
+}
 
 interface Props { models: ModelRow[]; unused: UnusedModel[]; onSelectPrompt: (name: string) => void }
 
@@ -38,10 +46,10 @@ export default function ActiveModels({ models, unused, onSelectPrompt }: Props) 
                 <td className="cell-mono">{formatPriceCell(m)}</td>
                 <td>
                   {m.prompt
-                    ? <button type="button" className="prompts-link" onClick={() => onSelectPrompt(m.prompt as string)}>{m.prompt}</button>
+                    ? <button type="button" className="prompts-link" onClick={() => onSelectPrompt(m.prompt as string)}>{breakAfter(m.prompt, "_")}</button>
                     : "—"}
                 </td>
-                <td className="cell-mono prompts-col-source">{m.source}</td>
+                <td className="cell-mono prompts-col-source">{breakAfter(m.source, ".")}</td>
               </tr>
             ))}
           </tbody>

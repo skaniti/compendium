@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { formatUsd } from "@/lib/overview";
 import {
   compareRows, fixtureFilter, formatDeltaPts, formatEvalDateTime, formatShare,
@@ -103,6 +103,7 @@ export default function EvalRunDetail({ run, runs }: { run: EvalRunRow; runs: Ev
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"all" | "misses">("all");
+  const [openJson, setOpenJson] = useState<Set<string>>(new Set());
   useEffect(() => {
     let live = true;
     fetchEvalRun(run.run_id).then((d) => { if (live) setDetail(d); }, (e) => { if (live) setError(msg(e)); });
@@ -141,17 +142,31 @@ export default function EvalRunDetail({ run, runs }: { run: EvalRunRow; runs: Ev
         <table className="dev-table prompts-fixtures">
           <thead><tr><th>Status</th><th>Type</th><th>Threat</th><th>Fixture</th><th>Expected</th><th>Actual</th><th /></tr></thead>
           <tbody>
-            {fixtures.map((f, i) => (
-              <tr key={`${f.fixture_id}-${i}`}>
-                <td><span className={`prompts-pill is-${f.status}`}>{f.status}</span></td>
-                <td>{f.type ?? "—"}</td>
-                <td>{f.threat_category ?? "—"}</td>
-                <td className="cell-mono">{f.fixture_id ?? "—"}</td>
-                <td>{f.expected ?? "—"}</td>
-                <td>{f.actual ?? "—"}</td>
-                <td><details><summary>JSON</summary><pre className="config-prompt">{JSON.stringify(f.detail, null, 2)}</pre></details></td>
-              </tr>
-            ))}
+            {fixtures.map((f, i) => {
+              const key = `${f.fixture_id}-${i}`;
+              const isOpen = openJson.has(key);
+              return (
+                <Fragment key={key}>
+                  <tr className={f.status === "correct" ? undefined : "is-miss"}>
+                    <td><span className={`prompts-pill is-${f.status}`}>{f.status}</span></td>
+                    <td>{f.type ?? "—"}</td>
+                    <td>{f.threat_category ?? "—"}</td>
+                    <td className="cell-mono">{f.fixture_id ?? "—"}</td>
+                    <td>{f.expected ?? "—"}</td>
+                    <td>{f.actual ?? "—"}</td>
+                    <td>
+                      <button
+                        type="button" className="prompts-link" aria-expanded={isOpen}
+                        onClick={() => setOpenJson((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; })}
+                      >JSON</button>
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr className="prompts-fixture-json"><td colSpan={7}><pre className="config-prompt">{JSON.stringify(f.detail, null, 2)}</pre></td></tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

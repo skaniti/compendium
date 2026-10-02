@@ -17,8 +17,8 @@ function Delta({ v }: { v: number | null }) {
 
 function VsPrevious({ delta }: { delta: NonNullable<EvalRunRow["delta"]> }) {
   const parts = [
-    delta.selection !== null && <>sel <Delta v={delta.selection} /></>,
-    delta.stress !== null && <>str <Delta v={delta.stress} /></>,
+    delta.selection !== null && <span className="prompts-chunk">sel <Delta v={delta.selection} /></span>,
+    delta.stress !== null && <span className="prompts-chunk">str <Delta v={delta.stress} /></span>,
   ].filter(Boolean);
   return (
     <>

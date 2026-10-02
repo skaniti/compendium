@@ -165,5 +165,5 @@ export function compareRows(a: EvalRunDetail, b: EvalRunDetail): CompareRow[] {
     row("Selection accuracy", a.metrics.selection?.accuracy, b.metrics.selection?.accuracy),
     row("Stress accuracy", a.metrics.stress?.accuracy, b.metrics.stress?.accuracy),
     ...threats.map((t) => row(`Recall · ${t}`, ra[t], rb[t])),
-  ];
+  ].filter((r) => r.a !== null || r.b !== null);
 }

@@ -24,6 +24,13 @@ it("prompt button selects; none when prompt is null", async () => {
   expect(onSelect).toHaveBeenCalledWith("alpha_task_v2");
   expect(screen.getAllByRole("button")).toHaveLength(1);
 });
+it("source and prompt keep their text, with break hints after . and _", () => {
+  const { container } = render(<ActiveModels models={models} unused={[]} onSelectPrompt={() => {}} />);
+  expect(container.querySelector("td.prompts-col-source")?.textContent).toBe("settings.model_x");
+  expect(container.querySelector("button.prompts-link")?.textContent).toBe("alpha_task_v2");
+  expect(container.querySelectorAll("button.prompts-link wbr")).toHaveLength(2);
+  expect(container.querySelectorAll("td.prompts-col-source wbr")).toHaveLength(1);
+});
 it("footnote exact, omitted when empty", () => {
   const { rerender } = render(<ActiveModels models={[modelRow()]} unused={[{ model: "model-u", source: "settings.u" }, { model: "model-v", source: "settings.v" }]} onSelectPrompt={() => {}} />);
   expect(screen.getByText("Declared in settings but never called: model-u (settings.u), model-v (settings.v).")).toBeInTheDocument();

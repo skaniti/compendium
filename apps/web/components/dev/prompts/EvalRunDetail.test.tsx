@@ -66,6 +66,21 @@ it("fixtures toggle hides correct rows", async () => {
   await userEvent.click(screen.getByRole("button", { name: "All fixtures" }));
   expect(container.querySelectorAll(".prompts-fixtures tbody tr")).toHaveLength(3);
 });
+it("JSON button toggles an expansion row under its fixture", async () => {
+  const { container } = await open();
+  expect(container.querySelector(".prompts-fixture-json")).toBeNull();
+  const buttons = screen.getAllByRole("button", { name: "JSON" });
+  await userEvent.click(buttons[0]);
+  const row = container.querySelector(".prompts-fixture-json") as HTMLElement;
+  expect(row).toBeTruthy();
+  expect(row.previousElementSibling).toBe(buttons[0].closest("tr"));
+  expect(row.querySelector("pre")?.textContent).toContain("actual_output");
+  await userEvent.click(buttons[1]);
+  expect(container.querySelectorAll(".prompts-fixture-json")).toHaveLength(2);
+  expect(buttons[0]).toHaveAttribute("aria-expanded", "true");
+  await userEvent.click(buttons[0]);
+  expect(container.querySelectorAll(".prompts-fixture-json")).toHaveLength(1);
+});
 it("fixtures_total note", async () => {
   vi.mocked(api.fetchEvalRun).mockResolvedValue(evalDetail({ fixtures_total: 500 }));
   await open();

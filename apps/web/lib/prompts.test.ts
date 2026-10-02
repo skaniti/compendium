@@ -80,6 +80,8 @@ describe("selection and filters", () => {
     }) as unknown as EvalRunDetail;
     const rows = compareRows(d(0.8, { b: 0.9, a: 0.4 }), d(null, { a: 0.5 }));
     expect(rows.map((x) => x.metric)).toEqual(["Selection accuracy", "Stress accuracy", "Recall · a", "Recall · b"]);
+    const sparse = compareRows({ metrics: { selection: { accuracy: 0.8 } } } as unknown as EvalRunDetail, { metrics: {} } as unknown as EvalRunDetail);
+    expect(sparse.map((x) => x.metric)).toEqual(["Selection accuracy"]);
     expect(rows[0]).toEqual({ metric: "Selection accuracy", a: 0.8, b: null, delta: null });
     expect(rows[2].delta).toBeCloseTo(-0.1);
     expect(rows[3]).toEqual({ metric: "Recall · b", a: 0.9, b: null, delta: null });

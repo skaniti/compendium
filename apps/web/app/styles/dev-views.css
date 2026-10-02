@@ -543,13 +543,13 @@
 .prompts-fixtures details pre { max-height: 40vh; overflow: auto; }
 .prompts-models-table, .prompts-evals-table { table-layout: fixed; width: 100%; min-width: 0; }
 .prompts-models-table > thead > tr > th, .prompts-models-table > tbody > tr > td, .prompts-evals-table > thead > tr > th, .prompts-evals-table > tbody > tr > td { max-width: none; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
-.prompts-models-table col.col-stage { width: 12%; }
-.prompts-models-table col.col-detail { width: 24%; }
-.prompts-models-table col.col-model { width: 17%; }
+.prompts-models-table col.col-stage { width: 11%; }
+.prompts-models-table col.col-detail { width: 20%; }
+.prompts-models-table col.col-model { width: 15%; }
 .prompts-models-table col.col-provider { width: 7%; }
 .prompts-models-table col.col-price { width: 10%; }
 .prompts-models-table col.col-prompt { width: 14%; }
-.prompts-models-table col.col-source { width: 16%; }
+.prompts-models-table col.col-source { width: 23%; }
 .prompts-evals-table col.col-run { width: 10%; }
 .prompts-evals-table col.col-prompt { width: 12%; }
 .prompts-evals-table col.col-set { width: 11%; }
@@ -587,4 +587,22 @@
   .prompts-evals-table col.col-selection, .prompts-evals-table col.col-stress { width: 13%; }
   .prompts-evals-table col.col-vs { width: 19%; }
   .prompts-evals-table col.col-action { width: 9%; }
+}
+.prompts-models-table > thead > tr > th, .prompts-models-table > tbody > tr > td { overflow-wrap: break-word; }
+.prompts-evals-table col.col-vs { width: auto; }
+.prompts-evals-table col.col-action { width: 4.5rem; }
+.prompts-chunk { white-space: nowrap; }
+.prompts-evals-table .prompts-pill { font-family: monospace; font-size: 0.66rem; }
+.prompts-confusion th { text-transform: none; }
+.prompts-pill.is-correct { background: color-mix(in oklch, var(--highlight) 24%, transparent); }
+.prompts-pill.is-wrong { background: transparent; box-shadow: inset 0 0 0 1px var(--text); font-weight: 600; }
+.prompts-pill.is-error { background: transparent; box-shadow: none; border: 1px dashed var(--text); }
+.prompts-fixtures tr.is-miss > td:first-child { box-shadow: inset 3px 0 0 var(--text); }
+.prompts-fixture-json > td { padding: 4px 10px 10px; }
+.prompts-fixture-json pre { margin: 0; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
+@media (max-width: 900px) {
+  .prompts-evals-table col.col-vs { width: auto; }
+  .prompts-evals-table col.col-action { width: 4.5rem; }
+  .prompts-nav { column-gap: 24px; }
+  .prompts-task-head { flex-direction: column; align-items: flex-start; gap: 0; }
 }
