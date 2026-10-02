@@ -14,8 +14,8 @@ import { usePeriodFetch } from "./usePeriodFetch";
 
 const EMPTY_ACTIVITY = "No activity in this period.";
 const EMPTY_GATE = "No gate skips in this period.";
-const LABEL_W = 180, ML = 44, MR = 48, MT = 8;
-const H_VOL = 120, H_RATE = 90, H_MIX = 70, AXIS_H = 22;
+const LABEL_W = 180, ML = 44, MR = 48, MT = 8, MB = 8;
+const H_VOL = 112, H_RATE = 82, H_MIX = 70, AXIS_H = 22;
 const OUTCOME_LABEL: Record<FlowOutcomeKey, string> = {
   processed: "Processed · kept", gate: "Skipped by LLM gate", rule_filter: "Rule filter · no LLM", before_gate: "Archived before gate", pending: "Pending",
 };
@@ -41,7 +41,7 @@ export default function FlowTimeline({ range, tz, order, labels, catColors }: { 
   const grid = (t: number, y: (v: number) => number, text: string) => (
     <g key={t} transform={`translate(0,${y(t)})`}><line x2={innerW} className="chart-grid" /><text x={-6} dy="0.32em" textAnchor="end" className="chart-tick">{text}</text></g>
   );
-  const row = (h: number, label: string, head: ReactNode, body: ReactNode, extra = 0) => (
+  const row = (h: number, label: string, head: ReactNode, body: ReactNode, extra = MB) => (
     <div className="flow-tl-row">
       <div className="flow-tl-label">{head}</div>
       {body === null ? null : <svg className="chart" viewBox={`0 0 ${plotW} ${h + MT + extra}`} width={plotW} height={h + MT + extra} role="img" aria-label={label}>{body}</svg>}

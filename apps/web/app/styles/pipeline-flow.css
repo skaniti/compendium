@@ -1,5 +1,6 @@
 /* Pipeline flow redesign: Sankey + shared-axis timeline. Colours come from theme variables only. */
 .pipeline-flow-panel {
+  --flow-captured: color-mix(in oklch, var(--panel-caption) 70%, var(--surface));
   --flow-processed: var(--highlight);
   --flow-gate: color-mix(in oklch, var(--highlight) 40%, var(--surface));
   --flow-rule: color-mix(in oklch, var(--panel-caption) 45%, var(--surface));
@@ -16,6 +17,7 @@
 .flow-headline { fill: var(--text); font-family: monospace; font-size: 28px; font-weight: 600; }
 .flow-headline-active { fill: var(--highlight); }
 .flow-ratio { fill: var(--panel-caption); font-size: 11px; }
+.flow-ratio-pct { fill: var(--text); font-family: monospace; font-weight: 600; }
 .flow-label { fill: var(--text); font-size: 12px; }
 .flow-label, .flow-num, .flow-sub, .flow-cap, .flow-ratio, .flow-headline, .flow-pending-marker { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .flow-num { fill: var(--text); font-family: monospace; font-weight: 600; }

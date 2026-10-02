@@ -37,7 +37,9 @@ it("renders the column headers, captured headline, fate captions and archive rat
   expect(screen.getByText("CAPTURED PAGES")).toBeInTheDocument();
   expect(screen.getByText("100")).toBeInTheDocument();
   expect(screen.getByText("ARCHIVED")).toBeInTheDocument();
-  expect(screen.getByText("70.0% archive ratio")).toBeInTheDocument();
+  const pct = screen.getByText("70.0%");
+  expect(pct).toHaveClass("flow-ratio-pct");
+  expect(pct.parentElement).toHaveTextContent("70.0% archive ratio");
   expect(screen.getByText("ACTIVE · in your graph")).toBeInTheDocument();
   expect(screen.getByText("Skipped by LLM gate")).toBeInTheDocument();
 });

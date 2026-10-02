@@ -24,7 +24,7 @@ type ModelLink = Omit<FlowLink, "x0" | "y0" | "x1" | "y1" | "h">;
 const FATES: FateKey[] = ["archived", "active", "pending"];
 const FATE_COLOR: Record<FateKey, string> = { archived: "var(--flow-archived)", active: "var(--flow-processed)", pending: "var(--flow-pending)" };
 const LATER_PARTS: [string, string][] = [["later_manual", "manual"], ["later_duplicate", "duplicate"], ["later_chrome", "chrome"], ["later_other", "other"]];
-const CAPTURED_COLOR = "var(--highlight)";
+const CAPTURED_COLOR = "var(--flow-captured)";
 
 function mergeDomains(lists: TopDomain[][]): TopDomain[] {
   const m = new Map<string, number>();

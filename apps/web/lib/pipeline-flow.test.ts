@@ -28,6 +28,9 @@ const flow = (over: Partial<PipelineFlow> = {}): PipelineFlow => ({
 const cats = { a: "#a", b: "#b", c: "#c", d: "#d", e: "#e", uncategorized: "#u" };
 
 describe("buildFlowModel", () => {
+  it("captured node uses the neutral captured token, not the highlight", () => {
+    expect(buildFlowModel(flow(), cats).nodes.find((n) => n.id === "captured")?.color).toBe("var(--flow-captured)");
+  });
   it("bundles gate categories past the top three when two or more remain", () => {
     const m = buildFlowModel(flow(), cats);
     const n = m.nodes.find((x) => x.id === "gate:smaller")!;

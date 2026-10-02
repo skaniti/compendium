@@ -93,7 +93,7 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
                     ? <text className="flow-cap" x={l.x} y={l.y - 20}>ARCHIVED</text>
                     : <text className="flow-cap flow-cap-active" x={l.x} y={l.y - 20}>ACTIVE · in your graph</text>}
                   <text className={`flow-headline${key === "active" ? " flow-headline-active" : ""}`} x={l.x} y={l.y + 8}>{num(n.count)}</text>
-                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 26}>{`${formatRatio(ratio)} archive ratio`}</text>}
+                  {key === "archived" && <text className="flow-ratio" x={l.x} y={l.y + 26}><tspan className="flow-ratio-pct">{formatRatio(ratio)}</tspan><tspan>{" archive ratio"}</tspan></text>}
                 </g>
               );
             })}
