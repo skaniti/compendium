@@ -26,14 +26,14 @@ export default function UnclusteredTable({ pages }: { pages: ClusterPages }) {
        : (
         <div className="dev-table-wrap">
           <table className="dev-table dev-table-fixed">
-            <colgroup><col style={{ width: "56%" }} /><col style={{ width: "24%" }} /><col style={{ width: "20%" }} /></colgroup>
+            <colgroup><col style={{ width: "58%" }} /><col style={{ width: "24%" }} /><col style={{ width: "18%" }} /></colgroup>
             <thead><tr><th>Title</th><th>Domain</th><th>Note</th></tr></thead>
             <tbody>
               {data.pages.map((p) => { const href = safeHref(p.url); const title = p.title || "Untitled"; return (
                 <tr key={p.id}>
                   <td className="clusters-sans" title={p.title ?? undefined}>{href ? <a className="clusters-link" href={href} target="_blank" rel="noreferrer">{title}</a> : title}</td>
                   <td>{p.domain || DASH}</td>
-                  <td>
+                  <td className="clusters-nowrap">
                     {p.featured && <span className="clusters-note is-featured">featured</span>}
                     {p.since_run && <span className="clusters-note">new since run</span>}
                   </td>

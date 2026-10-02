@@ -482,3 +482,5 @@
 .clusters-members a:hover, .clusters-link:hover { color: var(--highlight); text-decoration: underline; }
 .clusters-note { display: inline-block; font-family: monospace; font-size: 11px; padding: 1px 8px; margin-right: 6px; border-radius: 999px; color: var(--text); background: color-mix(in oklch, var(--panel-caption) 14%, transparent); }
 .clusters-note.is-featured { color: var(--highlight); background: color-mix(in oklch, var(--highlight) 18%, transparent); }
+.clusters-dist-row .clusters-caption { min-height: calc(2 * 1.4em); }
+.clusters-nowrap { white-space: nowrap; }
