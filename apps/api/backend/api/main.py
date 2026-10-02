@@ -188,7 +188,7 @@ def _record_learning_gate_cost(lg_response, page_url: str | None = None) -> None
         trends_repo.insert_cost_event(
             user_id=get_default_user_id(),
             event_type="learning_gate",
-            model="gpt-4o-mini",
+            model=LEARNING_GATE_MODEL,
             input_tokens=lg_response.input_tokens,
             output_tokens=lg_response.output_tokens,
             cost_usd=lg_response.cost_usd,
@@ -862,6 +862,12 @@ from backend.services.skip_categories import normalize_category
 from fastapi import HTTPException
 
 TOOL_SELECTION_MODEL = "gpt-4o-mini"
+
+# Registry prompts the capture path calls, and the learning gate's model.
+# Named so the Prompts dev view shows what the pipeline actually runs.
+SKIP_GATE_PROMPT = "skip_gate_v2_3"
+LEARNING_GATE_PROMPT = "learning_gate_v1"
+LEARNING_GATE_MODEL = "gpt-4o-mini"
 
 # Domains that should always be skipped — no content fetching, no LLM calls.
 # Auth/SSO, financial portals, healthcare, search engines, AI chat UIs,
@@ -1621,7 +1627,7 @@ async def process_capture(
         from backend.prompts.templates import get_prompt
 
         skip_prompt = get_prompt(
-            "skip_gate_v2_3",
+            SKIP_GATE_PROMPT,
             title=page.title or "Unknown",
             url=page.url,
             domain=urlparse(page.url).hostname or "unknown",
@@ -1709,14 +1715,14 @@ async def process_capture(
             from backend.prompts.templates import get_prompt as get_prompt_tpl
 
             learning_prompt = get_prompt_tpl(
-                "learning_gate_v1",
+                LEARNING_GATE_PROMPT,
                 title=page.title or "Unknown",
                 domain=domain,
                 snippet=snippet or "(no content preview available)",
             )
             lg_response = await llm.complete(
                 prompt=learning_prompt,
-                model="gpt-4o-mini",
+                model=LEARNING_GATE_MODEL,
                 temperature=0.0,
                 max_tokens=5,
             )
