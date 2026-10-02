@@ -1,34 +1,30 @@
 import { area, line, curveLinear } from "d3-shape";
-import { MARGIN, frame, xTime, yLinear, fmtMonthDay, thinTicks, MIN_LABEL_SPACING } from "./scales";
+import { MARGIN, frame, xBand, yLinear, type BandCat } from "./scales";
 import { useContainerWidth } from "./useContainerWidth";
 import { useChartTooltip } from "./ChartTooltip";
-export interface LinePoint { x: Date; y: number; hover: string; labelTop?: string; labelBottom?: string }
-export const ALWAYS_ON_LABEL_MAX = 10; // D5 ruling: labels on every point at <= 10 points, hover-only above
-export default function LineAreaChart({ points, yMax, yTicks, ySuffix = "", height = 240, yTitle = "" }:
-  { points: LinePoint[]; yMax: number; yTicks: number[]; ySuffix?: string; height?: number; yTitle?: string }) {
-  const alwaysOn = points.length <= ALWAYS_ON_LABEL_MAX;
+import BandAxis from "./BandAxis";
+/** y = null breaks the line (no data in that bucket); `tip` lines follow the bucket title in the tooltip. */
+export interface LinePoint { y: number | null; tip: string[] }
+export default function LineAreaChart({ cats, points, yMax, yTicks, ySuffix = "", height = 240, yTitle = "" }:
+  { cats: BandCat[]; points: LinePoint[]; yMax: number; yTicks: number[]; ySuffix?: string; height?: number; yTitle?: string }) {
   const [ref, width] = useContainerWidth(); const { tooltip, show, hide } = useChartTooltip(); const { innerW, innerH } = frame(width, height);
-  const x = xTime(points.map((p) => p.x), innerW); const y = yLinear(yMax, innerH);
-  const ticks = points.length > 0 ? thinTicks(x, innerW, MIN_LABEL_SPACING.monthDay, fmtMonthDay) : [];
-  const ln = line<LinePoint>().x((p) => x(p.x)).y((p) => y(p.y)).curve(curveLinear);
-  const ar = area<LinePoint>().x((p) => x(p.x)).y0(innerH).y1((p) => y(p.y));
+  const x = xBand(points.length, innerW); const y = yLinear(yMax, innerH);
+  const cx = (i: number) => (x(String(i)) ?? 0) + x.bandwidth() / 2;
+  const idx = points.map((_, i) => i);
+  const ln = line<number>().defined((i) => points[i].y !== null).x(cx).y((i) => y(points[i].y ?? 0)).curve(curveLinear);
+  const ar = area<number>().defined((i) => points[i].y !== null).x(cx).y0(innerH).y1((i) => y(points[i].y ?? 0));
   return (
     <div ref={ref} className="chart-wrap" style={{ width: "100%", position: "relative" }}>
     <svg className="chart" viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={yTitle || "line chart"}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
         {yTicks.map((t) => (<g key={t} transform={`translate(0,${y(t)})`}><line x2={innerW} className="chart-grid" /><text x={-6} dy="0.32em" textAnchor="end" className="chart-tick">{t}{ySuffix}</text></g>))}
-        {ticks.map((d, i) => (<text key={i} x={x(d)} y={innerH + 14} textAnchor="middle" className="chart-tick">{fmtMonthDay(d)}</text>))}
-        <path className="chart-area" d={ar(points) ?? ""} fill="var(--highlight)" fillOpacity={0.15} />
-        <path className="chart-line" d={ln(points) ?? ""} fill="none" stroke="var(--highlight)" strokeWidth={2} />
-        {points.map((p, i) => (<circle key={i} className="chart-point" cx={x(p.x)} cy={y(p.y)} r={3} fill="var(--highlight)" />))}
-        {points.map((p, i) => (<circle key={`h${i}`} className="chart-hit" cx={x(p.x)} cy={y(p.y)} r={8} fill="transparent" onMouseEnter={(e) => show(e, [fmtMonthDay(p.x), p.hover])} onMouseMove={(e) => show(e, [fmtMonthDay(p.x), p.hover])} onMouseLeave={hide} />))}
-        {alwaysOn && points.map((p, i) => {
-          const py = y(p.y); const flip = py > innerH - 16; // near the baseline: put both labels above the point
-          return (
-            <g key={`l${i}`} className="chart-point-label">
-              {p.labelTop && <text x={x(p.x)} y={flip ? py - 32 : py - 8} textAnchor="middle" className="chart-tick chart-label-strong">{p.labelTop}</text>}
-              {p.labelBottom && <text x={x(p.x)} y={flip ? py - 20 : py + 14} textAnchor="middle" className="chart-tick">{p.labelBottom}</text>}
-            </g>);
+        <BandAxis cats={cats} x={x} innerW={innerW} innerH={innerH} />
+        <path className="chart-area" d={ar(idx) ?? ""} fill="var(--highlight)" fillOpacity={0.15} />
+        <path className="chart-line" d={ln(idx) ?? ""} fill="none" stroke="var(--highlight)" strokeWidth={2} />
+        {idx.map((i) => points[i].y !== null && (<circle key={i} className="chart-point" cx={cx(i)} cy={y(points[i].y ?? 0)} r={3} fill="var(--highlight)" />))}
+        {idx.map((i) => {
+          const tip = (e: React.MouseEvent) => show(e, [cats[i]?.title ?? "", ...points[i].tip]);
+          return <rect key={`h${i}`} className="chart-hit" x={x(String(i)) ?? 0} width={x.bandwidth()} y={0} height={innerH} fill="transparent" onMouseEnter={tip} onMouseMove={tip} onMouseLeave={hide} />;
         })}
         {yTitle && <text transform={`rotate(-90) translate(${-innerH / 2},${-MARGIN.left + 12})`} textAnchor="middle" className="chart-axis-title">{yTitle}</text>}
       </g>

@@ -155,6 +155,11 @@
     min-width: 0;
 }
 
+/* Narrow bodies: stack the columns so reason rows keep a readable bar and a one-line domains caption. */
+@media (max-width: 900px) {
+    .dev-two-col { flex-direction: column; gap: 0; }
+}
+
 
 /* ===== Noise Pages Table ===== */
 
@@ -316,11 +321,12 @@
     font-weight: 600;
 }
 
+/* One column: every timeline gets the full body width (horizontal space beats vertical for timelines). */
 .trends-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
-    padding: 16px 32px;
+    margin-bottom: 24px;
 }
 
 .trends-chart-cell {
@@ -348,6 +354,10 @@
 .dev-sort-btn:hover { color: var(--text); }
 
 .dev-empty-inline { padding: 8px 0; text-align: left; font-size: 0.72rem; }
+.dev-bar-item { margin-bottom: 6px; }
+.dev-bar-item .dev-bar-row { margin-bottom: 0; }
+.dev-bar-sub { font-size: 0.68rem; color: var(--panel-caption); margin-top: 2px; overflow-wrap: anywhere; }
+.config-cat-id { color: var(--panel-caption); font-weight: 400; }
 .dev-bar-pct { color: var(--panel-caption); font-size: 0.68rem; margin-left: 2px; }
 .dev-sort-btn {
   background: none;

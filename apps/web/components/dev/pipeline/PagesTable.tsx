@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import SortIcon from "@/components/dev/SortIcon";
 import { fetchPipelinePages } from "@/lib/api";
 import { DASH, deriveSkipColumns, formatVisited } from "@/lib/pipeline";
-import type { PageSortColumn, PipelinePagesResponse, SortDir } from "@/lib/types";
+import type { PageSortColumn, PipelinePagesResponse, RangeKey, SortDir } from "@/lib/types";
 const PAGE_SIZE = 50;
 // Header order matches the Dash table; "Skip" and "Skip reason" are derived
 // columns with no backing sort key, so they render as plain <th>.
@@ -12,18 +12,21 @@ const HEADERS: { label: string; sort?: PageSortColumn }[] = [
   { label: "Title", sort: "title" }, { label: "Domain", sort: "domain" }, { label: "Status", sort: "status" },
   { label: "Decision", sort: "processing_depth" }, { label: "Skip" }, { label: "Skip reason" }, { label: "Visited", sort: "visited_at" },
 ];
-export default function PagesTable() {
+export default function PagesTable({ range, tz }: { range: RangeKey; tz: string }) {
   const [page, setPage] = useState(0);
+  const [seenRange, setSeenRange] = useState(range);
+  // a new period starts at page 1; adjusting during render means the effect below never fetches the old page for the new period
+  if (seenRange !== range) { setSeenRange(range); setPage(0); }
   const [sort, setSort] = useState<PageSortColumn>("created_at");
   const [dir, setDir] = useState<SortDir>("desc");
   const [data, setData] = useState<PipelinePagesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir).then((d) => { if (!cancelled) { setData(d); setError(null); } })
+    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir, range, tz).then((d) => { if (!cancelled) { setData(d); setError(null); } })
       .catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, [page, sort, dir]);
+  }, [page, sort, dir, range, tz]);
   function onSort(col: PageSortColumn) {
     if (col === sort) setDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSort(col); setDir("asc"); }
@@ -36,7 +39,7 @@ export default function PagesTable() {
       <h3 className="dev-section-title">All pages</h3>
       {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pages ({error}).</p>
        : !data ? <p className="dev-empty">Loading…</p>
-       : data.rows.length === 0 ? <p className="dev-empty">No pages found.</p>
+       : data.rows.length === 0 ? <p className="dev-empty">No pages in this period.</p>
        : (
         <div className="dev-table-wrap">
           <table className="dev-table dev-table-fixed">

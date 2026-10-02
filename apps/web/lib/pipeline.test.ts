@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveSkipColumns, formatVisited, percentOf, archiveRatio, skipRatePoints, skipReasonMix, archiveReasonLabel, rangeKeyFor } from "./pipeline";
+import { deriveSkipColumns, formatVisited, percentOf, formatRatio, browserTimeZone, rangeKeyFor } from "./pipeline";
 import type { PipelinePage } from "./types";
 
 const base: PipelinePage = { id: 1, title: "T", domain: "example.org", status: "active", processing_depth: "processed",
@@ -31,48 +31,19 @@ describe("formatVisited", () => {
 });
 
 describe("numbers", () => {
-  it("percentOf and archiveRatio guard zero totals", () => {
+  it("percentOf guards zero totals", () => {
     expect(percentOf(3, 0)).toBe(0);
     expect(percentOf(1, 4)).toBe(25);
-    expect(archiveRatio(0, 0)).toBe("0.0%");
-    expect(archiveRatio(224, 1164)).toBe("83.9%");
   });
-});
-
-describe("skipRatePoints (trends.py:268-341)", () => {
-  it("computes rounded percentages and guards total 0", () => {
-    const pts = skipRatePoints([{ day: "2026-08-01", total: 3, skipped: 1 }, { day: "2026-08-02", total: 0, skipped: 0 }]);
-    expect(pts.map((p) => p.rate)).toEqual([33.3, 0]);
-    expect(pts[0].day).toBeInstanceOf(Date);
+  it("formatRatio renders the backend fraction as xx.x% and never NaN", () => {
+    expect(formatRatio(0)).toBe("0.0%");
+    expect(formatRatio(0.8394)).toBe("83.9%");
+    expect(formatRatio(1)).toBe("100.0%");
+    expect(formatRatio(Number.NaN)).toBe("0.0%");
+    expect(formatRatio(undefined)).toBe("0.0%");
   });
-});
-
-describe("skipReasonMix (trends.py:344-424)", () => {
-  it("normalizes each day to 100 over the returned reasons, alphabetical series", () => {
-    const mix = skipReasonMix([
-      { day: "2026-08-01", reason: "login wall", cnt: 3 },
-      { day: "2026-08-01", reason: "content-free stub", cnt: 1 },
-      { day: "2026-08-02", reason: "login wall", cnt: 2 },
-    ]);
-    expect(mix.days).toEqual(["2026-08-01", "2026-08-02"]);
-    expect(mix.series.map((s) => s.name)).toEqual(["content-free stub", "login wall"]);
-    expect(mix.series[1].values).toEqual([75, 100]);
-    expect(mix.series[0].values).toEqual([25, 0]);
-  });
-  it("empty input -> empty days/series", () => {
-    expect(skipReasonMix([])).toEqual({ days: [], series: [] });
-  });
-});
-
-describe("archiveReasonLabel (twin of SKIP_METHOD_LABELS)", () => {
-  it("maps known values and title-cases unknown snake_case", () => {
-    expect(archiveReasonLabel("skip_gate")).toBe("LLM Skip Gate");
-    expect(archiveReasonLabel("domain_skip")).toBe("Domain Filter");
-    expect(archiveReasonLabel("dedupe_fold")).toBe("Dedupe Fold");
-    expect(archiveReasonLabel("other")).toBe("Other");
-    expect(archiveReasonLabel("some_new_reason")).toBe("Some New Reason");
-    expect(archiveReasonLabel("SOME_NEW")).toBe("Some New");
-    expect(archiveReasonLabel("constructor")).toBe("Constructor");
+  it("browserTimeZone returns a non-empty IANA-looking name", () => {
+    expect(browserTimeZone().length).toBeGreaterThan(0);
   });
 });
 

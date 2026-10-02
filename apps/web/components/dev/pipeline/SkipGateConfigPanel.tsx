@@ -15,6 +15,13 @@ export default function SkipGateConfigPanel({ config }: { config: SkipGateConfig
             <div className="config-tool-desc">{t.description}</div>
           </div>
         ))}
+        <div className="config-label">Categories</div>
+        {config.categories.map((c) => (
+          <div className="config-tool" key={c.id}>
+            <div className="config-tool-name">{c.label} <span className="config-cat-id">({c.id})</span></div>
+            <div className="config-tool-desc">{c.description}</div>
+          </div>
+        ))}
       </div>
     </details>
   );

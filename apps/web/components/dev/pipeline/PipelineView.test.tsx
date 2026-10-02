@@ -1,44 +1,77 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { vi, it, expect, beforeEach } from "vitest";
 import * as api from "@/lib/api";
 import type { PipelineSummary } from "@/lib/types";
 import TimeWindowProvider from "@/components/TimeWindowProvider";
 import PipelineView, { PIPELINE_SUBTITLE } from "./PipelineView";
 vi.mock("@/lib/api");
-const summary = (total: number): PipelineSummary => ({
-  status_counts: { active: 1271, pending: 2, archived: 30 }, total_pages: total,
-  decisions: [], skip_methods: [], skip_gate_reasons: [],
-  skip_gate_config: { model: "m", temperature: 0, prompt_name: "p1", prompt: "x", tools: [] },
+const cfg = { model: "m", temperature: 0, prompt_name: "p1", prompt: "x", tools: [], categories: [{ id: "login_wall", label: "Login Wall", description: "Needs sign-in" }] };
+const summary = (o: Partial<PipelineSummary> = {}): PipelineSummary => ({
+  range: "30d", status_counts: { active: 1271, pending: 2, archived: 40 }, total_pages: 1313, archive_ratio: 0.031,
+  decisions: [{ key: "skipped", label: "Skipped", count: 30, evaluated: true }],
+  archive_reasons: [{ key: "skip_gate", label: "Skip Gate", count: 30, top_domains: [{ domain: "a.example", count: 12 }] }, { key: "dedup", label: "Dedup", count: 10, top_domains: [] }],
+  skip_categories: [{ key: "login_wall", label: "Login Wall", count: 20, top_domains: [{ domain: "b.example", count: 7 }] }, { key: "uncategorized", label: "Uncategorized", count: 10, top_domains: [] }],
+  skip_gate_config: cfg, ...o,
 });
+const row = { id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, visited_at: null, created_at: null };
 beforeEach(() => {
-  vi.mocked(api.fetchArchiveHealth).mockResolvedValue({ active_count: 5, archived_count: 7, by_reason: [], per_capture: [] });
-  vi.mocked(api.fetchSkipTrends).mockResolvedValue({ range: "30d", skip_rate: [], skip_reasons: [] });
-  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [{ id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, visited_at: null, created_at: null }], total: 1, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
+  vi.resetAllMocks();
+  vi.mocked(api.fetchPipelineTimeline).mockResolvedValue({ range: "30d", granularity: "day", buckets: [] });
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [row], total: 1, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
 });
-it("shows loading, then formatted status cards and the subtitle", async () => {
-  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(1303));
-  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
-  expect(screen.getAllByText("Loading…")).toHaveLength(4); // summary + table + archive health + skip trends
+const mount = (tw: "7" | "30" | "all" = "30") => render(<TimeWindowProvider initialWindow={tw}><PipelineView /></TimeWindowProvider>);
+it("loads, then shows four status cards (ratio xx.x%), the subtitle, reason lists with domains", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  mount();
+  expect(screen.getAllByText("Loading…").length).toBeGreaterThanOrEqual(3); // summary, timeline, table
   expect(await screen.findByText("1,271")).toBeInTheDocument();
+  expect(screen.getByText("3.1%")).toBeInTheDocument();
   expect(screen.getByText(PIPELINE_SUBTITLE)).toBeInTheDocument();
+  expect(screen.getByText("top: a.example (12)")).toBeInTheDocument();
+  expect(screen.getByText("top: b.example (7)")).toBeInTheDocument();
+  expect(screen.getByText("20").parentElement).toHaveTextContent("20 67%"); // of 30 gate-archived pages
+  expect(screen.getByText("Skip Gate").closest(".dev-bar-row")).toHaveTextContent("30 75%"); // of 40 archived
 });
-it("renders an alert when the summary fails", async () => {
+it("section order follows the spec", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  const { container } = mount();
+  await screen.findByText("1,271");
+  await screen.findByText("Row page");
+  const titles = Array.from(container.querySelectorAll(".dev-section-title, .dev-bars-title, .dev-config-panel > summary")).map((e) => e.textContent);
+  const order = ["Skip gate config", "Page decisions", "Archive reasons", "Skip gate categories", "Archive over time", "Skip rate", "Skip category mix", "All pages"];
+  const idx = order.map((t) => titles.indexOf(t));
+  expect(idx.every((i) => i >= 0)).toBe(true);
+  expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+});
+it("pills are sticky with the header and every section refetches on period change", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  const { container } = mount();
+  await screen.findByText("1,271");
+  expect(container.querySelector(".trends-sticky-header .trends-range-bar")).toBeTruthy();
+  expect(api.fetchPipelineSummary).toHaveBeenCalledWith("30d", expect.any(String));
+  expect(api.fetchPipelineTimeline).toHaveBeenCalledWith("30d", expect.any(String));
+  expect(api.fetchPipelinePages).toHaveBeenCalledWith(50, 0, "created_at", "desc", "30d", expect.any(String));
+  await userEvent.click(screen.getByRole("button", { name: "All time" }));
+  await waitFor(() => expect(api.fetchPipelineSummary).toHaveBeenLastCalledWith("all", expect.any(String)));
+  await waitFor(() => expect(api.fetchPipelineTimeline).toHaveBeenLastCalledWith("all", expect.any(String)));
+  await waitFor(() => expect(api.fetchPipelinePages).toHaveBeenLastCalledWith(50, 0, "created_at", "desc", "all", expect.any(String)));
+});
+it("a failing summary alerts but the timeline and table still load", async () => {
   vi.mocked(api.fetchPipelineSummary).mockRejectedValue(new Error("boom"));
-  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
+  mount();
   expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+  expect(await screen.findByText("Row page")).toBeInTheDocument();
+  expect(await screen.findByText("Archive over time")).toBeInTheDocument();
 });
-it("shows No pages found. when total_pages is 0", async () => {
-  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary(0));
-  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
-  expect(await screen.findByText("No pages found.")).toBeInTheDocument();
-  await screen.findByText("Row page"); // table has a row, so the empty copy is the summary branch
-  expect(screen.getAllByText("No pages found.")).toHaveLength(1); // not DecisionBars' empty caption
-  expect(screen.queryByText("Page status")).not.toBeInTheDocument();
-});
-it("mounts the windowed sections even when the summary fails", async () => {
-  vi.mocked(api.fetchPipelineSummary).mockRejectedValue(new Error("boom"));
-  render(<TimeWindowProvider initialWindow="30"><PipelineView /></TimeWindowProvider>);
-  expect(await screen.findByText("Archive health")).toBeInTheDocument();
-  expect(await screen.findByText("Skip trends")).toBeInTheDocument();
-  expect(await screen.findByText("No skipped pages in this window.")).toBeInTheDocument();
+it("a zero-page period renders every empty state with 0 / 0.0%, never NaN", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary({ status_counts: { active: 0, pending: 0, archived: 0 }, total_pages: 0, archive_ratio: 0, decisions: [], archive_reasons: [], skip_categories: [] }));
+  vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [], total: 0, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
+  const { container } = mount();
+  expect(await screen.findByText("0.0%")).toBeInTheDocument();
+  await screen.findAllByText("No activity in this period.");
+  expect(screen.getAllByText("No pages in this period.").length).toBeGreaterThanOrEqual(3); // decisions, reasons, table
+  expect(screen.getAllByText("No gate skips in this period.").length).toBeGreaterThanOrEqual(2); // categories list + mix
+  expect(container.textContent).not.toContain("NaN");
+  expect(within(container).queryByText("Loading…")).toBeNull();
 });

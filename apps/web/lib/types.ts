@@ -257,24 +257,37 @@ export interface MemberExclusion {
   created_at: string;
 }
 
-// Pipeline dev view (apps/api backend/api/routers/pipeline.py + the reused
-// GET /api/analytics/archive-health). Shapes mirror the router's bare dicts.
+// Pipeline dev view (apps/api backend/api/routers/pipeline.py). Shapes mirror
+// the router's bare dicts; every endpoint takes the shared period (`range`).
 export type RangeKey = "7d" | "30d" | "90d" | "all";
 
 export interface DecisionRow { key: string; label: string; count: number; evaluated: boolean }
-export interface SkipMethodRow { key: string; label: string; count: number }
+export interface TopDomain { domain: string; count: number }
+export interface ReasonRow { key: string; label: string; count: number; top_domains: TopDomain[] }
+export interface SkipGateCategory { id: string; label: string; description: string }
 export interface SkipGateConfig {
   model: string; temperature: number; prompt_name: string; prompt: string;
   tools: { name: string; description: string }[];
+  categories: SkipGateCategory[];
 }
 export interface PipelineSummary {
+  range: RangeKey;
   status_counts: { active: number; pending: number; archived: number };
   total_pages: number;
+  archive_ratio: number;
   decisions: DecisionRow[];
-  skip_methods: SkipMethodRow[];
-  skip_gate_reasons: { reason: string; count: number }[];
+  archive_reasons: ReasonRow[];
+  skip_categories: ReasonRow[];
   skip_gate_config: SkipGateConfig;
 }
+export type TimelineGranularity = "6h" | "day" | "week" | "month";
+export interface TimelineBucket {
+  start: string; // ISO with the viewer's local offset
+  label_key: string;
+  kept: number; archived: number; evaluated: number; skipped: number;
+  categories: Record<string, number>;
+}
+export interface PipelineTimeline { range: RangeKey; granularity: TimelineGranularity; buckets: TimelineBucket[] }
 export interface PipelinePage {
   id: number; title: string | null; domain: string | null; status: string;
   processing_depth: string | null; archive_reason: string | null;
@@ -283,13 +296,3 @@ export interface PipelinePage {
 export type PageSortColumn = "title" | "domain" | "status" | "processing_depth" | "visited_at" | "created_at";
 export type SortDir = "asc" | "desc";
 export interface PipelinePagesResponse { rows: PipelinePage[]; total: number; limit: number; offset: number; sort: PageSortColumn; dir: SortDir }
-export interface ArchiveHealthSummary {
-  active_count: number; archived_count: number;
-  by_reason: { reason: string; count: number; top_domains: { domain: string; count: number }[] }[];
-  per_capture: { capture_id: string; started_at: string | null; archived: number; total: number; rate: number }[];
-}
-export interface SkipTrends {
-  range: string;
-  skip_rate: { day: string; total: number; skipped: number }[];
-  skip_reasons: { day: string; reason: string; cnt: number }[];
-}

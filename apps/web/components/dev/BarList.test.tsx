@@ -12,3 +12,8 @@ it("renders emptyText when there are no rows", () => {
   render(<BarList title="Skip gate reasons" rows={[]} emptyText="No archived pages yet." />);
   expect(screen.getByText("No archived pages yet.")).toBeInTheDocument();
 });
+it("renders a muted second line under a row when sub is given", () => {
+  render(<BarList title="Archive reasons" rows={[{ label: "Dedup", count: 3, pct: 30, fill: "x", sub: "top: a.com (2)" }, { label: "Other", count: 1, fill: "x" }]} emptyText="none" />);
+  expect(screen.getByText("top: a.com (2)")).toHaveClass("dev-bar-sub");
+  expect(document.querySelectorAll(".dev-bar-sub")).toHaveLength(1);
+});

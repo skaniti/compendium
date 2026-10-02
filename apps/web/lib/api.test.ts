@@ -871,18 +871,28 @@ describe("removeMemberExclusion", () => {
 
 describe("pipeline fetchers", () => {
   afterEach(() => vi.unstubAllGlobals());
+  const ok = (body: unknown) => vi.fn().mockImplementation(async () => new Response(JSON.stringify(body), { status: 200 }));
 
-  it("fetchPipelinePages hits /api/pipeline/pages with limit/offset/sort/dir", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ rows: [], total: 0, limit: 50, offset: 100, sort: "domain", dir: "asc" }), { status: 200 }));
+  it("fetchPipelinePages sends paging, sort, range and the encoded tz", async () => {
+    const fetchMock = ok({ rows: [], total: 0, limit: 50, offset: 100, sort: "domain", dir: "asc" });
     vi.stubGlobal("fetch", fetchMock);
     const { fetchPipelinePages } = await import("./api");
-    const body = await fetchPipelinePages(50, 100, "domain", "asc");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/pages?limit=50&offset=100&sort=domain&dir=asc");
+    const body = await fetchPipelinePages(50, 100, "domain", "asc", "7d", "America/New_York");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/pages?limit=50&offset=100&sort=domain&dir=asc&range=7d&tz=America%2FNew_York");
     expect(body.offset).toBe(100);
   });
-  it("fetchSkipTrends throws the house error on non-OK", async () => {
+  it("fetchPipelineSummary and fetchPipelineTimeline send range and tz", async () => {
+    const fetchMock = ok({});
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchPipelineSummary, fetchPipelineTimeline } = await import("./api");
+    await fetchPipelineSummary("30d", "UTC");
+    await fetchPipelineTimeline("all", "Europe/Paris");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/summary?range=30d&tz=UTC");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/pipeline/timeline?range=all&tz=Europe%2FParis");
+  });
+  it("fetchPipelineTimeline throws the house error on non-OK", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500, statusText: "Server Error" })));
-    const { fetchSkipTrends } = await import("./api");
-    await expect(fetchSkipTrends("30d")).rejects.toThrow("fetchSkipTrends failed: 500 Server Error");
+    const { fetchPipelineTimeline } = await import("./api");
+    await expect(fetchPipelineTimeline("30d", "UTC")).rejects.toThrow("fetchPipelineTimeline failed: 500 Server Error");
   });
 });

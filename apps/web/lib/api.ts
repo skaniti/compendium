@@ -1,5 +1,4 @@
 import type {
-  ArchiveHealthSummary,
   ClusteringStatus,
   DiaryWindow,
   GraphPayload,
@@ -9,9 +8,9 @@ import type {
   PageSortColumn,
   PipelinePagesResponse,
   PipelineSummary,
+  PipelineTimeline,
   RangeKey,
   ReclusterResult,
-  SkipTrends,
   SortDir,
   TimeWindow,
   TopicInterest,
@@ -193,24 +192,20 @@ export async function fetchClusteringStatus(): Promise<ClusteringStatus> {
   return (await res.json()) as ClusteringStatus;
 }
 
-export async function fetchPipelineSummary(): Promise<PipelineSummary> {
-  const res = await apiFetch("/api/pipeline/summary");
+const periodQuery = (range: RangeKey, tz: string) => `range=${range}&tz=${encodeURIComponent(tz)}`;
+export async function fetchPipelineSummary(range: RangeKey, tz: string): Promise<PipelineSummary> {
+  const res = await apiFetch(`/api/pipeline/summary?${periodQuery(range, tz)}`);
   if (!res.ok) throw new Error(`fetchPipelineSummary failed: ${res.status} ${res.statusText}`);
   return res.json();
 }
-export async function fetchPipelinePages(limit: number, offset: number, sort: PageSortColumn = "created_at", dir: SortDir = "desc"): Promise<PipelinePagesResponse> {
-  const res = await apiFetch(`/api/pipeline/pages?limit=${limit}&offset=${offset}&sort=${sort}&dir=${dir}`);
+export async function fetchPipelineTimeline(range: RangeKey, tz: string): Promise<PipelineTimeline> {
+  const res = await apiFetch(`/api/pipeline/timeline?${periodQuery(range, tz)}`);
+  if (!res.ok) throw new Error(`fetchPipelineTimeline failed: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+export async function fetchPipelinePages(limit: number, offset: number, sort: PageSortColumn, dir: SortDir, range: RangeKey, tz: string): Promise<PipelinePagesResponse> {
+  const res = await apiFetch(`/api/pipeline/pages?limit=${limit}&offset=${offset}&sort=${sort}&dir=${dir}&${periodQuery(range, tz)}`);
   if (!res.ok) throw new Error(`fetchPipelinePages failed: ${res.status} ${res.statusText}`);
-  return res.json();
-}
-export async function fetchArchiveHealth(range: RangeKey): Promise<ArchiveHealthSummary> {
-  const res = await apiFetch(`/api/analytics/archive-health?range=${range}`);
-  if (!res.ok) throw new Error(`fetchArchiveHealth failed: ${res.status} ${res.statusText}`);
-  return res.json();
-}
-export async function fetchSkipTrends(range: RangeKey): Promise<SkipTrends> {
-  const res = await apiFetch(`/api/pipeline/skip-trends?range=${range}`);
-  if (!res.ok) throw new Error(`fetchSkipTrends failed: ${res.status} ${res.statusText}`);
   return res.json();
 }
 
