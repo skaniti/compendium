@@ -5,6 +5,7 @@ export function rangeKeyFor(tw: TimeWindow): RangeKey {
   return tw === "7" ? "7d" : tw === "30" ? "30d" : tw === "90" ? "90d" : "all";
 }
 export const DASH = "—";
+export const PERIOD_LABELS: Record<RangeKey, string> = { "7d": "7 days", "30d": "30 days", "90d": "90 days", all: "All time" };
 const GATE_REASONS = new Set(["skip_gate", "manual_exclusion", "trivial_capture"]);
 
 export function deriveSkipColumns(p: PipelinePage): { skip: string; skipReason: string } {

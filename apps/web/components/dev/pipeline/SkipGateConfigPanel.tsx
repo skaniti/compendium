@@ -1,8 +1,13 @@
 import type { SkipGateConfig } from "@/lib/types";
 export default function SkipGateConfigPanel({ config }: { config: SkipGateConfig }) {
   return (
-    <details className="dev-config-panel">
-      <summary>Skip gate config</summary>
+    <details className="dev-config-panel dev-panel">
+      <summary>
+        <span className="dev-config-title">Skip gate · LLM</span>
+        <span className="dev-chip">{config.model}</span>
+        <span className="dev-chip">{config.prompt_name}</span>
+        <span className="dev-chip">{config.categories.length} categories + uncategorized</span>
+      </summary>
       <div className="config-body">
         <div className="config-row"><span className="config-label">Model</span><span className="config-value">{config.model}</span></div>
         <div className="config-row"><span className="config-label">Temperature</span><span className="config-value">{config.temperature.toFixed(1)}</span></div>

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import SortIcon from "@/components/dev/SortIcon";
 import { fetchPipelinePages } from "@/lib/api";
-import { DASH, deriveSkipColumns, formatVisited } from "@/lib/pipeline";
+import { DASH, PERIOD_LABELS, flowColumns, formatVisited } from "@/lib/pipeline";
 import type { PageSortColumn, PipelinePagesResponse, RangeKey, SortDir } from "@/lib/types";
 const PAGE_SIZE = 50;
 // Header order matches the Dash table; "Skip" and "Skip reason" are derived
@@ -39,8 +39,11 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
   const isDefault = sort === "created_at" && dir === "desc";
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
   return (
-    <section className={busy ? "is-refreshing" : undefined} aria-busy={busy}>
-      <h3 className="dev-section-title">All pages</h3>
+    <section className={busy ? "dev-panel is-refreshing" : "dev-panel"} aria-busy={busy}>
+      <div className="dev-panel-head">
+        <h3 className="dev-section-title">All pages</h3>
+        <span className="dev-panel-meta">{(data?.total ?? 0).toLocaleString("en-US")} · {PERIOD_LABELS[range]}</span>
+      </div>
       {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pages ({error}).</p>
        : !data ? <p className="dev-empty">Loading…</p>
        : data.rows.length === 0 ? <p className="dev-empty">No pages in this period.</p>
@@ -55,11 +58,11 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
                 </button>
               </th>) : <th key={h.label}>{h.label}</th>)}</tr></thead>
             <tbody>
-              {data.rows.map((r) => { const s = deriveSkipColumns(r); return (
+              {data.rows.map((r) => { const s = flowColumns(r); return (
                 <tr key={r.id}>
-                  <td title={r.title ?? undefined}>{r.title || DASH}</td><td>{r.domain || DASH}</td><td>{r.status || DASH}</td>
-                  <td>{r.processing_depth || DASH}</td><td>{s.skip}</td>
-                  <td title={r.skip_reasoning ?? undefined}>{s.skipReason}</td><td>{formatVisited(r.visited_at)}</td>
+                  <td title={r.title ?? undefined}>{r.title || DASH}</td><td>{r.domain || DASH}</td><td><span className={`status-pill status-${r.fate}`}>{r.fate}</span></td>
+                  <td>{s.decision}</td><td>{s.skip}</td>
+                  <td title={s.skipReasonTitle}>{s.skipReason}</td><td>{formatVisited(r.visited_at)}</td>
                 </tr>); })}
             </tbody>
           </table>
@@ -68,9 +71,10 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
       {data && data.rows.length > 0 && (
         <div className="dev-pager">
           <button type="button" disabled={isDefault} onClick={() => { setSort("created_at"); setDir("desc"); setPage(0); }}>Newest first</button>
-          <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <span>page {page + 1} of {pageCount}</span>
-          <button type="button" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>Next</button>
+          <span>{(data.offset + 1).toLocaleString("en-US")}–{Math.min(data.offset + PAGE_SIZE, data.total).toLocaleString("en-US")} of {data.total.toLocaleString("en-US")}</span>
+          <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
+          <span>{page + 1} / {pageCount}</span>
+          <button type="button" aria-label="Next page" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>›</button>
         </div>
       )}
     </section>
