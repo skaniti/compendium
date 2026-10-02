@@ -7,6 +7,7 @@ import SessionProvider from "@/components/SessionProvider";
 import "./styles/theme.css";
 import "./styles/style.css";
 import "./styles/dev-views.css";
+import "./styles/pipeline-flow.css";
 import "./styles/search-bar.css";
 import "./styles/login.css";
 import "./styles/starry-selector.css";

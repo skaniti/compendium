@@ -1,0 +1,41 @@
+/* Pipeline flow redesign: Sankey + shared-axis timeline. Colours come from theme variables only. */
+.pipeline-flow-panel {
+  --flow-processed: var(--highlight);
+  --flow-gate: color-mix(in oklch, var(--highlight) 40%, var(--surface));
+  --flow-rule: color-mix(in oklch, var(--panel-caption) 45%, var(--surface));
+  --flow-before: color-mix(in oklch, var(--panel-caption) 28%, var(--surface));
+  --flow-archived: color-mix(in oklch, var(--panel-caption) 60%, var(--surface));
+  --flow-pending: var(--panel-caption);
+}
+.pipeline-flow-scroll { overflow-x: auto; max-width: 100%; }
+.pipeline-flow-svg { display: block; font-family: inherit; }
+.flow-colhead { fill: var(--panel-caption); font-size: 11px; letter-spacing: 0.12em; }
+.flow-cap { fill: var(--panel-caption); font-size: 10px; letter-spacing: 0.1em; }
+.flow-cap-active { fill: var(--highlight); }
+.flow-cap-pending { font-family: monospace; }
+.flow-headline { fill: var(--text); font-family: monospace; font-size: 28px; font-weight: 600; }
+.flow-headline-active { fill: var(--highlight); }
+.flow-ratio { fill: var(--panel-caption); font-size: 11px; }
+.flow-label { fill: var(--text); font-size: 12px; }
+.flow-num { fill: var(--text); font-family: monospace; font-weight: 600; }
+.flow-num-lg { font-size: 16px; }
+.flow-sub { fill: var(--panel-caption); font-family: monospace; font-size: 10px; }
+.flow-pending-marker { fill: var(--panel-caption); font-family: monospace; font-size: 11px; opacity: 0.8; }
+.flow-node { cursor: default; }
+.flow-ribbon { transition: fill-opacity 0.12s; }
+.flow-ribbon:hover { fill-opacity: 0.55; }
+
+.flow-timeline { display: flex; flex-direction: column; }
+.flow-tl-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: start; }
+.flow-tl-label { padding: 6px 12px 0 0; font-size: 12px; }
+.flow-tl-title { color: var(--text); font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.flow-tl-sub { color: var(--panel-caption); font-size: 12px; display: flex; align-items: center; gap: 6px; line-height: 1.5; }
+.flow-tl-faint { opacity: 0.7; }
+.flow-tl-swatch { display: inline-block; width: 16px; height: 2px; flex: none; }
+.flow-tl-empty { margin: 0; align-self: center; }
+.flow-rate-end { font-family: monospace; font-size: 11px; }
+.flow-not-live { fill: var(--panel-caption); font-family: monospace; font-size: 11px; }
+.flow-tl-hit { cursor: default; }
+
+.chart-legend-flat { padding-left: 0; font-size: 12px; }
+.chart-legend-flat .flow-count { color: var(--text); font-family: monospace; font-weight: 600; }
