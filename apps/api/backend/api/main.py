@@ -3580,3 +3580,7 @@ app.include_router(_overview_router.router)
 from backend.api.routers import clusters as _clusters_router  # noqa: E402
 
 app.include_router(_clusters_router.router)
+
+from backend.api.routers import prompts as _prompts_router  # noqa: E402
+
+app.include_router(_prompts_router.router)
