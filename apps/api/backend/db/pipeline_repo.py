@@ -90,7 +90,8 @@ def get_windowed_pages(
         cur.execute(
             f"""
             SELECT p.id, p.title, p.domain, p.status, p.processing_depth,
-                   p.archive_reason, p.skip_reasoning, p.visited_at, p.created_at
+                   p.archive_reason, p.skip_reasoning, p.skip_category,
+                   p.visited_at, p.created_at
             FROM pages p JOIN captures c ON p.capture_id = c.id
             WHERE c.user_id = %s{wsql}
             {order_sql}

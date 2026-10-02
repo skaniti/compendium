@@ -177,8 +177,8 @@ headlessly via jsdom.
   unsigned APK); release signing happens out-of-band — no keystore or
   signing config is committed.
 - **Dev views:** they live at `/dev/<view>` behind the header's Dev toggle;
-  the first ported view is Pipeline, backed by `/api/pipeline/*` and
-  `/api/analytics/archive-health`.
+  the first ported view is Pipeline, backed by `/api/pipeline/summary`,
+  `/api/pipeline/timeline` and `/api/pipeline/pages`.
 
 ## Status
 

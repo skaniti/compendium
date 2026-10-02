@@ -6,7 +6,7 @@ import type { PageSortColumn, PipelinePagesResponse, SortDir } from "@/lib/types
 import PagesTable from "./PagesTable";
 vi.mock("@/lib/api");
 const row = (id: number) => ({ id, title: `Page ${id}`, domain: "example.org", status: "archived", processing_depth: "skipped",
-  archive_reason: "skip_gate", skip_reasoning: "login wall", visited_at: "2026-08-13T23:17:14+00:00", created_at: null });
+  archive_reason: "skip_gate", skip_reasoning: "login wall", skip_category: null, visited_at: "2026-08-13T23:17:14+00:00", created_at: null });
 const resp = (rows: ReturnType<typeof row>[], total: number, offset = 0, sort: PageSortColumn = "created_at", dir: SortDir = "desc"): PipelinePagesResponse =>
   ({ rows, total, limit: 50, offset, sort, dir });
 it("renders rows, derived skip columns, and pages through", async () => {

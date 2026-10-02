@@ -1,10 +1,9 @@
 """Pipeline dev-view routes (read-only).
 
-Replaces the in-process repo reads of the Dash Pipeline Monitor
-(explorer frontend/dash/callbacks/pipeline_monitor.py) and the two
-pipeline charts of the Dash Trends tab (trends.py: _chart_skip_rate,
-_chart_skip_reasons_trend). Archive-health metrics are NOT here: the Next
-view reuses GET /api/analytics/archive-health unchanged.
+Pipeline v2 routes, all taking ``range`` and ``tz``: ``/summary`` (period
+counts and top domains), ``/timeline`` (bucketed kept/archived/skipped series
+with skip categories) and ``/pages`` (paginated windowed pages, each carrying
+its ``skip_category``).
 
 Auth: verify_api_key only. The 05 disposition rules Pipeline demo-visitable;
 every query is scoped to the caller's user_id, so a demo session reads its
@@ -104,6 +103,7 @@ async def pipeline_pages(
         "processing_depth",
         "archive_reason",
         "skip_reasoning",
+        "skip_category",
         "visited_at",
         "created_at",
     )

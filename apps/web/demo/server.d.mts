@@ -24,6 +24,9 @@ export interface StartServerOptions {
   // falls through to the standard invalid-credentials 401, and the two
   // acting-session endpoints are absent (404, not 401).
   roleToolingEnabled?: boolean;
+  // Injectable clock (a Date, epoch ms, or a function returning either) used
+  // to shift fixtures and compute the pipeline routes; defaults to real time.
+  now?: Date | number | (() => Date | number);
 }
 
 export interface StartedServer {

@@ -5,19 +5,13 @@
 // skip_gate_config). BACKEND defaults to the ad-hoc :8011 apps/api (never
 // :8001).
 //
-// /api/pipeline/pages does not return skip_category, which the stub needs to
-// compute the skip-category sections. Pass SKIP_CATEGORY_MAP=<json file of
-// {"<page id>": "<category>"|null}> (queried from the same seeded database)
-// and it is merged onto each recorded row. Run `node demo/tools/build-fixtures.mjs` afterwards
-// (or with --pipeline-only to rebuild just demo/fixtures/pipeline/).
-//
 // login()/writeJson() are trimmed copies of the same-named helpers in
 // capture-fixtures.mjs (which runs its main() on import, so it cannot be
 // imported); unlike that tool, a failed login is fatal here.
 //
 // Usage: BACKEND=http://127.0.0.1:8011 CAPTURE_LOGIN_EMAIL=<email> \
 //          node demo/tools/capture-pipeline-fixtures.mjs
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -68,10 +62,6 @@ async function main() {
     if (body.rows.length === 0) break;
     rows.push(...body.rows);
   } while (rows.length < total);
-  if (process.env.SKIP_CATEGORY_MAP) {
-    const map = JSON.parse(await readFile(process.env.SKIP_CATEGORY_MAP, 'utf8'));
-    for (const r of rows) r.skip_category = map[String(r.id)] ?? null;
-  }
   await writeJson('pipeline/pages.json', { rows, total });
   console.log(`[capture-pipeline] pages.json <- ${rows.length}/${total} rows`);
   for (const [file, p] of Object.entries(PATHS)) {

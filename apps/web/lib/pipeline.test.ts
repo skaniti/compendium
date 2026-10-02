@@ -3,7 +3,7 @@ import { deriveSkipColumns, formatVisited, percentOf, formatRatio, browserTimeZo
 import type { PipelinePage } from "./types";
 
 const base: PipelinePage = { id: 1, title: "T", domain: "example.org", status: "active", processing_depth: "processed",
-  archive_reason: null, skip_reasoning: null, visited_at: null, created_at: null };
+  archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null };
 
 describe("deriveSkipColumns (Dash pipeline_monitor.py:338-370)", () => {
   it("domain_skip -> domain / domain filter", () => {

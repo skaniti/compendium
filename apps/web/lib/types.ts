@@ -291,7 +291,7 @@ export interface PipelineTimeline { range: RangeKey; granularity: TimelineGranul
 export interface PipelinePage {
   id: number; title: string | null; domain: string | null; status: string;
   processing_depth: string | null; archive_reason: string | null;
-  skip_reasoning: string | null; visited_at: string | null; created_at: string | null;
+  skip_reasoning: string | null; skip_category: string | null; visited_at: string | null; created_at: string | null;
 }
 export type PageSortColumn = "title" | "domain" | "status" | "processing_depth" | "visited_at" | "created_at";
 export type SortDir = "asc" | "desc";

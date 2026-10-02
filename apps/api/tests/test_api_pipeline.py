@@ -218,6 +218,7 @@ class TestPages:
             "processing_depth",
             "archive_reason",
             "skip_reasoning",
+            "skip_category",
             "visited_at",
             "created_at",
         }

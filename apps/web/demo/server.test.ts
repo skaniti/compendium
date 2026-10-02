@@ -77,7 +77,7 @@ function req(base: string, method: string, pathAndQuery: string, body?: unknown,
 // to reliably abort mid-stream).
 async function withServer<T>(
   fn: (base: string) => Promise<T>,
-  overrides: { reclusterDelayMs?: number; chatTokenDelayMs?: number; roleToolingEnabled?: boolean } = {}
+  overrides: { reclusterDelayMs?: number; chatTokenDelayMs?: number; roleToolingEnabled?: boolean; now?: Date | number | (() => Date | number) } = {}
 ): Promise<T> {
   const server = await startServer({
     port: 0,
@@ -1552,7 +1552,7 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
   // test move the clock via setClock() without re-shifting the data.
   const withNow = <T,>(boot: Date, fn: (get: (p: string) => Promise<Response>, setClock: (d: Date) => void) => Promise<T>) => {
     let clock = boot;
-    return withServer((base) => fn((p) => fetch(`${base}${p}`), (d) => { clock = d; }), { now: () => clock } as never);
+    return withServer((base) => fn((p) => fetch(`${base}${p}`), (d) => { clock = d; }), { now: () => clock });
   };
   const jget = async (g: (p: string) => Promise<Response>, p: string) => (await g(p)).json();
 
@@ -1667,7 +1667,7 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
       expect(all.total).toBeLessThan(252); // later-today visits are after `now`
       expect(first.rows).toHaveLength(Math.min(200, first.total));
       expect(Object.keys(first.rows[0]).sort()).toEqual(
-        ["archive_reason", "created_at", "domain", "id", "processing_depth", "skip_reasoning", "status", "title", "visited_at"],
+        ["archive_reason", "created_at", "domain", "id", "processing_depth", "skip_category", "skip_reasoning", "status", "title", "visited_at"],
       );
       expect(first.rows.every((r: { visited_at: string | null }) => r.visited_at === null || Date.parse(r.visited_at) <= Date.parse("2026-09-30T12:00:00Z"))).toBe(true);
       const seven = await jget(g, "/api/pipeline/pages?range=7d&limit=200");
@@ -1690,6 +1690,8 @@ describe("pipeline routes (v2, computed from the recorded pages)", () => {
       for (const route of ["summary", "timeline", "pages"]) {
         expect((await g(`/api/pipeline/${route}?tz=Not/AZone`)).status).toBe(422);
         expect((await g(`/api/pipeline/${route}?tz=%2B05:00`)).status).toBe(422);
+        expect((await g(`/api/pipeline/${route}?tz=america/new_york`)).status).toBe(422);
+        expect((await g(`/api/pipeline/${route}?tz=utc`)).status).toBe(422);
         expect((await g(`/api/pipeline/${route}?tz=Europe/Berlin`)).status).toBe(200);
       }
     });

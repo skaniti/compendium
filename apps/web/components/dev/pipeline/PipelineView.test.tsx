@@ -14,7 +14,7 @@ const summary = (o: Partial<PipelineSummary> = {}): PipelineSummary => ({
   skip_categories: [{ key: "login_wall", label: "Login Wall", count: 20, top_domains: [{ domain: "b.example", count: 7 }] }, { key: "uncategorized", label: "Uncategorized", count: 10, top_domains: [] }],
   skip_gate_config: cfg, ...o,
 });
-const row = { id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, visited_at: null, created_at: null };
+const row = { id: 1, title: "Row page", domain: "example.org", status: "active", processing_depth: null, archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(api.fetchPipelineTimeline).mockResolvedValue({ range: "30d", granularity: "day", buckets: [] });

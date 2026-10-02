@@ -61,30 +61,38 @@ export function normalizeRange(range) {
 // ---------------------------------------------------------------------------
 
 const formatters = new Map();
+/** Formatter for `tz`, cached by the resolved zone name (throws on invalid zones). */
 function formatter(tz) {
-  let f = formatters.get(tz);
-  if (!f) {
-    f = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      hourCycle: "h23",
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "numeric",
-      second: "numeric",
-    });
-    formatters.set(tz, f);
-  }
-  return f;
+  const resolved = formatters.get(tz);
+  if (resolved) return resolved;
+  const f = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  });
+  const zone = f.resolvedOptions().timeZone;
+  const canonical = formatters.get(`\0${zone}`) ?? f;
+  formatters.set(`\0${zone}`, canonical);
+  formatters.set(tz, canonical);
+  return canonical;
 }
 
-/** True when `tz` is an IANA zone name (same bar as the API's ZoneInfo check). */
+/** True when `tz` is a canonical IANA zone name: close to ZoneInfo; canonical names only. */
 export function isValidTz(tz) {
   if (typeof tz !== "string" || tz === "" || /^[+-]/.test(tz) || /[^A-Za-z0-9_+\-/]/.test(tz)) return false;
   try {
-    formatter(tz);
-    return true;
+    const zone = formatter(tz).resolvedOptions().timeZone;
+    if (zone === tz) return true;
+    // ICU resolves some canonical names to legacy aliases (Asia/Kolkata ->
+    // Asia/Calcutta): accept those unless the input is only a case variant of
+    // the resolved zone or has a segment that is not Capitalized.
+    if (zone.toLowerCase() === tz.toLowerCase()) return false;
+    return tz.split("/").every((seg) => /^[A-Z]/.test(seg) && seg !== seg.toUpperCase() || seg.length <= 3 && seg === seg.toUpperCase());
   } catch {
     return false;
   }
@@ -176,7 +184,7 @@ function windowRows(rows, range, nowMs) {
 // ---------------------------------------------------------------------------
 
 function skipMethodLabel(key) {
-  return SKIP_METHOD_LABELS[key] || key.split("_").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+  return SKIP_METHOD_LABELS[key] || key.split("_").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
 
 function skipCategoryLabel(key) {
@@ -233,7 +241,7 @@ function buildDecisionRows(rows) {
     } else if (raw === "processed") {
       out.push({ key: "processed", label: "Processed", count: count + legacyActive, evaluated: true });
     } else {
-      out.push({ key: raw, label: raw === "skipped" ? "Skipped" : raw[0].toUpperCase() + raw.slice(1), count, evaluated: true });
+      out.push({ key: raw, label: raw.split("_").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" "), count, evaluated: true });
     }
   }
   if (!depthCounts.has("processed") && legacyActive > 0) out.push({ key: "processed", label: "Processed", count: legacyActive, evaluated: true });
@@ -307,7 +315,7 @@ export function computeTimeline(allRows, range, tz, nowMs) {
 // ---------------------------------------------------------------------------
 
 export const PAGE_SORTS = ["title", "domain", "status", "processing_depth", "visited_at", "created_at"];
-const PAGE_KEEP = ["id", "title", "domain", "status", "processing_depth", "archive_reason", "skip_reasoning", "visited_at", "created_at"];
+const PAGE_KEEP = ["id", "title", "domain", "status", "processing_depth", "archive_reason", "skip_reasoning", "skip_category", "visited_at", "created_at"];
 
 export function computePages(allRows, range, nowMs, { limit, offset, sort, dir }) {
   const rows = windowRows(prepare(allRows), normalizeRange(range), nowMs);
