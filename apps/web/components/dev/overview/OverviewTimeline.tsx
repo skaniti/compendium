@@ -2,8 +2,8 @@
 import type { ReactNode } from "react";
 import LineAreaChart from "@/components/charts/LineAreaChart";
 import StackedBarChart from "@/components/charts/StackedBarChart";
-import { categoryColors } from "@/components/charts/palette";
 import { countTicks, type BandCat, type Margin } from "@/components/charts/scales";
+import { DEVICE_COLORS, SPEND_COLORS } from "./colors";
 import { usePeriodFetch } from "@/components/dev/pipeline/usePeriodFetch";
 import { fetchOverviewTimeline } from "@/lib/api";
 import { bucketSpend, formatCount, formatUsd, formatUsdTick, hasOverviewActivity, periodDeltas, plural, runningTotals, SPEND_LABELS, SPEND_ORDER, STALE_API_MESSAGE } from "@/lib/overview";
@@ -15,7 +15,6 @@ const PLOT = { growth: 130, captures: 80, spend: 80 };
 // Same left/right margins on every row so the three band scales line up.
 const margin = (xAxis: boolean): Margin => ({ top: 6, right: 16, bottom: xAxis ? 22 : 4, left: 56 });
 const CAPTURED_COLOR = "var(--panel-caption)", IN_GRAPH_COLOR = "var(--highlight)";
-export const DEVICE_COLORS = { desktop: "color-mix(in oklch, var(--panel-caption) 70%, var(--surface))", phone: "color-mix(in oklch, var(--panel-caption) 35%, var(--surface))" };
 
 function Row({ title, figure, sub, legend, children }: { title: string; figure: string; sub?: string; legend?: { name: string; color: string }[]; children: ReactNode }) {
   return (
@@ -55,21 +54,25 @@ export default function OverviewTimeline({ range, tz }: { range: RangeKey; tz: s
   const spendTotal = buckets.reduce((a, b) => a + bucketSpend(b), 0);
   const calls = buckets.reduce((a, b) => a + b.calls, 0);
   const hasSpend = spendTotal > 0;
-  const purposeColors = categoryColors(SPEND_ORDER);
+  const purposeColors = SPEND_COLORS;
+  const hasCaptures = dTotal + pTotal > 0;
+  const growthAxis = !hasCaptures && !hasSpend, capturesAxis = hasCaptures && !hasSpend;
   const purposes = SPEND_ORDER.filter((k) => buckets.some((b) => b.spend[k] > 0));
   return panel(<>
     <Row title="Corpus growth" figure={`+${formatCount(deltas.captured)} captured`} sub={`+${formatCount(deltas.inGraph)} in your graph`}
       legend={[{ name: "Captured", color: CAPTURED_COLOR }, { name: "In your graph", color: IN_GRAPH_COLOR }]}>
-      <LineAreaChart cats={cats} ariaLabel="Corpus growth" height={PLOT.growth + 10} margin={margin(false)} xAxis={false}
+      <LineAreaChart cats={cats} ariaLabel="Corpus growth" height={PLOT.growth + (growthAxis ? 28 : 10)} margin={margin(growthAxis)} xAxis={growthAxis}
         yMax={growthTicks.top} yTicks={growthTicks.ticks} yFormat={formatCount}
         series={[{ name: "Captured", color: CAPTURED_COLOR, values: totals.captured }, { name: "In your graph", color: IN_GRAPH_COLOR, values: totals.inGraph, area: true }]}
         tip={(i) => [`captured: ${formatCount(totals.captured[i])} (+${formatCount(buckets[i].captured)})`, `in your graph: ${formatCount(totals.inGraph[i])} (+${formatCount(buckets[i].in_graph)})`]} />
     </Row>
     <Row title="Captures" figure={plural(dTotal + pTotal, "capture")} sub={`desktop ${formatCount(dTotal)} · phone ${formatCount(pTotal)}`}
       legend={[{ name: "Desktop", color: DEVICE_COLORS.desktop }, { name: "Phone", color: DEVICE_COLORS.phone }]}>
-      <StackedBarChart mode="count" cats={cats} legend={false} height={PLOT.captures + (hasSpend ? 10 : 28)} margin={margin(!hasSpend)} xAxis={!hasSpend} yFormat={formatCount}
-        series={[{ name: "Desktop", color: DEVICE_COLORS.desktop, values: desktop }, { name: "Phone", color: DEVICE_COLORS.phone, values: phone }]}
-        tip={(i) => [`desktop: ${formatCount(desktop[i])}`, `phone: ${formatCount(phone[i])}`, `total: ${formatCount(desktop[i] + phone[i])}`]} />
+      {hasCaptures ? (
+        <StackedBarChart mode="count" cats={cats} legend={false} height={PLOT.captures + (capturesAxis ? 28 : 10)} margin={margin(capturesAxis)} xAxis={capturesAxis} yFormat={formatCount}
+          series={[{ name: "Desktop", color: DEVICE_COLORS.desktop, values: desktop }, { name: "Phone", color: DEVICE_COLORS.phone, values: phone }]}
+          tip={(i) => [`desktop: ${formatCount(desktop[i])}`, `phone: ${formatCount(phone[i])}`, `total: ${formatCount(desktop[i] + phone[i])}`]} />
+      ) : <p className="dev-empty dev-empty-inline">No captures in this period.</p>}
     </Row>
     <Row title="LLM spend" figure={formatUsd(spendTotal)} sub={plural(calls, "call")}
       legend={hasSpend ? purposes.map((k) => ({ name: SPEND_LABELS[k], color: purposeColors[k] })) : undefined}>

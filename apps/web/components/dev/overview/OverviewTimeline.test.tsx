@@ -50,3 +50,25 @@ it("other errors alert", async () => {
   mount();
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the timeline");
 });
+const noCaptures = (i: number, spend = { gates: 0.01, clustering: 0, chat: 0.001, other: 0 }, calls = 3) =>
+  bucket(i, { captures: { desktop: 0, phone: 0 }, spend, calls });
+const noSpend = { gates: 0, clustering: 0, chat: 0, other: 0 };
+it("no captures with spend: captures row says so and spend carries the x labels", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline([noCaptures(0), noCaptures(1), noCaptures(2)]));
+  const { container } = mount();
+  await screen.findByText("No captures in this period.");
+  const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
+  expect(rows[1]).toHaveTextContent("No captures in this period.");
+  expect(rows[1].querySelector("svg")).toBeNull();
+  expect(rows[1].querySelectorAll("text.chart-xlabel")).toHaveLength(0);
+  expect(rows[0].querySelectorAll("text.chart-xlabel")).toHaveLength(0);
+  expect(rows[2].querySelectorAll("text.chart-xlabel").length).toBeGreaterThan(0);
+});
+it("no captures and no spend: growth row carries the x labels", async () => {
+  vi.mocked(api.fetchOverviewTimeline).mockResolvedValue(timeline([noCaptures(0, noSpend, 0), noCaptures(1, noSpend, 0)]));
+  const { container } = mount();
+  await screen.findByText("No captures in this period.");
+  await screen.findByText("No LLM spend in this period.");
+  const rows = [...container.querySelectorAll(".overview-tl-row")] as HTMLElement[];
+  expect(rows[0].querySelectorAll("text.chart-xlabel").length).toBeGreaterThan(0);
+});
