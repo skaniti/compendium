@@ -24,12 +24,15 @@
 // Usage: node demo/tools/build-fixtures.mjs
 //        node demo/tools/build-fixtures.mjs --pipeline-only
 //        node demo/tools/build-fixtures.mjs --overview-only
+//        node demo/tools/build-fixtures.mjs --clusters-only
 //   --pipeline-only rebuilds ONLY demo/fixtures/pipeline/ from raw/pipeline/,
 //   leaving every other committed fixture untouched. It reuses the anchor
 //   already recorded in the committed meta.json (instead of today) so the
 //   pipeline dates agree with the existing diary.
 //   --overview-only does the same for demo/fixtures/overview/ (from
 //   raw/overview/ plus the committed demo seed).
+//   --clusters-only does the same for demo/fixtures/clusters/ (from
+//   raw/clusters/ plus the committed graph / topics fixtures).
 
 import {
   mkdirSync,
@@ -51,6 +54,7 @@ const RAW_DIR = path.join(REPO_ROOT, 'demo', 'fixtures', 'raw');
 const OUT_DIR = path.join(REPO_ROOT, 'demo', 'fixtures');
 const PIPELINE_ONLY = process.argv.includes('--pipeline-only');
 const OVERVIEW_ONLY = process.argv.includes('--overview-only');
+const CLUSTERS_ONLY = process.argv.includes('--clusters-only');
 
 function fatal(msg) {
   console.error(`\n[build-fixtures] FATAL: ${msg}\n`);
@@ -58,6 +62,7 @@ function fatal(msg) {
 }
 
 if (PIPELINE_ONLY && OVERVIEW_ONLY) fatal('--pipeline-only and --overview-only are mutually exclusive');
+if (CLUSTERS_ONLY && (PIPELINE_ONLY || OVERVIEW_ONLY)) fatal('--clusters-only is mutually exclusive with --pipeline-only and --overview-only');
 
 function readJson(...relParts) {
   const full = path.join(RAW_DIR, ...relParts);
@@ -91,9 +96,9 @@ const OUTPUT_ENTRIES = [
   'graph-window-90.json', 'graph-window-365.json',
   'diary-day.json', 'diary-week.json', 'diary-month.json',
   'diary-filtered-day.json', 'diary-filtered-week.json', 'diary-filtered-month.json',
-  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline', 'overview',
+  'nodes', 'pages', 'previews', 'members', 'assets', 'chat', 'pipeline', 'overview', 'clusters',
 ];
-for (const entry of PIPELINE_ONLY ? ['pipeline'] : OVERVIEW_ONLY ? ['overview'] : OUTPUT_ENTRIES) {
+for (const entry of PIPELINE_ONLY ? ['pipeline'] : OVERVIEW_ONLY ? ['overview'] : CLUSTERS_ONLY ? ['clusters'] : OUTPUT_ENTRIES) {
   rmSync(path.join(OUT_DIR, entry), { recursive: true, force: true });
 }
 console.log('[build-fixtures] cleaned previous output');
@@ -232,10 +237,10 @@ function formatMonthLabel(monthKey) {
 // Anchor = today (UTC midnight), truncated to a date. meta.json records it;
 // Task 4's stub shifts every date it serves by (today - anchor) at runtime.
 const now = new Date();
-const anchor = PIPELINE_ONLY || OVERVIEW_ONLY
+const anchor = PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY
   ? parseIsoDateUTC(JSON.parse(readFileSync(path.join(OUT_DIR, 'meta.json'), 'utf8')).anchor)
   : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-console.log(`[build-fixtures] anchor (${PIPELINE_ONLY || OVERVIEW_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
+console.log(`[build-fixtures] anchor (${PIPELINE_ONLY || OVERVIEW_ONLY || CLUSTERS_ONLY ? 'committed meta.json' : 'build date'}): ${isoDateStr(anchor)}`);
 
 // Hand-written, deterministic cadence: no RNG, no Date.now()-seeded shuffle.
 // 14 active browsing days spread across a rolling 35-day window ending at
@@ -327,6 +332,35 @@ function buildOverviewFixtures() {
   console.log(`[build-fixtures] overview: ${captures.length} captures, clusters ${clusters ? clusters.clusters : 'none'}`);
 }
 
+// Clusters dev-view fixtures (spec R17): the recorded backend responses for the
+// seed's one run, with the run moved onto the anchor day (its clock time kept;
+// history rows move by the same whole-day delta), and superclusters / topics
+// taken from the committed graph / topics fixtures because the seeded test DB
+// carries no topic preferences (Overview builder precedent).
+function buildClustersFixtures() {
+  const summary = readJson('clusters', 'summary.json');
+  const members = readJson('clusters', 'members.json');
+  const unclustered = readJson('clusters', 'unclustered.json');
+  const outJson = (f) => JSON.parse(readFileSync(path.join(OUT_DIR, f), 'utf8'));
+  const day = (iso) => (iso ? iso.slice(0, 10) : null);
+  const anchorDay = isoDateStr(anchor);
+  const runDay = day(summary.run?.completed_at ?? summary.run?.started_at);
+  const delta = runDay ? Math.round((Date.parse(`${anchorDay}T00:00:00Z`) - Date.parse(`${runDay}T00:00:00Z`)) / 86_400_000) : 0;
+  const shift = (iso) => (iso ? `${isoDateStr(addDaysUTC(parseIsoDateUTC(iso.slice(0, 10)), delta))}${iso.slice(10)}` : iso);
+  const shiftRun = (r) => r && { ...r, started_at: shift(r.started_at), completed_at: shift(r.completed_at) };
+  const superclusters = new Set(outJson('graph.json').clusters.map((c) => c.super_cluster).filter(Boolean)).size;
+  const topics = outJson('topics.json').topics.length;
+  writeJson('clusters/summary.json', {
+    ...summary,
+    run: shiftRun(summary.run),
+    runs: { ...summary.runs, items: summary.runs.items.map(shiftRun) },
+    groups: { ...summary.groups, superclusters, topics },
+  });
+  writeJson('clusters/members.json', members);
+  writeJson('clusters/unclustered.json', unclustered);
+  console.log(`[build-fixtures] clusters: run ${summary.run ? summary.run.id : 'none'}, ${summary.clusters.length} clusters, ${unclustered.total} not in a cluster`);
+}
+
 // Hygiene gate: hoisted so both the full build (Step 11) and --pipeline-only
 // run it over the whole committed output.
 // Terms assembled from parts so this tracked file never matches its own gate
@@ -358,6 +392,13 @@ if (OVERVIEW_ONLY) {
   buildOverviewFixtures();
   runHygieneGate();
   console.log('[build-fixtures] --overview-only: done (other fixtures untouched)');
+  process.exit(0);
+}
+
+if (CLUSTERS_ONLY) {
+  buildClustersFixtures();
+  runHygieneGate();
+  console.log('[build-fixtures] --clusters-only: done (other fixtures untouched)');
   process.exit(0);
 }
 
@@ -706,6 +747,7 @@ writeJson('meta.json', { anchor: isoDateStr(anchor), runNumber: rawClusteringSta
 
 buildPipelineFixtures();
 buildOverviewFixtures();
+buildClustersFixtures();
 
 // ---------------------------------------------------------------------------
 // Step 10: ATTRIBUTION.md

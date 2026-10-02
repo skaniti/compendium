@@ -35,6 +35,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { computeDeltaDays, shiftDiaryWindow, shiftIsoDateTime } from "./lib/dates.mjs";
 import { computeOverviewSummary, computeOverviewTimeline } from "./lib/overview.mjs";
+import { membersFor, pageUnclustered, shiftClustersFixtures } from "./lib/clusters.mjs";
 import { computePages, computeSummary, computeTimeline, isValidTz, PAGE_SORTS } from "./lib/pipeline.mjs";
 import { bearerFromRequest, decodeToken, mintToken } from "./lib/tokens.mjs";
 
@@ -167,6 +168,9 @@ function loadFixtures(fixturesDir, now = new Date()) {
     // Pipeline fixture rows above (demo/lib/overview.mjs).
     overviewCaptures: readJson("overview/captures.json").map((c) => ({ ...c, started_at: shiftIsoDateTime(c.started_at, deltaDays) })),
     overviewClusters: (({ clusters }) => clusters && { ...clusters, run_completed_at: shiftIsoDateTime(clusters.run_completed_at, deltaDays) })(readJson("overview/summary.json")),
+    // Clusters dev view: the recorded backend responses, replayed (run dates
+    // shifted to "now"; demo/lib/clusters.mjs).
+    clusters: { summary: shiftClustersFixtures(readJson("clusters/summary.json"), deltaDays), members: readJson("clusters/members.json"), unclustered: readJson("clusters/unclustered.json") },
   };
 }
 
@@ -1006,6 +1010,31 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         const tz = url.searchParams.get("tz") ?? "UTC";
         if (!isValidTz(tz)) return sendJson(res, 422, { detail: "invalid time zone" });
         sendJson(res, 200, computeOverviewTimeline(fixtures.pipelinePages, fixtures.overviewCaptures, url.searchParams.get("range"), tz, getNow().getTime()));
+      },
+    },
+
+    // Clusters dev view: demo-visitable reads, replayed from the recorded
+    // backend responses (demo/lib/clusters.mjs). Unknown cluster ids 404 like the API.
+    {
+      method: "GET",
+      pattern: /^\/api\/clusters\/summary$/,
+      handler: (req, res) => sendJson(res, 200, fixtures.clusters.summary),
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/clusters\/unclustered$/,
+      handler: (req, res, m, url) => {
+        const r = pageUnclustered(fixtures.clusters.unclustered, url.searchParams);
+        sendJson(res, r.status, r.body);
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/clusters\/(\d+)\/pages$/,
+      handler: (req, res, m) => {
+        const body = membersFor(fixtures.clusters.members, m[1]);
+        if (body) sendJson(res, 200, body);
+        else sendJson(res, 404, { detail: "cluster not found" });
       },
     },
 

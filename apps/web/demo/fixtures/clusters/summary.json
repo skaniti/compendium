@@ -1,0 +1,810 @@
+{
+  "run": {
+    "id": 141,
+    "started_at": "2026-08-15T13:14:53.078809Z",
+    "completed_at": "2026-08-15T13:15:01.510614Z",
+    "cluster_count": 49,
+    "noise_count": 27,
+    "naming_cost": 0.000836,
+    "elapsed_seconds": 8.42
+  },
+  "pages": {
+    "in_graph": 158,
+    "clustered": 130,
+    "clustered_in_graph": 130,
+    "not_clustered": 28,
+    "featured": 20,
+    "since_run": 0
+  },
+  "clusters": [
+    {
+      "id": 7288,
+      "name": "Architectural Styles",
+      "slug": "architectural_styles",
+      "size": 5,
+      "confidence": 0.5239,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7292,
+      "name": "Arduino and Microcontrollers",
+      "slug": "arduino_and_microcontrollers",
+      "size": 5,
+      "confidence": 0.8331,
+      "name_carried": false,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7266,
+      "name": "Variational Inference Techniques",
+      "slug": "variational_inference_techniques",
+      "size": 5,
+      "confidence": 0.7949,
+      "name_carried": true,
+      "super_cluster": "Diffusion models",
+      "group": {
+        "label": "Diffusion models",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7280,
+      "name": "Beverages: Tea and Coffee",
+      "slug": "beverages_tea_and_coffee",
+      "size": 4,
+      "confidence": 0.7727,
+      "name_carried": true,
+      "super_cluster": "Food and Beverages",
+      "group": {
+        "label": "Food and Beverages",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7267,
+      "name": "Biological Processes",
+      "slug": "biological_processes",
+      "size": 4,
+      "confidence": 0.8354,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7287,
+      "name": "Music Theory Concepts",
+      "slug": "music_theory_concepts",
+      "size": 4,
+      "confidence": 0.7696,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7272,
+      "name": "The Aeneid by Virgil",
+      "slug": "the_aeneid_by_virgil",
+      "size": 4,
+      "confidence": 0.6867,
+      "name_carried": true,
+      "super_cluster": "Greek and Roman mythology",
+      "group": {
+        "label": "Greek and Roman mythology",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7304,
+      "name": "Thermodynamics and Energy",
+      "slug": "thermodynamics_and_energy",
+      "size": 4,
+      "confidence": 0.7665,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7273,
+      "name": "Trojan War and Iliad",
+      "slug": "trojan_war_and_iliad",
+      "size": 4,
+      "confidence": 0.6914,
+      "name_carried": true,
+      "super_cluster": "Greek and Roman mythology",
+      "group": {
+        "label": "Greek and Roman mythology",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7281,
+      "name": "Bread and Sourdough",
+      "slug": "bread_and_sourdough",
+      "size": 3,
+      "confidence": 0.902,
+      "name_carried": true,
+      "super_cluster": "Food and Beverages",
+      "group": {
+        "label": "Food and Beverages",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7301,
+      "name": "Button Debouncing Techniques",
+      "slug": "button_debouncing_techniques",
+      "size": 3,
+      "confidence": 0.8944,
+      "name_carried": true,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7295,
+      "name": "Cephalopod Marine Life",
+      "slug": "cephalopod_marine_life",
+      "size": 3,
+      "confidence": 0.9493,
+      "name_carried": false,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7297,
+      "name": "Cephalopods in Cuisine and Science",
+      "slug": "cephalopods_in_cuisine_and_science",
+      "size": 3,
+      "confidence": 0.9095,
+      "name_carried": false,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7269,
+      "name": "Greek Mythology",
+      "slug": "greek_mythology",
+      "size": 3,
+      "confidence": 0.9639,
+      "name_carried": false,
+      "super_cluster": "Greek and Roman mythology",
+      "group": {
+        "label": "Greek and Roman mythology",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7289,
+      "name": "Mathematics and Linear Algebra",
+      "slug": "mathematics_and_linear_algebra",
+      "size": 3,
+      "confidence": 0.9014,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7303,
+      "name": "Natural Geographical Features",
+      "slug": "natural_geographical_features",
+      "size": 3,
+      "confidence": 0.984,
+      "name_carried": true,
+      "super_cluster": "Geological Features",
+      "group": {
+        "label": "Geological Features",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7285,
+      "name": "Pulse-width Modulation",
+      "slug": "pulse_width_modulation",
+      "size": 3,
+      "confidence": 0.9027,
+      "name_carried": true,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7305,
+      "name": "Time, Sleep, and Dreams",
+      "slug": "time_sleep_and_dreams",
+      "size": 3,
+      "confidence": 0.7056,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7306,
+      "name": "Visual Arts",
+      "slug": "visual_arts",
+      "size": 3,
+      "confidence": 0.8787,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7307,
+      "name": "Visual Arts Composition",
+      "slug": "visual_arts_composition",
+      "size": 3,
+      "confidence": 0.8818,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7274,
+      "name": "Ancient Computing Devices",
+      "slug": "ancient_computing_devices",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7271,
+      "name": "Animal Coloration",
+      "slug": "animal_coloration",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7294,
+      "name": "Cephalopod Biology",
+      "slug": "cephalopod_biology",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7264,
+      "name": "Classical Mythology",
+      "slug": "classical_mythology",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Greek and Roman mythology",
+      "group": {
+        "label": "Greek and Roman mythology",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7262,
+      "name": "Cultural Exchange and Languages",
+      "slug": "cultural_exchange_and_languages",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cultural Exchange",
+      "group": {
+        "label": "Cultural Exchange",
+        "source": "suggested",
+        "tier": "casual"
+      }
+    },
+    {
+      "id": 7279,
+      "name": "Diffusion-Based Generative Models",
+      "slug": "diffusion_based_generative_models",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Diffusion models",
+      "group": {
+        "label": "Diffusion models",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7270,
+      "name": "Diffusion Models",
+      "slug": "diffusion_models",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Diffusion models",
+      "group": {
+        "label": "Diffusion models",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7278,
+      "name": "Diffusion Models in Generative Modeling",
+      "slug": "diffusion_models_in_generative_modeling",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Diffusion models",
+      "group": {
+        "label": "Diffusion models",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7275,
+      "name": "Diffusion Models in Image Synthesis",
+      "slug": "diffusion_models_in_image_synthesis",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Diffusion models",
+      "group": {
+        "label": "Diffusion models",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7298,
+      "name": "Education and Language",
+      "slug": "education_and_language",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7263,
+      "name": "Historical Periods",
+      "slug": "historical_periods",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Historical Studies",
+      "group": {
+        "label": "Historical Studies",
+        "source": "suggested",
+        "tier": "casual"
+      }
+    },
+    {
+      "id": 7309,
+      "name": "Human Behavior and Society",
+      "slug": "human_behavior_and_society",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7300,
+      "name": "Integrated Circuits and Microcontrollers",
+      "slug": "integrated_circuits_and_microcontrollers",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7299,
+      "name": "Law and Religion",
+      "slug": "law_and_religion",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7291,
+      "name": "Light and Color",
+      "slug": "light_and_color",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7268,
+      "name": "Marine Ecosystems",
+      "slug": "marine_ecosystems",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7282,
+      "name": "Materials Science",
+      "slug": "materials_science",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Food and Beverages",
+      "group": {
+        "label": "Food and Beverages",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7284,
+      "name": "Mythical Sea Creatures",
+      "slug": "mythical_sea_creatures",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7265,
+      "name": "Mythological Interpretation and Analysis",
+      "slug": "mythological_interpretation_and_analysis",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Greek and Roman mythology",
+      "group": {
+        "label": "Greek and Roman mythology",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7286,
+      "name": "Natural Earth Features",
+      "slug": "natural_earth_features",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Food and Beverages",
+      "group": {
+        "label": "Food and Beverages",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7290,
+      "name": "Natural Landforms",
+      "slug": "natural_landforms",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Geological Features",
+      "group": {
+        "label": "Geological Features",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7310,
+      "name": "Philosophy and Economics",
+      "slug": "philosophy_and_economics",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7293,
+      "name": "Plate Tectonics and Continental Drift",
+      "slug": "plate_tectonics_and_continental_drift",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Geological Features",
+      "group": {
+        "label": "Geological Features",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7296,
+      "name": "Seafood Dishes",
+      "slug": "seafood_dishes",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7277,
+      "name": "Semiconductor History",
+      "slug": "semiconductor_history",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Semiconductor Development",
+      "group": {
+        "label": "Semiconductor Development",
+        "source": "suggested",
+        "tier": "casual"
+      }
+    },
+    {
+      "id": 7308,
+      "name": "Social Sciences",
+      "slug": "social_sciences",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Interdisciplinary Studies",
+      "group": {
+        "label": "Interdisciplinary Studies",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    },
+    {
+      "id": 7276,
+      "name": "Squid Giant Axon",
+      "slug": "squid_giant_axon",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Cephalopods",
+      "group": {
+        "label": "Cephalopods",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7283,
+      "name": "Transistor Technology",
+      "slug": "transistor_technology",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": false,
+      "super_cluster": "Electronics and Arduino",
+      "group": {
+        "label": "Electronics and Arduino",
+        "source": "keyword",
+        "tier": "declared"
+      }
+    },
+    {
+      "id": 7302,
+      "name": "Volcanic Features",
+      "slug": "volcanic_features",
+      "size": 2,
+      "confidence": 1,
+      "name_carried": true,
+      "super_cluster": "Geological Features",
+      "group": {
+        "label": "Geological Features",
+        "source": "suggested",
+        "tier": "binge"
+      }
+    }
+  ],
+  "groups": {
+    "superclusters": 4,
+    "topics": 4,
+    "suggested": 6
+  },
+  "edges": {
+    "count": 72,
+    "min": 0.188,
+    "max": 0.814,
+    "mean": 0.48,
+    "bins": [
+      {
+        "lo": 0,
+        "hi": 0.1,
+        "count": 0
+      },
+      {
+        "lo": 0.1,
+        "hi": 0.2,
+        "count": 1
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.3,
+        "count": 3
+      },
+      {
+        "lo": 0.3,
+        "hi": 0.4,
+        "count": 14
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.5,
+        "count": 26
+      },
+      {
+        "lo": 0.5,
+        "hi": 0.6,
+        "count": 13
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.7,
+        "count": 9
+      },
+      {
+        "lo": 0.7,
+        "hi": 0.8,
+        "count": 5
+      },
+      {
+        "lo": 0.8,
+        "hi": 0.9,
+        "count": 1
+      },
+      {
+        "lo": 0.9,
+        "hi": 1,
+        "count": 0
+      }
+    ]
+  },
+  "runs": {
+    "total": 1,
+    "items": [
+      {
+        "id": 141,
+        "status": "completed",
+        "started_at": "2026-08-15T13:14:53.078809Z",
+        "completed_at": "2026-08-15T13:15:01.510614Z",
+        "cluster_count": 49,
+        "noise_count": 27,
+        "naming_cost": 0.000836,
+        "elapsed_seconds": 8.42
+      }
+    ]
+  },
+  "config": {
+    "clustering": {
+      "embedding_model": "text-embedding-3-small",
+      "text_contract": "ctv2",
+      "min_cluster_size": 2,
+      "min_cluster_size_divisor": 150,
+      "effective_min_cluster_size": 2,
+      "min_samples": 2,
+      "selection_method": "leaf",
+      "selection_epsilon": 0,
+      "metric": "euclidean",
+      "umap_dims": 10,
+      "umap_n_neighbors": 15,
+      "edge_threshold": 0.15,
+      "max_edges_per_cluster": 3
+    },
+    "naming": {
+      "model": "gpt-4o-mini",
+      "temperature": 0.3,
+      "max_tokens": 30,
+      "sample_size": 10,
+      "prompt_name": "cluster_naming_v1a",
+      "prompt": "Name this cluster of {n_pages} web pages based on the DOMINANT topic.\n\nPages:\n{context}\n\nRules:\n- Focus on the subject matter, not the platform (e.g., 'Volcanic Eruptions' not 'Wikipedia Articles', 'Figure Skating' not 'Reddit Discussions').\n- If pages span unrelated topics, name the most common one and ignore outliers.\n- Be specific: 'Phreatomagmatic Eruptions' not 'Science Topics', 'Deck Box Organizers' not 'Gaming Resources'.\n- BAD names: 'Web Search Queries', 'Diverse Online Resources', 'Reddit Discussions', 'Wikipedia and Related Resources'.\n- 2-5 words. Output ONLY the name, nothing else."
+    }
+  }
+}

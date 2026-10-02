@@ -1807,3 +1807,66 @@ describe("overview routes (computed from the pipeline pages + seed captures)", (
     });
   });
 });
+
+describe("clusters routes (replayed from the recorded seed run)", () => {
+  const NOW = new Date("2026-10-01T23:59:59Z");
+  const withNow = <T,>(fn: (base: string) => Promise<T>) => withServer(fn, { now: () => NOW });
+  const fx = (f: string) => JSON.parse(readFileSync(`demo/fixtures/${f}`, "utf8"));
+  const jget = async (base: string, p: string) => (await fetch(`${base}${p}`)).json();
+
+  it("summary: one run, its clusters, and superclusters from the graph fixture", async () => {
+    await withNow(async (base) => {
+      const s = await jget(base, "/api/clusters/summary");
+      expect(s.run).not.toBeNull();
+      expect(s.clusters.length).toBeGreaterThan(0);
+      expect(s.runs.total).toBeGreaterThanOrEqual(1);
+      const sc = new Set(fx("graph.json").clusters.map((c: { super_cluster?: string }) => c.super_cluster).filter(Boolean)).size;
+      expect(s.groups.superclusters).toBe(sc);
+      expect(s.pages.clustered_in_graph + s.pages.not_clustered).toBe(s.pages.in_graph);
+    });
+  });
+
+  it("in your graph agrees with the pipeline stub's All-time active", async () => {
+    await withNow(async (base) => {
+      const s = await jget(base, "/api/clusters/summary");
+      const p = await jget(base, "/api/pipeline/summary?range=all&tz=UTC");
+      expect(s.pages.in_graph).toBe(p.status_counts.active);
+    });
+  });
+
+  it("members for every cluster; unknown id 404s", async () => {
+    await withNow(async (base) => {
+      const s = await jget(base, "/api/clusters/summary");
+      for (const c of s.clusters) {
+        const m = await jget(base, `/api/clusters/${c.id}/pages`);
+        expect(m.total).toBe(c.size);
+      }
+      const r = await fetch(`${base}/api/clusters/987654321/pages`);
+      expect(r.status).toBe(404);
+      expect(await r.json()).toEqual({ detail: "cluster not found" });
+    });
+  });
+
+  it("unclustered pages agree with the summary and page like the API", async () => {
+    await withNow(async (base) => {
+      const s = await jget(base, "/api/clusters/summary");
+      const first = await jget(base, "/api/clusters/unclustered?limit=5&offset=0");
+      expect(first.total).toBe(s.pages.not_clustered);
+      expect(first.pages.length).toBe(Math.min(5, first.total));
+      expect((await fetch(`${base}/api/clusters/unclustered?limit=0`)).status).toBe(422);
+    });
+  });
+
+  it("the run completes on the shifted anchor day", async () => {
+    await withNow(async (base) => {
+      const s = await jget(base, "/api/clusters/summary");
+      // The fixture's run sits on the anchor day; the stub shifts the anchor
+      // onto the UTC date of its clock by whole days.
+      const anchorMs = Date.parse(`${fx("meta.json").anchor}T00:00:00Z`);
+      const nowDayMs = Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), NOW.getUTCDate());
+      const shifted = new Date(anchorMs + (nowDayMs - anchorMs)).toISOString().slice(0, 10);
+      expect(shifted).toBe("2026-10-01");
+      expect(s.run.completed_at.slice(0, 10)).toBe(shifted);
+    });
+  });
+});
