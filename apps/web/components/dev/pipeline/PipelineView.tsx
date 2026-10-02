@@ -3,23 +3,27 @@ import { useMemo, useState } from "react";
 import RangePills from "@/components/dev/RangePills";
 import { useTimeWindow } from "@/components/TimeWindowProvider";
 import { fetchPipelineSummary } from "@/lib/api";
+import { categoryColors } from "@/components/charts/palette";
 import { browserTimeZone, rangeKeyFor } from "@/lib/pipeline";
 import type { PipelineSummary } from "@/lib/types";
-import StatusCards from "./StatusCards";
+import PipelineFlow from "./PipelineFlow";
+import FlowTimeline from "./FlowTimeline";
+import CategoryLegend from "./CategoryLegend";
+import RuleFilterPanel from "./RuleFilterPanel";
 import SkipGateConfigPanel from "./SkipGateConfigPanel";
-import PageDecisions from "./PageDecisions";
-import ReasonList from "./ReasonList";
-import TimelineSection from "./TimelineSection";
 import PagesTable from "./PagesTable";
 import { usePeriodFetch } from "./usePeriodFetch";
 
-export const PIPELINE_SUBTITLE = "Current state of the page processing pipeline for the selected period: how many pages are active, pending, or archived; what archive reasons and skip gate categories are filtering pages out; archive and skip trends over time; and the pages captured in the period.";
+export const PIPELINE_SUBTITLE = "Where every page captured in the selected period went: archived before the gate, filtered by rules with no LLM, skipped by the LLM gate, or processed into your graph; how that changed over time; and every page in the period.";
 
+function gateDetails(s: PipelineSummary | null) {
+  return s?.flow ? s.flow.details.filter((d) => d.outcome === "gate") : [];
+}
 function labelsOf(s: PipelineSummary | null): Record<string, string> {
   if (!s) return {};
   const out: Record<string, string> = {};
   for (const c of s.skip_gate_config.categories) out[c.id] = c.label;
-  for (const c of s.skip_categories) out[c.key] ??= c.label;
+  for (const d of gateDetails(s)) out[d.key] = d.label;
   return out;
 }
 
@@ -28,8 +32,11 @@ export default function PipelineView() {
   const range = rangeKeyFor(timeWindow);
   const [tz] = useState(browserTimeZone);
   const { data: summary, error, busy } = usePeriodFetch(`${range}|${tz}`, () => fetchPipelineSummary(range, tz));
-  const categoryLabels = useMemo(() => labelsOf(summary), [summary]);
-  const gateTotal = summary ? summary.skip_categories.reduce((a, r) => a + r.count, 0) : 0;
+  const labels = useMemo(() => labelsOf(summary), [summary]);
+  const gate = useMemo(() => gateDetails(summary), [summary]);
+  const order = useMemo(() => gate.map((d) => d.key), [gate]);
+  const catColors = useMemo(() => categoryColors(order), [order]);
+  const legend = gate.map((d) => ({ id: d.key, label: d.label, count: d.count, color: catColors[d.key] }));
   return (
     <>
       <div className="trends-sticky-header">
@@ -45,18 +52,22 @@ export default function PipelineView() {
          : !summary ? <p className="dev-empty">Loading…</p>
          : (
           <>
-            <StatusCards counts={summary.status_counts} ratio={summary.archive_ratio} />
-            <SkipGateConfigPanel config={summary.skip_gate_config} />
-            <div className="dev-two-col">
-              <PageDecisions decisions={summary.decisions} total={summary.total_pages} />
-              <ReasonList title="Archive reasons" rows={summary.archive_reasons} base={summary.status_counts.archived}
-                emptyText={summary.total_pages === 0 ? "No pages in this period." : "No archived pages in this period."} />
+            <section className="dev-panel pipeline-flow-panel">
+              {summary.flow ? (
+                <>
+                  <PipelineFlow flow={summary.flow} catColors={catColors} ratio={summary.archive_ratio} />
+                  <FlowTimeline range={range} tz={tz} order={order} labels={labels} catColors={catColors} />
+                  <CategoryLegend items={legend} />
+                </>
+              ) : <p className="dev-empty" role="alert">The API is older than this view; restart it to load the flow.</p>}
+            </section>
+            <div className="pipeline-filters-row">
+              {summary.flow && summary.rule_filter_config && <RuleFilterPanel flow={summary.flow} config={summary.rule_filter_config} />}
+              <SkipGateConfigPanel config={summary.skip_gate_config} />
             </div>
-            <ReasonList title="Skip gate categories" rows={summary.skip_categories} base={gateTotal} emptyText="No gate skips in this period." />
           </>
         )}
         </div>
-        <TimelineSection range={range} tz={tz} categoryLabels={categoryLabels} />
         <PagesTable range={range} tz={tz} />
       </div>
     </>

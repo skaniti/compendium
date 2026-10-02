@@ -261,9 +261,7 @@ export interface MemberExclusion {
 // the router's bare dicts; every endpoint takes the shared period (`range`).
 export type RangeKey = "7d" | "30d" | "90d" | "all";
 
-export interface DecisionRow { key: string; label: string; count: number; evaluated: boolean }
 export interface TopDomain { domain: string; count: number }
-export interface ReasonRow { key: string; label: string; count: number; top_domains: TopDomain[] }
 export interface SkipGateCategory { id: string; label: string; description: string }
 export interface SkipGateConfig {
   model: string; temperature: number; prompt_name: string; prompt: string;
@@ -275,11 +273,8 @@ export interface PipelineSummary {
   status_counts: { active: number; pending: number; archived: number };
   total_pages: number;
   archive_ratio: number;
-  decisions: DecisionRow[];
-  archive_reasons: ReasonRow[];
-  skip_categories: ReasonRow[];
   skip_gate_config: SkipGateConfig;
-  flow?: PipelineFlow; // optional: stale-API guard
+  flow?: PipelineFlow; // optional: stale-API guard (older API)
   rule_filter_config?: RuleFilterConfig;
 }
 export type FlowOutcomeKey = "before_gate" | "rule_filter" | "gate" | "processed" | "pending";
@@ -293,7 +288,7 @@ export type TimelineGranularity = "6h" | "day" | "week" | "month";
 export interface TimelineBucket {
   start: string; // ISO with the viewer's local offset
   label_key: string;
-  kept?: number; archived: number; evaluated?: number; skipped?: number;
+  archived: number;
   categories: Record<string, number>;
   total: number; outcomes: Record<FlowOutcomeKey, number>; reached_gate: number;
 }

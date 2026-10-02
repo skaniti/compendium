@@ -1,28 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { deriveSkipColumns, formatVisited, percentOf, formatRatio, browserTimeZone, rangeKeyFor } from "./pipeline";
+import { formatVisited, percentOf, formatRatio, browserTimeZone, rangeKeyFor } from "./pipeline";
 import type { PipelinePage } from "./types";
 
 const base: PipelinePage = { id: 1, title: "T", domain: "example.org", status: "active", processing_depth: "processed",
   archive_reason: null, skip_reasoning: null, skip_category: null, visited_at: null, created_at: null,
   outcome: "processed", detail: "active", detail_label: "Active", fate: "active" };
-
-describe("deriveSkipColumns (Dash pipeline_monitor.py:338-370)", () => {
-  it("domain_skip -> domain / domain filter", () => {
-    expect(deriveSkipColumns({ ...base, archive_reason: "domain_skip", skip_reasoning: "x" })).toEqual({ skip: "domain", skipReason: "domain filter" });
-  });
-  it("gate reasons collapse to gate and truncate to 80 chars", () => {
-    const long = "a".repeat(100);
-    for (const r of ["skip_gate", "manual_exclusion", "trivial_capture"]) {
-      const out = deriveSkipColumns({ ...base, archive_reason: r, skip_reasoning: long });
-      expect(out.skip).toBe("gate");
-      expect(out.skipReason).toHaveLength(80);
-    }
-  });
-  it("other reasons and nulls show em dashes", () => {
-    expect(deriveSkipColumns({ ...base, archive_reason: "dedup" })).toEqual({ skip: "—", skipReason: "—" });
-    expect(deriveSkipColumns({ ...base })).toEqual({ skip: "—", skipReason: "—" });
-  });
-});
 
 describe("formatVisited", () => {
   it("null -> em dash; ISO -> 'Mon DD, HH:MM:SS' in local time", () => {

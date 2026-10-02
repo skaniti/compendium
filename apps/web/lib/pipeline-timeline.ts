@@ -33,37 +33,6 @@ export function axisLabels(buckets: TimelineBucket[], g: TimelineGranularity): (
 const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0);
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-export function hasActivity(buckets: TimelineBucket[]): boolean {
-  return buckets.some((b) => (b.kept ?? 0) + b.archived > 0 || (b.evaluated ?? 0) > 0 || (b.skipped ?? 0) > 0);
-}
-
-export function archiveBars(buckets: TimelineBucket[]) {
-  return buckets.map((b) => ({ kept: b.kept ?? 0, archived: b.archived, rate: round1(pct(b.archived, (b.kept ?? 0) + b.archived)) }));
-}
-
-/** y is null where nothing was evaluated, so the line breaks instead of reading 0%. */
-export function skipRateSeries(buckets: TimelineBucket[]) {
-  return buckets.map((b) => ({ y: (b.evaluated ?? 0) > 0 ? round1(pct(b.skipped ?? 0, b.evaluated ?? 0)) : null, skipped: b.skipped ?? 0, evaluated: b.evaluated ?? 0 }));
-}
-
-/** 100%-stacked category shares per bucket (0 across the board for a bucket with no gate skips). `labels` maps category id -> display label, in display order. */
-export function categoryMix(buckets: TimelineBucket[], labels: Record<string, string>) {
-  const ids = new Set<string>();
-  for (const b of buckets) for (const [id, n] of Object.entries(b.categories)) if (n > 0) ids.add(id);
-  const known = Object.keys(labels).filter((id) => ids.has(id));
-  const rest = [...ids].filter((id) => !Object.hasOwn(labels, id)).sort();
-  const totals = buckets.map((b) => Object.values(b.categories).reduce((a, n) => a + n, 0));
-  const series = [...known, ...rest].map((id) => {
-    const counts = buckets.map((b) => b.categories[id] ?? 0);
-    return {
-      name: Object.hasOwn(labels, id) ? labels[id] : id.split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-      counts,
-      values: counts.map((n, i) => round1(pct(n, totals[i]))),
-    };
-  });
-  return { series };
-}
-
 /** Stack order of the volume panel, bottom to top. */
 export const VOLUME_ORDER: FlowOutcomeKey[] = ["processed", "gate", "rule_filter", "before_gate", "pending"];
 

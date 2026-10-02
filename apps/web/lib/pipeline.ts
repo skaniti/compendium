@@ -6,15 +6,6 @@ export function rangeKeyFor(tw: TimeWindow): RangeKey {
 }
 export const DASH = "—";
 export const PERIOD_LABELS: Record<RangeKey, string> = { "7d": "7 days", "30d": "30 days", "90d": "90 days", all: "All time" };
-const GATE_REASONS = new Set(["skip_gate", "manual_exclusion", "trivial_capture"]);
-
-export function deriveSkipColumns(p: PipelinePage): { skip: string; skipReason: string } {
-  const r = p.archive_reason;
-  const skip = r === "domain_skip" ? "domain" : r && GATE_REASONS.has(r) ? "gate" : DASH;
-  const skipReason = r === "domain_skip" ? "domain filter" : p.skip_reasoning ? p.skip_reasoning.slice(0, 80) : DASH;
-  return { skip, skipReason };
-}
-
 /** Table cells for the flow redesign: decision / skip kind / skip reason (free text rides in the title). */
 export function flowColumns(p: PipelinePage): { decision: string; skip: string; skipReason: string; skipReasonTitle?: string } {
   const decision = p.outcome === "processed" ? "keep" : p.outcome === "gate" || p.outcome === "rule_filter" ? "skip" : DASH;
