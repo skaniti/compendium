@@ -940,6 +940,14 @@ SKIP_URL_PATTERNS: list[tuple[str, str]] = [
 ]
 
 
+# One line per special-case rule in _is_skip_url below (shown in the Pipeline rule-filter panel). TWIN: keep in step with the function.
+SKIP_URL_PATH_RULES: tuple[str, ...] = (
+    "reddit.com subreddit listings (/r/<name>), not posts",
+    "youtube.com channel pages (/@<handle>)",
+    "instructure.com module listings (/modules), not module items",
+)
+
+
 def _is_skip_url(hostname: str, url: str) -> bool:
     """Check if a URL matches a path-based skip pattern."""
     for domain_sub, path_sub in SKIP_URL_PATTERNS:

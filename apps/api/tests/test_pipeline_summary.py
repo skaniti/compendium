@@ -1,87 +1,71 @@
-"""Pure-logic tests for the Pipeline dev view's summary shaping. Ports the
-rules of explorer frontend/dash/callbacks/pipeline_monitor.py:137-293."""
+"""Pure-logic tests for the Pipeline dev view's flow and config shaping."""
 
 from backend.services import pipeline_summary as ps
 
 
-class TestDecisionRows:
-    def test_expands_null_depth_into_breakdown_rows(self):
-        rows = ps.build_decision_rows(
-            {"processed": 10, "skipped": 30, "null": 7},
-            {"Pending": 4, "Trivial Capture": 2, "Other": 1},
-        )
-        assert [r["key"] for r in rows] == [
-            "skipped",
-            "processed",
-            "pending",
-            "trivial_capture",
-            "other",
+class TestBuildFlow:
+    def test_zero_filled_and_fixed_order_when_empty(self):
+        f = ps.build_flow([], [], [])
+        assert f["total"] == 0 and f["details"] == []
+        assert [(o["key"], o["count"], o["top_domains"]) for o in f["outcomes"]] == [
+            (k, 0, []) for k in ps.OUTCOME_ORDER
         ]
-        assert [r["label"] for r in rows] == [
-            "Skipped",
-            "Processed",
-            "Pending",
-            "Trivial Capture",
-            "Other",
+        assert [x["key"] for x in f["fates"]] == list(ps.FATE_ORDER)
+        assert f["outcomes"][1]["label"] == "Rule filter \u00b7 no LLM"
+
+    def test_details_ordered_labelled_and_fates_zero_filled(self):
+        cells = [
+            ("gate", "uncategorized", "archived", 9),
+            ("gate", "web_app", "archived", 2),
+            ("gate", "login_wall", "archived", 3),
+            ("gate", "login_wall", "active", 1),
+            ("processed", "active", "active", 4),
+            ("processed", "later_manual", "archived", 1),
+            ("before_gate", "other", "archived", 1),
+            ("before_gate", "placeholder", "archived", 2),
+            ("pending", "waiting", "pending", 5),
         ]
-        assert [r["evaluated"] for r in rows] == [True, True, False, False, False]
-
-    def test_legacy_active_folds_into_processed(self):
-        rows = ps.build_decision_rows({"processed": 10, "null": 5}, {"legacy_active": 5})
-        assert rows[0] == {"key": "processed", "label": "Processed", "count": 15, "evaluated": True}
-        assert len(rows) == 1  # no leftover breakdown rows
-
-    def test_legacy_active_without_processed_key_creates_processed_row(self):
-        rows = ps.build_decision_rows({"skipped": 3, "null": 5}, {"legacy_active": 5})
-        assert {"key": "processed", "label": "Processed", "count": 5, "evaluated": True} in rows
-
-    def test_surface_and_full_are_title_cased(self):
-        rows = ps.build_decision_rows({"surface": 1, "full": 2}, {})
-        assert {r["key"]: r["label"] for r in rows} == {"surface": "Surface", "full": "Full"}
-
-    def test_sorted_by_count_desc(self):
-        rows = ps.build_decision_rows({"processed": 1, "skipped": 9, "surface": 5}, {})
-        assert [r["count"] for r in rows] == [9, 5, 1]
-
-    def test_empty_inputs(self):
-        assert ps.build_decision_rows({}, {}) == []
-
-
-class TestSkipMethods:
-    def test_labels_and_order(self):
-        rows = ps.build_skip_method_rows(
-            {"skip_gate": 5, "domain_skip": 9, "dedupe_fold": 1, "other": 2}
-        )
-        assert rows == [
-            {"key": "domain_skip", "label": "Domain Filter", "count": 9},
-            {"key": "skip_gate", "label": "LLM Skip Gate", "count": 5},
-            {"key": "other", "label": "Other", "count": 2},
-            {"key": "dedupe_fold", "label": "Dedupe Fold", "count": 1},
+        top = [{"key": "gate:login_wall", "count": 4, "top_domains": [{"domain": "x", "count": 4}]}]
+        f = ps.build_flow(cells, [], top)
+        assert [(d["outcome"], d["key"]) for d in f["details"]] == [
+            ("before_gate", "placeholder"),
+            ("before_gate", "other"),
+            ("gate", "login_wall"),
+            ("gate", "web_app"),
+            ("gate", "uncategorized"),
+            ("processed", "later_manual"),
+            ("processed", "active"),
+            ("pending", "waiting"),
         ]
+        lw = f["details"][2]
+        assert lw["label"] == "Login Wall" and lw["count"] == 4
+        assert lw["fates"] == {"archived": 3, "active": 1, "pending": 0}
+        assert lw["top_domains"] == [{"domain": "x", "count": 4}]
+        assert f["details"][0]["top_domains"] == []
+        assert f["total"] == 28
+        assert {x["key"]: x["count"] for x in f["fates"]} == {
+            "archived": 18,
+            "active": 5,
+            "pending": 5,
+        }
 
-    def test_unknown_snake_case_falls_back_to_title_case(self):
-        rows = ps.build_skip_method_rows({"some_new_reason": 3})
-        assert rows[0]["label"] == "Some New Reason"
-        assert ps.skip_method_label("dedup") == "Dedup"
+    def test_detail_labels(self):
+        assert ps.detail_label("gate", "uncategorized") == "Uncategorized (no reason)"
+        assert ps.detail_label("rule_filter", "url_pattern") == "URL pattern rule"
+        assert ps.detail_label("processed", "later_chrome") == "Archived later \u00b7 chrome"
+        assert ps.detail_label("pending", "waiting") == "Not yet processed"
+        assert ps.detail_label("gate", "some_new_cat") == "Some New Cat"
 
 
-class TestSkipGateReasons:
-    def test_drops_none_bucket_and_keeps_order(self):
-        rows = ps.build_skip_gate_reasons([("login wall", 7), ("(none)", 100), ("stub", 2)])
-        assert rows == [{"reason": "login wall", "count": 7}, {"reason": "stub", "count": 2}]
+class TestRuleFilterConfig:
+    def test_built_live_from_main(self):
+        from backend.api import main
 
-
-class TestGroupRows:
-    def test_archive_reason_and_category_labels(self):
-        g = [{"key": "skip_gate", "count": 2, "top_domains": []}]
-        assert ps.build_archive_reason_rows(g)[0]["label"] == "LLM Skip Gate"
-        rows = ps.build_skip_category_rows(
-            [
-                {"key": "login_wall", "count": 1, "top_domains": []},
-                {"key": "uncategorized", "count": 1, "top_domains": []},
-            ]
-        )
-        assert [r["label"] for r in rows] == ["Login Wall", "Uncategorized"]
+        cfg = ps.build_rule_filter_config()
+        assert cfg["domains"] == sorted(main.SKIP_DOMAINS)
+        assert cfg["domain_suffixes"] == list(main.SKIP_DOMAIN_SUFFIXES)
+        assert cfg["url_patterns"] == [{"domain": d, "path": p} for d, p in main.SKIP_URL_PATTERNS]
+        assert cfg["path_rules"] == list(main.SKIP_URL_PATH_RULES) and cfg["path_rules"]
 
 
 class TestSkipGateConfig:

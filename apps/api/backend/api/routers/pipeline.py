@@ -1,9 +1,10 @@
 """Pipeline dev-view routes (read-only).
 
-Pipeline v2 routes, all taking ``range`` and ``tz``: ``/summary`` (period
-counts and top domains), ``/timeline`` (bucketed kept/archived/skipped series
-with skip categories) and ``/pages`` (paginated windowed pages, each carrying
-its ``skip_category``).
+Pipeline routes, all taking ``range`` and ``tz``: ``/summary`` (the
+outcome -> detail -> fate ``flow`` with top domains, plus rule-filter and
+skip-gate config), ``/timeline`` (bucketed total / archived / per-outcome series
+with gate categories) and ``/pages`` (paginated windowed pages, each carrying
+its outcome, detail, detail_label and fate).
 
 Auth: verify_api_key only. The 05 disposition rules Pipeline demo-visitable;
 every query is scoped to the caller's user_id, so a demo session reads its
@@ -22,8 +23,6 @@ from backend.db import page_repo, pipeline_repo
 from backend.services import pipeline_summary as ps
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
-
-_STATUS_KEYS = ("active", "pending", "archived")
 
 
 def _tz(tz: str = Query("UTC")) -> str:
@@ -49,17 +48,17 @@ async def pipeline_summary(
     user_id: int = Depends(verify_api_key),
 ) -> dict:
     key = pipeline_repo.normalize_range(range)
-    c = _guard_tz(pipeline_repo.get_summary_counts, user_id, key)
-    status_counts = {k: int(c["status_counts"].get(k, 0)) for k in _STATUS_KEYS}
-    total = int(sum(c["status_counts"].values()))
+    c = _guard_tz(pipeline_repo.get_flow_counts, user_id, key)
+    flow = ps.build_flow(c["cells"], c["outcome_domains"], c["detail_domains"])
+    status_counts = {f["key"]: f["count"] for f in flow["fates"]}
+    total = flow["total"]
     return {
         "range": key,
-        "status_counts": status_counts,
         "total_pages": total,
+        "status_counts": status_counts,
         "archive_ratio": (status_counts["archived"] / total) if total else 0.0,
-        "decisions": ps.build_decision_rows(c["depth_counts"], c["null_breakdown"]),
-        "archive_reasons": ps.build_archive_reason_rows(c["archive_reasons"]),
-        "skip_categories": ps.build_skip_category_rows(c["skip_categories"]),
+        "flow": flow,
+        "rule_filter_config": ps.build_rule_filter_config(),
         "skip_gate_config": ps.build_skip_gate_config(),
     }
 
@@ -106,9 +105,18 @@ async def pipeline_pages(
         "skip_category",
         "visited_at",
         "created_at",
+        "outcome",
+        "detail",
+        "fate",
     )
     return {
-        "rows": [{k: r.get(k) for k in keep} for r in rows],
+        "rows": [
+            {
+                **{k: r.get(k) for k in keep},
+                "detail_label": ps.detail_label(r["outcome"], r["detail"]),
+            }
+            for r in rows
+        ],
         "total": total,
         "limit": limit,
         "offset": offset,

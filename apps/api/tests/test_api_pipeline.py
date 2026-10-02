@@ -121,8 +121,18 @@ class TestSummary:
         assert body["range"] == "all"
         assert body["status_counts"] == {"active": 0, "pending": 0, "archived": 0}
         assert body["total_pages"] == 0 and body["archive_ratio"] == 0.0
-        assert body["decisions"] == []
-        assert body["archive_reasons"] == [] and body["skip_categories"] == []
+        assert body["flow"]["total"] == 0 and body["flow"]["details"] == []
+        assert [o["count"] for o in body["flow"]["outcomes"]] == [0] * 5
+        assert not {"decisions", "archive_reasons", "skip_categories"} & set(body)
+        from backend.api import main
+
+        assert body["rule_filter_config"]["domains"] == sorted(main.SKIP_DOMAINS)
+        assert set(body["rule_filter_config"]) == {
+            "domains",
+            "domain_suffixes",
+            "url_patterns",
+            "path_rules",
+        }
         cfg = body["skip_gate_config"]
         assert cfg["prompt_name"] == "skip_gate_v2_3"
         assert {c["id"] for c in cfg["categories"]} >= {"login_wall", "web_app", "other"}
@@ -134,28 +144,27 @@ class TestSummary:
         body = tc.get("/api/pipeline/summary").json()
         assert body["status_counts"] == {"active": 2, "pending": 1, "archived": 3}
         assert body["total_pages"] == 6 and body["archive_ratio"] == 0.5
-        keys = {r["key"]: r for r in body["decisions"]}
-        assert keys["processed"]["count"] == 2 and keys["processed"]["evaluated"] is True
-        assert keys["skipped"]["count"] == 2
-        assert keys["pending"] == {
-            "key": "pending",
-            "label": "Pending",
-            "count": 1,
-            "evaluated": False,
+        flow = body["flow"]
+        assert flow["total"] == 6
+        assert {o["key"]: o["count"] for o in flow["outcomes"]} == {
+            "before_gate": 1,
+            "rule_filter": 1,
+            "gate": 1,
+            "processed": 2,
+            "pending": 1,
         }
-        assert keys["trivial_capture"]["count"] == 1
-        assert {r["key"]: r["label"] for r in body["archive_reasons"]} == {
-            "skip_gate": "LLM Skip Gate",
-            "domain_skip": "Domain Filter",
-            "trivial_capture": "Trivial Capture",
+        assert {(d["outcome"], d["key"]): d["count"] for d in flow["details"]} == {
+            ("before_gate", "other"): 1,
+            ("rule_filter", "domain"): 1,
+            ("gate", "uncategorized"): 1,
+            ("processed", "active"): 2,
+            ("pending", "waiting"): 1,
         }
-        (cat,) = body["skip_categories"]
-        assert cat == {
-            "key": "uncategorized",
-            "label": "Uncategorized",
-            "count": 1,
-            "top_domains": [{"domain": "shop.example.com", "count": 1}],
-        }
+        gate = next(d for d in flow["details"] if d["outcome"] == "gate")
+        assert gate["label"] == "Uncategorized (no reason)"
+        assert gate["fates"] == {"archived": 1, "active": 0, "pending": 0}
+        assert gate["top_domains"] == [{"domain": "shop.example.com", "count": 1}]
+        assert [f["key"] for f in flow["fates"]] == ["archived", "active", "pending"]
 
     def test_range_windows_and_unknown_range(self, client):
         tc, user = client
@@ -187,11 +196,18 @@ class TestTimeline:
             assert set(b) == {
                 "start",
                 "label_key",
-                "kept",
+                "total",
                 "archived",
-                "evaluated",
-                "skipped",
+                "outcomes",
+                "reached_gate",
                 "categories",
+            }
+            assert set(b["outcomes"]) == {
+                "before_gate",
+                "rule_filter",
+                "gate",
+                "processed",
+                "pending",
             }
             assert b["start"][-6] in "+-" and b["start"][-3] == ":"  # local offset present
         body = tc.get("/api/pipeline/timeline?range=zzz").json()
@@ -221,6 +237,10 @@ class TestPages:
             "skip_category",
             "visited_at",
             "created_at",
+            "outcome",
+            "detail",
+            "detail_label",
+            "fate",
         }
         assert row["visited_at"].endswith("+00:00") or row["visited_at"].endswith("Z")
         second = tc.get("/api/pipeline/pages?limit=4&offset=4").json()
@@ -285,7 +305,7 @@ class TestDbRejectedTz:
     @pytest.mark.parametrize(
         ("path", "attr"),
         [
-            ("/api/pipeline/summary", "get_summary_counts"),
+            ("/api/pipeline/summary", "get_flow_counts"),
             ("/api/pipeline/timeline", "get_timeline"),
             ("/api/pipeline/pages", "get_windowed_pages"),
         ],
@@ -363,16 +383,15 @@ class TestAuth:
             assert pages["total"] == 1 and pages["rows"][0]["title"] == "Demo only"
             summary = tc.get("/api/pipeline/summary").json()
             assert summary["total_pages"] == 1
-            assert [(g["key"], g["count"]) for g in summary["archive_reasons"]] == [
-                ("skip_gate", 1)
+            assert [(d["outcome"], d["key"], d["count"]) for d in summary["flow"]["details"]] == [
+                ("gate", "web_app", 1)
             ]
-            assert [(g["key"], g["count"]) for g in summary["skip_categories"]] == [("web_app", 1)]
-            assert summary["skip_categories"][0]["top_domains"] == [
+            assert summary["flow"]["details"][0]["top_domains"] == [
                 {"domain": "docs.example.net", "count": 1}
             ]
             tl = tc.get("/api/pipeline/timeline?range=all").json()["buckets"]
-            assert sum(b["kept"] + b["archived"] for b in tl) == 1
-            assert sum(b["skipped"] for b in tl) == 1
+            assert sum(b["total"] for b in tl) == 1
+            assert sum(b["outcomes"]["gate"] for b in tl) == 1
             assert [b["categories"] for b in tl if b["categories"]] == [{"web_app": 1}]
         finally:
             app.dependency_overrides.pop(verify_api_key, None)

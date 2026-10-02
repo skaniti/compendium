@@ -34,6 +34,31 @@ _BUCKET_SQL = {
     "month": "date_trunc('month', {x})",
 }
 
+# Flow classification (spec §13.2) — the ONLY definition; summary, timeline and pages all use it.
+_EFFECTIVE_STATUS = "COALESCE(p.human_status, p.status)"
+_URL_PATTERN = "p.content_summary LIKE 'URL pattern skipped%%'"
+OUTCOME_SQL = f"""(CASE
+  WHEN p.status = 'pending' THEN 'pending'
+  WHEN p.processing_depth = 'skipped' AND (p.archive_reason = 'domain_skip' OR {_URL_PATTERN}) THEN 'rule_filter'
+  WHEN p.processing_depth = 'skipped' THEN 'gate'
+  WHEN p.processing_depth IN ('processed', 'surface', 'full')
+       OR (p.processing_depth IS NULL AND p.status = 'active') THEN 'processed'
+  ELSE 'before_gate' END)"""
+_ARCHIVE_KIND = """(CASE
+  WHEN p.archive_reason IN ('dedup', 'dedupe_fold') THEN 'duplicate'
+  WHEN p.archive_reason = 'app_chrome_junk' THEN 'chrome'
+  WHEN p.human_status = 'archived' THEN 'manual'
+  ELSE 'other' END)"""
+DETAIL_SQL = f"""(CASE {OUTCOME_SQL}
+  WHEN 'pending' THEN 'waiting'
+  WHEN 'rule_filter' THEN CASE WHEN {_URL_PATTERN} THEN 'url_pattern' ELSE 'domain' END
+  WHEN 'gate' THEN COALESCE(p.skip_category, 'uncategorized')
+  WHEN 'processed' THEN CASE WHEN {_EFFECTIVE_STATUS} = 'active' THEN 'active' ELSE 'later_' || {_ARCHIVE_KIND} END
+  ELSE CASE WHEN p.archive_reason = 'placeholder_no_content' THEN 'placeholder' ELSE {_ARCHIVE_KIND} END
+END)"""
+FATE_SQL = _EFFECTIVE_STATUS
+_OUTCOMES = ("before_gate", "rule_filter", "gate", "processed", "pending")
+
 
 def normalize_range(range_key: str | None) -> str:
     return range_key if range_key in RANGE_DAYS else "all"
@@ -91,7 +116,8 @@ def get_windowed_pages(
             f"""
             SELECT p.id, p.title, p.domain, p.status, p.processing_depth,
                    p.archive_reason, p.skip_reasoning, p.skip_category,
-                   p.visited_at, p.created_at
+                   p.visited_at, p.created_at,
+                   {OUTCOME_SQL} AS outcome, {DETAIL_SQL} AS detail, {FATE_SQL} AS fate
             FROM pages p JOIN captures c ON p.capture_id = c.id
             WHERE c.user_id = %s{wsql}
             {order_sql}
@@ -133,66 +159,32 @@ def _grouped_with_top_domains(
     return list(groups.values())
 
 
-def get_summary_counts(
-    user_id: int, range_key: str = "all", *, now: datetime | None = None
-) -> dict:
-    """Windowed status / depth / null-depth counts, archive reasons, skip categories."""
+def get_flow_counts(user_id: int, range_key: str = "all", *, now: datetime | None = None) -> dict:
+    """Windowed (outcome, detail, fate) cell counts plus top domains per outcome / detail."""
     now = now or datetime.now(UTC)
     wsql, wparams = _window(since_for(normalize_range(range_key), now), now)
-    base = f"FROM pages p JOIN captures c ON p.capture_id = c.id WHERE c.user_id = %s{wsql}"
-    params = [user_id, *wparams]
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT p.status, COUNT(*) {base} GROUP BY p.status", params)
-        status_counts = {k: int(v) for k, v in cur.fetchall()}
         cur.execute(
-            f"SELECT COALESCE(p.processing_depth, 'null'), COUNT(*) {base} "
-            "GROUP BY p.processing_depth",
-            params,
+            f"""
+            SELECT {OUTCOME_SQL}, {DETAIL_SQL}, {FATE_SQL}, COUNT(*)
+            FROM pages p JOIN captures c ON p.capture_id = c.id
+            WHERE c.user_id = %s{wsql}
+            GROUP BY 1, 2, 3
+            """,  # classification SQL is a module constant
+            [user_id, *wparams],
         )
-        depth_counts = {k: int(v) for k, v in cur.fetchall()}
-        null_breakdown: dict[str, int] = {}
-        if depth_counts:
-            cur.execute(
-                f"""
-                SELECT CASE
-                         WHEN p.status = 'active' THEN 'legacy_active'
-                         WHEN p.status = 'pending' THEN 'Pending'
-                         WHEN p.archive_reason = 'trivial_capture' THEN 'Trivial Capture'
-                         ELSE 'Other'
-                       END AS reason, COUNT(*)
-                {base} AND p.processing_depth IS NULL
-                GROUP BY reason
-                """,
-                params,
-            )
-            null_breakdown = {k: int(v) for k, v in cur.fetchall()}
-        archive_reasons = _grouped_with_top_domains(
-            cur,
-            user_id,
-            "COALESCE(p.archive_reason, 'other')",
-            "p.status = 'archived'",
-            wsql,
-            wparams,
+        cells = [(o, d, f, int(n)) for o, d, f, n in cur.fetchall()]
+        outcome_domains = _grouped_with_top_domains(
+            cur, user_id, OUTCOME_SQL, "TRUE", wsql, wparams
         )
-        skip_categories = _grouped_with_top_domains(
-            cur,
-            user_id,
-            "COALESCE(p.skip_category, 'uncategorized')",
-            "p.archive_reason = 'skip_gate'",
-            wsql,
-            wparams,
+        detail_domains = _grouped_with_top_domains(
+            cur, user_id, f"{OUTCOME_SQL} || ':' || {DETAIL_SQL}", "TRUE", wsql, wparams
         )
-    return {
-        "status_counts": status_counts,
-        "depth_counts": depth_counts,
-        "null_breakdown": null_breakdown,
-        "archive_reasons": archive_reasons,
-        "skip_categories": skip_categories,
-    }
+    return {"cells": cells, "outcome_domains": outcome_domains, "detail_domains": detail_domains}
 
 
 def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None = None) -> dict:
-    """Bucketed kept/archived/evaluated/skipped counts in the caller's local time.
+    """Bucketed total / archived / per-outcome counts in the caller's local time.
 
     Buckets are generated over local wall-clock starts (so empty buckets appear
     and DST changes neither duplicate nor drop a block); each ``start`` is
@@ -232,13 +224,18 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
             "FROM pages p JOIN captures c ON p.capture_id = c.id "
             "CROSS JOIN LATERAL (SELECT p.visited_at AT TIME ZONE %s AS lx) l"
         )
+        outcome_cols = ", ".join(
+            f"COUNT(*) FILTER (WHERE {OUTCOME_SQL} = '{k}') AS {k}" for k in _OUTCOMES
+        )
         cur.execute(
             f"""
             SELECT {local} AS b,
-                   COUNT(*) FILTER (WHERE p.status <> 'archived') AS kept,
-                   COUNT(*) FILTER (WHERE p.status = 'archived') AS archived,
-                   COUNT(*) FILTER (WHERE p.processing_depth IS NOT NULL) AS evaluated,
-                   COUNT(*) FILTER (WHERE p.processing_depth = 'skipped') AS skipped
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE {FATE_SQL} = 'archived') AS archived,
+                   {outcome_cols},
+                   COUNT(*) FILTER (WHERE {OUTCOME_SQL} = 'gate'
+                       OR ({OUTCOME_SQL} = 'processed' AND p.processing_depth IS NOT NULL))
+                       AS reached_gate
             {src}
             WHERE c.user_id = %s AND p.visited_at IS NOT NULL{wsql}
             GROUP BY 1
@@ -248,10 +245,10 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
         counts = {r[0]: r[1:] for r in cur.fetchall()}
         cur.execute(
             f"""
-            SELECT {local} AS b, COALESCE(p.skip_category, 'uncategorized') AS cat, COUNT(*)
+            SELECT {local} AS b, {DETAIL_SQL} AS cat, COUNT(*)
             {src}
             WHERE c.user_id = %s AND p.visited_at IS NOT NULL
-              AND p.archive_reason = 'skip_gate'{wsql}
+              AND {OUTCOME_SQL} = 'gate'{wsql}
             GROUP BY 1, 2
             """,
             [tz, user_id, *wparams],
@@ -261,15 +258,17 @@ def get_timeline(user_id: int, range_key: str, tz: str, *, now: datetime | None 
             cats.setdefault(b, {})[cat] = int(n)
     buckets = []
     for b in starts:
-        kept, archived, evaluated, skipped = (int(v) for v in counts.get(b, (0, 0, 0, 0)))
+        total, archived, *per_outcome, reached = (
+            int(v) for v in counts.get(b, (0,) * (len(_OUTCOMES) + 3))
+        )
         buckets.append(
             {
                 "start": b.replace(tzinfo=zone).isoformat(),
                 "label_key": label_key,
-                "kept": kept,
+                "total": total,
                 "archived": archived,
-                "evaluated": evaluated,
-                "skipped": skipped,
+                "outcomes": dict(zip(_OUTCOMES, per_outcome)),
+                "reached_gate": reached,
                 "categories": cats.get(b, {}),
             }
         )
