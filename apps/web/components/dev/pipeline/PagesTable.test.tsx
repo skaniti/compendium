@@ -73,3 +73,17 @@ it("resets to page 1 and refetches when the period changes", async () => {
   expect(vi.mocked(api.fetchPipelinePages).mock.calls.some((c) => c[1] === 50 && c[4] === "all")).toBe(false); // never fetched the old page under the new period
   expect(screen.getByText("page 1 of 3")).toBeInTheDocument();
 });
+it("is aria-busy while a new page or period loads, and clears on arrival", async () => {
+  let resolve!: (r: PipelinePagesResponse) => void;
+  vi.mocked(api.fetchPipelinePages).mockResolvedValueOnce(resp([row(1)], 120)).mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+  const { container } = render(<PagesTable range="30d" tz="UTC" />);
+  await screen.findByText("Page 1");
+  const section = () => container.querySelector("section")!;
+  expect(section().getAttribute("aria-busy")).not.toBe("true");
+  await userEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(section().getAttribute("aria-busy")).toBe("true");
+  expect(section().classList.contains("is-refreshing")).toBe(true);
+  resolve(resp([row(51)], 120, 50));
+  await screen.findByText("Page 51");
+  expect(section().getAttribute("aria-busy")).not.toBe("true");
+});

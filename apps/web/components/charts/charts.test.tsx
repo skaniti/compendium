@@ -3,7 +3,7 @@ import { render, fireEvent } from "@testing-library/react";
 import TimelineBars from "./TimelineBars";
 import LineAreaChart from "./LineAreaChart";
 import StackedBarChart, { seriesFill } from "./StackedBarChart";
-import { thinBandLabels } from "./scales";
+import { countTicks, labelSpacing, thinBandLabels } from "./scales";
 
 function withWidth(w: number, fn: () => void) {
   class RO { constructor(private c: ResizeObserverCallback) {} observe() { this.c([{ contentRect: { width: w } } as ResizeObserverEntry], this as unknown as ResizeObserver); } disconnect() {} unobserve() {} }
@@ -80,4 +80,25 @@ it("thinBandLabels keeps only labelled bands >= minSpacing apart and drops repea
 });
 it("seriesFill rotates hue and differs for neighbours", () => {
   expect(seriesFill(0, 4)).not.toBe(seriesFill(1, 4));
+});
+it("countTicks never yields fractional counts, 0..max in steps of 1 for small maxima", () => {
+  for (const m of [0, 1, 2, 3, 4, 5, 7, 12, 99, 1000]) {
+    const { ticks, top } = countTicks(m);
+    expect(ticks.every(Number.isInteger)).toBe(true);
+    expect(top).toBeGreaterThanOrEqual(m);
+    expect(ticks[0]).toBe(0);
+  }
+  expect(countTicks(2).ticks).toEqual([0, 1, 2]);
+  expect(countTicks(3).ticks).toEqual([0, 1, 2, 3]);
+  expect(countTicks(1).ticks).toEqual([0, 1]);
+});
+it("week labels get wider spacing so 'wk of Sep 22' never runs together at 700px", () => {
+  const week = Array.from({ length: 13 }, (_, i) => ({ title: `wk ${i}`, axis: `wk of Sep ${String(10 + i).padStart(2, "0")}` as string | null }));
+  let texts: (string | null)[] = [];
+  withWidth(700, () => { texts = axisTexts(render(<TimelineBars cats={week} bars={Array(13).fill({ kept: 1, archived: 0, rate: 0 })} />).container); });
+  expect(texts.length).toBeGreaterThan(1);
+  // 700 - margins = 640px plot / 13 bands ~ 49px pitch: labels must sit >= 96px apart
+  expect(texts.length).toBeLessThanOrEqual(Math.floor(640 / 96) + 1);
+  expect(labelSpacing(["wk of Sep 22", null])).toBeGreaterThanOrEqual(96);
+  expect(labelSpacing(["Sep 22", null])).toBe(76);
 });

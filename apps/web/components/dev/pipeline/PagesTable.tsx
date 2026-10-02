@@ -21,11 +21,15 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
   const [dir, setDir] = useState<SortDir>("desc");
   const [data, setData] = useState<PipelinePagesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const requestKey = `${page}|${sort}|${dir}|${range}|${tz}`;
+  const [settledKey, setSettledKey] = useState(requestKey); // the request whose response (or error) is on screen
+  const busy = settledKey !== requestKey;
   useEffect(() => {
     let cancelled = false;
-    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir, range, tz).then((d) => { if (!cancelled) { setData(d); setError(null); } })
-      .catch((e: Error) => { if (!cancelled) setError(e.message); });
+    fetchPipelinePages(PAGE_SIZE, page * PAGE_SIZE, sort, dir, range, tz).then((d) => { if (!cancelled) { setData(d); setError(null); setSettledKey(requestKey); } })
+      .catch((e: Error) => { if (!cancelled) { setError(e.message); setSettledKey(requestKey); } });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- requestKey is derived from these same deps
   }, [page, sort, dir, range, tz]);
   function onSort(col: PageSortColumn) {
     if (col === sort) setDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -35,7 +39,7 @@ export default function PagesTable({ range, tz }: { range: RangeKey; tz: string 
   const isDefault = sort === "created_at" && dir === "desc";
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
   return (
-    <section>
+    <section className={busy ? "is-refreshing" : undefined} aria-busy={busy}>
       <h3 className="dev-section-title">All pages</h3>
       {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pages ({error}).</p>
        : !data ? <p className="dev-empty">Loading…</p>

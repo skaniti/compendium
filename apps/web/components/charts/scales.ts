@@ -3,6 +3,12 @@ export const MARGIN = { top: 12, right: 16, bottom: 36, left: 44 };
 export const DEFAULT_WIDTH = 640; // SSR/jsdom fallback width; live width comes from useContainerWidth (1 viewBox unit = 1px)
 /** Minimum horizontal px per x-axis label ("wk of Sep 22" is the widest), so labels thin out (then vanish) instead of overlapping; the tooltip carries the date. */
 export const MIN_LABEL_SPACING = { band: 76 };
+const LABEL_PX_PER_CHAR = 8; // monospace 10px glyphs plus a little air
+/** Per-label spacing: the default, widened for long labels (week labels "wk of Sep 22" need ~96px). */
+export function labelSpacing(labels: (string | null)[]): number {
+  const longest = labels.reduce((m, l) => Math.max(m, l?.length ?? 0), 0);
+  return Math.max(MIN_LABEL_SPACING.band, longest * LABEL_PX_PER_CHAR);
+}
 export type Margin = typeof MARGIN;
 /** One x-axis category per bucket: `title` heads the tooltip, `axis` is the tick label (null = none for this bucket). */
 export interface BandCat { title: string; axis: string | null }
@@ -27,6 +33,8 @@ export function thinBandLabels(labels: (string | null)[], pitch: number, minSpac
 }
 /** Y axis for counts: nice ticks (about 4) and the matching top. */
 export function countTicks(max: number): { ticks: number[]; top: number } {
-  const ticks = scaleLinear().domain([0, Math.max(1, max)]).nice(4).ticks(4);
+  const m = Math.max(1, Math.ceil(max));
+  // counts are whole pages: small maxima get every integer, larger ones d3's nice steps (always >= 1 here)
+  const ticks = m <= 3 ? Array.from({ length: m + 1 }, (_, i) => i) : scaleLinear().domain([0, m]).nice(4).ticks(4).filter(Number.isInteger);
   return { ticks, top: ticks[ticks.length - 1] };
 }

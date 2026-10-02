@@ -75,3 +75,25 @@ it("a zero-page period renders every empty state with 0 / 0.0%, never NaN", asyn
   expect(container.textContent).not.toContain("NaN");
   expect(within(container).queryByText("Loading…")).toBeNull();
 });
+it("the initial pill state reflects the provider's initialWindow", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  mount("7");
+  expect(screen.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "All time" })).toHaveAttribute("aria-pressed", "false");
+  await waitFor(() => expect(api.fetchPipelineSummary).toHaveBeenCalledWith("7d", expect.any(String)));
+});
+it("a pill click marks the sections aria-busy until the new responses resolve", async () => {
+  let resolveSummary!: (s: PipelineSummary) => void;
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValueOnce(summary()).mockReturnValueOnce(new Promise((r) => { resolveSummary = r; }));
+  const { container } = mount();
+  await screen.findByText("1,271");
+  await screen.findByText("Row page");
+  const busy = () => container.querySelectorAll('[aria-busy="true"]').length;
+  expect(busy()).toBe(0);
+  await userEvent.click(screen.getByRole("button", { name: "All time" }));
+  await waitFor(() => expect(busy()).toBeGreaterThan(0));
+  expect(container.querySelector('[data-section="summary"]')).toHaveAttribute("aria-busy", "true");
+  resolveSummary(summary({ range: "all" }));
+  await waitFor(() => expect(container.querySelector('[data-section="summary"]')).toHaveAttribute("aria-busy", "false"));
+  await waitFor(() => expect(busy()).toBe(0));
+});

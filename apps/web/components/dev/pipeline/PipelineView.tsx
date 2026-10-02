@@ -27,7 +27,7 @@ export default function PipelineView() {
   const { timeWindow, setTimeWindow } = useTimeWindow();
   const range = rangeKeyFor(timeWindow);
   const [tz] = useState(browserTimeZone);
-  const { data: summary, error } = usePeriodFetch(`${range}|${tz}`, () => fetchPipelineSummary(range, tz));
+  const { data: summary, error, busy } = usePeriodFetch(`${range}|${tz}`, () => fetchPipelineSummary(range, tz));
   const categoryLabels = useMemo(() => labelsOf(summary), [summary]);
   const gateTotal = summary ? summary.skip_categories.reduce((a, r) => a + r.count, 0) : 0;
   return (
@@ -40,6 +40,7 @@ export default function PipelineView() {
         <RangePills value={timeWindow} onChange={setTimeWindow} />
       </div>
       <div className="dev-view-body">
+        <div data-section="summary" className={busy ? "is-refreshing" : undefined} aria-busy={busy}>
         {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pipeline summary ({error}).</p>
          : !summary ? <p className="dev-empty">Loading…</p>
          : (
@@ -54,6 +55,7 @@ export default function PipelineView() {
             <ReasonList title="Skip gate categories" rows={summary.skip_categories} base={gateTotal} emptyText="No gate skips in this period." />
           </>
         )}
+        </div>
         <TimelineSection range={range} tz={tz} categoryLabels={categoryLabels} />
         <PagesTable range={range} tz={tz} />
       </div>
