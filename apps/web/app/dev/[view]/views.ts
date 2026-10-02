@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import OverviewView from "@/components/dev/overview/OverviewView";
 import PipelineView from "@/components/dev/pipeline/PipelineView";
 import ClustersView from "@/components/dev/clusters/ClustersView";
+import PromptsView from "@/components/dev/prompts/PromptsView";
 
 // Server-side view map, imported ONLY by page.tsx so the header/tab bar
 // (client) never bundles view code. Keys match lib/dev-views.ts ids.
@@ -9,4 +10,5 @@ export const DEV_VIEW_COMPONENTS: Record<string, ComponentType> = {
   overview: OverviewView,
   pipeline: PipelineView,
   clusters: ClustersView,
+  prompts: PromptsView,
 };

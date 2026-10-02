@@ -180,7 +180,9 @@ headlessly via jsdom.
   the ported views are Overview (`/api/overview/summary`, `/api/overview/timeline`) and Pipeline, backed by `/api/pipeline/summary`,
   `/api/pipeline/timeline` and `/api/pipeline/pages`, and Clusters, backed by
   `/api/clusters/summary`, `/api/clusters/{id}/pages` and
-  `/api/clusters/unclustered`.
+  `/api/clusters/unclustered`, and Prompts, backed by `/api/prompts/summary`
+  and `/api/prompts/templates/{name}` plus admin-only override and
+  evaluation-history routes.
 
 ## Status
 
@@ -189,12 +191,12 @@ surface by surface. Ported and live here: the app shell, the diary/history
 and topic-detail panels, the header widgets, the constellation graph (a
 vendored D3 port with supercluster nameplate layout, an original typeface,
 and a tunable layout), the streaming chat with source pills, the
-auth/session/role mechanics, and the Overview, Pipeline and Clusters dev views (`/dev/overview`, `/dev/pipeline`, `/dev/clusters`). The FastAPI backend lives at `apps/api` and
+auth/session/role mechanics, and the Overview, Pipeline, Clusters and Prompts dev views (`/dev/overview`, `/dev/pipeline`, `/dev/clusters`, `/dev/prompts`). The FastAPI backend lives at `apps/api` and
 runs the hosted instance; the browser extension (`apps/extension`) and the
 Android collector (`apps/android`) ship from here too.
 
 Migration in progress: the internal dev/observability views (data
-browser, prompts, logs, traces, dqBot), a deploy target for this
+browser, logs, traces, dqBot), a deploy target for this
 frontend, and retirement of the predecessor's Dash surface.
 
 ## Known limitations

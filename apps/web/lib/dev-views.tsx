@@ -135,7 +135,7 @@ export const DEV_VIEWS: DevViewDef[] = [
   { id: "pipeline", label: "Pipeline", href: "/dev/pipeline", access: "any", status: "live", Icon: PipelineIcon },
   { id: "clusters", label: "Clusters", href: "/dev/clusters", access: "any", status: "live", Icon: ClustersIcon },
   { id: "dqbot", label: "dqBot", href: "/dev/dqbot", access: "admin", status: "planned", Icon: DqBotIcon },
-  { id: "prompts", label: "Prompts", href: "/dev/prompts", access: "any", status: "planned", Icon: PromptsIcon },
+  { id: "prompts", label: "Prompts", href: "/dev/prompts", access: "any", status: "live", Icon: PromptsIcon },
   { id: "logs", label: "Logs", href: "/dev/logs", access: "admin", status: "planned", Icon: LogsIcon },
   { id: "traces", label: "Traces", href: "/dev/traces", access: "admin", status: "planned", Icon: TracesIcon },
 ];
