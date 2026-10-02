@@ -36,10 +36,10 @@ describe("dev view registry", () => {
     expect(v?.status).toBe("live");
     expect(DEV_VIEWS[0].id).toBe("overview");
   });
-  it("registry order, two live views, rest planned", () => {
+  it("registry order, three live views, rest planned", () => {
     expect(DEV_VIEWS.map((v) => v.id)).toEqual(["overview", "data", "pipeline", "clusters", "dqbot", "prompts", "logs", "traces"]);
-    expect(DEV_VIEWS.filter((v) => v.status === "live")).toHaveLength(2);
-    expect(liveDevViews().map((v) => v.id)).toEqual(["overview", "pipeline"]);
+    expect(DEV_VIEWS.filter((v) => v.status === "live")).toHaveLength(3);
+    expect(liveDevViews().map((v) => v.id)).toEqual(["overview", "pipeline", "clusters"]);
   });
   it("plain demo keeps planned any-access tabs, drops planned admin-only ones", () => {
     const ids = visibleDevViews("demo", false).map((v) => v.id);
