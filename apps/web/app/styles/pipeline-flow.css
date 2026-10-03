@@ -28,6 +28,9 @@
 .flow-sub { fill: var(--panel-caption); font-family: monospace; font-size: 10px; }
 .flow-pending-marker { fill: var(--panel-caption); font-family: monospace; font-size: 11px; opacity: 0.8; }
 .flow-node { cursor: default; }
+/* Pending band: one dashed line in the text colour, no fill (ribbons and the pending node bars alike). */
+.flow-pending-line { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 4 3; stroke-linecap: butt; }
+.flow-node-hit { fill: transparent; }
 .flow-ribbon { transition: fill-opacity 0.12s; }
 .flow-ribbon:hover { fill-opacity: 0.55; }
 

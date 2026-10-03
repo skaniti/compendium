@@ -55,6 +55,18 @@ it("shows PENDING n and no zero marker when there are pending pages", () => {
   expect(screen.queryByText("Pending 0 ····")).toBeNull();
   expect(screen.queryByText("···· PENDING 0")).toBeNull();
 });
+it("draws the pending band as one dashed line: no filled ribbon, no visible bar, tooltip kept", () => {
+  const { container } = mount(flow(6));
+  const ribbon = container.querySelector('path[data-link="captured>pending"]')!;
+  expect(ribbon).toHaveClass("flow-pending-line");
+  expect(ribbon).not.toHaveClass("flow-ribbon");
+  expect(ribbon.getAttribute("style") ?? "").not.toContain("fill");
+  const bar = container.querySelector('rect[data-node="pending"]')!;
+  expect(bar).toHaveClass("flow-node-hit");
+  expect(container.querySelector('line[data-node-line="pending"]')).toHaveClass("flow-pending-line");
+  fireEvent.mouseMove(bar);
+  expect(screen.getByRole("tooltip")).toHaveTextContent("Pending");
+});
 it("the sub-line for archived-later sits on its own line", () => {
   mount();
   expect(screen.getByText("5 manual")).toBeInTheDocument();

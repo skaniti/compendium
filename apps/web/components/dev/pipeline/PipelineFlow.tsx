@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useChartTooltip } from "@/components/charts/ChartTooltip";
 import { useContainerWidth } from "@/components/charts/useContainerWidth";
-import { BAR_W, FLOW_MIN_WIDTH, OUTCOME_LABEL_H, layoutFlow, mergeDomains, ribbonOpacity, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
+import { BAR_W, FLOW_MIN_WIDTH, OUTCOME_LABEL_H, layoutFlow, mergeDomains, ribbonCenterPath, ribbonOpacity, ribbonPath, type FlowNode } from "@/lib/pipeline-flow";
 import { formatRatio, percentOf } from "@/lib/pipeline";
 import type { PipelineFlow as Flow } from "@/lib/types";
 
@@ -63,18 +63,24 @@ export default function PipelineFlow({ flow, catColors, ratio }: { flow: Flow; c
             <text key={h} className="flow-colhead" x={i === 0 ? columnX[0] - 8 : columnX[i]} y={14} textAnchor={i === 0 ? "end" : "start"}>{h}</text>
           ))}
           <g transform={`translate(0,${TOP})`}>
-            {layout.links.map((l) => (
-              <path key={l.id} data-link={l.id} d={ribbonPath(l)} className="flow-ribbon" style={{ fill: l.color }} fillOpacity={ribbonOpacity(l.color)}
-                stroke={l.dashed ? l.color : undefined} strokeDasharray={l.dashed ? "4 3" : undefined} strokeOpacity={l.dashed ? 0.6 : undefined}
-                onMouseEnter={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
-                onMouseMove={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
-                onMouseLeave={l.id.includes(":smaller:") ? hide : undefined} />
-            ))}
-            {layout.nodes.map((n) => (
-              <rect key={n.id} data-node={n.id} className="flow-node" x={n.x} y={n.y} width={BAR_W} height={n.h} rx={1} style={{ fill: n.color }}
-                fillOpacity={n.dashed ? 0.5 : 1} stroke={n.dashed ? n.color : undefined} strokeDasharray={n.dashed ? "3 2" : undefined}
-                onMouseEnter={nodeTip(n)} onMouseMove={nodeTip(n)} onMouseLeave={hide} />
-            ))}
+            {/* The pending band (links and nodes) is one dashed line through the middle, not a filled ribbon. */}
+            {layout.links.map((l) => l.dashed
+              ? <path key={l.id} data-link={l.id} d={ribbonCenterPath(l)} className="flow-pending-line" />
+              : <path key={l.id} data-link={l.id} d={ribbonPath(l)} className="flow-ribbon" style={{ fill: l.color }} fillOpacity={ribbonOpacity(l.color)}
+                  onMouseEnter={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
+                  onMouseMove={l.id.includes(":smaller:") ? strandTip(l.target, l.id) : undefined}
+                  onMouseLeave={l.id.includes(":smaller:") ? hide : undefined} />)}
+            {layout.nodes.map((n) => n.dashed
+              ? (
+                <g key={n.id}>
+                  <line data-node-line={n.id} className="flow-pending-line" x1={n.x} y1={n.y + n.h / 2} x2={n.x + BAR_W} y2={n.y + n.h / 2} />
+                  {/* Invisible hit area so the pending node keeps its tooltip. */}
+                  <rect data-node={n.id} className="flow-node flow-node-hit" x={n.x} y={n.y + n.h / 2 - 5} width={BAR_W} height={10}
+                    onMouseEnter={nodeTip(n)} onMouseMove={nodeTip(n)} onMouseLeave={hide} />
+                </g>
+              )
+              : <rect key={n.id} data-node={n.id} className="flow-node" x={n.x} y={n.y} width={BAR_W} height={n.h} rx={1} style={{ fill: n.color }}
+                  onMouseEnter={nodeTip(n)} onMouseMove={nodeTip(n)} onMouseLeave={hide} />)}
             {layout.nodes.map((n) => {
               const l = lblOf.get(n.id);
               if (!l) return null;

@@ -1,6 +1,6 @@
 import { UNCATEGORIZED_FILL } from "@/components/charts/palette";
 import { describe, it, expect } from "vitest";
-import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonPath, ribbonOpacity, mergeDomains, FATE_LABEL_H, FATE_LABEL_TOP, DETAIL_GROUP_EXTRA } from "./pipeline-flow";
+import { BAR_W, FLOW_HEIGHT, FLOW_MIN_WIDTH, LABEL_PITCH, OUTCOME_LABEL_H, SUB_LABEL_H, buildFlowModel, declutter, layoutFlow, ribbonCenterPath, ribbonPath, ribbonOpacity, mergeDomains, FATE_LABEL_H, FATE_LABEL_TOP, DETAIL_GROUP_EXTRA } from "./pipeline-flow";
 import type { FateKey, FlowDetail, FlowOutcomeKey, PipelineFlow } from "./types";
 
 const fates = (archived: number, active = 0, pending = 0): Record<FateKey, number> => ({ archived, active, pending });
@@ -160,6 +160,10 @@ describe("layoutFlow", () => {
     expect(p.startsWith("M")).toBe(true);
     expect(p.endsWith("Z")).toBe(true);
     expect(p).not.toContain("NaN");
+  });
+  it("ribbonCenterPath runs an open curve along the ribbon's middle", () => {
+    const l = { id: "a>b", source: "a", target: "b", count: 4, color: "x", x0: 10, y0: 20, x1: 110, y1: 60, h: 6 };
+    expect(ribbonCenterPath(l)).toBe("M10,23 C60,23 60,63 110,63");
   });
 });
 

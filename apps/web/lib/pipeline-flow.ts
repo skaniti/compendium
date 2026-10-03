@@ -138,6 +138,13 @@ export function ribbonPath(l: FlowLink): string {
   return `M${r(x0)},${r(y0)} C${r(mx)},${r(y0)} ${r(mx)},${r(y1)} ${r(x1)},${r(y1)} L${r(x1)},${r(y1 + h)} C${r(mx)},${r(y1 + h)} ${r(mx)},${r(y0 + h)} ${r(x0)},${r(y0 + h)} Z`;
 }
 
+/** An open curve along the ribbon's middle: the pending band is drawn as a single dashed line, not a filled ribbon. */
+export function ribbonCenterPath(l: FlowLink): string {
+  const r = (n: number) => +n.toFixed(2);
+  const mx = (l.x0 + l.x1) / 2, a = l.y0 + l.h / 2, b = l.y1 + l.h / 2;
+  return `M${r(l.x0)},${r(a)} C${r(mx)},${r(a)} ${r(mx)},${r(b)} ${r(l.x1)},${r(b)}`;
+}
+
 type Port = { count: number };
 const linkThickness = (c: number, k: number) => Math.max(1, c * k);
 /** A node is at least MIN_H and tall enough to hold both its stacked incoming and its stacked outgoing ribbons. */
