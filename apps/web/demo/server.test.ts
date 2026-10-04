@@ -373,11 +373,9 @@ describe("GET /api/agent/internals", () => {
     expect(typeof body.system_prompt).toBe("string");
   });
 
-  it("200s for an acting-as-demo token (admin viewing as demo)", async () => {
+  it("403s an acting-as-demo token (admin viewing as demo gets the plain-demo view)", async () => {
     const res = await get("/api/agent/internals", actingDemoToken());
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(typeof body.system_prompt).toBe("string");
+    expect(res.status).toBe(403);
   });
 
   it('403s a plain-demo token with {detail: "..."}', async () => {

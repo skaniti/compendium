@@ -552,10 +552,9 @@ class TestPreferencesWriteGate:
 
 
 class TestAgentInternalsGate:
-    """GET /api/agent/internals -- admin-context-only REST port of the Dash
-    "Agent Internals" gear panel (graph_canvas.py). Same predicate as the
-    preferences write gate above: real admin role OR an acting_as_demo
-    token; plain demo/regular-user logins are refused."""
+    """GET /api/agent/internals -- admin-only REST port of the Dash "Agent
+    Internals" gear panel (graph_canvas.py): a real admin role, NOT viewing
+    as demo (2026-10-04); plain demo/regular-user logins are refused too."""
 
     def test_admin_sees_system_prompt_and_tools(self, client, users):
         from backend.services.auth_service import create_access_token
@@ -585,7 +584,7 @@ class TestAgentInternalsGate:
         r = client.get("/api/agent/internals", headers=_bearer(token))
         assert r.status_code == 403
 
-    def test_acting_as_demo_allowed(self, client, users):
+    def test_acting_as_demo_refused(self, client, users):
         from backend.services.auth_service import create_access_token
 
         admin = users["admin"]
@@ -596,6 +595,5 @@ class TestAgentInternalsGate:
         acting_token = view_as.json()["access_token"]
 
         r = client.get("/api/agent/internals", headers=_bearer(acting_token))
-        assert r.status_code == 200
-        body = r.json()
-        assert body["tools"]
+        assert r.status_code == 403
+        assert r.json() == {"detail": "Disabled in demo view"}

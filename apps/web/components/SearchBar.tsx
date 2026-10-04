@@ -234,16 +234,17 @@ export default function SearchBar() {
   const { turns, busy, input, setInput, send, cancel, clear } = useAgentChat();
   const { barRef, handleRef, maximized, resizing, toggleMaximized, expand } = useSearchBarResize();
 
-  // app.py's clientside callback predicate (:2807-2830): admin-context ==
-  // real admin role OR an admin currently viewing as demo. Same gate for
-  // the internals gear/panel (item 4) and the per-response trace block +
-  // #search-bar's data-show-trace attribute (item 5). In dev-unauthed
-  // (no session hydrated -> role null, actingAsDemo false) this resolves
-  // false -- gear/trace stay hidden, matching the accepted dev-vs-Dash
-  // difference noted in the batch brief (Dash's dev mode resolves an
-  // admin dev-user; Next dev has no identity).
-  const { role, actingAsDemo } = useSession();
-  const adminContext = role === "admin" || actingAsDemo;
+  // A real admin, NOT viewing as demo: an admin viewing as demo gets exactly
+  // the plain-demo chat (2026-10-04; Dash's app.py :2807-2830 counted view-as
+  // as admin context, and the backend now refuses it the internals). Same
+  // gate for the internals gear/panel (item 4) and the per-response trace
+  // block + #search-bar's data-show-trace attribute (item 5). In
+  // dev-unauthed (no session hydrated -> role null) this resolves false --
+  // gear/trace stay hidden, matching the accepted dev-vs-Dash difference
+  // noted in the batch brief (Dash's dev mode resolves an admin dev-user;
+  // Next dev has no identity).
+  const { role } = useSession();
+  const adminContext = role === "admin";
 
   const [internalsOpen, setInternalsOpen] = useState(false);
   // Panel pops up from the gear (not the top of the whole wrapper): the gear
@@ -441,10 +442,8 @@ export default function SearchBar() {
 
                 {/* Guard on the DATA, not just adminContext: the backend
                     redacts tool_calls_made/total_cost_usd for any
-                    non-admin get_role(user_id) -- which includes
-                    acting-as-demo sessions, where adminContext is still
-                    true here. An acting session therefore renders no
-                    trace at all (same visible outcome as Dash). */}
+                    non-admin get_role(user_id), acting-as-demo sessions
+                    included. */}
                 {!restored && adminContext && assistant.meta?.tool_calls_made && assistant.meta.tool_calls_made.length > 0 && (
                   <details>
                     <summary className="search-trace-summary">

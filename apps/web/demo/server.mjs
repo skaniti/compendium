@@ -10,7 +10,7 @@
 // identity, view-as included), SSE chat replay (POST /api/agent/query-stream,
 // keyword-matched against demo/fixtures/chat/*.sse -- see
 // parseSseFrames/pickChatEntry below), and preview/asset streaming (GET
-// /api/pages/{pid}/preview, GET /captured-assets/<path>) plus gated GET
+// /api/pages/{pid}/preview, GET /captured-assets/<path>) plus admin-only GET
 // /api/agent/internals. NOTE: /captured-assets is a TOP-LEVEL path (not
 // under /api) because that's the exact URL pattern captured preview HTML
 // references (see demo/tools/capture-fixtures.mjs's module header) -- the
@@ -482,12 +482,8 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
   // Task 6 write gate: every mutation handler gets wrapped with this so the
   // 403-for-plain-demo check is applied uniformly and can't be forgotten on
   // a newly-added route. isPlainDemo (Task 5) never throws, so this never
-  // needs its own try/catch. Task 7 reuses it for GET /api/agent/internals
-  // too -- despite the name, `gated` is really "isPlainDemo -> 403, else
-  // run the handler," which is exactly the role gate the real backend
-  // applies to internals (a READ, not a mutation) as well: plain demo gets
-  // 403, an acting-as-demo token (isPlainDemo is false for it) and a plain
-  // admin token both pass through untouched.
+  // needs its own try/catch. An acting-as-demo token (isPlainDemo is false
+  // for it) and a plain admin token both pass through untouched.
   const gated = (handler) => (req, res, m, url) => {
     if (isPlainDemo(req)) return sendJson(res, 403, { detail: "forbidden" });
     return handler(req, res, m, url);
@@ -852,14 +848,13 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
-    // GET /api/agent/internals -- 403 for plain-demo (Task 7); acting-as-
-    // demo and plain admin both get the fixture verbatim. See the `gated`
-    // definition above for why reusing it here is correct even though this
-    // is a read, not a mutation.
+    // GET /api/agent/internals -- admins only: like the real backend, it
+    // refuses every demo identity, an admin viewing as demo included
+    // (2026-10-04); a plain admin gets the fixture verbatim.
     {
       method: "GET",
       pattern: /^\/api\/agent\/internals$/,
-      handler: gated((req, res) => sendJson(res, 200, fixtures.internals)),
+      handler: (req, res) => (isDemoIdentity(req) ? sendJson(res, 403, { detail: "forbidden" }) : sendJson(res, 200, fixtures.internals)),
     },
 
     // GET /api/auth/me -- NEVER 401s (a 401 from any endpoint bounces the

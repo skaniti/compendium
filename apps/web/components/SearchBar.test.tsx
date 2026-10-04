@@ -25,8 +25,8 @@ import type { GraphPayload } from "@/lib/types";
 // (mock the hook directly rather than standing up a real SessionProvider,
 // which needs its own fetch/DOM setup unrelated to what these tests
 // exercise). Defaults to signed-out/non-admin; admin-context tests call
-// mockSession({ role: "admin" }) or mockSession({ actingAsDemo: true })
-// explicitly before rendering.
+// mockSession({ role: "admin" }) explicitly before rendering; an admin
+// acting as demo is NOT admin context (2026-10-04).
 function mockSession(overrides: { role?: SessionRole | null; actingAsDemo?: boolean } = {}) {
   vi.spyOn(SessionProviderModule, "useSession").mockReturnValue({
     role: overrides.role ?? null,
@@ -650,10 +650,10 @@ describe("SearchBar", () => {
       expect(screen.getByRole("button", { name: "Agent Internals" })).toBeInTheDocument();
     });
 
-    it("gear is unhidden for an admin acting as demo", () => {
+    it("gear is hidden for an admin acting as demo (the plain-demo chat)", () => {
       mockSession({ role: "demo", actingAsDemo: true });
       const { container } = render(<SearchBar />);
-      expect(container.querySelector("#agent-internals-btn")).not.toHaveAttribute("hidden");
+      expect(container.querySelector("#agent-internals-btn")).toHaveAttribute("hidden");
     });
 
     it("gear is hidden for a plain (non-acting) demo login", () => {
@@ -788,16 +788,19 @@ describe("SearchBar", () => {
       await waitFor(() => expect(screen.getByText(/^Trace:/)).toBeInTheDocument());
     });
 
-    it("data-show-trace is 1 and the trace block renders for an admin acting as demo", async () => {
+    it("data-show-trace is 0 and no trace block renders for an admin acting as demo, even with trace data", async () => {
       mockSession({ role: "demo", actingAsDemo: true });
-      mockCompleteWithTrace();
+      const spy = mockCompleteWithTrace();
       const { container } = render(<SearchBar />);
-      expect(container.querySelector("#search-bar")).toHaveAttribute("data-show-trace", "1");
+      expect(container.querySelector("#search-bar")).toHaveAttribute("data-show-trace", "0");
 
       await userEvent.type(screen.getByPlaceholderText(/ask/i), "hi");
       await userEvent.click(screen.getByRole("button", { name: "Search" }));
 
-      await waitFor(() => expect(screen.getByText(/^Trace:/)).toBeInTheDocument());
+      // Wait for the mocked reply to finish, so "no trace" is not vacuous.
+      await waitFor(() => expect(spy).toHaveBeenCalled());
+      await act(async () => { await spy.mock.results[0].value; });
+      expect(screen.queryByText(/^Trace:/)).not.toBeInTheDocument();
     });
   });
 });

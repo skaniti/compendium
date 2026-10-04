@@ -329,8 +329,7 @@ async def verify_admin_context(
 ) -> int:
     """Require an admin-context session for operator-only endpoints.
 
-    Same predicate as the inline gate on GET /api/agent/internals and the
-    view-as/return-to-admin pair: a real admin role (re-checked from the
+    Same predicate as the view-as/return-to-admin pair: a real admin role (re-checked from the
     DB via ``ar.get_role``, never trusted from the client) OR a token
     carrying ``acting_as_demo`` (an admin currently viewing as demo). A
     plain demo or regular-user login satisfies neither and gets 403.
@@ -1968,23 +1967,24 @@ async def agent_internals(
     user_id: int = Depends(verify_api_key),
     claims: dict = Depends(get_current_claims),
 ):
-    """Admin-context-only: the agent system prompt + tool definitions, for
-    the "Agent Internals" debug panel (REST port of the Dash gear-button
-    panel -- frontend/dash/layouts/graph_canvas.py imports the same
-    ``AGENT_TOOLS``/``SYSTEM_PROMPT`` and renders them server-side; here
-    the Next.js app fetches them instead).
+    """Admins only: the agent system prompt + tool definitions, for the
+    "Agent Internals" debug panel (REST port of the Dash gear-button panel --
+    frontend/dash/layouts/graph_canvas.py imports the same
+    ``AGENT_TOOLS``/``SYSTEM_PROMPT`` and renders them server-side; here the
+    Next.js app fetches them instead).
 
-    Same admin-context predicate as the view-as/return-to-admin pair:
-    a real admin role (``ar.get_role``, re-checked from the DB, never
-    trusted from the client) OR a token carrying ``acting_as_demo`` (an
-    admin currently viewing as demo -- mirrors the #graph-debug-overlay/
-    agent-internals gate in graph_canvas.py, which also treats
-    admin-launched-demo as admin context). A plain demo or regular-user
-    login satisfies neither and gets 403.
+    A real admin role (``ar.get_role``, re-checked from the DB, never trusted
+    from the client), NOT viewing as demo: the system prompt can carry a
+    deployment-local prompt override, and an admin viewing as demo gets
+    exactly what a plain demo gets (2026-10-04, the Prompts view's rule;
+    Dash treated view-as as admin context here). A plain demo or regular-user
+    login gets 403 too.
     """
     from backend.db import auth_repo as ar
 
-    if ar.get_role(user_id) != "admin" and not claims.get("acting_as_demo"):
+    if claims.get("acting_as_demo"):
+        raise HTTPException(status_code=403, detail="Disabled in demo view")
+    if ar.get_role(user_id) != "admin":
         raise HTTPException(status_code=403, detail="Admin context required")
 
     from backend.services.agent import AGENT_TOOLS, SYSTEM_PROMPT
