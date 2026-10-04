@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import SortIcon from "@/components/dev/SortIcon";
 import { formatUsd } from "@/lib/overview";
 import {
@@ -33,6 +33,26 @@ function VsPrevious({ delta }: { delta: NonNullable<EvalRunRow["delta"]> }) {
       vs {delta.vs_version}: {parts.length === 0 ? "—" : parts.map((p, i) => <Fragment key={i}>{i > 0 && " · "}{p}</Fragment>)}
     </>
   );
+}
+
+export const EVALS_LOCKED_TEXT = "Evaluation history is disabled in demo view.";
+
+function EvalPanel({ meta, children }: { meta?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="dev-panel prompts-evals">
+      <div className="dev-panel-head">
+        <h3 className="dev-section-title">Evaluation history</h3>
+        {meta}
+      </div>
+      <p className="prompts-caption">Runs of the evaluation harness, read from this API&apos;s EVAL_RUNS_DIR. Accuracy is the share of fixtures whose verdict matched the expected one; vs previous compares with the latest run of the previous version on the same fixture set and model.</p>
+      {children}
+    </section>
+  );
+}
+
+/** What any demo session sees in place of the runs: the panel, greyed out. Nothing is fetched. */
+export function EvalHistoryLocked() {
+  return <EvalPanel><p className="dev-empty prompts-locked">{EVALS_LOCKED_TEXT}</p></EvalPanel>;
 }
 
 export default function EvalHistory() {
@@ -129,16 +149,8 @@ export default function EvalHistory() {
     </>
   );
 
-  return (
-    <section className="dev-panel prompts-evals">
-      <div className="dev-panel-head">
-        <h3 className="dev-section-title">Evaluation history</h3>
-        {data?.configured && data.readable && (
-          <span className="dev-panel-meta">{runs.length} runs{data.skipped > 0 ? ` · ${data.skipped} unreadable` : ""}</span>
-        )}
-      </div>
-      <p className="prompts-caption">Runs of the evaluation harness, read from this API&apos;s EVAL_RUNS_DIR. Accuracy is the share of fixtures whose verdict matched the expected one; vs previous compares with the latest run of the previous version on the same fixture set and model.</p>
-      {body}
-    </section>
-  );
+  const meta = data?.configured && data.readable
+    ? <span className="dev-panel-meta">{runs.length} runs{data.skipped > 0 ? ` · ${data.skipped} unreadable` : ""}</span>
+    : null;
+  return <EvalPanel meta={meta}>{body}</EvalPanel>;
 }

@@ -30,6 +30,8 @@ describe("prompts stub", () => {
   });
   it("evals", () => {
     expect(evalsList(false)).toEqual({ status: 403, body: { detail: ADMIN_REQUIRED } });
+    expect(evalsList(true, true)).toEqual({ status: 403, body: { detail: VIEWING_AS_DEMO } });
+    expect(evalDetail(true, true)).toEqual({ status: 403, body: { detail: VIEWING_AS_DEMO } });
     expect(evalsList(true)).toEqual({ status: 200, body: EVALS_NOT_CONFIGURED });
     expect(evalDetail(false).status).toBe(403);
     expect(evalDetail(true)).toEqual({ status: 404, body: { detail: RUN_NOT_FOUND } });

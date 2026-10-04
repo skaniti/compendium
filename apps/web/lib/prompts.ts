@@ -18,7 +18,7 @@ export interface PromptsSummary { models: ModelRow[]; unused_models: UnusedModel
 export interface PromptDetail {
   name: string; task: string; task_label: string; version: string; description: string; techniques: string[];
   placeholders: string[]; live: boolean; task_has_live: boolean; overridden: boolean; registry_template: string;
-  /** Present for admin context only: the override text, or null when none. */
+  /** Present for admins only (never a demo session, view-as included): the override text, or null when none. */
   override?: string | null;
 }
 export interface SaveOverrideResult extends PromptDetail { cleared: boolean; missing_placeholders: string[] }

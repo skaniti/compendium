@@ -137,8 +137,9 @@ def test_summary_shape(as_role, no_overrides):
     assert "://" not in json.dumps(s)
 
 
+# An admin viewing as demo gets exactly what a plain demo gets (2026-10-04).
 @pytest.mark.parametrize(
-    "role, has_admin", [("admin", True), ("acting", True), ("demo", False), ("user", False)]
+    "role, has_admin", [("admin", True), ("acting", False), ("demo", False), ("user", False)]
 )
 def test_summary_admin_block_per_role(as_role, no_overrides, monkeypatch, role, has_admin):
     monkeypatch.setattr(settings, "eval_runs_dir", "")
@@ -153,7 +154,7 @@ def test_summary_admin_block_per_role(as_role, no_overrides, monkeypatch, role, 
 
 
 @pytest.mark.parametrize(
-    "role, sees_text", [("admin", True), ("acting", True), ("demo", False), ("user", False)]
+    "role, sees_text", [("admin", True), ("acting", False), ("demo", False), ("user", False)]
 )
 def test_template_detail_redaction(as_role, ofile, role, sees_text):
     ofile.write_text(json.dumps({NAME: "LOCAL OVERRIDE {title}"}), encoding="utf-8")
@@ -179,7 +180,7 @@ def test_template_unknown_and_bad_names(as_role, no_overrides):
 
 
 ADMIN_REQUIRED = {"detail": "Admin context required"}
-VIEWING_AS_DEMO = {"detail": "Editing is disabled in demo view"}
+VIEWING_AS_DEMO = {"detail": "Disabled in demo view"}
 
 
 @pytest.mark.parametrize(
@@ -216,8 +217,9 @@ def test_viewing_as_demo_cannot_reset_an_existing_override(as_role, ofile):
     r = tc.delete(f"/api/prompts/templates/{NAME}/override")
     assert (r.status_code, r.json()) == (403, VIEWING_AS_DEMO)
     assert ofile.read_text() == saved
-    # Reads stay admin context: the override text is still visible.
-    assert tc.get(f"/api/prompts/templates/{NAME}").json()["override"] == "NEW {title} {content}"
+    # Like a plain demo, it sees that the prompt is overridden, never the text.
+    d = tc.get(f"/api/prompts/templates/{NAME}").json()
+    assert d["overridden"] is True and "override" not in d
 
 
 @pytest.mark.parametrize(
@@ -232,9 +234,8 @@ def test_non_admin_403_precedes_validation(as_role, ofile, role, denied):
     assert (r.status_code, r.json()) == (403, denied)
     r = tc.delete("/api/prompts/templates/nope_v1/override")
     assert (r.status_code, r.json()) == (403, denied)
-    if role != "acting":  # an admin viewing as demo still reads eval runs
-        r = tc.get("/api/prompts/evals/.hidden")
-        assert (r.status_code, r.json()) == (403, denied)
+    r = tc.get("/api/prompts/evals/.hidden")
+    assert (r.status_code, r.json()) == (403, denied)
 
 
 def test_put_round_trip(as_role, ofile):
@@ -311,12 +312,15 @@ def test_put_unwritable_directory_500(as_role, monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "role, status", [("admin", 200), ("acting", 200), ("demo", 403), ("user", 403)]
+    "role, status", [("admin", 200), ("acting", 403), ("demo", 403), ("user", 403)]
 )
 def test_evals_role_matrix(as_role, runs, role, status):
     tc = as_role(role)
     assert tc.get("/api/prompts/evals").status_code == status
     assert tc.get("/api/prompts/evals/run-a").status_code == status
+    if role == "acting":
+        assert tc.get("/api/prompts/evals").json() == VIEWING_AS_DEMO
+        assert tc.get("/api/prompts/evals/run-a").json() == VIEWING_AS_DEMO
 
 
 def test_evals_not_configured(as_role, monkeypatch):

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, it, expect, beforeEach } from "vitest";
 import * as api from "@/lib/prompts-api";
-import EvalHistory from "./EvalHistory";
+import EvalHistory, { EVALS_LOCKED_TEXT, EvalHistoryLocked } from "./EvalHistory";
 import { evalDetail, evalRow, evalRuns } from "./test-fixtures";
 
 vi.mock("@/lib/prompts-api");
@@ -18,6 +18,13 @@ const three = [
   evalRow({ run_id: "run-003", prompt_name: "beta_gate", prompt_version: "v2" }),
 ];
 
+it("locked (demo): the panel with its title and a greyed note, nothing fetched", () => {
+  const { container } = render(<EvalHistoryLocked />);
+  expect(screen.getByRole("heading", { name: "Evaluation history" })).toBeInTheDocument();
+  expect(screen.getByText(EVALS_LOCKED_TEXT)).toHaveClass("prompts-locked");
+  expect(container.querySelector("table")).toBeNull();
+  expect(api.fetchEvalRuns).not.toHaveBeenCalled();
+});
 it("not configured", async () => {
   vi.mocked(api.fetchEvalRuns).mockResolvedValue(evalRuns({ configured: false }));
   render(<EvalHistory />);

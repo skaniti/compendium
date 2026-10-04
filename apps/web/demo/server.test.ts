@@ -1955,12 +1955,24 @@ describe("prompts routes (replayed from the recorded plain-demo payloads)", () =
       expect(await plain.json()).toEqual({ detail: "Admin context required" });
       const acting = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, { ...init, headers: { ...init.headers, authorization: `Bearer ${actingDemoToken()}` } });
       expect(acting.status).toBe(403);
-      expect(await acting.json()).toEqual({ detail: "Editing is disabled in demo view" });
+      expect(await acting.json()).toEqual({ detail: "Disabled in demo view" });
       const admin = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, init);
       expect(admin.status).toBe(409);
       expect(await admin.json()).toEqual({ detail: "Prompt overrides are not configured on this deployment." });
       const unknown = await fetch(`${baseUrl}/api/prompts/templates/nope_v1/override`, init);
       expect(unknown.status).toBe(404);
+    }
+  });
+
+  it("viewing as demo gets exactly the plain-demo view: no admin block, no override key, evals refused", async () => {
+    const s = await (await call("/api/prompts/summary", undefined, actingDemoToken())).json();
+    expect(s).toEqual(fx("prompts/summary.json"));
+    const known = names(fx("prompts/summary.json"))[0];
+    expect("override" in (await (await call(`/api/prompts/templates/${known}`, undefined, actingDemoToken())).json())).toBe(false);
+    for (const path of ["/api/prompts/evals", "/api/prompts/evals/x"]) {
+      const r = await call(path, undefined, actingDemoToken());
+      expect(r.status).toBe(403);
+      expect(await r.json()).toEqual({ detail: "Disabled in demo view" });
     }
   });
 

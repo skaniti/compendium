@@ -2,20 +2,21 @@
 
 GET    /api/prompts/summary                    active models, the registry by task, admin status
 GET    /api/prompts/templates/{name}           one prompt's detail
-PUT    /api/prompts/templates/{name}/override  save an override (admin, not viewing as demo)
-DELETE /api/prompts/templates/{name}/override  remove an override (admin, not viewing as demo)
-GET    /api/prompts/evals                      evaluation-harness runs (admin context)
-GET    /api/prompts/evals/{run_id}             one run's detail (admin context)
+PUT    /api/prompts/templates/{name}/override  save an override (admin tools)
+DELETE /api/prompts/templates/{name}/override  remove an override (admin tools)
+GET    /api/prompts/evals                      evaluation-harness runs (admin tools)
+GET    /api/prompts/evals/{run_id}             one run's detail (admin tools)
 
 Auth: verify_api_key on every route. The view is demo-visitable, but override
-text and evaluation runs are deployment-local data, so only admin context
-(an admin, or an admin acting as demo: the existing verify_admin_context gate)
-receives them. Other roles get registry text and counts, never deployment-wide
-data (the Pipeline R12 lesson). Writes are stricter: no demo identity may
-edit, an admin viewing as demo included, so a click made while previewing the
-demo never changes the prompts this deployment runs (2026-10-04, the same rule
-as recluster). Writes go to settings.prompt_overrides_path,
-outside the repo, never to the tracked overrides.json. Registered late in
+text and evaluation runs are deployment-local data, and editing changes the
+prompts this deployment runs, so all of it is admin tools: an admin, NOT
+viewing as demo. Stricter than verify_admin_context, which admits an admin
+viewing as demo: here view-as gets exactly what a plain demo gets, so the
+preview is faithful and a click made while previewing can never edit
+(2026-10-04, the same rule as recluster). Other roles get registry text and
+counts, never deployment-wide data (the Pipeline R12 lesson). Writes go to
+settings.prompt_overrides_path, outside the repo, never to the tracked
+overrides.json. Registered late in
 main.py, after verify_api_key exists, like the other dev views.
 """
 
@@ -42,23 +43,14 @@ RunId = Annotated[str, Path(pattern=eval_runs.RUN_ID_PATTERN)]
 NOT_CONFIGURED = "Prompt overrides are not configured on this deployment."
 UNREADABLE = "The override file can't be read; fix or remove it on the server."
 WRITE_FAILED = "The override file couldn't be written."
-VIEWING_AS_DEMO = "Editing is disabled in demo view"
+VIEWING_AS_DEMO = "Disabled in demo view"
 
 
 class OverrideBody(BaseModel):
     template: str
 
 
-async def _admin_context(user_id: int, claims: dict) -> bool:
-    """Same predicate as the verify_admin_context gate, as a boolean."""
-    try:
-        await verify_admin_context(user_id=user_id, claims=claims)
-    except HTTPException:
-        return False
-    return True
-
-
-async def _override_editor(
+async def _admin_tools(
     user_id: Annotated[int, Depends(verify_admin_context)],
     claims: Annotated[dict, Depends(get_current_claims)],
 ) -> int:
@@ -66,6 +58,17 @@ async def _override_editor(
     if claims.get("acting_as_demo"):
         raise HTTPException(status_code=403, detail=VIEWING_AS_DEMO)
     return user_id
+
+
+async def _admin_tools_allowed(user_id: int, claims: dict) -> bool:
+    """The _admin_tools predicate as a boolean, for routes every role may call."""
+    if claims.get("acting_as_demo"):
+        return False
+    try:
+        await verify_admin_context(user_id=user_id, claims=claims)
+    except HTTPException:
+        return False
+    return True
 
 
 def _known(name: str) -> None:
@@ -89,7 +92,7 @@ async def prompts_summary(
     user_id: Annotated[int, Depends(verify_api_key)],
     claims: Annotated[dict, Depends(get_current_claims)],
 ) -> dict:
-    admin = await _admin_context(user_id, claims)
+    admin = await _admin_tools_allowed(user_id, claims)
     overrides = _load_overrides()
     return {
         "models": prompt_view.build_models(),
@@ -114,7 +117,7 @@ async def prompt_template(
 ) -> dict:
     _known(name)
     return prompt_view.template_detail(
-        name, _load_overrides(), await _admin_context(user_id, claims)
+        name, _load_overrides(), await _admin_tools_allowed(user_id, claims)
     )
 
 
@@ -122,7 +125,7 @@ async def prompt_template(
 async def save_override(
     name: PromptName,
     body: OverrideBody,
-    user_id: int = Depends(_override_editor),
+    user_id: int = Depends(_admin_tools),
 ) -> dict:
     _known(name)
     try:
@@ -143,7 +146,7 @@ async def save_override(
 @router.delete("/templates/{name}/override")
 async def reset_override(
     name: PromptName,
-    user_id: int = Depends(_override_editor),
+    user_id: int = Depends(_admin_tools),
 ) -> dict:
     _known(name)
     try:
@@ -159,7 +162,7 @@ async def reset_override(
 
 
 @router.get("/evals")
-async def eval_runs_list(user_id: int = Depends(verify_admin_context)) -> dict:
+async def eval_runs_list(user_id: int = Depends(_admin_tools)) -> dict:
     st = eval_runs.status()
     if not (st["configured"] and st["readable"]):
         return {**st, "runs": [], "skipped": 0}
@@ -167,7 +170,7 @@ async def eval_runs_list(user_id: int = Depends(verify_admin_context)) -> dict:
 
 
 @router.get("/evals/{run_id}")
-async def eval_run_detail(run_id: RunId, user_id: int = Depends(verify_admin_context)) -> dict:
+async def eval_run_detail(run_id: RunId, user_id: int = Depends(_admin_tools)) -> dict:
     root = eval_runs.runs_dir()
     detail = eval_runs.load_detail(root, run_id) if root is not None and root.is_dir() else None
     if detail is None:

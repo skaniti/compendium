@@ -3,8 +3,9 @@ models each LLM stage calls, and per-prompt detail.
 
 Everything is built field by field from named constants and settings:
 ``settings`` also carries API keys, hosts and database URLs, so it is never
-serialised wholesale. Override text is admin context only (spec R6); other
-roles get the registry template and an ``overridden`` flag.
+serialised wholesale. Override text is for admins only, not viewing as demo
+(spec R6, narrowed 2026-10-04); other roles get the registry template and an
+``overridden`` flag.
 """
 
 from __future__ import annotations

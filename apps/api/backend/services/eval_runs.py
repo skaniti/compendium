@@ -1,10 +1,10 @@
-"""Evaluation-harness runs for the Prompts dev view (admin context only).
+"""Evaluation-harness runs for the Prompts dev view (admins only, not viewing as demo).
 
 Runs live in ``settings.eval_runs_dir`` (env ``EVAL_RUNS_DIR``): a directory
 outside the repo holding ``<run_id>/run.json`` files written by the
 evaluation harness. Hosted deployments have none. A run's fixtures can carry
 browsing-derived text, so nothing here is ever copied into a tracked file, and
-the routes serve it to admin context only.
+the routes serve it to admins only, never to a demo session (view-as included).
 
 Path safety: a run id is only ever matched against the names ``os.scandir``
 returns for that directory -- a client string is never joined into a path --

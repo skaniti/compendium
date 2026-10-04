@@ -8,13 +8,13 @@ export declare const ADMIN_STATUS: {
   evals: { configured: boolean };
 };
 export declare const EVALS_NOT_CONFIGURED: { configured: boolean; readable: boolean; runs: unknown[]; skipped: number };
-export declare function summaryFor<T extends Record<string, unknown>>(summary: T, adminContext: boolean): Omit<T, "admin"> & { admin: unknown };
-export declare function detailFor(map: Record<string, Record<string, unknown>>, name: string, adminContext: boolean): Record<string, unknown> | null;
+export declare function summaryFor<T extends Record<string, unknown>>(summary: T, admin: boolean): Omit<T, "admin"> & { admin: unknown };
+export declare function detailFor(map: Record<string, Record<string, unknown>>, name: string, admin: boolean): Record<string, unknown> | null;
 export declare function overrideWrite(
   map: Record<string, unknown>,
   name: string,
   adminContext: boolean,
   viewingAsDemo?: boolean,
 ): { status: number; body: { detail: string } };
-export declare function evalsList(adminContext: boolean): { status: number; body: Record<string, unknown> };
-export declare function evalDetail(adminContext: boolean): { status: number; body: { detail: string } };
+export declare function evalsList(adminContext: boolean, viewingAsDemo?: boolean): { status: number; body: Record<string, unknown> };
+export declare function evalDetail(adminContext: boolean, viewingAsDemo?: boolean): { status: number; body: { detail: string } };

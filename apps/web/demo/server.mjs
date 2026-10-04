@@ -1052,19 +1052,20 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
-    // Prompts dev view: plain demo gets the recorded registry view; admin
-    // context gets the honest not-configured state (demo/lib/prompts.mjs).
-    // Override writes refuse every demo identity, view-as included.
+    // Prompts dev view: every demo identity, view-as included, gets the
+    // recorded plain-demo registry view and is refused the admin tools
+    // (writes, eval runs); an admin gets the honest not-configured state
+    // (demo/lib/prompts.mjs).
     {
       method: "GET",
       pattern: /^\/api\/prompts\/summary$/,
-      handler: (req, res) => sendJson(res, 200, summaryFor(fixtures.prompts.summary, !isPlainDemo(req))),
+      handler: (req, res) => sendJson(res, 200, summaryFor(fixtures.prompts.summary, !isDemoIdentity(req))),
     },
     {
       method: "GET",
       pattern: /^\/api\/prompts\/templates\/([a-z0-9_]{1,80})$/,
       handler: (req, res, m) => {
-        const d = detailFor(fixtures.prompts.templates, m[1], !isPlainDemo(req));
+        const d = detailFor(fixtures.prompts.templates, m[1], !isDemoIdentity(req));
         return d ? sendJson(res, 200, d) : sendJson(res, 404, { detail: PROMPT_NOT_FOUND });
       },
     },
@@ -1072,7 +1073,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       method,
       pattern: /^\/api\/prompts\/templates\/([a-z0-9_]{1,80})\/override$/,
       handler: (req, res, m) => {
-        const r = overrideWrite(fixtures.prompts.templates, m[1], !isPlainDemo(req), isDemoIdentity(req) && !isPlainDemo(req));
+        const r = overrideWrite(fixtures.prompts.templates, m[1], !isPlainDemo(req), isViewingAsDemo(req));
         sendJson(res, r.status, r.body);
       },
     })),
@@ -1080,7 +1081,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       method: "GET",
       pattern: /^\/api\/prompts\/evals$/,
       handler: (req, res) => {
-        const r = evalsList(!isPlainDemo(req));
+        const r = evalsList(!isPlainDemo(req), isViewingAsDemo(req));
         sendJson(res, r.status, r.body);
       },
     },
@@ -1088,7 +1089,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       method: "GET",
       pattern: /^\/api\/prompts\/evals\/([^/]+)$/,
       handler: (req, res) => {
-        const r = evalDetail(!isPlainDemo(req));
+        const r = evalDetail(!isPlainDemo(req), isViewingAsDemo(req));
         sendJson(res, r.status, r.body);
       },
     },
@@ -1152,6 +1153,11 @@ export function isPlainDemo(req) {
 export function isDemoIdentity(req) {
   const payload = decodeToken(bearerFromRequest(req));
   return !!payload && payload.role === "demo";
+}
+
+// An admin viewing as demo (role demo with the acting claim).
+function isViewingAsDemo(req) {
+  return isDemoIdentity(req) && !isPlainDemo(req);
 }
 
 // Mirrors the backend's DEMO_DEFAULTED_PREFERENCES: every demo session starts

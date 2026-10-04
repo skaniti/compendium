@@ -2,12 +2,11 @@
 import { useRef, useState } from "react";
 import { usePeriodFetch } from "@/components/dev/pipeline/usePeriodFetch";
 import { useSession } from "@/components/SessionProvider";
-import { canSeeAdminViews } from "@/lib/dev-views";
 import { STALE_API_MESSAGE } from "@/lib/overview";
 import { initialPrompt } from "@/lib/prompts";
 import { fetchPromptsSummary } from "@/lib/prompts-api";
 import ActiveModels from "./ActiveModels";
-import EvalHistory from "./EvalHistory";
+import EvalHistory, { EvalHistoryLocked } from "./EvalHistory";
 import PromptRegistry from "./PromptRegistry";
 
 export const PROMPTS_SUBTITLE = "Which model and which prompt each LLM stage runs, every prompt in the registry, and (for admins) local overrides and evaluation runs. Prompts are current state, so this view has no period.";
@@ -17,8 +16,11 @@ export default function PromptsView() {
   const [reload, setReload] = useState(0);
   // A new key keeps the previous data on screen, so badges never blank out after a save.
   const { data, error } = usePeriodFetch(`prompts|${reload}`, fetchPromptsSummary);
-  const { role, actingAsDemo } = useSession();
-  const admin = !!data?.admin && canSeeAdminViews(role, actingAsDemo);
+  const { role } = useSession();
+  // Every demo session, an admin viewing as demo included, gets the plain-demo
+  // view: the admin sections stay in place, greyed out (2026-10-04).
+  const demo = role === "demo";
+  const admin = role === "admin" && !!data?.admin;
   const [selected, setSelected] = useState<string | null>(null);
   const registryRef = useRef<HTMLElement>(null);
   return (
@@ -44,9 +46,9 @@ export default function PromptsView() {
               onSelect={setSelected}
               admin={admin ? data.admin : null}
               onChanged={() => setReload((n) => n + 1)}
-              editLocked={role === "demo"}
+              editLocked={demo}
             />
-            {admin && <EvalHistory />}
+            {admin ? <EvalHistory /> : demo && <EvalHistoryLocked />}
           </>}
       </div>
     </>

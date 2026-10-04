@@ -39,28 +39,26 @@ it("admin: override text and full toolbar", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Compare with registry" }));
   expect(screen.getByText("− registry · + override")).toBeInTheDocument();
 });
-it("demo lock: Edit and Reset greyed out with the chart-kit tooltip and inert; Compare still works", async () => {
-  vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ overridden: true, override: "Override text" }));
+it("demo lock: the plain-demo view plus one greyed, inert Edit override with the chart-kit tooltip", async () => {
+  vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ overridden: true, override: "SECRET override text" }));
+  // Even if handed an admin status, a demo session gets no admin tools.
   render(<PromptViewer name="alpha_task_v2" admin={adminStatus()} onChanged={() => {}} editLocked />);
   const edit = await screen.findByRole("button", { name: "Edit override" });
-  const reset = screen.getByRole("button", { name: "Reset to registry" });
+  expect(screen.getAllByRole("button")).toEqual([edit]);
   expect(edit).toHaveAttribute("aria-disabled", "true");
-  expect(reset).toHaveAttribute("aria-disabled", "true");
-  expect(screen.getByRole("button", { name: "Compare with registry" })).not.toHaveAttribute("aria-disabled");
   expect(edit).not.toHaveAttribute("title");
   expect(edit).toHaveAccessibleDescription(EDIT_LOCKED_TEXT);
-  expect(reset).toHaveAccessibleDescription(EDIT_LOCKED_TEXT);
+  expect(screen.getByText("This deployment runs a local override of this prompt. Its text is visible to admins only; below is the registry text.")).toBeInTheDocument();
+  expect(screen.getByText("Registry text for {title}")).toHaveClass("prompts-template");
+  expect(document.body.textContent).not.toContain("SECRET override text");
+  expect(screen.queryByText(/Editing is off/)).toBeNull();
   fireEvent.mouseEnter(edit, { clientX: 40, clientY: 30 });
   expect(screen.getByRole("tooltip")).toHaveTextContent(EDIT_LOCKED_TEXT);
   fireEvent.mouseLeave(edit);
   expect(screen.queryByRole("tooltip")).toBeNull();
   await userEvent.click(edit);
   expect(screen.queryByRole("textbox")).toBeNull();
-  await userEvent.click(reset);
-  expect(screen.queryByText(/to the registry text\?/)).toBeNull();
-  expect(api.resetPromptOverride).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: "Compare with registry" }));
-  expect(screen.getByText("− registry · + override")).toBeInTheDocument();
+  expect(api.savePromptOverride).not.toHaveBeenCalled();
 });
 it("admin: Edit override is not locked and shows no tooltip", async () => {
   vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ override: null }));

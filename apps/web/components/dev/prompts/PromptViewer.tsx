@@ -11,7 +11,9 @@ type Loaded = { name: string; data: PromptDetail | null; error: string | null };
 
 export const EDIT_LOCKED_TEXT = "Editing is disabled in demo view";
 
-export default function PromptViewer({ name, admin, onChanged, editLocked = false }: Props) {
+export default function PromptViewer({ name, admin: adminStatus, onChanged, editLocked = false }: Props) {
+  // A demo session never gets the admin tools, whatever it is passed.
+  const admin = editLocked ? null : adminStatus;
   const [rev, setRev] = useState(0);
   const [loaded, setLoaded] = useState<Loaded>({ name, data: null, error: null });
   const [editing, setEditing] = useState(false);
@@ -19,19 +21,13 @@ export default function PromptViewer({ name, admin, onChanged, editLocked = fals
   const [confirming, setConfirming] = useState(false);
   const [status, setStatus] = useState<string[]>([]);
   const [resetError, setResetError] = useState<string | null>(null);
-  // Any demo session, an admin viewing as demo included: the API refuses
-  // override writes (2026-10-04), so Edit and Reset stay visible but greyed
-  // out, with the chart-kit tooltip saying why (same as the recluster lock);
-  // a hidden description carries the reason for keyboard and screen readers.
+  // Any demo session, an admin viewing as demo included, sees the same
+  // registry view and an Edit override button greyed out, with the chart-kit
+  // tooltip saying why (same as the recluster lock, 2026-10-04); a hidden
+  // description carries the reason for keyboard and screen readers.
   const lockTip = useHoverTooltip();
   const lockNoteId = useId();
-  const lockProps = editLocked ? {
-    "aria-disabled": true as const,
-    "aria-describedby": lockNoteId,
-    onMouseEnter: (e: MouseEvent) => lockTip.show(e, [EDIT_LOCKED_TEXT]),
-    onMouseMove: (e: MouseEvent) => lockTip.show(e, [EDIT_LOCKED_TEXT]),
-    onMouseLeave: lockTip.hide,
-  } : {};
+  const showLockTip = (e: MouseEvent) => lockTip.show(e, [EDIT_LOCKED_TEXT]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,13 +93,11 @@ export default function PromptViewer({ name, admin, onChanged, editLocked = fals
       )}
       {admin && admin.overrides.configured && admin.overrides.readable && !editing && (
         <div className="prompts-toolbar">
-          <button type="button" {...lockProps} onClick={() => { if (editLocked) return; setEditing(true); setComparing(false); setConfirming(false); }}>Edit override</button>
+          <button type="button" onClick={() => { setEditing(true); setComparing(false); setConfirming(false); }}>Edit override</button>
           {override !== null && (
             <button type="button" aria-pressed={comparing} onClick={() => { setComparing((c) => !c); setEditing(false); }}>Compare with registry</button>
           )}
-          {override !== null && <button type="button" {...lockProps} onClick={() => { if (!editLocked) setConfirming(true); }}>Reset to registry</button>}
-          {editLocked && <span id={lockNoteId} hidden>{EDIT_LOCKED_TEXT}</span>}
-          {lockTip.tooltip}
+          {override !== null && <button type="button" onClick={() => setConfirming(true)}>Reset to registry</button>}
           {confirming && (
             <span className="prompts-confirm">
               Reset {name} to the registry text? <button type="button" onClick={doReset}>Reset</button> <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
@@ -111,8 +105,15 @@ export default function PromptViewer({ name, admin, onChanged, editLocked = fals
           )}
         </div>
       )}
+      {editLocked && (
+        <div className="prompts-toolbar">
+          <button type="button" aria-disabled="true" aria-describedby={lockNoteId} onMouseEnter={showLockTip} onMouseMove={showLockTip} onMouseLeave={lockTip.hide}>Edit override</button>
+          <span id={lockNoteId} hidden>{EDIT_LOCKED_TEXT}</span>
+          {lockTip.tooltip}
+        </div>
+      )}
       {resetError && <p className="prompts-note" role="alert">Couldn&apos;t reset ({resetError}).</p>}
-      {editing && admin && !editLocked
+      {editing && admin
         ? <PromptEditor name={name} liveText={liveText} registryText={detail.registry_template} onSaved={onSaved} onCancel={() => setEditing(false)} />
         : comparing && override !== null
           ? <PromptDiff registry={detail.registry_template} override={override} />
