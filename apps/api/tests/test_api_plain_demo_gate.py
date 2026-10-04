@@ -1,8 +1,7 @@
 """Endpoint contract tests for the plain-demo mutation gate (migration
 batch 02, task 8, deliverable 3; extended by the task-8 fix wave, I2):
-``verify_not_plain_demo``, applied to nine mutation endpoints --
+``verify_not_plain_demo``, applied to eight mutation endpoints --
 
-    POST   /api/recluster
     POST   /api/topics
     DELETE /api/topics/{keyword}
     PATCH  /api/topics/{keyword}                    (rename, task 8 deliverable 2)
@@ -18,6 +17,9 @@ view-as-demo session (acting_as_demo == True) and any normal-role user
 pass through untouched. The FastAPI equivalent pre-dates this task only on
 PATCH /api/auth/preferences (main.py:2786) -- covered by
 tests/test_api_view_as.py's TestPreferencesWriteGate, left as-is here.
+
+POST /api/recluster left this gate on 2026-10-04: it refuses every demo
+identity, an admin viewing as demo included (TestReclusterGate below).
 
 Mirrors batch-04's tests/test_api_view_as.py fixtures (prod_auth, users,
 client) -- real Postgres-backed admin/demo/plain users and real JWT
@@ -252,7 +254,9 @@ class TestReclusterGate:
         assert r.status_code == 403
         assert calls == []
 
-    def test_acting_as_demo_allowed(self, client, users, monkeypatch):
+    def test_acting_as_demo_forbidden(self, client, users, monkeypatch):
+        """A recluster while viewing as demo would rewrite the public demo
+        graph (2026-10-04)."""
         from backend.services.auth_service import create_access_token
 
         admin = users["admin"]
@@ -261,8 +265,19 @@ class TestReclusterGate:
         acting_token = _acting_as_demo_token(client, admin_token)
 
         r = client.post("/api/recluster", headers=_bearer(acting_token))
+        assert r.status_code == 403
+        assert calls == []
+
+    def test_admin_allowed(self, client, users, monkeypatch):
+        from backend.services.auth_service import create_access_token
+
+        admin = users["admin"]
+        calls = _mock_recluster(monkeypatch)
+        token = create_access_token(admin["id"], admin["email"])
+
+        r = client.post("/api/recluster", headers=_bearer(token))
         assert r.status_code != 403
-        assert len(calls) == 1
+        assert calls == [admin["id"]]
 
     def test_normal_user_allowed(self, client, users, monkeypatch):
         from backend.services.auth_service import create_access_token

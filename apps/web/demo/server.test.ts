@@ -1026,6 +1026,18 @@ describe("demo preferences: defaults, never saved (2026-10-04)", () => {
   });
 });
 
+describe("demo recluster: refused for every demo identity (2026-10-04)", () => {
+  it("refuses a recluster from an admin viewing as demo; the run number is unchanged", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "POST", "/api/recluster", undefined, actingDemoToken());
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ detail: "forbidden" });
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.run_number).toBe(141);
+    });
+  });
+});
+
 describe("mutation endpoints (Task 6): reset on restart", () => {
   it("fresh startServer resets mutated state (topics, exclusions, preferences, clustering-status all reseed)", async () => {
     const admin = adminToken();

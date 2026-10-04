@@ -6,6 +6,8 @@ import HeaderCards from "./HeaderCards";
 import TimeWindowProvider from "./TimeWindowProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as apiModule from "@/lib/api";
+import * as SessionProviderModule from "./SessionProvider";
+import type { SessionRole } from "./SessionProvider";
 import type { ClusteringStatus, GraphPayload, ReclusterResult, TopicInterest } from "@/lib/types";
 
 // Ports app.py's _build_graph_widgets (Dash source of truth) into a
@@ -58,6 +60,20 @@ async function advanceTimers(ms: number): Promise<void> {
   });
 }
 
+// HeaderCards reads useSession() for the demo recluster lock; mock the hook
+// (SearchBar.test.tsx's convention). beforeEach defaults to admin.
+function mockSession(overrides: { role?: SessionRole | null; actingAsDemo?: boolean } = {}) {
+  vi.spyOn(SessionProviderModule, "useSession").mockReturnValue({
+    role: overrides.role ?? "admin",
+    account: "test@example.com",
+    actingAsDemo: overrides.actingAsDemo ?? false,
+    adminOriginEmail: undefined,
+    showNoise: false,
+    status: "hydrated",
+    refresh: vi.fn(),
+  });
+}
+
 function renderHeaderCards(children?: ReactNode) {
   return render(
     <TimeWindowProvider>
@@ -87,6 +103,7 @@ describe("HeaderCards", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     __resetGraphCacheForTest();
+    mockSession();
   });
 
   // ── CLUSTERING card ──────────────────────────────────────────────────
@@ -207,6 +224,33 @@ describe("HeaderCards", () => {
     // no status refetch.
     expect(fetchGraphSpy).toHaveBeenCalledTimes(1);
     expect(statusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("admin: recluster is live, with the Recluster now tooltip", () => {
+    mockDefaults();
+    renderHeaderCards();
+
+    const button = document.getElementById("recluster-btn") as HTMLButtonElement;
+    expect(button).not.toHaveAttribute("aria-disabled");
+    expect(button).toHaveAttribute("title", "Recluster now");
+  });
+
+  it.each([
+    ["a direct demo login", false],
+    ["an admin viewing as demo", true],
+  ])("demo (%s): recluster is greyed out with a demo-view tooltip, and a click sends nothing (2026-10-04)", async (_label, actingAsDemo) => {
+    mockDefaults();
+    mockSession({ role: "demo", actingAsDemo });
+    const postSpy = vi.spyOn(apiModule, "postRecluster").mockResolvedValue(makeReclusterResult());
+    renderHeaderCards();
+
+    const button = document.getElementById("recluster-btn") as HTMLButtonElement;
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAttribute("title", "Recluster is disabled in demo view");
+
+    await userEvent.click(button);
+    expect(postSpy).not.toHaveBeenCalled();
+    expect(button.className).toBe("hbar-recluster-btn");
   });
 
   it("refetches clustering status whenever graphVersion bumps, not just on mount/recluster (final-review I1)", async () => {

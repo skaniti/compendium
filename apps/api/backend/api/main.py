@@ -1850,13 +1850,22 @@ from backend.services.clustering_service import ClusteringService
 
 
 @app.post("/api/recluster", tags=["Clustering"])
-async def recluster(user_id: int = Depends(verify_not_plain_demo)):
+async def recluster(user_id: int = Depends(verify_api_key)):
     """Run cross-session HDBSCAN clustering and rebuild the knowledge graph.
 
     The graph_cache rebuild now happens inside ``ClusteringService.recluster_all``
     as its final step, so all callers (this endpoint, trigger_recluster.py CLI,
     nightly_maintenance scheduler) get consistent fresh graph_cache state.
+
+    Demo gate: no demo identity may recluster, neither a direct demo login nor
+    an admin viewing as demo, so a click made while viewing as demo never
+    rewrites the graph demo visitors get (2026-10-04). Stricter than
+    ``verify_not_plain_demo``, which the topic-curation endpoints keep.
     """
+    from backend.db import auth_repo as ar
+
+    if ar.get_role(user_id) == "demo":
+        raise HTTPException(status_code=403, detail="Demo account cannot recluster")
     svc = ClusteringService(user_id=user_id)
     return await svc.recluster_all()
 

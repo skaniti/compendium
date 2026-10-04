@@ -637,7 +637,7 @@
    continuous spin animation below -- without this guard, hovering the
    button mid-recluster froze/jumped the rotation each frame the :hover
    rule's transform re-applied. */
-.hbar-recluster-btn:not(.is-spinning):hover {
+.hbar-recluster-btn:not(.is-spinning):not([aria-disabled="true"]):hover {
     background: rgba(255, 255, 255, 0.12);
     transform: rotate(60deg);
 }
@@ -650,6 +650,12 @@
 .hbar-recluster-btn:disabled {
     opacity: 0.5;
     cursor: default;
+}
+/* Demo lock (HeaderCards): greyed out like :disabled, but still hoverable
+   so its "disabled in demo view" title tooltip shows. */
+.hbar-recluster-btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 .hbar-clustering-stats {
     display: flex;
@@ -1387,7 +1393,6 @@ a.page-link:hover {
    .plain-demo is toggled on <body> by a clientside callback in app.py
    keyed off the user-role-ctx Store (role === 'demo' with no
    admin_launched_demo marker). Hidden here:
-     - #recluster-btn            -- run_recluster is guarded
      - #suggested-topics-panel   -- accept/dismiss/split-accept guarded
      - .hbar-sc-popover          -- the SUPERCLUSTERS tile popovers (both
                                      the allocated rename/delete/icon-pick
@@ -1402,8 +1407,9 @@ a.page-link:hover {
                                      depth since its callbacks still mutate
                                      preferences.
    .hbar-sc-tooltip (hover-info, read-only) is intentionally NOT in this
-   list -- it isn't a mutation control. --------------------------------- */
-body.plain-demo #recluster-btn,
+   list -- it isn't a mutation control. #recluster-btn left this list on
+   2026-10-04: every demo identity now sees it greyed out with a "disabled
+   in demo view" tooltip (HeaderCards, [aria-disabled] rule above). ----- */
 body.plain-demo #suggested-topics-panel,
 body.plain-demo .hbar-sc-popover,
 body.plain-demo #icon-picker-grid,

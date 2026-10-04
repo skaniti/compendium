@@ -6,6 +6,7 @@ import { fetchClusteringStatus, fetchTopics, postRecluster } from "@/lib/api";
 import { TopicIcon } from "@/lib/icons";
 import ScPopover from "./ScPopover";
 import ScTooltips from "./ScTooltip";
+import { useSession } from "./SessionProvider";
 import { useTimeWindow, type TimeWindow } from "./TimeWindowProvider";
 import type { ClusteringStatus, TopicInterest } from "@/lib/types";
 
@@ -13,7 +14,7 @@ import type { ClusteringStatus, TopicInterest } from "@/lib/types";
 // "mini-cards" (CLUSTERING / DATE RANGE / SUPERCLUSTERS) rendered inside
 // #header-graph-controls' .hbar-cards-row (mounted by Header.tsx). Class
 // names AND element ids are kept verbatim -- the ported CSS
-// (app/styles/style.css's .hbar-* rules, body.plain-demo #recluster-btn)
+// (app/styles/style.css's .hbar-* rules, #recluster-btn's demo lock)
 // keys off both.
 //
 // SC popovers/tooltips (topics.py's render_sc_card popovers +
@@ -53,6 +54,11 @@ const MAX_SUPERCLUSTERS = 12;
 export default function HeaderCards() {
   const { graphVersion, refresh } = useGraph();
   const { timeWindow, setTimeWindow } = useTimeWindow();
+  // Every demo identity (a direct demo login or an admin viewing as demo):
+  // the API refuses its recluster (2026-10-04), so the button stays visible
+  // but greyed out, with a tooltip saying why. aria-disabled rather than
+  // `disabled` so the tooltip still shows on hover in every browser.
+  const reclusterLocked = useSession().role === "demo";
 
   const [status, setStatus] = useState<ClusteringStatus>(INITIAL_STATUS);
   const [busy, setBusy] = useState(false);
@@ -117,7 +123,7 @@ export default function HeaderCards() {
   }, [graphVersion, refetchTopics]);
 
   async function handleRecluster(): Promise<void> {
-    if (busy) return;
+    if (busy || reclusterLocked) return;
     setBusy(true);
     try {
       await postRecluster();
@@ -166,7 +172,8 @@ export default function HeaderCards() {
               id="recluster-btn"
               type="button"
               className={busy ? "hbar-recluster-btn is-spinning" : "hbar-recluster-btn"}
-              title="Recluster now"
+              title={reclusterLocked ? "Recluster is disabled in demo view" : "Recluster now"}
+              aria-disabled={reclusterLocked || undefined}
               disabled={busy}
               onClick={() => void handleRecluster()}
             >

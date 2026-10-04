@@ -8,7 +8,8 @@ import { useSession } from "./SessionProvider";
 // DIRECT demo login only (role "demo" with no admin_launched_demo/
 // actingAsDemo marker -- demo-as-admin and the real admin keep the class
 // off). The ported CSS (app/styles/style.css:1326) keys off this class to
-// hide #recluster-btn, .hbar-sc-popover, etc. for that session.
+// hide .hbar-sc-popover, #suggested-topics-panel, etc. for that session
+// (#recluster-btn is greyed out instead, by HeaderCards, for any demo).
 //
 // UX ONLY, same as Dash's own comment on this callback: the actual
 // privilege boundary is server-side (the backend's is_plain_demo gate on

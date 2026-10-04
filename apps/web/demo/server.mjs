@@ -5,8 +5,9 @@
 // GET endpoints, the auth suite (login/logout/refresh/view-as/
 // return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs),
 // in-memory mutations gated behind the plain-demo write gate (topics CRUD,
-// exclusions, preferences PATCH, recluster -- see createMutableState/the
-// `gated` write gate below), SSE chat replay (POST /api/agent/query-stream,
+// exclusions -- see createMutableState/the `gated` write gate below;
+// preferences PATCH and recluster refuse every demo identity, view-as
+// included), SSE chat replay (POST /api/agent/query-stream,
 // keyword-matched against demo/fixtures/chat/*.sse -- see
 // parseSseFrames/pickChatEntry below), and preview/asset streaming (GET
 // /api/pages/{pid}/preview, GET /captured-assets/<path>) plus gated GET
@@ -676,11 +677,14 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
     // doesn't pay the real delay), bumps run_number, updates the status
     // title's embedded run number, leaves every other status string as-is.
     // Response values are awaited but never rendered (endpoints.md) -- any
-    // plausible numbers satisfy the contract.
+    // plausible numbers satisfy the contract. Stricter than `gated`: like the
+    // real backend, it refuses every demo identity, an admin viewing as demo
+    // included.
     {
       method: "POST",
       pattern: /^\/api\/recluster$/,
-      handler: gated(async (req, res) => {
+      handler: async (req, res) => {
+        if (isDemoIdentity(req)) return sendJson(res, 403, { detail: "forbidden" });
         await new Promise((resolve) => setTimeout(resolve, reclusterDelayMs));
         state.clusteringStatus.run_number += 1;
         state.clusteringStatus.title = state.clusteringStatus.title.replace(
@@ -693,7 +697,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
           naming_cost: 0.02,
           elapsed_seconds: reclusterDelayMs / 1000,
         });
-      }),
+      },
     },
 
     // GET /api/topics -- reflects mutations (Task 6).
