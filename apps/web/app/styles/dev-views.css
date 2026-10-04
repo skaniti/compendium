@@ -436,6 +436,8 @@
 .overview-spend-callout .swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 .overview-spend-tick { position: absolute; top: 15px; bottom: 0; width: 1px; background: var(--panel-caption); }
 .overview-spend-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; }
+/* Bold so the figures read comfortably on the fills; the measuring span matches so the fit check sees the bold widths. */
+.overview-spend-seg-label, .overview-spend-measure { font-weight: 700; }
 .overview-spend-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 32px; align-items: start; }
 @media (max-width: 1100px) { .overview-spend-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .overview-spend-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 10px; align-items: center; font-size: 0.78rem; }
