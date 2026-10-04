@@ -2,6 +2,7 @@ export declare const ADMIN_REQUIRED: string;
 export declare const PROMPT_NOT_FOUND: string;
 export declare const RUN_NOT_FOUND: string;
 export declare const NOT_CONFIGURED: string;
+export declare const VIEWING_AS_DEMO: string;
 export declare const ADMIN_STATUS: {
   overrides: { configured: boolean; readable: boolean; count: number };
   evals: { configured: boolean };
@@ -13,6 +14,7 @@ export declare function overrideWrite(
   map: Record<string, unknown>,
   name: string,
   adminContext: boolean,
+  viewingAsDemo?: boolean,
 ): { status: number; body: { detail: string } };
 export declare function evalsList(adminContext: boolean): { status: number; body: Record<string, unknown> };
 export declare function evalDetail(adminContext: boolean): { status: number; body: { detail: string } };

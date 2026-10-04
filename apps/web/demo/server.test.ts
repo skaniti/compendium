@@ -1946,13 +1946,16 @@ describe("prompts routes (replayed from the recorded plain-demo payloads)", () =
     expect((await call("/api/prompts/templates/Bad-Name")).status).toBe(404);
   });
 
-  it("PUT and DELETE override: 403 plain demo, 409 admin, 404 unknown name", async () => {
+  it("PUT and DELETE override: 403 plain demo, 403 viewing as demo, 409 admin, 404 unknown name", async () => {
     const known = names(fx("prompts/summary.json"))[0];
     for (const method of ["PUT", "DELETE"]) {
       const init = { method, headers: { "content-type": "application/json" }, body: method === "PUT" ? JSON.stringify({ template: "x" }) : undefined };
       const plain = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, { ...init, headers: { ...init.headers, authorization: `Bearer ${plainDemoToken()}` } });
       expect(plain.status).toBe(403);
       expect(await plain.json()).toEqual({ detail: "Admin context required" });
+      const acting = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, { ...init, headers: { ...init.headers, authorization: `Bearer ${actingDemoToken()}` } });
+      expect(acting.status).toBe(403);
+      expect(await acting.json()).toEqual({ detail: "Editing is disabled in demo view" });
       const admin = await fetch(`${baseUrl}/api/prompts/templates/${known}/override`, init);
       expect(admin.status).toBe(409);
       expect(await admin.json()).toEqual({ detail: "Prompt overrides are not configured on this deployment." });

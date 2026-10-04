@@ -178,33 +178,63 @@ def test_template_unknown_and_bad_names(as_role, no_overrides):
     assert tc.get("/api/prompts/templates/" + "a" * 81).status_code == 422
 
 
+ADMIN_REQUIRED = {"detail": "Admin context required"}
+VIEWING_AS_DEMO = {"detail": "Editing is disabled in demo view"}
+
+
 @pytest.mark.parametrize(
-    "role, status", [("admin", 200), ("acting", 200), ("demo", 403), ("user", 403)]
+    "role, denied",
+    [
+        ("admin", None),
+        ("acting", VIEWING_AS_DEMO),
+        ("demo", ADMIN_REQUIRED),
+        ("user", ADMIN_REQUIRED),
+    ],
 )
-def test_write_role_matrix(as_role, ofile, role, status):
+def test_write_role_matrix(as_role, ofile, role, denied):
+    # Every demo identity is refused, an admin viewing as demo included (2026-10-04).
     tc = as_role(role)
     r = tc.put(
         f"/api/prompts/templates/{NAME}/override", json={"template": "NEW {title} {content}"}
     )
-    assert r.status_code == status
-    if status == 403:
-        assert r.json() == {"detail": "Admin context required"}
+    assert r.status_code == (403 if denied else 200)
+    if denied:
+        assert r.json() == denied
         assert not ofile.exists()
-    assert tc.delete(f"/api/prompts/templates/{NAME}/override").status_code == status
+    r = tc.delete(f"/api/prompts/templates/{NAME}/override")
+    assert r.status_code == (403 if denied else 200)
+    if denied:
+        assert r.json() == denied
 
 
-@pytest.mark.parametrize("role", ["demo", "user"])
-def test_non_admin_403_precedes_validation(as_role, ofile, role):
+def test_viewing_as_demo_cannot_reset_an_existing_override(as_role, ofile):
+    as_role("admin").put(
+        f"/api/prompts/templates/{NAME}/override", json={"template": "NEW {title} {content}"}
+    )
+    saved = ofile.read_text()
+    tc = as_role("acting")
+    r = tc.delete(f"/api/prompts/templates/{NAME}/override")
+    assert (r.status_code, r.json()) == (403, VIEWING_AS_DEMO)
+    assert ofile.read_text() == saved
+    # Reads stay admin context: the override text is still visible.
+    assert tc.get(f"/api/prompts/templates/{NAME}").json()["override"] == "NEW {title} {content}"
+
+
+@pytest.mark.parametrize(
+    "role, denied",
+    [("demo", ADMIN_REQUIRED), ("user", ADMIN_REQUIRED), ("acting", VIEWING_AS_DEMO)],
+)
+def test_non_admin_403_precedes_validation(as_role, ofile, role, denied):
     tc = as_role(role)
-    denied = {"detail": "Admin context required"}
     r = tc.put("/api/prompts/templates/nope_v1/override", json={})
     assert (r.status_code, r.json()) == (403, denied)
     r = tc.put("/api/prompts/templates/Bad-Name/override", json={"template": ""})
     assert (r.status_code, r.json()) == (403, denied)
     r = tc.delete("/api/prompts/templates/nope_v1/override")
     assert (r.status_code, r.json()) == (403, denied)
-    r = tc.get("/api/prompts/evals/.hidden")
-    assert (r.status_code, r.json()) == (403, denied)
+    if role != "acting":  # an admin viewing as demo still reads eval runs
+        r = tc.get("/api/prompts/evals/.hidden")
+        assert (r.status_code, r.json()) == (403, denied)
 
 
 def test_put_round_trip(as_role, ofile):

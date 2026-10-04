@@ -531,6 +531,9 @@
 .prompts-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .prompts-toolbar button, .prompts-editor-actions button, .prompts-confirm button { padding: 4px 10px; border: 0; border-radius: 6px; background: color-mix(in oklch, var(--panel-caption) 18%, transparent); color: var(--text); font-size: 0.72rem; cursor: pointer; }
 .prompts-toolbar button[aria-pressed="true"] { background: color-mix(in oklch, var(--highlight) 28%, transparent); }
+/* Demo lock (PromptViewer): greyed out like :disabled, but still hoverable so
+   its "disabled in demo view" tooltip shows. */
+.prompts-toolbar button[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .prompts-editor { width: 100%; box-sizing: border-box; min-height: 18rem; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-family: monospace; font-size: 0.7rem; line-height: 1.5; resize: vertical; }
 .prompts-editor-status, .prompts-status { font-size: 0.7rem; color: var(--panel-caption); font-family: monospace; }
 .prompts-editor-actions { display: flex; gap: 8px; }

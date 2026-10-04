@@ -49,7 +49,7 @@ it("admin session with admin block shows evals", async () => {
   vi.mocked(api.fetchPromptsSummary).mockResolvedValue(summary({ admin: adminStatus() }));
   const { container } = render(<PromptsView />);
   await waitFor(() => expect(container.querySelector(".prompts-evals")).toBeTruthy());
-  expect(await screen.findByRole("button", { name: "Edit override" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Edit override" })).not.toHaveAttribute("aria-disabled");
 });
 it("R20: admin block but demo session, not acting, hides evals", async () => {
   session.value = { role: "demo", actingAsDemo: false, status: "hydrated" };
@@ -59,11 +59,15 @@ it("R20: admin block but demo session, not acting, hides evals", async () => {
   expect(container.querySelector(".prompts-evals")).toBeNull();
   expect(screen.queryByRole("button", { name: "Edit override" })).toBeNull();
 });
-it("acting as demo with admin block shows evals", async () => {
+it("acting as demo with admin block shows evals, but editing is locked", async () => {
   session.value = { role: "demo", actingAsDemo: true, status: "hydrated" };
   vi.mocked(api.fetchPromptsSummary).mockResolvedValue(summary({ admin: adminStatus() }));
   const { container } = render(<PromptsView />);
   await waitFor(() => expect(container.querySelector(".prompts-evals")).toBeTruthy());
+  const edit = await screen.findByRole("button", { name: "Edit override" });
+  expect(edit).toHaveAttribute("aria-disabled", "true");
+  await userEvent.click(edit);
+  expect(screen.queryByRole("textbox")).toBeNull();
 });
 it("models prompt button selects that prompt", async () => {
   vi.mocked(api.fetchPromptsSummary).mockResolvedValue(summary({ models: [modelRow({ prompt: "beta_task_v1" })] }));

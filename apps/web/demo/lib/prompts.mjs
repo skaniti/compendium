@@ -7,6 +7,7 @@ export const ADMIN_REQUIRED = "Admin context required";
 export const PROMPT_NOT_FOUND = "prompt not found";
 export const RUN_NOT_FOUND = "run not found";
 export const NOT_CONFIGURED = "Prompt overrides are not configured on this deployment.";
+export const VIEWING_AS_DEMO = "Editing is disabled in demo view";
 
 export const ADMIN_STATUS = Object.freeze({
   overrides: Object.freeze({ configured: false, readable: true, count: 0 }),
@@ -26,9 +27,13 @@ export function detailFor(map, name, adminContext) {
   return adminContext ? { ...detail, override: null } : detail;
 }
 
-/** PUT / DELETE override: admin-only (403), known name (404), then not configured (409). */
-export function overrideWrite(map, name, adminContext) {
+/**
+ * PUT / DELETE override: admin-only (403), not while viewing as demo (403, every
+ * demo identity is refused, 2026-10-04), known name (404), then not configured (409).
+ */
+export function overrideWrite(map, name, adminContext, viewingAsDemo = false) {
   if (!adminContext) return { status: 403, body: { detail: ADMIN_REQUIRED } };
+  if (viewingAsDemo) return { status: 403, body: { detail: VIEWING_AS_DEMO } };
   if (!Object.hasOwn(map, name)) return { status: 404, body: { detail: PROMPT_NOT_FOUND } };
   return { status: 409, body: { detail: NOT_CONFIGURED } };
 }

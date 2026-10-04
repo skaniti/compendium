@@ -6,8 +6,8 @@
 // return-to-admin + role-reflecting /api/auth/me, see demo/lib/tokens.mjs),
 // in-memory mutations gated behind the plain-demo write gate (topics CRUD,
 // exclusions -- see createMutableState/the `gated` write gate below;
-// preferences PATCH and recluster refuse every demo identity, view-as
-// included), SSE chat replay (POST /api/agent/query-stream,
+// preferences PATCH, recluster and prompt-override writes refuse every demo
+// identity, view-as included), SSE chat replay (POST /api/agent/query-stream,
 // keyword-matched against demo/fixtures/chat/*.sse -- see
 // parseSseFrames/pickChatEntry below), and preview/asset streaming (GET
 // /api/pages/{pid}/preview, GET /captured-assets/<path>) plus gated GET
@@ -1054,6 +1054,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
 
     // Prompts dev view: plain demo gets the recorded registry view; admin
     // context gets the honest not-configured state (demo/lib/prompts.mjs).
+    // Override writes refuse every demo identity, view-as included.
     {
       method: "GET",
       pattern: /^\/api\/prompts\/summary$/,
@@ -1071,7 +1072,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       method,
       pattern: /^\/api\/prompts\/templates\/([a-z0-9_]{1,80})\/override$/,
       handler: (req, res, m) => {
-        const r = overrideWrite(fixtures.prompts.templates, m[1], !isPlainDemo(req));
+        const r = overrideWrite(fixtures.prompts.templates, m[1], !isPlainDemo(req), isDemoIdentity(req) && !isPlainDemo(req));
         sendJson(res, r.status, r.body);
       },
     })),

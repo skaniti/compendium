@@ -1,8 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { it, expect, vi, beforeEach } from "vitest";
 import * as api from "@/lib/prompts-api";
-import PromptViewer from "./PromptViewer";
+import PromptViewer, { EDIT_LOCKED_TEXT } from "./PromptViewer";
 import { adminStatus, detail } from "./test-fixtures";
 vi.mock("@/lib/prompts-api");
 
@@ -38,6 +38,38 @@ it("admin: override text and full toolbar", async () => {
   expect(screen.getByRole("button", { name: "Reset to registry" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Compare with registry" }));
   expect(screen.getByText("− registry · + override")).toBeInTheDocument();
+});
+it("demo lock: Edit and Reset greyed out with the chart-kit tooltip and inert; Compare still works", async () => {
+  vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ overridden: true, override: "Override text" }));
+  render(<PromptViewer name="alpha_task_v2" admin={adminStatus()} onChanged={() => {}} editLocked />);
+  const edit = await screen.findByRole("button", { name: "Edit override" });
+  const reset = screen.getByRole("button", { name: "Reset to registry" });
+  expect(edit).toHaveAttribute("aria-disabled", "true");
+  expect(reset).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("button", { name: "Compare with registry" })).not.toHaveAttribute("aria-disabled");
+  expect(edit).not.toHaveAttribute("title");
+  expect(edit).toHaveAccessibleDescription(EDIT_LOCKED_TEXT);
+  expect(reset).toHaveAccessibleDescription(EDIT_LOCKED_TEXT);
+  fireEvent.mouseEnter(edit, { clientX: 40, clientY: 30 });
+  expect(screen.getByRole("tooltip")).toHaveTextContent(EDIT_LOCKED_TEXT);
+  fireEvent.mouseLeave(edit);
+  expect(screen.queryByRole("tooltip")).toBeNull();
+  await userEvent.click(edit);
+  expect(screen.queryByRole("textbox")).toBeNull();
+  await userEvent.click(reset);
+  expect(screen.queryByText(/to the registry text\?/)).toBeNull();
+  expect(api.resetPromptOverride).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Compare with registry" }));
+  expect(screen.getByText("− registry · + override")).toBeInTheDocument();
+});
+it("admin: Edit override is not locked and shows no tooltip", async () => {
+  vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ override: null }));
+  render(<PromptViewer name="alpha_task_v2" admin={adminStatus()} onChanged={() => {}} />);
+  const edit = await screen.findByRole("button", { name: "Edit override" });
+  expect(edit).not.toHaveAttribute("aria-disabled");
+  expect(edit).not.toHaveAccessibleDescription();
+  fireEvent.mouseEnter(edit, { clientX: 40, clientY: 30 });
+  expect(screen.queryByRole("tooltip")).toBeNull();
 });
 it("admin without override: only Edit override", async () => {
   vi.mocked(api.fetchPromptDetail).mockResolvedValue(detail({ override: null }));

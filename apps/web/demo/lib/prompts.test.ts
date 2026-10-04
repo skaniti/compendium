@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  ADMIN_REQUIRED, ADMIN_STATUS, EVALS_NOT_CONFIGURED, NOT_CONFIGURED, PROMPT_NOT_FOUND, RUN_NOT_FOUND,
+  ADMIN_REQUIRED, ADMIN_STATUS, EVALS_NOT_CONFIGURED, NOT_CONFIGURED, PROMPT_NOT_FOUND, RUN_NOT_FOUND, VIEWING_AS_DEMO,
   detailFor, evalDetail, evalsList, overrideWrite, summaryFor,
 } from "./prompts.mjs";
 
@@ -21,8 +21,10 @@ describe("prompts stub", () => {
     expect(detailFor(map, "toString", true)).toBeNull();
     expect("override" in map.alpha_v1).toBe(false);
   });
-  it("writes: 403 plain demo, 404 unknown, 409 not configured", () => {
+  it("writes: 403 plain demo, 403 viewing as demo, 404 unknown, 409 not configured", () => {
     expect(overrideWrite(map, "alpha_v1", false)).toEqual({ status: 403, body: { detail: ADMIN_REQUIRED } });
+    expect(overrideWrite(map, "alpha_v1", true, true)).toEqual({ status: 403, body: { detail: VIEWING_AS_DEMO } });
+    expect(overrideWrite(map, "nope_v1", true, true)).toEqual({ status: 403, body: { detail: VIEWING_AS_DEMO } });
     expect(overrideWrite(map, "nope_v1", true)).toEqual({ status: 404, body: { detail: PROMPT_NOT_FOUND } });
     expect(overrideWrite(map, "alpha_v1", true)).toEqual({ status: 409, body: { detail: NOT_CONFIGURED } });
   });

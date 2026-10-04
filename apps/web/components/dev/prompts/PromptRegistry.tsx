@@ -5,10 +5,10 @@ import PromptViewer from "./PromptViewer";
 
 interface Props {
   tasks: PromptTask[]; selected: string | null; onSelect: (name: string) => void;
-  admin: PromptsAdminStatus | null; onChanged: () => void;
+  admin: PromptsAdminStatus | null; onChanged: () => void; editLocked?: boolean;
 }
 
-const PromptRegistry = forwardRef<HTMLElement, Props>(function PromptRegistry({ tasks, selected, onSelect, admin, onChanged }, ref) {
+const PromptRegistry = forwardRef<HTMLElement, Props>(function PromptRegistry({ tasks, selected, onSelect, admin, onChanged, editLocked }, ref) {
   const all = tasks.flatMap((t) => t.prompts);
   const overridden = all.filter((p) => p.overridden).length;
   return (
@@ -43,7 +43,7 @@ const PromptRegistry = forwardRef<HTMLElement, Props>(function PromptRegistry({ 
             );
           })}
         </nav>
-        {selected && <PromptViewer key={selected} name={selected} admin={admin} onChanged={onChanged} />}
+        {selected && <PromptViewer key={selected} name={selected} admin={admin} onChanged={onChanged} editLocked={editLocked} />}
       </div>
     </section>
   );

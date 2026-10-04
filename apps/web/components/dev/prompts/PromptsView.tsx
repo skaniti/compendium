@@ -44,6 +44,7 @@ export default function PromptsView() {
               onSelect={setSelected}
               admin={admin ? data.admin : null}
               onChanged={() => setReload((n) => n + 1)}
+              editLocked={role === "demo"}
             />
             {admin && <EvalHistory />}
           </>}

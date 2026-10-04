@@ -1,14 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState, type MouseEvent } from "react";
+import { useHoverTooltip } from "@/components/charts/HoverTooltip";
 import type { PromptDetail, PromptsAdminStatus, SaveOverrideResult } from "@/lib/prompts";
 import { fetchPromptDetail, resetPromptOverride } from "@/lib/prompts-api";
 import PromptDiff from "./PromptDiff";
 import PromptEditor from "./PromptEditor";
 
-interface Props { name: string; admin: PromptsAdminStatus | null; onChanged: () => void }
+interface Props { name: string; admin: PromptsAdminStatus | null; onChanged: () => void; editLocked?: boolean }
 type Loaded = { name: string; data: PromptDetail | null; error: string | null };
 
-export default function PromptViewer({ name, admin, onChanged }: Props) {
+export const EDIT_LOCKED_TEXT = "Editing is disabled in demo view";
+
+export default function PromptViewer({ name, admin, onChanged, editLocked = false }: Props) {
   const [rev, setRev] = useState(0);
   const [loaded, setLoaded] = useState<Loaded>({ name, data: null, error: null });
   const [editing, setEditing] = useState(false);
@@ -16,6 +19,19 @@ export default function PromptViewer({ name, admin, onChanged }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [status, setStatus] = useState<string[]>([]);
   const [resetError, setResetError] = useState<string | null>(null);
+  // Any demo session, an admin viewing as demo included: the API refuses
+  // override writes (2026-10-04), so Edit and Reset stay visible but greyed
+  // out, with the chart-kit tooltip saying why (same as the recluster lock);
+  // a hidden description carries the reason for keyboard and screen readers.
+  const lockTip = useHoverTooltip();
+  const lockNoteId = useId();
+  const lockProps = editLocked ? {
+    "aria-disabled": true as const,
+    "aria-describedby": lockNoteId,
+    onMouseEnter: (e: MouseEvent) => lockTip.show(e, [EDIT_LOCKED_TEXT]),
+    onMouseMove: (e: MouseEvent) => lockTip.show(e, [EDIT_LOCKED_TEXT]),
+    onMouseLeave: lockTip.hide,
+  } : {};
 
   useEffect(() => {
     let cancelled = false;
@@ -81,11 +97,13 @@ export default function PromptViewer({ name, admin, onChanged }: Props) {
       )}
       {admin && admin.overrides.configured && admin.overrides.readable && !editing && (
         <div className="prompts-toolbar">
-          <button type="button" onClick={() => { setEditing(true); setComparing(false); setConfirming(false); }}>Edit override</button>
+          <button type="button" {...lockProps} onClick={() => { if (editLocked) return; setEditing(true); setComparing(false); setConfirming(false); }}>Edit override</button>
           {override !== null && (
             <button type="button" aria-pressed={comparing} onClick={() => { setComparing((c) => !c); setEditing(false); }}>Compare with registry</button>
           )}
-          {override !== null && <button type="button" onClick={() => setConfirming(true)}>Reset to registry</button>}
+          {override !== null && <button type="button" {...lockProps} onClick={() => { if (!editLocked) setConfirming(true); }}>Reset to registry</button>}
+          {editLocked && <span id={lockNoteId} hidden>{EDIT_LOCKED_TEXT}</span>}
+          {lockTip.tooltip}
           {confirming && (
             <span className="prompts-confirm">
               Reset {name} to the registry text? <button type="button" onClick={doReset}>Reset</button> <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
@@ -94,7 +112,7 @@ export default function PromptViewer({ name, admin, onChanged }: Props) {
         </div>
       )}
       {resetError && <p className="prompts-note" role="alert">Couldn&apos;t reset ({resetError}).</p>}
-      {editing && admin
+      {editing && admin && !editLocked
         ? <PromptEditor name={name} liveText={liveText} registryText={detail.registry_template} onSaved={onSaved} onCancel={() => setEditing(false)} />
         : comparing && override !== null
           ? <PromptDiff registry={detail.registry_template} override={override} />
