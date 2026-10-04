@@ -423,13 +423,22 @@
 .overview-tl-chart { min-width: 0; }
 .overview-tl-chart .dev-empty-inline { padding: 24px 0 24px 56px; }
 .overview-footnote { margin: 8px 0 0; font-size: 0.68rem; color: var(--panel-caption); }
-.overview-spend-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; margin: 4px 0 14px; }
-.overview-spend-bar > span { min-width: 3px; }
+.overview-spend-figure { position: relative; margin: 4px 0 14px; }
+.overview-spend-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; }
+.overview-spend-bar > span { min-width: 3px; display: flex; align-items: center; justify-content: center; }
+/* Figures ride inside each segment that fits them (spend-bar.ts measures first, so nothing is clipped); ink is whichever of --bg / --text contrasts more with the fill. */
+.overview-spend-seg-label, .overview-spend-callout, .overview-spend-measure { font-family: monospace; font-size: 0.72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.overview-spend-seg-label.ink-dark { color: var(--bg); }
+.overview-spend-seg-label.ink-light { color: var(--text); }
+.overview-spend-callouts { position: relative; height: 22px; }
+.overview-spend-callout { position: absolute; top: 0; line-height: 14px; color: var(--text); display: flex; align-items: center; gap: 4px; }
+.overview-spend-callout .swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.overview-spend-tick { position: absolute; top: 15px; bottom: 0; width: 1px; background: var(--panel-caption); }
+.overview-spend-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .overview-spend-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 32px; align-items: start; }
 @media (max-width: 1100px) { .overview-spend-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.overview-spend-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto auto; column-gap: 10px; align-items: center; font-size: 0.78rem; }
-.overview-spend-usd, .overview-spend-pct, .overview-spend-calls { font-family: monospace; font-variant-numeric: tabular-nums; }
-.overview-spend-pct, .overview-spend-calls { color: var(--panel-caption); font-size: 0.72rem; }
+.overview-spend-list > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 10px; align-items: center; font-size: 0.78rem; }
+.overview-spend-unbarred { font-family: monospace; font-variant-numeric: tabular-nums; font-size: 0.72rem; color: var(--panel-caption); }
 .overview-spend-types { grid-column: 2 / -1; list-style: none; padding: 0; font-family: monospace; font-size: 0.68rem; color: var(--panel-caption); margin: 2px 0 0; display: flex; flex-direction: column; gap: 1px; }
 
 /* ===== Clusters ===== */

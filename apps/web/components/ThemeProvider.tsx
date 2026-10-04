@@ -32,6 +32,12 @@ export function useTheme(): ThemeContextValue {
   return ctx;
 }
 
+// Same as useTheme() but returns null outside a provider, for readers that
+// only react to palette changes (the Overview spend bar's label ink).
+export function useOptionalTheme(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
+
 function readStoredVariant(): string {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
