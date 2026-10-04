@@ -1,4 +1,4 @@
-"""Integration tests for backend/scripts/dq_vocab_canonicalize.py.
+"""Integration tests for backend/scripts/_archive/dq_vocab_canonicalize.py.
 
 SBERT is monkeypatched to a deterministic fake vector for every test except
 the dry-run test, which asserts the real loader is never even imported.
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(not _pg_reachable(), reason="Test PostgreSQL not
 
 from backend.db import dq_vocab_repo, user_repo
 from backend.db.connection import get_conn
-from backend.scripts import dq_vocab_canonicalize
+from backend.scripts._archive import dq_vocab_canonicalize
 
 FAKE_EMBEDDING = [0.01] * 384
 

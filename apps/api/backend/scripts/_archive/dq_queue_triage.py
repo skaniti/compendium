@@ -34,9 +34,9 @@ the pattern in ``suggest_vocab_descriptions.py`` / ``dq_vocab_repo.py`` --
 belt-and-braces if a future non-superuser app role is ever introduced.
 
 Usage:
-    python -m backend.scripts.dq_queue_triage                     # dry run
-    python -m backend.scripts.dq_queue_triage --apply
-    python -m backend.scripts.dq_queue_triage --apply --user-id 152
+    python -m backend.scripts._archive.dq_queue_triage                     # dry run
+    python -m backend.scripts._archive.dq_queue_triage --apply
+    python -m backend.scripts._archive.dq_queue_triage --apply --user-id 152
 """
 
 import argparse
@@ -47,7 +47,7 @@ from collections import Counter
 from pathlib import Path
 
 # repo root = two levels up (this file lives at backend/scripts/)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db.connection import get_conn, set_current_user_id
 

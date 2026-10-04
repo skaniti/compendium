@@ -12,9 +12,9 @@ This script is read-only. It never mutates the database.
 
 Usage::
 
-    uv run python scripts/diagnostics/dedup_audit.py
-    uv run python scripts/diagnostics/dedup_audit.py --user-id 152
-    uv run python scripts/diagnostics/dedup_audit.py --recent-days 14
+    uv run python scripts/_archive/diagnostics/dedup_audit.py
+    uv run python scripts/_archive/diagnostics/dedup_audit.py --user-id 152
+    uv run python scripts/_archive/diagnostics/dedup_audit.py --recent-days 14
 
 What it reports:
 
@@ -39,8 +39,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# Allow running as `uv run python scripts/diagnostics/dedup_audit.py`
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# Allow running as `uv run python scripts/_archive/diagnostics/dedup_audit.py`
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db.connection import get_conn
 from backend.utils.url_normalize import normalize_url

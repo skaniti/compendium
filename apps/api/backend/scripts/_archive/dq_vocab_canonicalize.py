@@ -56,8 +56,8 @@ script (including the raw safety-check query) sets
 ``backend/db/dq_vocab_repo.py``.
 
 Usage:
-    python -m backend.scripts.dq_vocab_canonicalize --user-id 152           # dry run
-    python -m backend.scripts.dq_vocab_canonicalize --user-id 152 --apply
+    python -m backend.scripts._archive.dq_vocab_canonicalize --user-id 152           # dry run
+    python -m backend.scripts._archive.dq_vocab_canonicalize --user-id 152 --apply
 """
 
 import argparse
@@ -68,7 +68,7 @@ from collections import Counter
 from pathlib import Path
 
 # repo root = two levels up (this file lives at backend/scripts/)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db import dq_vocab_repo
 from backend.db.connection import get_conn

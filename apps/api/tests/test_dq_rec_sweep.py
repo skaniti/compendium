@@ -1,4 +1,4 @@
-"""Integration tests for backend/scripts/dq_rec_sweep.py."""
+"""Integration tests for backend/scripts/_archive/dq_rec_sweep.py."""
 
 import json
 
@@ -10,7 +10,7 @@ pytestmark = pytest.mark.skipif(not _pg_reachable(), reason="Test PostgreSQL not
 
 from backend.db import dq_observations_repo, dq_recommendations_repo, dq_runs_repo, user_repo
 from backend.db.connection import get_conn
-from backend.scripts import dq_rec_sweep
+from backend.scripts._archive import dq_rec_sweep
 
 
 @pytest.fixture

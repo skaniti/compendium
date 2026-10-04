@@ -13,7 +13,7 @@ afterward. No production state mutated. Costs $0 (no LLM calls).
 
 Run::
 
-    python scripts/smoke_test_featured_singletons.py
+    python scripts/_archive/smoke_test_featured_singletons.py
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pathlib import Path
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ.pop("LANGCHAIN_API_KEY", None)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np  # noqa: E402

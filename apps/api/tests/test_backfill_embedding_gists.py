@@ -7,7 +7,7 @@ real backfill run, not unit-tested here -- mocking the whole ClusteringService
 + embedding_repo + trends_repo chain would mostly test the mocks.
 """
 
-from backend.scripts.backfill_embedding_gists import (
+from backend.scripts._archive.backfill_embedding_gists import (
     DEFAULT_CONCURRENCY,
     SLICE_SIZE,
     _build_parser,

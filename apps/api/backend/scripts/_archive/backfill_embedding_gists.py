@@ -20,8 +20,8 @@ immediately after that slice's LLM call returns (crash-safe) via
 ``embedding_repo.upsert_embedding_gists``.
 
 Usage:
-    python -m backend.scripts.backfill_embedding_gists --user-id 152 --dry-run
-    python -m backend.scripts.backfill_embedding_gists --user-id 152 --concurrency 8
+    python -m backend.scripts._archive.backfill_embedding_gists --user-id 152 --dry-run
+    python -m backend.scripts._archive.backfill_embedding_gists --user-id 152 --concurrency 8
 """
 
 import argparse
@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 # repo root = two levels up (this file lives at backend/scripts/)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db import embedding_repo, trends_repo
 from backend.services.clustering_service import (

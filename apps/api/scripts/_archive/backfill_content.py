@@ -5,8 +5,8 @@ Fixes two historical gaps:
   2. Reddit posts had no backend fetcher, so they went to catchall with no content
 
 Usage:
-    python scripts/backfill_content.py              # dry run (default)
-    python scripts/backfill_content.py --apply       # actually write changes
+    python scripts/_archive/backfill_content.py              # dry run (default)
+    python scripts/_archive/backfill_content.py --apply       # actually write changes
 """
 
 import argparse
@@ -16,8 +16,8 @@ import logging
 import sys
 from pathlib import Path
 
-# Allow running as `python scripts/backfill_content.py`
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Allow running as `python scripts/_archive/backfill_content.py`
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db.connection import get_conn
 from backend.services.content_fetcher import (

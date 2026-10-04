@@ -32,12 +32,12 @@ What this script does NOT do:
       happen to share host+path and were visited within 5 seconds).
 
 Dry-run by default. Pass ``--execute`` to mutate. Every action logged
-to ``scripts/diagnostics/dedup_cleanup_pages_log_{ts}.jsonl``.
+to ``scripts/_archive/diagnostics/dedup_cleanup_pages_log_{ts}.jsonl``.
 
 Usage::
 
-    uv run python scripts/diagnostics/dedup_cleanup_pages.py
-    uv run python scripts/diagnostics/dedup_cleanup_pages.py --execute
+    uv run python scripts/_archive/diagnostics/dedup_cleanup_pages.py
+    uv run python scripts/_archive/diagnostics/dedup_cleanup_pages.py --execute
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db.connection import get_conn
 from backend.db.page_repo import (

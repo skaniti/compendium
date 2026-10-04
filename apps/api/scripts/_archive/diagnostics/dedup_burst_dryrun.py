@@ -17,14 +17,14 @@ Two rules, applied per consecutive pair:
         archived pages don't contribute to clustering — these rows
         are just storage bloat.
 
-Output: an Excel file at scripts/diagnostics/burst_dryrun_{ts}.xlsx
+Output: an Excel file at scripts/_archive/diagnostics/burst_dryrun_{ts}.xlsx
 showing every chain, which pages would be kept/deleted, which rule
 matched, and the recomputed dwell times.
 
 Usage::
 
-    uv run python scripts/diagnostics/dedup_burst_dryrun.py
-    uv run python scripts/diagnostics/dedup_burst_dryrun.py --execute
+    uv run python scripts/_archive/diagnostics/dedup_burst_dryrun.py
+    uv run python scripts/_archive/diagnostics/dedup_burst_dryrun.py --execute
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db.connection import get_conn
 

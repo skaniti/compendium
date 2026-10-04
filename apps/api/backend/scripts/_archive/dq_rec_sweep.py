@@ -1,7 +1,7 @@
 """Applies the executive rec-sweep disposition manifest to the dqBot queue.
 
 Reads the frozen manifest at
-``backend/scripts/dq_rec_sweep_manifest_2026_07_17.json`` (provided by the
+``backend/scripts/_archive/dq_rec_sweep_manifest_2026_07_17.json`` (provided by the
 orchestrator -- see
 the 2026-07-17 dq-pending-recs-vocab-sweep plan (private), spec.md,
 for the full disposition rationale) and, for each entry:
@@ -74,8 +74,8 @@ user's queue (152), and the engine path performs live cluster/page_clusters
 mutations, so an unscoped run is not a safe default.
 
 Usage:
-    python -m backend.scripts.dq_rec_sweep --user-id 152              # dry run
-    python -m backend.scripts.dq_rec_sweep --user-id 152 --apply
+    python -m backend.scripts._archive.dq_rec_sweep --user-id 152              # dry run
+    python -m backend.scripts._archive.dq_rec_sweep --user-id 152 --apply
 """
 
 import argparse
@@ -86,7 +86,7 @@ from collections import Counter
 from pathlib import Path
 
 # repo root = two levels up (this file lives at backend/scripts/)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.db import dq_overrides_repo, dq_recommendations_repo
 from backend.db.connection import get_conn, set_current_user_id

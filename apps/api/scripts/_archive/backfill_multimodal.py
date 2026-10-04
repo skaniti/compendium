@@ -18,14 +18,14 @@ pick up where a previous (possibly crashed) run left off. Use
 ``--all`` to force-reprocess every Wikipedia page.
 
 Usage:
-    python scripts/backfill_multimodal.py                     # dry-run (default)
-    python scripts/backfill_multimodal.py --apply             # write, skip already-done pages
-    python scripts/backfill_multimodal.py --apply --all       # force-reprocess everything
-    python scripts/backfill_multimodal.py --apply --limit 5
-    python scripts/backfill_multimodal.py --apply --url https://en.wikipedia.org/wiki/Hominidae
+    python scripts/_archive/backfill_multimodal.py                     # dry-run (default)
+    python scripts/_archive/backfill_multimodal.py --apply             # write, skip already-done pages
+    python scripts/_archive/backfill_multimodal.py --apply --all       # force-reprocess everything
+    python scripts/_archive/backfill_multimodal.py --apply --limit 5
+    python scripts/_archive/backfill_multimodal.py --apply --url https://en.wikipedia.org/wiki/Hominidae
 
 Persisted log (recommended on long runs):
-    python scripts/backfill_multimodal.py --apply 2>&1 | tee logs/$(date +%Y-%m-%d-%H%M%S)-multimodal-backfill.log
+    python scripts/_archive/backfill_multimodal.py --apply 2>&1 | tee logs/$(date +%Y-%m-%d-%H%M%S)-multimodal-backfill.log
 """
 
 import argparse
@@ -35,7 +35,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db.connection import get_conn
 from backend.services.content_fetcher import fetch_wikipedia_content

@@ -22,7 +22,7 @@ import httpx
 import wikipediaapi
 from bs4 import BeautifulSoup
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FLAT_PAGES = PROJECT_ROOT / "data" / "experiments" / "clustering" / "flat_pages.jsonl"
 OUT_CONTENT = PROJECT_ROOT / "data" / "experiments" / "clustering" / "page_content.jsonl"
 

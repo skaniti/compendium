@@ -4,8 +4,8 @@ Targets Wikipedia and YouTube rows where the fetcher ran historically but
 only stored a 300-char summary — fetched_content and extracted_text are NULL.
 
 Usage:
-    python scripts/refetch_missing_content.py           # dry-run
-    python scripts/refetch_missing_content.py --apply   # actually update DB
+    python scripts/_archive/refetch_missing_content.py           # dry-run
+    python scripts/_archive/refetch_missing_content.py --apply   # actually update DB
 """
 
 import asyncio

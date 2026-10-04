@@ -23,7 +23,7 @@ Output: scripts/audit_output/v2_2_audit_<timestamp>.json with
 
 Usage::
 
-    python scripts/audit_v2_2_reprocess.py --user-id 152 [--limit N]
+    python scripts/_archive/audit_v2_2_reprocess.py --user-id 152 [--limit N]
 
 The diff list is for review only -- this script does NOT modify the DB.
 Apply approved drops via a separate step (e.g., a one-shot UPDATE).
@@ -39,7 +39,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 import os  # noqa: E402

@@ -4,8 +4,8 @@ Fetches README + metadata via the GitHub REST API for pages that
 have sparse or missing extracted_text.
 
 Usage:
-    python scripts/refetch_github.py           # dry-run
-    python scripts/refetch_github.py --apply   # actually update DB
+    python scripts/_archive/refetch_github.py           # dry-run
+    python scripts/_archive/refetch_github.py --apply   # actually update DB
 """
 
 import asyncio

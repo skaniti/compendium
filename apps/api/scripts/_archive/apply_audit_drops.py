@@ -6,11 +6,11 @@ exclusion file is provided.
 
 Workflow:
 
-1. Run audit: ``python scripts/audit_v2_2_reprocess.py --user-id 152``
+1. Run audit: ``python scripts/_archive/audit_v2_2_reprocess.py --user-id 152``
 2. Review the audit JSON's ``candidates_to_drop`` array. Optionally write an
    exclusion file: a JSON list of page_ids that you've decided to KEEP active
    despite the v2.2 verdict (i.e., v2.2 said skip but you disagree).
-3. Apply: ``python scripts/apply_audit_drops.py --audit <path> [--exclude <path>] [--execute]``
+3. Apply: ``python scripts/_archive/apply_audit_drops.py --audit <path> [--exclude <path>] [--execute]``
 
 Dry-run by default. Pass ``--execute`` to actually mutate the DB.
 
@@ -25,7 +25,7 @@ import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from backend.db.connection import get_conn  # noqa: E402

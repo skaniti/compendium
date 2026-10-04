@@ -1,4 +1,4 @@
-"""Tests for scripts/backfill_skip_categories.py (LLM mocked)."""
+"""Tests for scripts/_archive/backfill_skip_categories.py (LLM mocked)."""
 
 import asyncio
 import json
@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.services.skip_categories import SKIP_CATEGORY_IDS
-from scripts import backfill_skip_categories as bf
+from scripts._archive import backfill_skip_categories as bf
 
 
 def _pg_reachable() -> bool:

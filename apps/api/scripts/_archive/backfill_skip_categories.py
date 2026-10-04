@@ -6,9 +6,9 @@ tool call per batch plus bounded retries, writes a reviewable mapping file OUTSI
 only with ``--apply`` -- updates the pages.
 
     cd apps/api
-    python scripts/backfill_skip_categories.py --limit 40          # smoke
-    python scripts/backfill_skip_categories.py                     # dry run + mapping
-    python scripts/backfill_skip_categories.py --apply --mapping-in <file>
+    python scripts/_archive/backfill_skip_categories.py --limit 40          # smoke
+    python scripts/_archive/backfill_skip_categories.py                     # dry run + mapping
+    python scripts/_archive/backfill_skip_categories.py --apply --mapping-in <file>
 
 The mapping file contains the owner's skip reasons: it is never written inside
 the git work tree (the script refuses such a path).
@@ -25,7 +25,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db.connection import get_conn
 from backend.services.skip_categories import (
