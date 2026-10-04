@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useGraph } from "@/hooks/useGraph";
 import { fetchClusteringStatus, fetchTopics, postRecluster } from "@/lib/api";
 import { TopicIcon } from "@/lib/icons";
+import { useHoverTooltip } from "./charts/HoverTooltip";
 import ScPopover from "./ScPopover";
 import ScTooltips from "./ScTooltip";
 import { useSession } from "./SessionProvider";
@@ -59,6 +60,9 @@ export default function HeaderCards() {
   // but greyed out, with a tooltip saying why. aria-disabled rather than
   // `disabled` so the tooltip still shows on hover in every browser.
   const reclusterLocked = useSession().role === "demo";
+  const reclusterLabel = reclusterLocked ? "Recluster is disabled in demo view" : "Recluster now";
+  // Chart-kit tooltip, not a native title (2026-10-04).
+  const reclusterTip = useHoverTooltip();
 
   const [status, setStatus] = useState<ClusteringStatus>(INITIAL_STATUS);
   const [busy, setBusy] = useState(false);
@@ -172,13 +176,20 @@ export default function HeaderCards() {
               id="recluster-btn"
               type="button"
               className={busy ? "hbar-recluster-btn is-spinning" : "hbar-recluster-btn"}
-              title={reclusterLocked ? "Recluster is disabled in demo view" : "Recluster now"}
+              aria-label={reclusterLabel}
               aria-disabled={reclusterLocked || undefined}
               disabled={busy}
-              onClick={() => void handleRecluster()}
+              onMouseEnter={(e) => reclusterTip.show(e, [reclusterLabel])}
+              onMouseMove={(e) => reclusterTip.show(e, [reclusterLabel])}
+              onMouseLeave={reclusterTip.hide}
+              onClick={() => {
+                reclusterTip.hide();
+                void handleRecluster();
+              }}
             >
               ↻
             </button>
+            {reclusterTip.tooltip}
           </div>
           <div className="hbar-clustering-stats">
             <div id="hbar-cluster-stats-line1" className="hbar-stat-line">

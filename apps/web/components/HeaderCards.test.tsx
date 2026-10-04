@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HeaderCards from "./HeaderCards";
 import TimeWindowProvider from "./TimeWindowProvider";
@@ -226,13 +226,18 @@ describe("HeaderCards", () => {
     expect(statusSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("admin: recluster is live, with the Recluster now tooltip", () => {
+  it("admin: recluster is live, with the Recluster now tooltip (chart-kit style, no native title)", () => {
     mockDefaults();
     renderHeaderCards();
 
     const button = document.getElementById("recluster-btn") as HTMLButtonElement;
     expect(button).not.toHaveAttribute("aria-disabled");
-    expect(button).toHaveAttribute("title", "Recluster now");
+    expect(button).not.toHaveAttribute("title");
+    expect(button).toHaveAccessibleName("Recluster now");
+    fireEvent.mouseEnter(button, { clientX: 20, clientY: 20 });
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Recluster now");
+    fireEvent.mouseLeave(button);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it.each([
@@ -246,7 +251,11 @@ describe("HeaderCards", () => {
 
     const button = document.getElementById("recluster-btn") as HTMLButtonElement;
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveAttribute("title", "Recluster is disabled in demo view");
+    expect(button).not.toHaveAttribute("title");
+    expect(button).toHaveAccessibleName("Recluster is disabled in demo view");
+    fireEvent.mouseEnter(button, { clientX: 20, clientY: 20 });
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Recluster is disabled in demo view");
+    fireEvent.mouseLeave(button);
 
     await userEvent.click(button);
     expect(postSpy).not.toHaveBeenCalled();

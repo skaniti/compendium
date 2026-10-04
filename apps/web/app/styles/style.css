@@ -652,7 +652,7 @@
     cursor: default;
 }
 /* Demo lock (HeaderCards): greyed out like :disabled, but still hoverable
-   so its "disabled in demo view" title tooltip shows. */
+   so its "disabled in demo view" tooltip shows. */
 .hbar-recluster-btn[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;

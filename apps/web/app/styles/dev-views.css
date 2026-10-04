@@ -346,6 +346,8 @@
 .chart-seg-label { fill: var(--on-primary); font-size: 7px; font-weight: 700; }
 .chart-tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-family: monospace; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.35); white-space: pre; }
 .chart-tooltip-title { color: var(--panel-caption); }
+/* useHoverTooltip (charts/HoverTooltip.tsx): the same tooltip outside a chart, portalled to <body>. */
+.chart-tooltip.chart-tooltip-fixed { position: fixed; z-index: 200; }
 .is-refreshing { opacity: .55; transition: opacity .15s; }
 
 .chart-legend-flow { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 8px 0 0; padding: 0 0 0 44px;
