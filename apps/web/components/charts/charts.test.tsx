@@ -160,3 +160,11 @@ it("categoryColors: 14 ids, no hue within 30 degrees of the highlight, every pai
     expect(dh >= 35 || dl >= 0.15 - 1e-9, `${i}/${j}`).toBe(true);
   }
 });
+it("placeTooltip: beside the pointer, flips left / above at the wrapper edge, clamps inside it", async () => {
+  const { placeTooltip } = await import("./ChartTooltip");
+  expect(placeTooltip(100, 50, 1000, 400, 200, 80)).toEqual({ x: 112, y: 62 });
+  expect(placeTooltip(900, 50, 1000, 400, 200, 80)).toEqual({ x: 688, y: 62 }); // 912 + 200 > 1000 -> left of the pointer
+  expect(placeTooltip(100, 380, 1000, 400, 200, 80)).toEqual({ x: 112, y: 288 }); // flips above
+  expect(placeTooltip(150, 50, 300, 400, 290, 80)).toEqual({ x: 0, y: 62 }); // too wide either side -> clamped to the edge
+  expect(placeTooltip(100, 50, 0, 0, 200, 80)).toEqual({ x: 112, y: 62 }); // no wrapper: no clamping
+});
