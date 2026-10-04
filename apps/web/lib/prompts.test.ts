@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   compareRows, evalFamilies, fixtureFilter, formatAccuracy, formatDeltaPts, formatEvalDateTime,
-  formatPrice, formatPriceCell, formatSeconds, formatShare, initialPrompt, lineDiff,
+  formatPrice, formatPriceCell, formatSeconds, formatShare, initialPrompt, lineDiff, evalSortFirstDir, sortEvalRuns,
   type EvalRunDetail, type EvalRunRow, type PromptTask,
 } from "./prompts";
 
@@ -65,6 +65,35 @@ describe("selection and filters", () => {
   it("evalFamilies", () => {
     const r = (prompt_name: string | null) => ({ prompt_name }) as EvalRunRow;
     expect(evalFamilies([r("beta"), r("alpha"), r(null), r("beta")])).toEqual(["alpha", "beta"]);
+  });
+  it("sortEvalRuns", () => {
+    const r = (run_id: string, o: Partial<EvalRunRow>) => ({
+      run_id, timestamp: null, prompt_name: null, prompt_version: null, fixture_set: null, model: null,
+      selection: null, stress: null, cost_usd: null, wall_time_s: null, cache_hits: null, cache_misses: null, delta: null, ...o,
+    }) as EvalRunRow;
+    // API order: newest first, a run without a timestamp last.
+    const rows = [
+      r("c", { timestamp: "2026-09-03T10:00:00", prompt_name: "skip_gate", prompt_version: "v2_10", selection: { accuracy: 0.9, n: 50 }, cost_usd: 0.2, wall_time_s: 30 }),
+      r("b", { timestamp: "2026-09-02T10:00:00", prompt_name: "skip_gate", prompt_version: "v2_3", selection: { accuracy: 0.95, n: 50 }, cost_usd: null, wall_time_s: 12 }),
+      r("a", { timestamp: "2026-09-01T10:00:00", prompt_name: "agent", prompt_version: "v1", selection: { accuracy: 0.9, n: 20 }, cost_usd: 0.05, model: "gpt-4o" }),
+      r("x", { prompt_name: null }),
+    ];
+    const ids = (k: Parameters<typeof sortEvalRuns>[1], d: "asc" | "desc") => sortEvalRuns(rows, k, d).map((x) => x.run_id).join("");
+    expect(ids("run", "desc")).toBe("cbax");
+    expect(ids("run", "asc")).toBe("abcx");
+    // Versions compare numerically: v2_3 before v2_10.
+    expect(ids("prompt", "asc")).toBe("abcx");
+    expect(ids("prompt", "desc")).toBe("cbax");
+    // Ties keep the API order (c before a at 0.9); missing values stay last either way.
+    expect(ids("selection", "desc")).toBe("bcax");
+    expect(ids("selection", "asc")).toBe("cabx");
+    expect(ids("cost", "desc")).toBe("cabx");
+    expect(ids("cost", "asc")).toBe("acbx");
+    expect(ids("model", "asc")).toBe("acbx");
+    expect(rows.map((x) => x.run_id).join("")).toBe("cbax");
+    expect(evalSortFirstDir("prompt")).toBe("asc");
+    expect(evalSortFirstDir("run")).toBe("desc");
+    expect(evalSortFirstDir("selection")).toBe("desc");
   });
   it("fixtureFilter", () => {
     const f = [{ status: "correct" }, { status: "wrong" }, { status: "error" }] as never[];

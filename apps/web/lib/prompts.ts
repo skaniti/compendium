@@ -145,6 +145,39 @@ export function evalFamilies(runs: EvalRunRow[]): string[] {
   return [...new Set(runs.map((r) => r.prompt_name).filter((x): x is string => !!x))].sort();
 }
 
+export type EvalSortKey = "run" | "prompt" | "set" | "model" | "selection" | "stress" | "cost" | "time";
+export type EvalSortDir = "asc" | "desc";
+/** A first click sorts the text columns A to Z and the rest newest or highest first. */
+export const evalSortFirstDir = (key: EvalSortKey): EvalSortDir => (key === "prompt" || key === "set" || key === "model" ? "asc" : "desc");
+
+const versionCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+function evalSortValue(r: EvalRunRow, key: EvalSortKey): string | number | null {
+  const num = (v: number | null | undefined) => (finite(v) ? v : null);
+  switch (key) {
+    case "run": return r.timestamp || null; // the raw string, as the API orders it
+    case "prompt": return r.prompt_name === null ? null : `${r.prompt_name} ${r.prompt_version ?? ""}`;
+    case "set": return r.fixture_set;
+    case "model": return r.model;
+    case "selection": return num(r.selection?.accuracy);
+    case "stress": return num(r.stress?.accuracy);
+    case "cost": return num(r.cost_usd);
+    case "time": return num(r.wall_time_s);
+  }
+}
+
+/** Runs sorted by one column: missing values last either way, ties keep the API's newest-first order. */
+export function sortEvalRuns(rows: EvalRunRow[], key: EvalSortKey, dir: EvalSortDir): EvalRunRow[] {
+  const sign = dir === "asc" ? 1 : -1;
+  return rows
+    .map((row, i) => ({ row, i, v: evalSortValue(row, key) }))
+    .sort((a, b) => {
+      if (a.v === null || b.v === null) return a.v === b.v ? a.i - b.i : a.v === null ? 1 : -1;
+      const c = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : versionCollator.compare(String(a.v), String(b.v));
+      return sign * c || a.i - b.i;
+    })
+    .map((x) => x.row);
+}
+
 export function fixtureFilter(fixtures: EvalFixture[], mode: "all" | "misses"): EvalFixture[] {
   return mode === "all" ? fixtures : fixtures.filter((f) => f.status !== "correct");
 }

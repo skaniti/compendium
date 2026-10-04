@@ -95,3 +95,29 @@ it("one detail at a time", async () => {
   expect(within(container.querySelector("tbody") as HTMLElement).getAllByRole("button", { name: "Hide" })).toHaveLength(1);
   expect(api.fetchEvalRun).toHaveBeenLastCalledWith("run-002");
 });
+it("sortable headers: newest first by default, a click sorts, a second click flips, sorting spans every run", async () => {
+  const many = [
+    ...Array.from({ length: 15 }, (_, i) => evalRow({ run_id: `run-${String(i).padStart(2, "0")}`, timestamp: `2026-03-${String(20 - i).padStart(2, "0")}T10:00:00`, cost_usd: 0.01 })),
+    evalRow({ run_id: "oldest-dearest", timestamp: "2026-03-01T10:00:00", cost_usd: 9 }),
+  ];
+  vi.mocked(api.fetchEvalRuns).mockResolvedValue(evalRuns({ configured: true, runs: many }));
+  const { container } = render(<EvalHistory />);
+  await screen.findByText("16 runs");
+  // By the Run cell's date text: the cell's native title is due to go (no-native-tooltips sweep).
+  const firstRun = () => container.querySelector("tbody tr td")?.textContent;
+  const header = (name: string) => screen.getByRole("button", { name }).closest("th") as HTMLElement;
+  expect(header("Run")).toHaveAttribute("aria-sort", "descending");
+  expect(header("Cost")).toHaveAttribute("aria-sort", "none");
+  expect(firstRun()).toBe("Mar 20, 10:00");
+  expect(screen.queryByRole("button", { name: "vs previous" })).toBeNull();
+  // The 16th run is past the preview cut, but sorting reaches it.
+  await userEvent.click(screen.getByRole("button", { name: "Cost" }));
+  expect(header("Cost")).toHaveAttribute("aria-sort", "descending");
+  expect(header("Run")).toHaveAttribute("aria-sort", "none");
+  expect(firstRun()).toBe("Mar 1, 10:00");
+  await userEvent.click(screen.getByRole("button", { name: "Cost" }));
+  expect(header("Cost")).toHaveAttribute("aria-sort", "ascending");
+  expect(firstRun()).toBe("Mar 20, 10:00");
+  await userEvent.click(screen.getByRole("button", { name: "Prompt" }));
+  expect(header("Prompt")).toHaveAttribute("aria-sort", "ascending");
+});

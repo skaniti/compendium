@@ -1,14 +1,22 @@
 "use client";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import SortIcon from "@/components/dev/SortIcon";
 import { formatUsd } from "@/lib/overview";
 import {
-  evalFamilies, formatAccuracy, formatDeltaPts, formatEvalDateTime, formatSeconds,
-  type EvalRunRow, type EvalRunsResponse,
+  evalFamilies, evalSortFirstDir, formatAccuracy, formatDeltaPts, formatEvalDateTime, formatSeconds, sortEvalRuns,
+  type EvalRunRow, type EvalRunsResponse, type EvalSortDir, type EvalSortKey,
 } from "@/lib/prompts";
 import { fetchEvalRuns } from "@/lib/prompts-api";
 import EvalRunDetail from "./EvalRunDetail";
 
 const LIMIT = 15;
+// Header order matches the colgroup; `className` hides Model, Cost and Time on narrow windows.
+const HEADERS: { label: string; key?: EvalSortKey; className?: string }[] = [
+  { label: "Run", key: "run" }, { label: "Prompt", key: "prompt" }, { label: "Set", key: "set" },
+  { label: "Model", key: "model", className: "col-model" }, { label: "Selection", key: "selection" }, { label: "Stress", key: "stress" },
+  { label: "Cost", key: "cost", className: "col-cost" }, { label: "Time", key: "time", className: "col-time" },
+  { label: "vs previous" }, { label: "" },
+];
 const cls = (v: number | null) => (v === null ? "is-flat" : v > 0.0005 ? "is-up" : v < -0.0005 ? "is-down" : "is-flat");
 
 function Delta({ v }: { v: number | null }) {
@@ -33,6 +41,7 @@ export default function EvalHistory() {
   const [family, setFamily] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: EvalSortKey; dir: EvalSortDir }>({ key: "run", dir: "desc" });
 
   useEffect(() => {
     let live = true;
@@ -47,9 +56,13 @@ export default function EvalHistory() {
     return () => { live = false; };
   }, []);
 
-  const runs: EvalRunRow[] = data?.runs ?? [];
-  const filtered = family ? runs.filter((r) => r.prompt_name === family) : runs;
+  const runs: EvalRunRow[] = useMemo(() => data?.runs ?? [], [data]);
+  const filtered = useMemo(
+    () => sortEvalRuns(family ? runs.filter((r) => r.prompt_name === family) : runs, sort.key, sort.dir),
+    [runs, family, sort],
+  );
   const shown = all ? filtered : filtered.slice(0, LIMIT);
+  const onSort = (key: EvalSortKey) => setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: evalSortFirstDir(key) });
 
   let body;
   if (error) body = <p className="dev-empty" role="alert">Couldn&apos;t load runs ({error}).</p>;
@@ -73,10 +86,12 @@ export default function EvalHistory() {
               <col className="col-vs" /><col className="col-action" />
             </colgroup>
             <thead>
-              <tr>
-                <th>Run</th><th>Prompt</th><th>Set</th><th className="col-model">Model</th><th>Selection</th><th>Stress</th>
-                <th className="col-cost">Cost</th><th className="col-time">Time</th><th>vs previous</th><th />
-              </tr>
+              <tr>{HEADERS.map((h, i) => h.key ? (
+                <th key={h.key} className={h.className} aria-sort={h.key === sort.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+                  <button type="button" className="dev-sort-btn" onClick={() => onSort(h.key as EvalSortKey)}>
+                    {h.label}<SortIcon state={h.key === sort.key ? sort.dir : "none"} />
+                  </button>
+                </th>) : <th key={i}>{h.label}</th>)}</tr>
             </thead>
             <tbody>
               {shown.map((r) => (

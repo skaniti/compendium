@@ -577,6 +577,7 @@
 .prompts-evals-table col.col-vs { width: 16%; }
 .prompts-evals-table col.col-action { width: 6%; }
 .prompts-evals-table .prompts-link { white-space: nowrap; }
+.prompts-evals-table .dev-sort-btn { white-space: nowrap; }
 .prompts-link { text-align: left; }
 .prompts-classes { table-layout: auto; width: auto; }
 .prompts-classes th, .prompts-classes td { white-space: nowrap; }
