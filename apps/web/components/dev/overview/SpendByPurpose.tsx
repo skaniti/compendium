@@ -1,11 +1,12 @@
 "use client";
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useChartTooltip } from "@/components/charts/ChartTooltip";
 import { useContainerWidth } from "@/components/charts/useContainerWidth";
 import { useOptionalTheme } from "@/components/ThemeProvider";
 import { SPEND_COLORS } from "./colors";
 import { CALLOUT_LEAD, CHAR_WIDTH, layoutSpendBar, pickInk, type Rgb } from "./spend-bar";
 import { formatUsd, plural, shareOf } from "@/lib/overview";
-import type { OverviewSpend, SpendPurposeKey } from "@/lib/types";
+import type { OverviewSpend, SpendPurpose, SpendPurposeKey } from "@/lib/types";
 
 const MEASURE_SAMPLE = "$0.0000 · 00.0% · 0,000 calls";
 
@@ -35,6 +36,18 @@ export default function SpendByPurpose({ spend }: { spend: OverviewSpend }) {
   const measureRef = useRef<HTMLSpanElement>(null);
   const segRefs = useRef(new Map<string, HTMLSpanElement>());
   const variant = useOptionalTheme()?.variant;
+  const { tooltip, show, hide } = useChartTooltip();
+  const byKey = new Map(paid.map((p) => [p.key as string, p]));
+  const tipLines = (p: SpendPurpose) => [
+    p.label,
+    `${formatUsd(p.usd)} · ${shareOf(p.usd, spend.usd)} · ${plural(p.calls, "call")}`,
+    ...p.event_types.map((t) => `${t.label} ${formatUsd(t.usd)} · ${plural(t.calls, "call")}`),
+  ];
+  // Segments and their callouts share one hover tooltip (the chart kit's), so a 3px segment is reachable through its callout.
+  const tipHandlers = (p: SpendPurpose) => {
+    const onMove = (e: MouseEvent) => show(e, tipLines(p));
+    return { onMouseEnter: onMove, onMouseMove: onMove, onMouseLeave: hide };
+  };
 
   const layout = layoutSpendBar(
     paid.map((p) => {
@@ -67,7 +80,7 @@ export default function SpendByPurpose({ spend }: { spend: OverviewSpend }) {
   }, [variant, paidKeys]);
 
   return (
-    <section className="dev-panel overview-spend">
+    <section className="dev-panel overview-spend chart-wrap">
       <div className="dev-panel-head">
         <h3 className="dev-section-title">Spend by purpose</h3>
         <span className="dev-panel-meta">{formatUsd(spend.usd)} · {plural(spend.calls, "call")}</span>
@@ -81,7 +94,7 @@ export default function SpendByPurpose({ spend }: { spend: OverviewSpend }) {
                     pushed-aside callout would run under its neighbour and read as that one's). */}
                 {callouts.map((c) => (
                   <Fragment key={c.key}>
-                    <span className="overview-spend-callout" style={{ left: c.left }}>
+                    <span className="overview-spend-callout" style={{ left: c.left }} {...tipHandlers(byKey.get(c.key) as SpendPurpose)}>
                       <span className="swatch" style={{ background: colors[c.key as SpendPurposeKey] }} />
                       {c.text}
                     </span>
@@ -98,7 +111,7 @@ export default function SpendByPurpose({ spend }: { spend: OverviewSpend }) {
                     key={p.key}
                     ref={(el) => { if (el) segRefs.current.set(p.key, el); else segRefs.current.delete(p.key); }}
                     style={{ flexGrow: p.usd / paidTotal, flexBasis: 0, background: colors[p.key] }}
-                    title={`${p.label}: ${formatUsd(p.usd)} · ${shareOf(p.usd, spend.usd)} · ${plural(p.calls, "call")}`}
+                    {...tipHandlers(p)}
                   >
                     {l.mode === "inside" && <span className={`overview-spend-seg-label ink-${inks[p.key] ?? "dark"}`}>{l.text}</span>}
                   </span>
@@ -125,6 +138,7 @@ export default function SpendByPurpose({ spend }: { spend: OverviewSpend }) {
           ))}
         </ul>
       </>}
+      {tooltip}
     </section>
   );
 }

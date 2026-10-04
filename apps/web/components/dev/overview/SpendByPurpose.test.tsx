@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { it, expect } from "vitest";
 import SpendByPurpose from "./SpendByPurpose";
 import { summary } from "./fixtures";
@@ -53,4 +53,18 @@ it("bar segments fill the whole bar even when paid dollars sum below $1", () => 
   expect(grows).toHaveLength(2);
   expect(grows.reduce((a, n) => a + n, 0)).toBeCloseTo(1);
   expect(grows[0]).toBeCloseTo(5 / 7);
+});
+it("hovering a segment or its callout shows the chart tooltip, not a native title", () => {
+  const [g, c] = summary().spend.purposes;
+  const spend = { usd: 1, calls: 3010, all_time_usd: 1, purposes: [{ ...g, usd: 0.99 }, { ...c, usd: 0.01, calls: 10 }] };
+  const { container } = render(<SpendByPurpose spend={spend} />);
+  const segs = [...container.querySelectorAll(".overview-spend-bar > span")];
+  expect(segs.some((s) => s.hasAttribute("title"))).toBe(false);
+  fireEvent.mouseEnter(segs[0]);
+  const lines = () => [...container.querySelectorAll(".chart-tooltip > div")].map((d) => d.textContent);
+  expect(lines()).toEqual(["Skip & learning gates", "$0.99 · 99.0% · 3,000 calls", "Skip gate $0.59 · 2,900 calls", "Learning gate $0.02 · 100 calls"]);
+  fireEvent.mouseLeave(segs[0]);
+  expect(container.querySelector(".chart-tooltip")).toBeNull();
+  fireEvent.mouseEnter(container.querySelector(".overview-spend-callout") as Element);
+  expect(lines().slice(0, 2)).toEqual(["Chat", "$0.01 · 1.0% · 10 calls"]);
 });

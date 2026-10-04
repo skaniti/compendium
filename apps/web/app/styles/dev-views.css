@@ -423,6 +423,7 @@
 .overview-tl-chart { min-width: 0; }
 .overview-tl-chart .dev-empty-inline { padding: 24px 0 24px 56px; }
 .overview-footnote { margin: 8px 0 0; font-size: 0.68rem; color: var(--panel-caption); }
+.overview-spend { position: relative; } /* the chart tooltip's positioning box */
 .overview-spend-figure { position: relative; margin: 4px 0 14px; }
 .overview-spend-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; }
 .overview-spend-bar > span { min-width: 3px; display: flex; align-items: center; justify-content: center; }
