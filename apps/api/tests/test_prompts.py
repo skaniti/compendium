@@ -482,6 +482,10 @@ class TestGetPromptRaw:
             json.dumps({"cluster_naming_v1a": "OVERRIDDEN {n_pages} {context}"})
         )
         monkeypatch.setattr(templates_mod, "_OVERRIDES_PATH", override_path)
+        # A configured PROMPT_OVERRIDES_PATH (a local .env) wins over the fallback.
+        from backend.config.settings import settings
+
+        monkeypatch.setattr(settings, "prompt_overrides_path", "")
         result = get_prompt_raw("cluster_naming_v1a", n_pages=2, context="ctx")
         assert result == "OVERRIDDEN 2 ctx"
 
