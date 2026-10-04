@@ -203,3 +203,44 @@ describe("noscript fallback (scriptless-load notice)", () => {
     expect(inner).not.toMatch(/var\(--/);
   });
 });
+
+describe("demo sessions start on the default palette (2026-10-04)", () => {
+  function findThemeProviderProps(node: unknown): Record<string, unknown> | null {
+    if (!node || typeof node !== "object") return null;
+    const el = node as { type?: { name?: string }; props?: { children?: unknown } & Record<string, unknown> };
+    if (el.type?.name === "ThemeProvider") return el.props ?? null;
+    const kids = el.props?.children;
+    for (const k of Array.isArray(kids) ? kids : [kids]) {
+      const hit = findThemeProviderProps(k);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  function stubBackend(role: string) {
+    vi.mocked(cookies).mockResolvedValue({ get: (k: string) => (k === "access_token" ? { value: "tok" } : undefined) } as never);
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (String(url).endsWith("/api/auth/me") ? { role, acting_as_demo: role === "demo" } : { theme: "Teal" }),
+    })));
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  it("a demo session seeds the default palette, runs ephemeral and skips the localStorage pre-paint script", async () => {
+    stubBackend("demo");
+    const element = await RootLayout({ children: <div /> });
+    expect(findThemeProviderProps(element)).toMatchObject({ initialVariant: DEFAULT_VARIANT, canPersist: false, ephemeral: true });
+    expect(renderToStaticMarkup(element)).not.toContain("localStorage.getItem");
+  });
+
+  it("an admin session keeps its saved palette and the pre-paint script", async () => {
+    stubBackend("admin");
+    const element = await RootLayout({ children: <div /> });
+    expect(findThemeProviderProps(element)).toMatchObject({ initialVariant: "Teal", canPersist: true, ephemeral: false });
+    expect(renderToStaticMarkup(element)).toContain("localStorage.getItem");
+  });
+});

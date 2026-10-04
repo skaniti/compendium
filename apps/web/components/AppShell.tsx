@@ -63,36 +63,31 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
     getInitialTimeWindow(),
   ]);
 
-  const isPlainDemo = sessionRole === "demo" && !actingAsDemo;
+  // Any demo session: a direct demo login or an admin viewing as demo.
+  const isDemo = sessionRole === "demo";
   // Force return mode for any demo-role view (direct login or
   // admin-launched acting session) even if this account's own
   // compendium_loader_seen preference says otherwise.
-  const forceReturnMode = sessionRole === "demo" || actingAsDemo;
+  const forceReturnMode = isDemo || actingAsDemo;
   const initialHasSeen = compendiumLoaderSeen || forceReturnMode;
-  // Plain (direct-login, non-acting) demo can never persist preferences
-  // server-side -- the backend's update_preferences 403s that PATCH (see
-  // its own is_plain_demo gate) -- so skip the pointless write attempt
-  // client-side rather than let CompendiumLoader's first-run dismiss fire
-  // one anyway. Acting-as-demo is NOT narrowed here: it already resolves
-  // canPersist=true via getInitialCompendiumLoaderSeen (a valid token +
-  // successful preferences read), and Dash's own behavior is that an
-  // admin-launched demo session's writes land on the demo row.
-  const canPersist = isPlainDemo ? false : compendiumLoaderCanPersist;
+  // Demo sessions never persist preferences (2026-10-04): the backend's
+  // update_preferences refuses every demo identity, view-as included, so
+  // clicks made while viewing as demo never change what demo visitors get.
+  // Skip the write attempts client-side rather than fire known 403s.
+  const canPersist = isDemo ? false : compendiumLoaderCanPersist;
 
-  // Plain demo sessions get 403'd by the backend on ANY preferences PATCH
-  // (Dash parity, see the backend's is_plain_demo gate) -- not just the
-  // compendium loader's own first-run dismiss (`canPersist` above), but the
-  // palette debounce (ThemeProvider, seeded in app/layout.tsx from its own
-  // getInitialSessionRole call), the starfield pill clicks
-  // (StarfieldProvider, just below), and panel-resize drag persistence
-  // (usePanelResize, via PanelGrid's canPersist prop) as well. Unlike
-  // `canPersist` above -- which also requires compendiumLoaderCanPersist,
-  // i.e. a resolvable authenticated session specifically for the loader's
-  // own seen-flag persistence -- this gate is a pure function of
-  // isPlainDemo: a null/failed role read (no session confirmed either way)
-  // must default to true here, matching every other writer's pre-existing
-  // (pre-this-change) behavior when nothing is known about the session.
-  const canPersistPreferences = !isPlainDemo;
+  // The same gate for every other preference writer: the starfield pill
+  // clicks (StarfieldProvider, just below), the shared time period
+  // (TimeWindowProvider) and panel-resize drag persistence (usePanelResize,
+  // via PanelGrid's canPersist prop); the palette has its own copy in
+  // app/layout.tsx. Unlike `canPersist` above -- which also requires
+  // compendiumLoaderCanPersist, a resolvable authenticated session -- this
+  // is a pure function of the role: a null/failed role read must default
+  // to true, matching every writer's behaviour when nothing is known.
+  const canPersistPreferences = !isDemo;
+  // Demo sessions always start on All time (the backend also omits a demo
+  // row's saved period; this covers the demo stub and a failed read).
+  const startWindow = isDemo ? "all" : initialTimeWindow;
 
   return (
     <StarfieldProvider
@@ -121,7 +116,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
           future reader) share one context instance. */}
-      <TimeWindowProvider initialWindow={initialTimeWindow} canPersist={canPersistPreferences}>
+      <TimeWindowProvider initialWindow={startWindow} canPersist={canPersistPreferences}>
         <Header mode={mode} />
         {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
             .app-header. #header-graph-controls animates its mode-swap via

@@ -15,8 +15,8 @@ interface PanelGridProps {
   initialLeftWidth?: string;
   initialRightWidth?: string;
   // Threaded down to usePanelResize -- see that hook's own doc comment.
-  // Plain demo sessions (AppShell's isPlainDemo) get 403'd on the
-  // mouseup PATCH, Dash parity; defaults to true so every existing render
+  // Demo sessions (AppShell's isDemo) get 403'd on the mouseup PATCH;
+  // defaults to true so every existing render
   // of this (client) component without an explicit session context behaves
   // exactly as before this prop existed.
   canPersist?: boolean;

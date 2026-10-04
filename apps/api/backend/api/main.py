@@ -3171,32 +3171,44 @@ async def auth_me(
     return user
 
 
+# Preference keys a demo identity never sees from its stored row: every demo
+# session starts on the app defaults (the default palette, All time).
+DEMO_DEFAULTED_PREFERENCES = ("theme", "time_window")
+
+
 @app.get("/api/auth/preferences", tags=["Auth"])
 async def get_preferences(user_id: int = Depends(verify_api_key)):
-    """Return current user's preferences."""
+    """Return current user's preferences.
+
+    A demo identity (a direct demo login or an admin viewing as demo) gets
+    them without ``DEMO_DEFAULTED_PREFERENCES``, so every reader falls back
+    to the app defaults whatever the demo row holds.
+    """
     from backend.db import auth_repo as ar
 
-    return ar.get_preferences(user_id)
+    prefs = ar.get_preferences(user_id)
+    if ar.get_role(user_id) == "demo":
+        prefs = {k: v for k, v in prefs.items() if k not in DEMO_DEFAULTED_PREFERENCES}
+    return prefs
 
 
 @app.patch("/api/auth/preferences", tags=["Auth"])
 async def update_preferences(
     body: PreferencesRequest,
     user_id: int = Depends(verify_api_key),
-    claims: dict = Depends(get_current_claims),
 ):
     """Update user preferences (shallow merge).
 
-    Plain-demo write gate: a DIRECT demo login (role == "demo" and the
-    current token carries no ``acting_as_demo`` claim) may not write
-    preferences — mirrors Dash's ``role_guard.is_plain_demo()``, which
-    blocks the same mutation for a direct demo session but allows it for
-    an admin-launched view-as-demo session (role == "demo" AND
-    acting_as_demo == True).
+    Demo write gate: no demo identity may write preferences, neither a
+    direct demo login nor an admin viewing as demo, so clicks made while
+    viewing as demo never change what demo visitors get (2026-10-04).
+    Stricter than Dash's ``role_guard.is_plain_demo()``, which let view-as
+    writes land on the demo row. Topic curation (``/api/topics``) keeps
+    its own ``verify_not_plain_demo`` gate and is unaffected.
     """
     from backend.db import auth_repo as ar
 
-    if ar.get_role(user_id) == "demo" and not claims.get("acting_as_demo"):
+    if ar.get_role(user_id) == "demo":
         raise HTTPException(
             status_code=403, detail="Demo account preferences are read-only"
         )

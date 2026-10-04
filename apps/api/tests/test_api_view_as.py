@@ -488,7 +488,9 @@ class TestPreferencesWriteGate:
         )
         assert r.status_code == 403
 
-    def test_acting_as_demo_write_allowed(self, client, users):
+    def test_acting_as_demo_write_forbidden(self, client, users):
+        """View-as clicks must not change what demo visitors get (2026-10-04)."""
+        from backend.db import auth_repo as ar
         from backend.services.auth_service import create_access_token
 
         admin = users["admin"]
@@ -503,8 +505,37 @@ class TestPreferencesWriteGate:
             json={"preferences": {"theme": "dark"}},
             headers=_bearer(acting_token),
         )
-        assert r.status_code == 200
-        assert r.json().get("theme") == "dark"
+        assert r.status_code == 403
+        assert ar.get_preferences(users["demo"]["id"]).get("theme") != "dark"
+
+    def test_demo_reads_omit_theme_and_period(self, client, users):
+        from backend.db import auth_repo as ar
+        from backend.services.auth_service import create_access_token
+
+        admin, demo = users["admin"], users["demo"]
+        ar.update_preferences(
+            demo["id"], {"theme": "Teal", "time_window": "90", "starfield": "twinkle"}
+        )
+        plain = create_access_token(demo["id"], demo["email"])
+        admin_token = create_access_token(admin["id"], admin["email"])
+        acting = client.post(
+            "/api/auth/view-as", json={"profile": "demo"}, headers=_bearer(admin_token)
+        ).json()["access_token"]
+
+        for token in (plain, acting):
+            prefs = client.get("/api/auth/preferences", headers=_bearer(token)).json()
+            assert "theme" not in prefs and "time_window" not in prefs
+            assert prefs["starfield"] == "twinkle"
+
+    def test_admin_reads_keep_theme_and_period(self, client, users):
+        from backend.db import auth_repo as ar
+        from backend.services.auth_service import create_access_token
+
+        admin = users["admin"]
+        ar.update_preferences(admin["id"], {"theme": "Teal", "time_window": "90"})
+        token = create_access_token(admin["id"], admin["email"])
+        prefs = client.get("/api/auth/preferences", headers=_bearer(token)).json()
+        assert prefs["theme"] == "Teal" and prefs["time_window"] == "90"
 
     def test_admin_write_unaffected(self, client, users):
         from backend.services.auth_service import create_access_token

@@ -340,4 +340,36 @@ describe("ThemeProvider", () => {
     expect(() => render(<Bare />)).toThrow(/ThemeProvider/);
     spy.mockRestore();
   });
+
+  describe("ephemeral (demo sessions, 2026-10-04)", () => {
+    function renderEphemeral() {
+      document.body.innerHTML = '<style id="theme-root"></style><div id="root"></div>';
+      return render(
+        <ThemeProvider initialVariant={DEFAULT_VARIANT} canPersist={false} ephemeral>
+          <Consumer />
+        </ThemeProvider>
+      );
+    }
+
+    it("stays on the seeded default without reading the server or localStorage", async () => {
+      localStorage.setItem(STORAGE_KEY, "Pink");
+      vi.spyOn(preferences, "getPreferences").mockResolvedValue({ theme: "Teal" });
+      renderEphemeral();
+      await act(async () => {});
+      expect(screen.getByTestId("variant")).toHaveTextContent(DEFAULT_VARIANT);
+      expect(preferences.getPreferences).not.toHaveBeenCalled();
+      expect(document.getElementById("theme-root")?.textContent).toBe(generateCssText(getTokens(DEFAULT_VARIANT)));
+    });
+
+    it("changes palette in-session but saves it nowhere", async () => {
+      vi.useFakeTimers();
+      localStorage.setItem(STORAGE_KEY, "Teal");
+      renderEphemeral();
+      fireEvent.click(screen.getByText("pink"));
+      expect(screen.getByTestId("variant")).toHaveTextContent("Pink");
+      await act(async () => { vi.advanceTimersByTime(2000); });
+      expect(localStorage.getItem(STORAGE_KEY)).toBe("Teal");
+      expect(preferences.patchPreferences).not.toHaveBeenCalled();
+    });
+  });
 });

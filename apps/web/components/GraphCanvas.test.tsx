@@ -1819,9 +1819,8 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
   // mirrors (see the "admin-context gate" describe block above). A plain-
   // demo session can no longer reach the control via the UI at all, so
   // that click-then-assert-skip test is superseded by this absence check;
-  // the `!isPlainDemo` persistence-skip guard in handleToggleNoise stays as
-  // a defensive backstop (GraphCanvas.tsx's own comment there) even though
-  // it's now unreachable through this path.
+  // the `!isDemo` persistence-skip guard in handleToggleNoise still matters
+  // for an admin viewing as demo (next test).
   it("plain-demo session (role===demo, not acting): the control is entirely absent, not just persistence-skipped", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
@@ -1832,7 +1831,7 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
     expect(patchSpy).not.toHaveBeenCalled();
   });
 
-  it("an admin acting-as-demo session still persists (isPlainDemo is false while acting)", async () => {
+  it("an admin acting-as-demo session flips the toggle but never persists it (2026-10-04)", async () => {
     vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
     const patchSpy = vi.spyOn(preferences, "patchPreferences").mockResolvedValue(undefined);
     renderCanvas(
@@ -1843,7 +1842,8 @@ describe("GraphCanvas noise toggle (Step 4)", () => {
 
     act(() => screen.getByText("noise: off").click());
 
-    await waitFor(() => expect(patchSpy).toHaveBeenCalledWith({ show_noise: true }));
+    await waitFor(() => expect(screen.getByText("noise: on")).toBeInTheDocument());
+    expect(patchSpy).not.toHaveBeenCalled();
   });
 
   // Was: "the toggle control is never hidden -- visible for a plain

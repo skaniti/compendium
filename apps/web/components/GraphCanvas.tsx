@@ -368,14 +368,12 @@ export default function GraphCanvas() {
   const { variant } = useTheme();
   const { timeWindow } = useTimeWindow();
 
-  // Plain demo sessions (direct login, not admin-launched view-as) get
-  // 403'd by the backend on ANY preferences PATCH (Dash parity, the
-  // backend's is_plain_demo gate) -- same local derivation ThemeProvider/
-  // StarfieldProvider/usePanelResize's own callers use (AppShell.tsx's
-  // isPlainDemo), computed here directly since GraphCanvas already reads
-  // role/actingAsDemo from useSession() (the view-demo/return-to-admin
-  // controls moved to components/Header.tsx) and isn't threaded any props from a server component.
-  const isPlainDemo = role === "demo" && !actingAsDemo;
+  // Demo sessions (a direct demo login or an admin viewing as demo) get
+  // 403'd by the backend on ANY preferences PATCH -- same derivation as
+  // AppShell.tsx's isDemo, computed here directly since GraphCanvas already
+  // reads role from useSession() and isn't threaded any props from a
+  // server component.
+  const isDemo = role === "demo";
 
   // 2026-08-24 (prod-mode sweep item 1): admin-context gate for the whole
   // #graph-debug-overlay wrapper below -- same predicate/comment precedent
@@ -953,24 +951,17 @@ export default function GraphCanvas() {
   // Task A1-3 (Step 4): port of Dash's noise-toggle click handler
   // (callbacks/graph.py:129-154's toggle_noise). Flips the local/vendor
   // state unconditionally (the effect above pushes it to the vendor).
-  // The `!isPlainDemo` persistence-write guard below predates the
-  // 2026-08-24 adminContext gate added around the JSX (item 1 of that
-  // sweep): isPlainDemo (role === "demo" && !actingAsDemo) and
-  // adminContext (role === "admin" || actingAsDemo) are mutually
-  // exclusive, so a plain-demo session can no longer even reach this
-  // control now that the whole #graph-debug-overlay wrapper is
-  // admin-context-gated -- kept as a defensive backstop (matches Dash's
-  // own belt-and-suspenders 403 backstop) rather than deleted as dead
-  // code. Dash's own handler swallows a persistence failure silently
-  // (`except Exception: pass`) and still flips client-side either way;
-  // the 403 backstop this skip is paired with is the SAME shape
-  // patchPreferences itself already logs-and-swallows (lib/preferences.ts),
-  // so no extra
+  // The `!isDemo` persistence-write guard below: a plain demo session
+  // can't reach this control (the #graph-debug-overlay wrapper is
+  // admin-context-gated), but an admin viewing as demo can, and its toggle
+  // must not land on the demo row (2026-10-04; the backend refuses it too).
+  // The toggle still flips client-side, as Dash's handler did on a failed
+  // write; patchPreferences already logs-and-swallows, so no extra
   // try/catch belongs here.
   function handleToggleNoise(): void {
     const next = !showNoise;
     setShowNoiseState(next);
-    if (!isPlainDemo) {
+    if (!isDemo) {
       void patchPreferences({ show_noise: next });
     }
   }

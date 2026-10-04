@@ -878,25 +878,31 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
-    // GET /api/auth/preferences -- reflects mutations (Task 6).
+    // GET /api/auth/preferences -- reflects mutations (Task 6). A demo
+    // identity gets it without the keys every demo session starts on the
+    // defaults for, as the real backend does.
     {
       method: "GET",
       pattern: /^\/api\/auth\/preferences$/,
-      handler: (req, res) => sendJson(res, 200, state.preferences),
+      handler: (req, res) =>
+        sendJson(res, 200, isDemoIdentity(req) ? omitKeys(state.preferences, DEMO_DEFAULTED_PREFERENCES) : state.preferences),
     },
 
     // PATCH /api/auth/preferences {preferences:{...partial}} (wrapper
     // shape!) -- shallow-merges the partial into the mutable prefs state.
+    // Stricter than `gated`: like the real backend, it refuses every demo
+    // identity, an admin viewing as demo included.
     {
       method: "PATCH",
       pattern: /^\/api\/auth\/preferences$/,
-      handler: gated(async (req, res) => {
+      handler: async (req, res) => {
+        if (isDemoIdentity(req)) return sendJson(res, 403, { detail: "forbidden" });
         const body = await readJsonBody(req);
         if (body.preferences && typeof body.preferences === "object") {
           Object.assign(state.preferences, body.preferences);
         }
         sendJson(res, 200, state.preferences);
-      }),
+      },
     },
 
     // POST /api/auth/login -- {email, password} -> {access_token,
@@ -1135,6 +1141,19 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
 export function isPlainDemo(req) {
   const payload = decodeToken(bearerFromRequest(req));
   return !!payload && payload.role === "demo" && !payload.acting_as_demo;
+}
+
+// Any demo identity: a direct demo login or an admin viewing as demo.
+export function isDemoIdentity(req) {
+  const payload = decodeToken(bearerFromRequest(req));
+  return !!payload && payload.role === "demo";
+}
+
+// Mirrors the backend's DEMO_DEFAULTED_PREFERENCES: every demo session starts
+// on the default palette and All time, whatever the stored prefs hold.
+export const DEMO_DEFAULTED_PREFERENCES = ["theme", "time_window"];
+function omitKeys(obj, keys) {
+  return Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k)));
 }
 
 // ---------------------------------------------------------------------------

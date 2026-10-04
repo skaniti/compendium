@@ -22,10 +22,9 @@ interface ActiveDrag {
   onUp: () => void;
 }
 
-// canPersist: plain demo sessions (role === "demo" && !actingAsDemo -- see
-// AppShell.tsx's isPlainDemo) get a 403 from the backend's
-// update_preferences endpoint on ANY PATCH, Dash parity (the backend's own
-// is_plain_demo gate). false skips the patchPreferences call on mouseup
+// canPersist: demo sessions (AppShell.tsx's isDemo: a direct demo login or
+// an admin viewing as demo) get a 403 from the backend's
+// update_preferences endpoint on ANY PATCH. false skips the patchPreferences call on mouseup
 // entirely; the drag itself (DOM width updates via the CSS custom property)
 // is untouched. Defaults to true so every existing call site (PanelGrid,
 // with no session context threaded through) behaves exactly as before this

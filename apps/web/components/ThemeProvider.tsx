@@ -84,22 +84,24 @@ interface ThemeProviderProps {
   // lazy initializer below for why this matters and what happens when it's
   // null/absent.
   initialVariant?: string | null;
-  // Plain demo sessions (role === "demo" && !actingAsDemo -- see
-  // AppShell.tsx's isPlainDemo) get a 403 from the backend's
-  // update_preferences endpoint on ANY PATCH, Dash parity (the backend's
-  // own is_plain_demo gate). Rather than fire a PATCH we already know will
-  // 403, skip scheduling it entirely when false -- every other behavior
-  // (DOM apply, localStorage write, state update, and the mount-time
-  // hydration GET below) stays identical, since reads are still allowed
-  // for demo. Defaults to true so every existing call site (no session
-  // context available) behaves exactly as before this prop existed.
+  // False skips the debounced palette PATCH (the backend refuses it, e.g.
+  // for every demo session); DOM apply, state update and localStorage write
+  // stay. Defaults to true so call sites with no session context behave as
+  // before this prop existed.
   canPersist?: boolean;
+  // Demo sessions (role "demo", direct login or an admin viewing as demo):
+  // stay on initialVariant (the default palette) unless changed in-session,
+  // and never touch saved state -- no mount-time hydration GET and no
+  // localStorage write, so a palette picked while viewing as demo can't
+  // leak into the next load or into the admin's own pre-paint palette.
+  ephemeral?: boolean;
 }
 
 export default function ThemeProvider({
   children,
   initialVariant,
   canPersist = true,
+  ephemeral = false,
 }: ThemeProviderProps) {
   // Two distinct init paths, chosen once at mount and never revisited by
   // this initializer (it's a lazy useState initializer -- runs exactly once):
@@ -165,6 +167,12 @@ export default function ThemeProvider({
   // hydration was left holding the wrong CSS indefinitely -- see
   // applyToDom's own comment for the full mechanism.
   useEffect(() => {
+    // Demo sessions never read saved state; just re-assert the seeded
+    // variant onto every #theme-root node (same reason as above).
+    if (ephemeral) {
+      applyToDom(variantRef.current);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -225,7 +233,7 @@ export default function ThemeProvider({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ephemeral]);
 
   useEffect(() => {
     return () => {
@@ -238,12 +246,11 @@ export default function ThemeProvider({
     userDirtyRef.current = true;
     updateVariant(normalized);
     applyToDom(normalized);
-    writeStoredVariant(normalized);
+    if (!ephemeral) writeStoredVariant(normalized);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Plain demo: skip scheduling the PATCH entirely -- see canPersist's
-    // own doc comment on ThemeProviderProps for why this never fires
-    // client-side rather than firing-and-swallowing a known 403.
+    // Skip scheduling a PATCH the backend would refuse -- see canPersist's
+    // doc comment on ThemeProviderProps.
     if (!canPersist) return;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;

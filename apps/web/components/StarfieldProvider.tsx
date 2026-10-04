@@ -52,10 +52,9 @@ export default function StarfieldProvider({
   children,
 }: {
   initialVariant?: string;
-  // Plain demo sessions (role === "demo" && !actingAsDemo -- see
-  // AppShell.tsx's isPlainDemo) get a 403 from the backend's
-  // update_preferences endpoint on ANY PATCH, Dash parity (the backend's
-  // own is_plain_demo gate). false skips the patchPreferences call below
+  // Demo sessions (AppShell.tsx's isDemo: a direct demo login or an admin
+  // viewing as demo) get a 403 from the backend's update_preferences
+  // endpoint on ANY PATCH. false skips the patchPreferences call below
   // entirely; the state update (and thus the visible pill change) still
   // happens. Defaults to true so every existing call site behaves exactly
   // as before this prop existed.

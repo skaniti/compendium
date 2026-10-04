@@ -1002,6 +1002,30 @@ describe("mutation endpoints (Task 6): plain-demo write gate", () => {
   });
 });
 
+describe("demo preferences: defaults, never saved (2026-10-04)", () => {
+  it("refuses a preferences PATCH from an admin viewing as demo", async () => {
+    await withServer(async (base) => {
+      const res = await req(base, "PATCH", "/api/auth/preferences", { preferences: { theme: "Teal" } }, actingDemoToken());
+      expect(res.status).toBe(403);
+      const prefs = await (await req(base, "GET", "/api/auth/preferences")).json();
+      expect(prefs.theme).toBe("Grey");
+    });
+  });
+
+  it("drops theme and time_window from a demo identity's preferences read", async () => {
+    await withServer(async (base) => {
+      await req(base, "PATCH", "/api/auth/preferences", { preferences: { time_window: "90" } }, adminToken());
+      for (const token of [plainDemoToken(), actingDemoToken()]) {
+        const prefs = await (await req(base, "GET", "/api/auth/preferences", undefined, token)).json();
+        expect(prefs).not.toHaveProperty("theme");
+        expect(prefs).not.toHaveProperty("time_window");
+      }
+      const admin = await (await req(base, "GET", "/api/auth/preferences", undefined, adminToken())).json();
+      expect(admin).toMatchObject({ theme: "Grey", time_window: "90" });
+    });
+  });
+});
+
 describe("mutation endpoints (Task 6): reset on restart", () => {
   it("fresh startServer resets mutated state (topics, exclusions, preferences, clustering-status all reseed)", async () => {
     const admin = adminToken();
