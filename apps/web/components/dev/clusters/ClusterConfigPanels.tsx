@@ -1,3 +1,4 @@
+import PromptOverrideNote from "@/components/dev/PromptOverrideNote";
 import type { ClustersConfig } from "@/lib/clusters";
 import { percent } from "@/lib/clusters";
 
@@ -43,6 +44,7 @@ export default function ClusterConfigPanels({ config }: { config: ClustersConfig
           <Row label="Max tokens" value={String(n.max_tokens)} />
           <Row label="Sample" value={`up to ${n.sample_size} pages per cluster`} />
           <Row label="Prompt" value={n.prompt_name} />
+          {n.prompt && <PromptOverrideNote state={n.prompt_override} />}
           {n.prompt ? <pre className="config-prompt">{n.prompt}</pre> : <p className="dev-empty dev-empty-inline">Prompt template not found.</p>}
         </div>
       </details>

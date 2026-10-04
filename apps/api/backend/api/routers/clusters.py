@@ -20,7 +20,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from backend.api.main import verify_api_key
-from backend.db import cluster_view_repo, recluster_repo
+from backend.db import auth_repo, cluster_view_repo, recluster_repo
 from backend.services import cluster_view
 
 router = APIRouter(prefix="/api/clusters", tags=["Clusters"])
@@ -30,6 +30,9 @@ _INT4_MAX = 2_147_483_647
 
 @router.get("/summary")
 async def clusters_summary(user_id: int = Depends(verify_api_key)) -> dict:
+    # The naming prompt's live override text is for admins only; a view-as
+    # token is the demo account's, so role == "admin" excludes it.
+    admin = auth_repo.get_role(user_id) == "admin"
     run = recluster_repo.get_latest_run(user_id)
     runs = cluster_view_repo.get_run_history(user_id)
     if run is None:
@@ -40,7 +43,7 @@ async def clusters_summary(user_id: int = Depends(verify_api_key)) -> dict:
             "groups": cluster_view_repo.get_group_counts(user_id, None),
             "edges": cluster_view.edge_summary([]),
             "runs": runs,
-            "config": cluster_view.build_config(None),
+            "config": cluster_view.build_config(None, admin=admin),
         }
     pages = cluster_view_repo.get_page_counts(user_id, run["id"], run["started_at"])
     considered = (run["noise_count"] or 0) + pages["clustered"]
@@ -51,7 +54,7 @@ async def clusters_summary(user_id: int = Depends(verify_api_key)) -> dict:
         "groups": cluster_view_repo.get_group_counts(user_id, run["id"]),
         "edges": cluster_view.edge_summary(cluster_view_repo.get_edge_weights(user_id, run["id"])),
         "runs": runs,
-        "config": cluster_view.build_config(considered),
+        "config": cluster_view.build_config(considered, admin=admin),
     }
 
 

@@ -1,3 +1,4 @@
+import PromptOverrideNote from "@/components/dev/PromptOverrideNote";
 import { formatRatio } from "@/lib/pipeline";
 import type { PipelineFlow, SkipGateConfig } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function SkipGateConfigPanel({ config, flow }: { config: SkipGate
         <div className="config-row"><span className="config-label">Model</span><span className="config-value">{config.model}</span></div>
         <div className="config-row"><span className="config-label">Temperature</span><span className="config-value">{config.temperature.toFixed(1)}</span></div>
         <div className="config-row"><span className="config-label">Prompt</span><span className="config-value">{config.prompt_name}</span></div>
+        <PromptOverrideNote state={config.prompt_override} />
         <pre className="config-prompt">{config.prompt}</pre>
         <div className="config-label">Tools</div>
         {config.tools.map((t) => (

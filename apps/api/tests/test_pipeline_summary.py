@@ -105,13 +105,49 @@ class TestSkipGateConfig:
         cats = ps.build_skip_gate_config()["categories"]
         assert [(c["id"], c["label"], c["description"]) for c in cats] == list(SKIP_CATEGORIES)
 
-    def test_override_wins(self, monkeypatch):
+    def test_override_text_is_admin_only(self, monkeypatch):
+        # Override text is deployment-local: admins see it, everyone else
+        # (demo and view-as included) gets the registry text (2026-10-04).
         from backend.prompts import templates
 
         monkeypatch.setattr(
             templates, "_load_overrides", lambda: {"skip_gate_v2_3": "OVERRIDE {title}"}
         )
-        assert ps.build_skip_gate_config()["prompt"] == "OVERRIDE {title}"
+        admin = ps.build_skip_gate_config(admin=True)
+        assert (admin["prompt"], admin["prompt_override"]) == ("OVERRIDE {title}", "shown")
+        other = ps.build_skip_gate_config()
+        assert other["prompt"] == templates.PROMPTS["skip_gate_v2_3"]["template"]
+        assert other["prompt_override"] == "withheld"
+        assert "OVERRIDE" not in repr(other)
+
+    def test_no_override(self, monkeypatch):
+        from backend.prompts import templates
+
+        monkeypatch.setattr(templates, "_load_overrides", dict)
+        for admin in (True, False):
+            assert ps.build_skip_gate_config(admin=admin)["prompt_override"] is None
+
+
+class TestGetPromptTemplateForViewer:
+    def test_unknown_name_raises_keyerror(self):
+        import pytest
+
+        from backend.prompts.templates import get_prompt_template_for_viewer
+
+        with pytest.raises(KeyError):
+            get_prompt_template_for_viewer("no_such_prompt", admin=True)
+
+    def test_blank_or_non_string_override_counts_as_none(self, monkeypatch):
+        from backend.prompts import templates
+
+        registry = templates.PROMPTS["skip_gate_v2_3"]["template"]
+        for value in ("", None, 3):
+            monkeypatch.setattr(templates, "_load_overrides", lambda v=value: {"skip_gate_v2_3": v})
+            for admin in (True, False):
+                assert templates.get_prompt_template_for_viewer("skip_gate_v2_3", admin=admin) == (
+                    registry,
+                    None,
+                )
 
 
 class TestGetPromptTemplate:

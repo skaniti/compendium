@@ -1,6 +1,7 @@
 // Clusters dev view: types and pure helpers. Kept out of lib/types.ts and
 // lib/api.ts on purpose (per-view commit isolation, spec R15).
 import { formatRunDate, shareOf } from "@/lib/overview";
+import type { PromptOverrideState } from "@/lib/prompts";
 
 export type ClusterRunStatus = "running" | "completed" | "failed" | "archived";
 export interface ClusterRun {
@@ -19,7 +20,11 @@ export interface ClustersConfig {
     effective_min_cluster_size: number | null; min_samples: number; selection_method: string; selection_epsilon: number;
     metric: "cosine" | "euclidean"; umap_dims: number; umap_n_neighbors: number; edge_threshold: number; max_edges_per_cluster: number;
   };
-  naming: { model: string; temperature: number; max_tokens: number; sample_size: number; prompt_name: string; prompt: string | null };
+  naming: {
+    model: string; temperature: number; max_tokens: number; sample_size: number; prompt_name: string; prompt: string | null;
+    /** Absent from payloads recorded before 2026-10-04. */
+    prompt_override?: PromptOverrideState;
+  };
 }
 export interface ClustersSummary {
   run: CurrentRun | null; pages: ClusterPages | null; clusters: ClusterRow[];

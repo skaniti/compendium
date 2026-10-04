@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { it, expect } from "vitest";
+import { OVERRIDE_SHOWN_NOTE, OVERRIDE_WITHHELD_NOTE } from "@/lib/prompts";
 import type { PipelineFlow, SkipGateConfig } from "@/lib/types";
 import SkipGateConfigPanel from "./SkipGateConfigPanel";
 const config = { model: "model-x", temperature: 0, prompt_name: "skip_v1", prompt: "p", tools: [],
@@ -31,4 +32,20 @@ it("shows a dash for the share when nothing was captured", () => {
 it("renders no face without a flow", () => {
   const { container } = render(<SkipGateConfigPanel config={config} />);
   expect(container.querySelector(".skip-gate-face")).toBeNull();
+});
+it.each([
+  ["withheld", OVERRIDE_WITHHELD_NOTE],
+  ["shown", OVERRIDE_SHOWN_NOTE],
+] as const)("a %s override gets its note above the prompt", (state, note) => {
+  const { container } = render(<SkipGateConfigPanel config={{ ...config, prompt_override: state }} />);
+  const p = screen.getByText(note);
+  expect(p).toHaveClass("config-note");
+  expect(p.nextElementSibling).toBe(container.querySelector("pre.config-prompt"));
+});
+it("no override, or a payload without the field: no note", () => {
+  for (const c of [config, { ...config, prompt_override: null }]) {
+    const { container, unmount } = render(<SkipGateConfigPanel config={c} />);
+    expect(container.querySelector(".config-note")).toBeNull();
+    unmount();
+  }
 });

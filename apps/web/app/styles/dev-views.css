@@ -210,6 +210,9 @@
     font-weight: 500;
 }
 
+/* Above a read-only prompt when a local override is live (PromptOverrideNote). */
+.config-note { margin: 4px 0 0; font-size: 0.72rem; color: var(--panel-caption); }
+
 .config-prompt {
     margin: 4px 0 0 0;
     padding: 8px 10px;

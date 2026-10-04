@@ -161,6 +161,24 @@ class TestSummary:
         assert cfg["counts"]["domains"] == len(main.SKIP_DOMAINS) + len(main.SKIP_DOMAIN_SUFFIXES)
         assert len(cfg["path_rules"]) == 4
 
+    def test_skip_gate_override_text_admin_only(self, client, monkeypatch):
+        # A view-as token is the demo account's, so the "demo" role covers it.
+        from backend.db import auth_repo
+        from backend.prompts import templates
+
+        monkeypatch.setattr(
+            templates, "_load_overrides", lambda: {"skip_gate_v2_3": "LOCAL OVERRIDE {title}"}
+        )
+        tc, user = client
+        for role in ("demo", "user"):
+            auth_repo.set_role(user["id"], role)
+            cfg = tc.get("/api/pipeline/summary").json()["skip_gate_config"]
+            assert cfg["prompt"] == templates.PROMPTS["skip_gate_v2_3"]["template"]
+            assert cfg["prompt_override"] == "withheld"
+        auth_repo.set_role(user["id"], "admin")
+        cfg = tc.get("/api/pipeline/summary").json()["skip_gate_config"]
+        assert (cfg["prompt"], cfg["prompt_override"]) == ("LOCAL OVERRIDE {title}", "shown")
+
     def test_seeded_mix(self, client):
         tc, user = client
         _seed_mix(user["id"])

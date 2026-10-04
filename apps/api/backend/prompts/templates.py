@@ -958,9 +958,11 @@ def get_prompt_raw(name: str, **kwargs) -> str:
 
 def get_prompt_template(name: str) -> str:
     """Return the UNFORMATTED template text for ``name`` -- the live override
-    from ``overrides.json`` if one exists, else the registry entry. Used by
-    read-only surfaces that display a prompt (Pipeline dev view's skip-gate
-    config panel; the Prompts dev view) without rendering it.
+    from ``overrides.json`` if one exists, else the registry entry.
+
+    Admin-only: the override text is deployment-local. No route serves this
+    since 2026-10-04; a read-only display a non-admin can reach uses
+    ``get_prompt_template_for_viewer`` instead.
 
     Raises:
         KeyError: If prompt name not found
@@ -969,6 +971,30 @@ def get_prompt_template(name: str) -> str:
         raise KeyError(f"Prompt template '{name}' not found. Available: {list(PROMPTS.keys())}")
     overrides = _load_overrides()
     return overrides.get(name) or PROMPTS[name]["template"]
+
+
+def get_prompt_template_for_viewer(name: str, *, admin: bool) -> tuple[str, str | None]:
+    """``(text, override)`` for a read-only prompt display in a demo-visitable
+    view (the Pipeline and Clusters config panels).
+
+    Override text is deployment-local, so only an admin sees it (never a demo
+    session, an admin viewing as demo included: its token is the demo
+    account's); everyone else gets the registry text. ``override`` is
+    ``"shown"`` when the text is the live override, ``"withheld"`` when an
+    override is live but the registry text is returned, else ``None`` (the
+    Prompts view's rule, 2026-10-04).
+
+    Raises:
+        KeyError: If prompt name not found
+    """
+    if name not in PROMPTS:
+        raise KeyError(f"Prompt template '{name}' not found. Available: {list(PROMPTS.keys())}")
+    live = _load_overrides().get(name)
+    if not (isinstance(live, str) and live):
+        return PROMPTS[name]["template"], None
+    if admin:
+        return live, "shown"
+    return PROMPTS[name]["template"], "withheld"
 
 
 def list_prompts() -> list[dict]:

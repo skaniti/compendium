@@ -307,6 +307,8 @@ function buildPipelineFixtures() {
   // computed from pages. The live rule-filter wording names one product host, which the hygiene gate
   // forbids in committed fixtures, so that host is swapped for a generic one here.
   const rawSummary = readJson('pipeline', 'summary.json');
+  // Override text is deployment-local: a capture made as an admin would carry it.
+  if (rawSummary.skip_gate_config?.prompt_override === 'shown') fatal('raw/pipeline/summary.json carries live override text (capture as the demo account)');
   const scrubHost = (v) => (typeof v === 'string' ? v.split('claude' + '.ai').join('chat-app.example') : Array.isArray(v) ? v.map(scrubHost) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrubHost(x)])) : v);
   writeJson('pipeline/summary.json', { ...rawSummary, rule_filter_config: scrubHost(rawSummary.rule_filter_config) });
 
@@ -346,6 +348,7 @@ function buildOverviewFixtures() {
 // carries no topic preferences (Overview builder precedent).
 function buildClustersFixtures() {
   const summary = readJson('clusters', 'summary.json');
+  if (summary.config?.naming?.prompt_override === 'shown') fatal('raw/clusters/summary.json carries live override text (capture as the demo account)');
   const members = readJson('clusters', 'members.json');
   const unclustered = readJson('clusters', 'unclustered.json');
   const outJson = (f) => JSON.parse(readFileSync(path.join(OUT_DIR, f), 'utf8'));

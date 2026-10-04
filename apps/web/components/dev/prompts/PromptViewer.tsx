@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useId, useState, type MouseEvent } from "react";
 import { useHoverTooltip } from "@/components/charts/HoverTooltip";
-import type { PromptDetail, PromptsAdminStatus, SaveOverrideResult } from "@/lib/prompts";
+import { OVERRIDE_WITHHELD_NOTE, type PromptDetail, type PromptsAdminStatus, type SaveOverrideResult } from "@/lib/prompts";
 import { fetchPromptDetail, resetPromptOverride } from "@/lib/prompts-api";
 import PromptDiff from "./PromptDiff";
 import PromptEditor from "./PromptEditor";
@@ -83,7 +83,7 @@ export default function PromptViewer({ name, admin: adminStatus, onChanged, edit
           : <span>No placeholders</span>}</span>
       </div>
       {!admin && detail.overridden && (
-        <p className="prompts-note">This deployment runs a local override of this prompt. Its text is visible to admins only; below is the registry text.</p>
+        <p className="prompts-note">{OVERRIDE_WITHHELD_NOTE}</p>
       )}
       {admin && !admin.overrides.configured && (
         <p className="prompts-note">Editing is off: this API has no PROMPT_OVERRIDES_PATH. Set it to a file outside the repo to enable overrides.</p>

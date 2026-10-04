@@ -311,6 +311,26 @@ def test_config_is_parameters_only(client):
     assert cfg["clustering"]["effective_min_cluster_size"] == settings.hdbscan_min_cluster_size
 
 
+def test_naming_override_text_admin_only(client, monkeypatch):
+    # A view-as token is the demo account's, so the "demo" role covers it.
+    from backend.config.settings import settings
+    from backend.db import auth_repo
+    from backend.prompts import templates
+
+    name = f"cluster_naming_{settings.cluster_naming_prompt_version}"
+    monkeypatch.setattr(templates, "_load_overrides", lambda: {name: "LOCAL OVERRIDE {n_pages}"})
+    tc, uid = client
+    for role in ("demo", "user"):
+        auth_repo.set_role(uid, role)
+        naming = tc.get("/api/clusters/summary").json()["config"]["naming"]
+        assert naming["prompt"] == templates.PROMPTS[name]["template"]
+        assert naming["prompt_override"] == "withheld"
+        assert "LOCAL OVERRIDE" not in json.dumps(tc.get("/api/clusters/summary").json())
+    auth_repo.set_role(uid, "admin")
+    naming = tc.get("/api/clusters/summary").json()["config"]["naming"]
+    assert (naming["prompt"], naming["prompt_override"]) == ("LOCAL OVERRIDE {n_pages}", "shown")
+
+
 def test_other_users_never_count(client):
     tc, uid = client
     _world(uid)

@@ -4,6 +4,8 @@
 // shared contract artifact exists (monorepo time), backend event-shape
 // changes must be mirrored here by hand.
 
+import type { PromptOverrideState } from "@/lib/prompts";
+
 export interface ToolCall {
   iteration: number;
   tool: string;
@@ -265,6 +267,8 @@ export interface TopDomain { domain: string; count: number }
 export interface SkipGateCategory { id: string; label: string; description: string }
 export interface SkipGateConfig {
   model: string; temperature: number; prompt_name: string; prompt: string;
+  /** Absent from payloads recorded before 2026-10-04. */
+  prompt_override?: PromptOverrideState;
   tools: { name: string; description: string }[];
   categories: SkipGateCategory[];
 }

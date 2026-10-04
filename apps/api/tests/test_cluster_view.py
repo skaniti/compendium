@@ -90,7 +90,20 @@ def test_build_config_keys_are_exact():
         "sample_size",
         "prompt_name",
         "prompt",
+        "prompt_override",
     }
+
+
+def test_build_config_naming_override_text_is_admin_only(monkeypatch):
+    from backend.prompts import templates
+
+    name = f"cluster_naming_{settings.cluster_naming_prompt_version}"
+    monkeypatch.setattr(templates, "_load_overrides", lambda: {name: "OVERRIDE {n_pages}"})
+    admin = cv.build_config(None, admin=True)["naming"]
+    assert (admin["prompt"], admin["prompt_override"]) == ("OVERRIDE {n_pages}", "shown")
+    other = cv.build_config(None)["naming"]
+    assert other["prompt"] == templates.PROMPTS[name]["template"]
+    assert other["prompt_override"] == "withheld"
 
 
 def test_build_config_reads_the_pipeline_values():

@@ -59,6 +59,10 @@ export interface EvalRunDetail {
 }
 
 export const MAX_TEMPLATE_CHARS = 32_000;
+/** A read-only prompt's relation to a live local override: "shown" (admins), "withheld" (everyone else), null (none). */
+export type PromptOverrideState = "shown" | "withheld" | null;
+export const OVERRIDE_WITHHELD_NOTE = "This deployment runs a local override of this prompt. Its text is visible to admins only; below is the registry text.";
+export const OVERRIDE_SHOWN_NOTE = "This is the local override this deployment runs; Prompts compares it with the registry text.";
 const MINUS = "−";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const finite = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);

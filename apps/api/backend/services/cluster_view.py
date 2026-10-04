@@ -66,16 +66,20 @@ def effective_min_cluster_size(considered: int | None) -> int | None:
     return max(settings.hdbscan_min_cluster_size, considered // MIN_CLUSTER_SIZE_DIVISOR)
 
 
-def build_config(considered: int | None) -> dict:
+def build_config(considered: int | None, *, admin: bool = False) -> dict:
+    """Clustering and naming parameters. A live naming-prompt override is shown
+    to admins only; others get the registry text (``prompt_override``)."""
     # Lazy: clustering_service pulls in the ML stack.
-    from backend.prompts.templates import get_prompt_template
+    from backend.prompts.templates import get_prompt_template_for_viewer
     from backend.services import clustering_service as cs
 
     prompt_name = f"cluster_naming_{settings.cluster_naming_prompt_version}"
+    prompt: str | None
+    prompt_override: str | None
     try:
-        prompt: str | None = get_prompt_template(prompt_name)
+        prompt, prompt_override = get_prompt_template_for_viewer(prompt_name, admin=admin)
     except KeyError:
-        prompt = None
+        prompt, prompt_override = None, None
     return {
         "clustering": {
             "embedding_model": settings.clustering_embedding_model,
@@ -99,5 +103,6 @@ def build_config(considered: int | None) -> dict:
             "sample_size": cs.NAMING_SAMPLE_SIZE,
             "prompt_name": prompt_name,
             "prompt": prompt,
+            "prompt_override": prompt_override,
         },
     }

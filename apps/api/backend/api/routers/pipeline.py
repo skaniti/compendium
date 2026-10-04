@@ -35,14 +35,16 @@ async def pipeline_summary(
     flow = ps.build_flow(c["cells"], c["outcome_domains"], c["detail_domains"])
     status_counts = {f["key"]: f["count"] for f in flow["fates"]}
     total = flow["total"]
+    role = auth_repo.get_role(user_id)
     return {
         "range": key,
         "total_pages": total,
         "status_counts": status_counts,
         "archive_ratio": (status_counts["archived"] / total) if total else 0.0,
         "flow": flow,
-        "rule_filter_config": ps.build_rule_filter_config(auth_repo.get_role(user_id)),
-        "skip_gate_config": ps.build_skip_gate_config(),
+        "rule_filter_config": ps.build_rule_filter_config(role),
+        # A view-as token is the demo account's, so role == "admin" excludes it.
+        "skip_gate_config": ps.build_skip_gate_config(admin=role == "admin"),
     }
 
 

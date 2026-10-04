@@ -151,17 +151,21 @@ def build_rule_filter_config(role: str = "user") -> dict:
     }
 
 
-def build_skip_gate_config() -> dict:
+def build_skip_gate_config(*, admin: bool = False) -> dict:
+    """The gate's model, prompt, tools and categories. A live prompt override is
+    shown to admins only; others get the registry text (``prompt_override``)."""
     # Lazy imports: main.py imports this module's router; llm_service is heavy.
     from backend.api.main import TOOL_SELECTION_MODEL
-    from backend.prompts.templates import get_prompt_template
+    from backend.prompts.templates import get_prompt_template_for_viewer
     from backend.services.llm_service import PAGE_PROCESSING_TOOLS
 
+    prompt, prompt_override = get_prompt_template_for_viewer(SKIP_GATE_PROMPT_NAME, admin=admin)
     return {
         "model": TOOL_SELECTION_MODEL,
         "temperature": SKIP_GATE_TEMPERATURE,
         "prompt_name": SKIP_GATE_PROMPT_NAME,
-        "prompt": get_prompt_template(SKIP_GATE_PROMPT_NAME),
+        "prompt": prompt,
+        "prompt_override": prompt_override,
         "categories": [
             {"id": cid, "label": label, "description": desc} for cid, label, desc in SKIP_CATEGORIES
         ],
