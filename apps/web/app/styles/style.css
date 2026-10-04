@@ -631,25 +631,61 @@
     border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 50%;
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.3s ease;
+    transition: background 0.15s ease;
 }
-/* :not(.is-spinning) so the static 60deg hover-tilt can't fight the
-   continuous spin animation below -- without this guard, hovering the
-   button mid-recluster froze/jumped the rotation each frame the :hover
-   rule's transform re-applied. */
+/* Idle icon (HeaderCards' ReclusterIcon): an SVG arc centred on the button,
+   so the hover tilt turns it about its own centre (the old text glyph sat
+   off-centre and wobbled). The button itself never rotates. */
+.hbar-recluster-icon {
+    display: block;
+    transition: transform 0.3s ease;
+}
 .hbar-recluster-btn:not(.is-spinning):not([aria-disabled="true"]):hover {
     background: rgba(255, 255, 255, 0.12);
+}
+.hbar-recluster-btn:not(.is-spinning):not([aria-disabled="true"]):hover .hbar-recluster-icon {
     transform: rotate(60deg);
 }
-.hbar-recluster-btn.is-spinning {
-    animation: recluster-spin 1s linear infinite;
+/* Busy: a ring whose tail fades to nothing and whose round head sits where
+   the idle arrowhead was (2 o'clock), turning clockwise. Same 14px box, ring
+   radius 4.75px and 1.75px thickness as the icon's arc: a conic gradient
+   from the tail (4 o'clock, transparent) round to the head, cut to a ring by
+   the radial mask, with the head capped by the ::after dot. */
+.hbar-recluster-spinner {
+    position: relative;
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: conic-gradient(from 120deg, transparent 0deg, currentColor 300deg, transparent 300deg);
+    -webkit-mask: radial-gradient(circle, transparent 3.85px, #000 3.9px, #000 5.6px, transparent 5.65px);
+    mask: radial-gradient(circle, transparent 3.85px, #000 3.9px, #000 5.6px, transparent 5.65px);
+    animation: recluster-spin 0.9s linear infinite;
+}
+.hbar-recluster-spinner::after {
+    content: "";
+    position: absolute;
+    left: 10.239px;
+    top: 3.75px;
+    width: 1.75px;
+    height: 1.75px;
+    border-radius: 50%;
+    background: currentColor;
 }
 @keyframes recluster-spin {
     to { transform: rotate(360deg); }
 }
-.hbar-recluster-btn:disabled {
+@media (prefers-reduced-motion: reduce) {
+    .hbar-recluster-spinner { animation-duration: 2.4s; }
+    .hbar-recluster-icon { transition: none; }
+}
+/* Disabled while busy keeps full strength so the spinner reads clearly. */
+.hbar-recluster-btn:disabled:not(.is-spinning) {
     opacity: 0.5;
     cursor: default;
+}
+.hbar-recluster-btn.is-spinning {
+    cursor: progress;
 }
 /* Demo lock (HeaderCards): greyed out like :disabled, but still hoverable
    so its "disabled in demo view" tooltip shows. */

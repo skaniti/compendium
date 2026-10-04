@@ -181,12 +181,19 @@ describe("HeaderCards", () => {
     expect(statusSpy).toHaveBeenCalledTimes(1);
 
     const button = document.getElementById("recluster-btn") as HTMLButtonElement;
+    // Idle: the centred arrow icon, no spinner (2026-10-04).
+    expect(button.querySelector("svg.hbar-recluster-icon")).not.toBeNull();
+    expect(button.querySelector(".hbar-recluster-spinner")).toBeNull();
     await userEvent.click(button);
 
     // Busy state applied synchronously (setBusy(true) runs before the
-    // first await inside handleRecluster).
+    // first await inside handleRecluster). The arrow gives way to the
+    // fading-tail ring spinner; the button itself no longer rotates.
     expect(button.className).toBe("hbar-recluster-btn is-spinning");
     expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button.querySelector(".hbar-recluster-spinner")).not.toBeNull();
+    expect(button.querySelector("svg.hbar-recluster-icon")).toBeNull();
     expect(postSpy).toHaveBeenCalledTimes(1);
 
     // A second click while busy must be impossible.
@@ -197,6 +204,8 @@ describe("HeaderCards", () => {
 
     await waitFor(() => expect(button).not.toBeDisabled());
     expect(button.className).toBe("hbar-recluster-btn");
+    expect(button).not.toHaveAttribute("aria-busy");
+    expect(button.querySelector("svg.hbar-recluster-icon")).not.toBeNull();
     await screen.findByText("CLUSTERING (RUN #1)");
     expect(statusSpy).toHaveBeenCalledTimes(2);
   });

@@ -48,6 +48,20 @@ const DATE_RANGE_PILLS: ReadonlyArray<{ label: string; value: TimeWindow }> = [
   { label: "All", value: "all" },
 ];
 
+// The recluster button's idle icon (2026-10-04): a 300deg arc centred in a
+// 14px box (radius 4.75, 1.75 stroke) with the arrowhead at 2 o'clock pointing
+// clockwise. The busy spinner (.hbar-recluster-spinner in style.css) is the
+// same ring with its head at the same spot, so the swap reads as the arrow
+// setting off.
+function ReclusterIcon() {
+  return (
+    <svg className="hbar-recluster-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+      <path d="M11.114 9.375A4.75 4.75 0 1 1 11.114 4.625" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M12.014 6.184L12.386 3.429L9.442 5.129Z" fill="currentColor" stroke="currentColor" strokeWidth="0.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // topics.py:630 -- mirrored as a literal constant rather than imported
 // (no shared contract module exists yet between the two repos).
 const MAX_SUPERCLUSTERS = 12;
@@ -178,6 +192,7 @@ export default function HeaderCards() {
               className={busy ? "hbar-recluster-btn is-spinning" : "hbar-recluster-btn"}
               aria-label={reclusterLabel}
               aria-disabled={reclusterLocked || undefined}
+              aria-busy={busy || undefined}
               disabled={busy}
               onMouseEnter={(e) => reclusterTip.show(e, [reclusterLabel])}
               onMouseMove={(e) => reclusterTip.show(e, [reclusterLabel])}
@@ -187,7 +202,7 @@ export default function HeaderCards() {
                 void handleRecluster();
               }}
             >
-              ↻
+              {busy ? <span className="hbar-recluster-spinner" aria-hidden="true" /> : <ReclusterIcon />}
             </button>
             {reclusterTip.tooltip}
           </div>
