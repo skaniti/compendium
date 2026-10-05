@@ -22,7 +22,7 @@ text) are title-only guesses: they are listed, not restored, unless
 --allow-title-only is given.
 
 Usage:
-    python scripts/regate_dwell_archives.py --user-id N [--apply] [--limit N]
+    python scripts/_archive/regate_dwell_archives.py --user-id N [--apply] [--limit N]
         [--reason-pattern '%dwell%']
 """
 
@@ -33,7 +33,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db import page_repo
 from backend.db.connection import get_conn, set_current_user_id

@@ -21,6 +21,7 @@ runs unless given `--apply` or `--execute`; read the script's docstring first.
 | `fix_legacy_depth_values.py` | Rewrote legacy `processing_depth` values. |
 | `refetch_github.py` | Re-fetched GitHub repo pages missing content. |
 | `refetch_missing_content.py` | Re-fetched `page_content` rows missing fetched content. |
+| `regate_dwell_archives.py` | Re-ran the content-and-URL skip gate (`skip_gate_v2_3`) on pages the March 2026 gate archived for missing dwell time; run locally 2026-09-29 and on hosted 2026-10-04, all restored. It rewrites the reason but not `skip_category`. |
 | `smoke_test_featured_singletons.py` | End-to-end check of the featured-singletons refactor. |
 | `diagnostics/dedup_audit.py` | Read-only audit of duplicate visits and content. |
 | `diagnostics/dedup_burst_dryrun.py` | Dry-run report of same-host visit bursts (`--execute` merges them). |

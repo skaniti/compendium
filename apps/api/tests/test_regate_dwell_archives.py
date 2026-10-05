@@ -1,4 +1,4 @@
-"""Tests for scripts/regate_dwell_archives.py (no network, no DB)."""
+"""Tests for scripts/_archive/regate_dwell_archives.py (no network, no DB)."""
 
 import asyncio
 import sys
@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts import regate_dwell_archives as rg
+from scripts._archive import regate_dwell_archives as rg
 
 USAGE = {"model": "m", "input_tokens": 1, "output_tokens": 2, "cost_usd": 0.001}
 
@@ -231,6 +231,6 @@ def test_selection_sql_skips_rows_already_regated():
     # The rewrite keeps the old wording in "(was: ...)", so without this
     # exclusion a SKIP verdict would match the default %dwell% pattern again
     # on every re-run and burn a gate call each time.
-    from scripts import regate_dwell_archives as m
+    from scripts._archive import regate_dwell_archives as m
 
     assert "NOT ILIKE 're-gated%%'" in m.SELECT_SQL
