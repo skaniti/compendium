@@ -38,20 +38,45 @@ Full source list and per-domain licensing notes:
 file just describes the *processed* (post-pipeline) form of the data the
 attribution doc already covers.
 
-## Known limitation: preview images 404
+## Preview assets (known limitation: 70 still 404)
 
 `captured_assets` rows (image/stylesheet metadata referenced by archived
-page HTML) ship in the seed, but their underlying binary files do not —
-those live on disk under `data/captures/assets/` in the source deployment
-and were never part of this export. The serving route exists as of the
-post-flip closeout (API route `GET /captured-assets/{rel:path}` here in
-apps/api, plus the bearer-carrying Next proxy in front of it in apps/web)
-— the gap left is just the binaries. Net effect: the seeded demo's
-page-preview images will 404 in the compose stack. This is a known,
-harmless gap (the rest of the app — graph, diary, topic detail,
-clustering — is unaffected); closing it
-means re-exporting the binaries, tracked as follow-up work rather than
-blocking this task.
+page HTML) ship in the seed, but their binary files are not part of this
+export. The compose stack gets them from the frontend-only demo instead:
+the root `docker-compose.yml` mounts
+`apps/web/demo/fixtures/assets/captured-assets` read-only at the API's
+assets base dir (`/app/data/captures/assets`). Those files use the same
+`<aa>/<sha>.<ext>` layout as `captured_assets.file_path`, so
+`GET /captured-assets/{rel:path}` serves them directly. The route's owner
+check passes for the demo login because the loader remaps every row's
+`user_id` to the demo account.
+
+Verified 2026-10-05 against a freshly built compose stack, logged in as the
+demo account: 2,971 of the 3,041 seeded rows return 200 with the seeded
+byte size, and a different login gets 404 on the same paths. All 157 pages
+with linked assets render a preview; 130 of them resolve every asset they
+reference.
+
+The other 70 rows have no file anywhere in this repo.
+`apps/web/demo/tools/capture-fixtures.mjs` only downloads assets that the
+preview HTML referenced when the fixtures were captured, and for these pages
+that HTML referenced fewer assets than the seed links (the lilianweng post's
+fixture preview referenced none of its 19 images; the YouTube page has no
+fixture preview). All 70 belong to 32 pages:
+
+| Pages | Missing files | Effect on the rendered preview |
+| --- | --- | --- |
+| 23 arXiv abstracts | 7 (shared arxiv.org assets) | 2-3 of 7-8 references broken per page |
+| lilianweng.github.io diffusion post | 19 | all 19 images broken |
+| SparkFun PWM tutorial | 8 | 6 of 8 references broken |
+| Adafruit RGB LED lesson | 23 | 1 of 2 references broken |
+| YouTube watch page | 4 (CSS) | all 4 stylesheets missing |
+| 3 Gutenberg ebooks, 2 GitHub repos | 5 + 4 | none referenced, no visible effect |
+
+That leaves 27 previews with a broken image or stylesheet. The rest of the
+app (graph, diary, topic detail, clustering) is unaffected. Closing the gap
+means shipping those 70 files next to the others. The fixture directory also
+holds 77 files with no seed row. The compose stack never requests them.
 
 ## Synthetic augment (temporary, D10 c-1)
 

@@ -77,6 +77,13 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:
       - compendium_hf_cache:/root/.cache/huggingface
+      # Page-preview images + stylesheets for the seeded demo: the
+      # frontend-only demo already ships these files in the same
+      # <aa>/<sha>.<ext> layout as captured_assets.file_path, so
+      # GET /captured-assets/{rel} serves them straight off this mount.
+      # Read-only so the repo's fixtures can't be written to; the catch is
+      # that captures you send to this stack skip asset archival (logged).
+      - ./apps/web/demo/fixtures/assets/captured-assets:/app/data/captures/assets:ro
     ports:
       - "8001:8000"
     healthcheck:
