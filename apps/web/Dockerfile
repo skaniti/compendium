@@ -27,10 +27,15 @@ RUN npm ci
 
 FROM node:22-slim AS builder
 WORKDIR /repo
-# next.config.ts resolves BACKEND_URL at BUILD time for the
-# /captured-assets/* rewrite destination (the /api/* proxy route handlers
-# read it at runtime instead) — so the builder must be told the compose-
-# network address, or the image bakes the localhost default.
+# NEXT_PUBLIC_* values are inlined into the client bundle by `next build`, so
+# they must exist at BUILD time. The server compose passes
+# NEXT_PUBLIC_DEMO_ROLE_TOOLING=1 for the tailnet-only owner stack (view-as
+# buttons); empty means off. BACKEND_URL is read at RUN time by the route
+# handlers (lib/backend-proxy.ts, the auth routes, the captured-assets
+# route); the build arg only keeps root docker-compose.yml's existing
+# `args:` working and gives `next build`'s prerender pass a value.
+ARG NEXT_PUBLIC_DEMO_ROLE_TOOLING=""
+ENV NEXT_PUBLIC_DEMO_ROLE_TOOLING=$NEXT_PUBLIC_DEMO_ROLE_TOOLING
 ARG BACKEND_URL=http://localhost:8001
 ENV BACKEND_URL=$BACKEND_URL
 COPY --from=deps /repo/node_modules ./node_modules

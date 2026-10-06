@@ -1,12 +1,14 @@
-# Server-side compose for apps/api ONLY (batch-07 Task 6 cutover).
+# Server-side compose for the OWNER stack: apps/api + apps/web
+# (tailnet-owner-demo-split, 2026-10-06).
 #
-# Brings up the FastAPI backend against the REAL, already-provisioned
-# production database. Nothing else: no `db` service (postgres is owned by
-# the Dash-side stack that stays on compendium-server — see the cutover
-# runbook), no `web` service (Vercel or a local process serves apps/web;
-# out of scope for this batch).
+# Reachable ONLY over the tailnet: `tailscale serve` maps HTTPS 443 to the
+# web container (127.0.0.1:3000) and HTTPS 8443 to the API (127.0.0.1:8001,
+# for the collectors). No public route reaches either port. The public demo
+# runs from docker-compose.demo.yml, a separate project that shares nothing
+# with this one. There is no `db` service here: postgres is owned by the
+# Dash-side stack that stays on compendium-server (see the cutover runbook).
 #
-#   docker compose -f apps/api/docker/docker-compose.server.yml up -d --build
+#   bash apps/api/scripts/server/deploy_server.sh --stack owner
 #
 # This is deliberately NOT docker/server/docker-compose.yml's shape (the
 # pre-extraction explorer repo's 3-service postgres+backend+frontend
@@ -94,6 +96,7 @@ services:
       # No new-user signups on the production deploy -- matches the
       # pre-extraction `app` service's setting.
       DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-1}"
+      TAILNET_ONLY_DEPLOYMENT: "${TAILNET_ONLY_DEPLOYMENT:-0}"
       # dqBot stays available at the app level; per-role gating is
       # verify_not_plain_demo at the router. This is the deployment-wide
       # kill switch, unaffected by the split -- see the runbook's wrinkle
@@ -146,6 +149,31 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  web:
+    build:
+      context: ../../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_DEMO_ROLE_TOOLING: "1"
+    image: compendium-web:server
+    container_name: compendium-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - compendium-net
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3000}:3000"
+    environment:
+      BACKEND_URL: http://compendium-api:8000
+      AUTH_REQUIRED: "1"
 
 networks:
   # External: created once by the runbook precheck (`docker network create
