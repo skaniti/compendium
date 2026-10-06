@@ -27,8 +27,7 @@
 # postgres+app+frontend stack at docker/server/docker-compose.yml. This
 # script no longer touches that stack at all.
 #
-# Usage:
-#   bash scripts/server/deploy_server.sh
+# Usage: see usage() below, or run with --help.
 #
 # What this does:
 #   1. Source ~/.secrets + ~/apps/compendium/.env so docker compose ${VAR}
@@ -68,19 +67,81 @@
 
 set -uo pipefail
 
+usage() {
+    cat <<'USAGE'
+Usage: bash deploy_server.sh [--stack owner|demo] [--skip-seed]
+  --stack owner  (default) tailnet-only owner stack: api + web,
+                 docker-compose.server.yml, env ~/apps/compendium/.env + ~/.secrets
+  --stack demo   public demo stack: api + db, docker-compose.demo.yml,
+                 env ~/apps/compendium/.env.demo ONLY (never ~/.secrets)
+  --skip-seed    owner only: skip the demo-copy refresh step
+Env: ENV_FILE, SECRETS_FILE (owner only), API_HOST_PORT, WEB_HOST_PORT,
+     SEED_APPLY=yes|no (owner: apply the demo-copy refresh without asking)
+USAGE
+}
+
+STACK="owner"
+SKIP_SEED=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --stack) STACK="${2:-}"; shift 2 ;;
+        --stack=*) STACK="${1#--stack=}"; shift ;;
+        --skip-seed) SKIP_SEED=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "ERROR: unknown argument: $1"; usage; exit 2 ;;
+    esac
+done
+
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.server.yml"
-ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env}"
-SECRETS_FILE="${SECRETS_FILE:-$HOME/.secrets}"
-API_HOST_PORT="${API_HOST_PORT:-8001}"
-export API_HOST_PORT
+REPO_ROOT="$(cd "$PROJECT_ROOT/../.." && pwd)"
+case "$STACK" in
+    owner)
+        COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.server.yml"
+        ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env}"
+        SECRETS_FILE="${SECRETS_FILE:-$HOME/.secrets}"
+        API_HOST_PORT="${API_HOST_PORT:-8001}"
+        export API_HOST_PORT
+        ;;
+    demo)
+        COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.demo.yml"
+        ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env.demo}"
+        SECRETS_FILE=""   # never the owner's secrets, whatever the shell exported
+        API_HOST_PORT="${API_HOST_PORT:-8002}"
+        export DEMO_API_HOST_PORT="$API_HOST_PORT"
+        ;;
+    *) echo "ERROR: --stack must be owner or demo (got '$STACK')"; exit 2 ;;
+esac
+
+# Demo-copy refresh decision (owner only). SEED_APPLY wins; otherwise ask on a
+# terminal and default to NO without one, so a scripted or ssh-without-tty
+# deploy can never rewrite the owner DB's demo copy unattended.
+seed_apply_mode() {
+    if [ "$STACK" != "owner" ] || [ "$SKIP_SEED" = "1" ]; then echo skip; return; fi
+    case "${SEED_APPLY:-}" in
+        yes) echo yes; return ;;
+        no) echo no; return ;;
+    esac
+    if [ -t 0 ]; then echo ask; else echo no; fi
+}
+
+if [ -n "${PLAN_ONLY:-}" ]; then
+    echo "stack=$STACK"
+    echo "compose_file=$COMPOSE_FILE"
+    echo "env_file=$ENV_FILE"
+    echo "secrets_file=${SECRETS_FILE:-<none>}"
+    echo "api_host_port=$API_HOST_PORT"
+    echo "seed_apply=$(seed_apply_mode)"
+    exit 0
+fi
+
+compose() { docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
 
 # --------------------------------------------------------------------------
 # 0. Log capture (mirrors start_app.sh convention)
 # --------------------------------------------------------------------------
 LOG_DIR="$PROJECT_ROOT/logs"
 LOG_TS=$(date +"%Y-%m-%d-%H%M%S")
-LOG_NAME="${LOG_TS}-deploy.log"
+LOG_NAME="${LOG_TS}-deploy-${STACK}.log"
 LOG_PATH="$LOG_DIR/$LOG_NAME"
 mkdir -p "$LOG_DIR"
 ln -sfn "$LOG_NAME" "$LOG_DIR/latest-deploy.log" 2>/dev/null || true
@@ -97,7 +158,7 @@ echo ""
 # --------------------------------------------------------------------------
 echo "--- sanity checks ---"
 fail=0
-for f in "$ENV_FILE" "$SECRETS_FILE" "$COMPOSE_FILE"; do
+for f in "$ENV_FILE" ${SECRETS_FILE:+"$SECRETS_FILE"} "$COMPOSE_FILE"; do
     if [ ! -f "$f" ]; then
         echo "ERROR: required file not found: $f"
         fail=1
@@ -119,7 +180,7 @@ echo "ok"
 # and bootstrap-style scripts may also read os.environ directly.
 set -a
 # shellcheck disable=SC1090
-source "$SECRETS_FILE"
+if [ -n "$SECRETS_FILE" ]; then source "$SECRETS_FILE"; fi
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
@@ -140,14 +201,14 @@ echo "--- docker compose up -d --build ---"
 # without this check a failed build/up would leave the OLD container running
 # untouched and the health wait below would then pass against it, masking
 # the failure entirely.
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build || { echo "ERROR: docker compose up failed"; exit 1; }
+compose up -d --build || { echo "ERROR: docker compose up failed"; exit 1; }
 
 # --------------------------------------------------------------------------
 # 4. Confirm container status
 # --------------------------------------------------------------------------
 echo ""
 echo "--- docker compose ps ---"
-docker compose -f "$COMPOSE_FILE" ps
+compose ps
 
 # --------------------------------------------------------------------------
 # 5. Wait for /health (200, db_connected: true)
@@ -170,7 +231,7 @@ for i in $(seq 1 60); do
     if [ "$i" -eq 60 ]; then
         echo "ERROR: /health did not report db_connected: true within 120s"
         echo "  last response: ${resp:-<no response>}"
-        docker compose -f "$COMPOSE_FILE" logs --tail 50 api
+        compose logs --tail 50 api
         exit 1
     fi
 done
@@ -184,16 +245,69 @@ done
 # absence of any migration-related line is the actual red flag.
 echo ""
 echo "--- migration evidence (docker compose logs api | grep -i migrat) ---"
-docker compose -f "$COMPOSE_FILE" logs api | grep -i migrat || echo "  (no migration-related log lines found -- check container logs directly)"
+compose logs api | grep -i migrat || echo "  (no migration-related log lines found -- check container logs directly)"
+
+if [ "$STACK" = "owner" ]; then
+    WEB_HOST_PORT="${WEB_HOST_PORT:-3000}"
+    echo ""
+    echo "--- waiting for http://127.0.0.1:${WEB_HOST_PORT}/login (web) ---"
+    for i in $(seq 1 60); do
+        code=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "http://127.0.0.1:${WEB_HOST_PORT}/login" 2>/dev/null) || code=""
+        if [ "$code" = "200" ]; then
+            echo "web ok ($((i * 2))s)"
+            break
+        fi
+        sleep 2
+        if [ "$i" -eq 60 ]; then
+            echo "ERROR: web /login did not return 200 within 120s (last: ${code:-none})"
+            compose logs --tail 50 web
+            exit 1
+        fi
+    done
+fi
+
+mode=$(seed_apply_mode)
+if [ "$mode" != "skip" ]; then
+    echo ""
+    echo "--- demo copy refresh (owner DB): dry run ---"
+    compose exec -T api python scripts/demo/load_demo_seed.py --replace --dry-run
+    dry_rc=$?
+    apply=no
+    if [ "$dry_rc" -ne 0 ]; then
+        echo "dry run failed (exit $dry_rc) -- NOT applying. Exit 2 = a seed id collision (see above)."
+    elif [ "$mode" = "yes" ]; then
+        apply=yes
+    elif [ "$mode" = "ask" ]; then
+        read -r -p "Apply this refresh to the owner DB's demo copy? Take a pg_dump first. [y/N] " ans
+        if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then apply=yes; fi
+    else
+        echo "no terminal and SEED_APPLY unset -- not applying (SEED_APPLY=yes applies)"
+    fi
+    if [ "$apply" = "yes" ]; then
+        echo "--- copying demo preview assets into ${CAPTURES_ASSETS_HOST_DIR:-<unset>} (no overwrite) ---"
+        if [ -n "${CAPTURES_ASSETS_HOST_DIR:-}" ]; then
+            cp -rn "$REPO_ROOT/apps/web/demo/fixtures/assets/captured-assets/." "$CAPTURES_ASSETS_HOST_DIR/" \
+                || echo "WARNING: asset copy failed; rerun: sudo cp -rn $REPO_ROOT/apps/web/demo/fixtures/assets/captured-assets/. $CAPTURES_ASSETS_HOST_DIR/"
+        else
+            echo "WARNING: CAPTURES_ASSETS_HOST_DIR unset; preview assets not copied"
+        fi
+        echo "--- demo copy refresh: apply ---"
+        compose exec -T api python scripts/demo/load_demo_seed.py --replace \
+            || { echo "ERROR: refresh failed (rolled back, nothing changed)"; exit 1; }
+    fi
+fi
 
 echo ""
 echo "=== deploy complete ==="
 echo "  Log:     $LOG_PATH"
 echo "  Health:  http://127.0.0.1:${API_HOST_PORT}/health"
-echo "  Stop:    docker compose -f $COMPOSE_FILE down"
-echo "  Logs:    docker compose -f $COMPOSE_FILE logs -f api"
+echo "  Stop:    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE down"
+echo "  Logs:    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE logs -f api"
 echo ""
-echo "  Reminder: this deployed the BACKEND only. Frontend changes build on"
-echo "  Vercel from the push to main but go live only after 'vercel promote'."
+if [ "$STACK" = "owner" ]; then
+    echo "  Owner stack: tailnet only (tailscale serve 443 -> :3000, 8443 -> :8001)."
+else
+    echo "  Demo stack: public via the Cloudflare tunnel -> :${API_HOST_PORT}. Frontend changes go live via Vercel promote."
+fi
 
 exit 0
