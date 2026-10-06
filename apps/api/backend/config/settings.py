@@ -102,6 +102,15 @@ class Settings(BaseSettings):
     # Refused at startup in production -- see _check_production_secrets --
     # because it would make every public caller implicitly trusted.
     session_trust_missing_ingress: bool = False
+    # tailnet-owner-demo-split (2026-10-06): set ONLY on a deployment that has
+    # no public ingress at all (the owner stack, reachable solely through
+    # `tailscale serve`). Every request is then tailnet-trusted, so non-demo
+    # logins get the remembered policy without any header stamping. Never set
+    # it on a stack a public route reaches (the demo stack). Refused together
+    # with RATE_LIMIT_TRUST_CF_HEADER, which only makes sense with Cloudflare
+    # in front -- see _check_production_secrets. Env var
+    # ``TAILNET_ONLY_DEPLOYMENT``.
+    tailnet_only_deployment: bool = False
     # Task 7e (post-flip-closeout): the api container is reached through a
     # `127.0.0.1:8001:8000` docker port map, so uvicorn's peer address is
     # always the docker bridge gateway for every request -- one rate-limit
@@ -501,6 +510,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SESSION_INGRESS_TRUSTED_VALUE must be changed from its default "
                 "in production. Set a strong random value in your .env file."
+            )
+
+        # tailnet-owner-demo-split: trusting CF-Connecting-IP implies
+        # Cloudflare is in front of this API, which a tailnet-only deployment
+        # never has -- the combination means the flag landed on a stack a
+        # public route still reaches. Refused in every environment.
+        if self.tailnet_only_deployment and self.rate_limit_trust_cf_header:
+            raise ValueError(
+                "TAILNET_ONLY_DEPLOYMENT cannot be combined with "
+                "RATE_LIMIT_TRUST_CF_HEADER: a tailnet-only deployment has no "
+                "Cloudflare ingress."
             )
 
         return self

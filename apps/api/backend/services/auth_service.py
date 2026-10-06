@@ -133,7 +133,13 @@ def ingress_trusted(headers) -> bool:
     When the header is entirely absent (no Caddy in front -- local dev),
     falls back to ``settings.session_trust_missing_ingress`` (refused in
     production by the ``Settings`` validator).
+
+    On a tailnet-only deployment (``settings.tailnet_only_deployment``,
+    tailnet-owner-demo-split 2026-10-06) every request is trusted regardless
+    of the header: there is no public path to forge it from.
     """
+    if settings.tailnet_only_deployment:
+        return True
     value = headers.get(settings.session_ingress_header)
     if value is None:
         return settings.session_trust_missing_ingress

@@ -652,3 +652,81 @@ class TestDevAuthBypassSwitch:
         monkeypatch.setattr(settings, "dev_auth_bypass", True)
         r = client.get("/api/auth/me")
         assert r.status_code == 401
+
+
+class TestTailnetOnlyDeployment:
+    """tailnet-owner-demo-split (2026-10-06): a deployment with no public
+    ingress at all treats every request as tailnet-trusted."""
+
+    def test_off_by_default(self):
+        assert Settings.model_fields["tailnet_only_deployment"].default is False
+
+    def test_absent_header_is_trusted(self, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        assert auth_service.ingress_trusted({}) is True
+
+    def test_any_header_value_is_trusted(self, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        assert (
+            auth_service.ingress_trusted({"X-Compendium-Ingress": "public"}) is True
+        )
+
+    def test_user_login_without_header_is_remembered(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        _stub_login_user(monkeypatch, user_id=6, email="user@test.local", role="user")
+        save_calls = _capture_save_refresh_token(monkeypatch)
+        r = client.post(
+            "/api/auth/login", json={"email": "user@test.local", "password": "x"}
+        )
+        assert r.status_code == 200
+        assert r.json()["session_policy"]["remembered"] is True
+        assert save_calls[0]["remembered"] is True
+
+    def test_demo_login_stays_not_remembered(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        _stub_login_user(monkeypatch, user_id=7, email="demo@test.local", role="demo")
+        save_calls = _capture_save_refresh_token(monkeypatch)
+        r = client.post(
+            "/api/auth/login", json={"email": "demo@test.local", "password": "x"}
+        )
+        assert r.status_code == 200
+        assert r.json()["session_policy"]["remembered"] is False
+        assert save_calls[0]["remembered"] is False
+
+
+class TestValidatorRefusesTailnetOnlyWithCfHeaderTrust:
+    """A tailnet-only deployment has no Cloudflare in front of it, so trusting
+    CF-Connecting-IP there means the flag landed on a public stack."""
+
+    _prod = dict(
+        environment="production",
+        jwt_secret_key="a-real-production-secret",
+        cors_origins="https://compendium.example.com",
+        session_trust_missing_ingress=False,
+        session_ingress_trusted_value="a-real-ingress-secret",
+    )
+
+    def test_refused_in_production(self):
+        with pytest.raises(ValueError, match="TAILNET_ONLY_DEPLOYMENT"):
+            Settings(
+                **self._prod,
+                tailnet_only_deployment=True,
+                rate_limit_trust_cf_header=True,
+            )
+
+    def test_refused_in_development_too(self):
+        with pytest.raises(ValueError, match="TAILNET_ONLY_DEPLOYMENT"):
+            Settings(
+                environment="development",
+                session_trust_missing_ingress=False,
+                tailnet_only_deployment=True,
+                rate_limit_trust_cf_header=True,
+            )
+
+    def test_allowed_alone_in_production(self):
+        s = Settings(
+            **self._prod,
+            tailnet_only_deployment=True,
+            rate_limit_trust_cf_header=False,
+        )
+        assert s.tailnet_only_deployment is True
