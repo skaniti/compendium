@@ -14,6 +14,9 @@
 #   /etc/ufw/before.rules -- inserts one ufw-before-input rule dropping NEW
 #     connections arriving on the demo bridge: the host's own listeners
 #     (tailscale serve 443/8443, ssh) become unreachable from demo containers.
+#     It goes right after the stock RELATED,ESTABLISHED accept inside *filter,
+#     i.e. before ufw's NEW-accepting ICMP/DHCP/mDNS/SSDP rules; the script
+#     refuses (touching nothing) if that anchor line is not found there.
 # ufw loads both files at boot, before Docker starts, so the rules survive
 # reboots and Docker restarts. Every edit backs the file up first.
 #
@@ -34,7 +37,7 @@ SUDO="${SUDO-sudo}"
 BLOCKED_NETS="100.64.0.0/10 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16" # scan-ok: test-ip
 BEGIN="# BEGIN compendium-demo-isolation"
 END="# END compendium-demo-isolation"
-COMMIT_MARK="# don't delete the 'COMMIT' line"
+ESTABLISHED_RULE="-A ufw-before-input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
 
 render_after() {
     cat <<EOF
@@ -61,7 +64,7 @@ EOF
 if [ -n "${RENDER_ONLY:-}" ]; then
     echo "== $UFW_DIR/after.rules (appended as its own *filter block) =="
     render_after
-    echo "== $UFW_DIR/before.rules (inserted before the *filter COMMIT marker) =="
+    echo "== $UFW_DIR/before.rules (inserted after the *filter RELATED,ESTABLISHED accept) =="
     render_before
     exit 0
 fi
@@ -75,8 +78,23 @@ echo "=== demo-isolation-firewall.sh start: $TS (subnet $DEMO_SUBNET, bridge $DE
 BEFORE_RULES="$UFW_DIR/before.rules"
 AFTER_RULES="$UFW_DIR/after.rules"
 
-if ! $SUDO grep -q "^$COMMIT_MARK" "$BEFORE_RULES"; then
-    echo "ERROR: $BEFORE_RULES has no \"$COMMIT_MARK\" line; refusing to edit it."
+# Build the new before.rules on a temp copy first; refuse before any backup or
+# edit if the anchor (ESTABLISHED accept inside the *filter table) is missing.
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+$SUDO cat "$BEFORE_RULES" | sed "/^$BEGIN\$/,/^$END\$/d" \
+    | BLOCK="$(render_before)" ANCHOR="$ESTABLISHED_RULE" awk '
+    /^\*/ { infilter = ($0 == "*filter") }
+    /^COMMIT/ { infilter = 0 }
+    { print }
+    infilter && !done && $0 == ENVIRON["ANCHOR"] { print ENVIRON["BLOCK"]; done = 1 }
+    END { if (!done) exit 3 }
+' > "$tmp" || {
+    echo "ERROR: $BEFORE_RULES has no \"$ESTABLISHED_RULE\" line inside its *filter table; refusing to edit it."
+    exit 1
+}
+if ! grep -qxF "$BEGIN" "$tmp"; then
+    echo "ERROR: insertion into $BEFORE_RULES did not happen; refusing to edit it."
     exit 1
 fi
 
@@ -95,20 +113,30 @@ for f in "$BEFORE_RULES" "$AFTER_RULES"; do
     $SUDO sed -i "/^$BEGIN\$/,/^$END\$/d" "$f"
 done
 
-tmp="$(mktemp)"
-$SUDO cat "$BEFORE_RULES" | BLOCK="$(render_before)" MARK="$COMMIT_MARK" awk '
-    !done && index($0, ENVIRON["MARK"]) == 1 { print ENVIRON["BLOCK"]; done = 1 }
-    { print }
-' > "$tmp"
 $SUDO cp "$tmp" "$BEFORE_RULES"
-rm -f "$tmp"
+# Guard against an after.rules with no trailing newline (would glue onto COMMIT).
+if [ -n "$($SUDO tail -c1 "$AFTER_RULES")" ]; then
+    echo | $SUDO tee -a "$AFTER_RULES" >/dev/null
+fi
 render_after | $SUDO tee -a "$AFTER_RULES" >/dev/null
 echo "rule files updated"
 
 if [ -z "${NO_HOST:-}" ]; then
-    $SUDO ufw reload
+    if ! $SUDO ufw reload; then
+        echo "ERROR: ufw reload failed; restoring the backed-up rule files and reloading again."
+        $SUDO cp "$BEFORE_RULES.bak-$TS" "$BEFORE_RULES"
+        $SUDO cp "$AFTER_RULES.bak-$TS" "$AFTER_RULES"
+        $SUDO ufw reload || echo "ERROR: reload after restore also failed; check ufw status now."
+        echo "Restored $BEFORE_RULES and $AFTER_RULES from .bak-$TS."
+        exit 1
+    fi
     echo "--- DOCKER-USER ---"
-    $SUDO iptables -S DOCKER-USER
+    docker_user="$($SUDO iptables -S DOCKER-USER)"
+    printf '%s\n' "$docker_user"
+    first_net="${BLOCKED_NETS%% *}"
+    for want in "-s $DEMO_SUBNET -d $DEMO_SUBNET -j RETURN" "-s $DEMO_SUBNET -d $first_net -j DROP"; do
+        printf '%s\n' "$docker_user" | grep -qF -- "$want" || { echo "ERROR: DOCKER-USER lacks \"$want\" after reload"; exit 1; }
+    done
     echo "--- ufw-before-input (demo bridge) ---"
     $SUDO iptables -S ufw-before-input | grep -- "-i $DEMO_BRIDGE" || { echo "ERROR: input rule missing after reload"; exit 1; }
 fi
