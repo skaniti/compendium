@@ -49,8 +49,15 @@ Design:
   ``raw_html`` column.
 
 - **Idempotent.** If the resolved demo user already has any ``captures``
-  or ``pages`` rows, the loader logs "already seeded" and exits 0 without
+  or ``pages`` rows, a plain run logs "already seeded" and exits 0 without
   touching anything else. Safe to run on every container boot.
+
+- **Seed version record.** Every load records ``seed_sha256()`` (the seed
+  artifact + augment file bytes) in ``demo_seed_state`` (migration 048).
+
+- **Augment ids are not preserved.** The synthetic augment pages are
+  inserted with sequence-assigned ids (nothing references them; their
+  hard-coded ids would collide with real pages in a shared database).
 
 - **Single transaction.** All 16 tables load (or none do) — a failure
   partway through rolls back cleanly rather than leaving a half-seeded
@@ -64,8 +71,10 @@ Run manually (matches how ``docker/entrypoint.sh`` invokes it):
 
 from __future__ import annotations
 
+import argparse
 import base64
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -81,6 +90,7 @@ SEED_PATH = Path(
         str(Path(__file__).resolve().parents[2] / "data" / "demo-seed" / "demo_seed.json.gz"),
     )
 )
+AUGMENT_PATH = SEED_PATH.with_name("demo_seed_augment.json")
 
 # FK-safe insert order per the load contract (batch-07 Task 4 export review).
 INSERT_ORDER = [
@@ -188,8 +198,7 @@ def _check_schema_version(cur, manifest_schema_version: str) -> None:
     )
 
 
-def _resolve_demo_user_id(cur) -> int:
-    demo_email = os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local")
+def _resolve_demo_user_id(cur, demo_email: str) -> int:
     cur.execute("SELECT id, email FROM users WHERE role = 'demo'")
     rows = cur.fetchall()
     if not rows:
@@ -278,98 +287,166 @@ def _load_table(
 
 
 def _reset_sequence(cur, table: str) -> None:
+    """Move the table's id sequence to at least MAX(id) -- never backwards: in
+    a database other users share, the sequence may already be ahead of every
+    surviving row, and deleted rows' ids must never be reissued."""
     cur.execute(
-        f"SELECT setval(pg_get_serial_sequence(%s, 'id'), "
-        f"COALESCE((SELECT MAX(id) FROM {table}), 1))",
-        (table,),
+        f"SELECT setval(pg_get_serial_sequence(%s, 'id'), GREATEST("
+        f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
+        f"COALESCE(pg_sequence_last_value(pg_get_serial_sequence(%s, 'id')::regclass), 1)))",
+        (table, table),
     )
 
 
-def _load_augment(cur, demo_user_id: int, source_user_id: int) -> int:
-    """Insert the synthetic augment pages (D10 c-1), if the file is present.
+def _load_augment(cur, rows: list[dict], demo_user_id: int, source_user_id: int) -> int:
+    """Insert the synthetic augment pages (D10 c-1), if any.
 
     Archived / skipped / pending pages attached to the seed's captures so the
     Pipeline dev view has a skip population. Temporary until the
     demo-seed-maturity re-export replaces the seed.
+
+    Their exported ids are DROPPED (tailnet-owner-demo-split, 2026-10-06):
+    nothing references an augment page, and the hard-coded ids (13076+)
+    would collide with real pages in a database other users share. The
+    pages sequence assigns fresh ones.
     """
-    augment_path = SEED_PATH.with_name("demo_seed_augment.json")
-    if not augment_path.exists():
-        return 0
-    augment = json.loads(augment_path.read_text(encoding="utf-8"))
-    n = _load_table(cur, "pages", augment["pages"], demo_user_id, source_user_id)
+    fresh = [{k: v for k, v in row.items() if k != "id"} for row in rows]
+    n = _load_table(cur, "pages", fresh, demo_user_id, source_user_id)
     if n:
         _reset_sequence(cur, "pages")
     print(f"[load_demo_seed] augment: inserted {n} synthetic pages")
     return n
 
 
-def main() -> int:
-    if not SEED_PATH.exists():
-        fail(f"seed artifact not found at {SEED_PATH}")
-
-    print(f"[load_demo_seed] reading {SEED_PATH} ...")
-    with gzip.open(SEED_PATH, "rt", encoding="utf-8") as f:
+def read_seed(seed_path: Path = SEED_PATH) -> dict:
+    with gzip.open(seed_path, "rt", encoding="utf-8") as f:
         data = json.load(f)
-
-    manifest = data.get("manifest")
-    if not manifest:
+    if not data.get("manifest"):
         fail("seed file has no 'manifest' key — not a valid demo seed export")
-    schema_version = manifest["schema_version"]
-    source_user_id = manifest.get("source_demo_user_id", 153)
-    print(
-        f"[load_demo_seed] manifest: schema_version={schema_version!r} "
-        f"export_date={manifest.get('export_date')!r} "
-        f"source_demo_user_id={source_user_id}"
+    return data
+
+
+def read_augment_rows(augment_path: Path = AUGMENT_PATH) -> list[dict]:
+    if not augment_path.exists():
+        return []
+    return json.loads(augment_path.read_text(encoding="utf-8"))["pages"]
+
+
+def seed_sha256(seed_path: Path = SEED_PATH, augment_path: Path = AUGMENT_PATH) -> str:
+    """Identity of the seed being loaded: the seed artifact's bytes plus the
+    augment file's (when present). Recorded per demo account in
+    demo_seed_state so --replace can tell "nothing changed" from "reload"."""
+    h = hashlib.sha256(seed_path.read_bytes())
+    if augment_path.exists():
+        h.update(b"\x00augment\x00")
+        h.update(augment_path.read_bytes())
+    return h.hexdigest()
+
+
+def _recorded_sha(cur, demo_user_id: int) -> str | None:
+    cur.execute("SELECT seed_sha256 FROM demo_seed_state WHERE user_id = %s", (demo_user_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _record_sha(cur, demo_user_id: int, seed_sha: str) -> None:
+    cur.execute(
+        "INSERT INTO demo_seed_state (user_id, seed_sha256, loaded_at) "
+        "VALUES (%s, %s, now()) ON CONFLICT (user_id) DO UPDATE "
+        "SET seed_sha256 = EXCLUDED.seed_sha256, loaded_at = now()",
+        (demo_user_id, seed_sha),
     )
 
-    dsn = os.environ.get("DATABASE_URL")
-    if not dsn:
-        fail("DATABASE_URL is not set")
 
-    conn = psycopg2.connect(dsn)
+def _load_all(cur, data: dict, augment_rows: list[dict], demo_user_id: int,
+              source_user_id: int) -> dict[str, int]:
     counts: dict[str, int] = {}
+    for table in INSERT_ORDER:
+        n = _load_table(cur, table, data.get(table, []), demo_user_id, source_user_id)
+        counts[table] = n
+        if table in SEQUENCE_TABLES and n:
+            _reset_sequence(cur, table)
+        print(f"  {table:24s} {n:6d} rows loaded")
+        if table == "pages":
+            counts["pages"] += _load_augment(cur, augment_rows, demo_user_id, source_user_id)
+    return counts
+
+
+def run(dsn: str, *, data: dict, augment_rows: list[dict], seed_sha: str,
+        demo_email: str, dry_run: bool = False) -> dict:
+    """Load ``data`` into the demo account, in one transaction.
+
+    Returns ``{"demo_user_id", "dry_run", "action", "inserted"}`` where
+    ``action`` is ``"loaded"`` or ``"already_seeded"``. A dry run does all
+    the work inside the transaction, then rolls it back.
+    """
+    manifest = data["manifest"]
+    source_user_id = manifest.get("source_demo_user_id", 153)
+    conn = psycopg2.connect(dsn)
     try:
         conn.autocommit = False
         with conn.cursor() as cur:
-            _check_schema_version(cur, schema_version)
-
-            demo_user_id = _resolve_demo_user_id(cur)
-            print(f"[load_demo_seed] target demo user id = {demo_user_id}")
-
+            _check_schema_version(cur, manifest["schema_version"])
+            demo_user_id = _resolve_demo_user_id(cur, demo_email)
+            result: dict = {"demo_user_id": demo_user_id, "dry_run": dry_run}
             if _already_seeded(cur, demo_user_id):
-                print(
-                    "[load_demo_seed] demo user already has captures/pages "
-                    "— already seeded, exiting"
-                )
                 conn.rollback()
-                return 0
-
-            print(
-                f"[load_demo_seed] loading seed data "
-                f"(source user_id {source_user_id} -> {demo_user_id}) ..."
-            )
-            for table in INSERT_ORDER:
-                rows = data.get(table, [])
-                n = _load_table(cur, table, rows, demo_user_id, source_user_id)
-                counts[table] = n
-                if table in SEQUENCE_TABLES and n:
-                    _reset_sequence(cur, table)
-                print(f"  {table:24s} {n:6d} rows loaded")
-
-                if table == "pages":
-                    n_aug = _load_augment(cur, demo_user_id, source_user_id)
-                    counts["pages"] += n_aug
-
-        conn.commit()
+                return {**result, "action": "already_seeded"}
+            result["action"] = "loaded"
+            result["inserted"] = _load_all(cur, data, augment_rows, demo_user_id, source_user_id)
+            _record_sha(cur, demo_user_id, seed_sha)
+        if dry_run:
+            conn.rollback()
+        else:
+            conn.commit()
+        return result
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
 
-    print("[load_demo_seed] done. Per-table summary:")
-    for table in INSERT_ORDER:
-        print(f"  {table:24s} {counts.get(table, 0):6d}")
+
+def _print_summary(result: dict) -> None:
+    print(f"[load_demo_seed] action={result['action']} demo_user_id={result['demo_user_id']}")
+    for label in ("deleted", "inserted"):
+        counts = result.get(label)
+        if counts:
+            print(f"[load_demo_seed] {label}:")
+            for table, n in counts.items():
+                print(f"  {table:24s} {n:6d}")
+    if result.get("dry_run"):
+        print("[load_demo_seed] DRY RUN -- everything above was rolled back; nothing changed")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Load the demo seed into the demo account.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="do the work inside a transaction, print the counts, then roll back")
+    args = parser.parse_args(argv)
+
+    if not SEED_PATH.exists():
+        fail(f"seed artifact not found at {SEED_PATH}")
+    print(f"[load_demo_seed] reading {SEED_PATH} ...")
+    data = read_seed(SEED_PATH)
+    manifest = data["manifest"]
+    print(
+        f"[load_demo_seed] manifest: schema_version={manifest['schema_version']!r} "
+        f"export_date={manifest.get('export_date')!r} "
+        f"source_demo_user_id={manifest.get('source_demo_user_id', 153)}"
+    )
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        fail("DATABASE_URL is not set")
+    result = run(
+        dsn,
+        data=data,
+        augment_rows=read_augment_rows(AUGMENT_PATH),
+        seed_sha=seed_sha256(SEED_PATH, AUGMENT_PATH),
+        demo_email=os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local"),
+        dry_run=args.dry_run,
+    )
+    _print_summary(result)
     return 0
 
 
