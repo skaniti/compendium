@@ -278,7 +278,131 @@ def test_dry_run_first_load_writes_nothing(seed, augment, users):
 
 def test_reset_sequence_never_moves_backwards(seed, augment, users):
     current = _q("SELECT last_value FROM captures_id_seq")[0][0]
-    ahead = max(current, max(c["id"] for c in seed["captures"])) + 1000
+    ahead = max(current, _q("SELECT COALESCE(MAX(id), 0) FROM captures")[0][0],
+                max(c["id"] for c in seed["captures"])) + 1000
     _q("SELECT setval('captures_id_seq', %s)", (ahead,))
     _load(seed, augment, users)
     assert _q("SELECT last_value FROM captures_id_seq") == [(ahead,)]
+
+
+def _rename_first_demo_cluster(user_id, name="renamed-by-test"):
+    _q("UPDATE clusters SET cluster_name = %s WHERE id = "
+       "(SELECT min(id) FROM clusters WHERE user_id = %s)", (name, user_id))
+
+
+def _names(user_id, seed):
+    return [r[0] for r in demo_fingerprint(user_id, seed)["cluster_names"]]
+
+
+def test_replace_on_an_empty_demo_account_loads(seed, augment, users):
+    result = _load(seed, augment, users, replace=True)
+    assert result["action"] == "replaced"
+    assert demo_fingerprint(users["demo"], seed)["captures"] == len(seed["captures"])
+    assert _sha(users["demo"]) == [("sha-a",)]
+
+
+def test_replace_with_the_same_sha_is_a_noop(seed, augment, users):
+    _load(seed, augment, users)
+    _rename_first_demo_cluster(users["demo"])
+    assert _load(seed, augment, users, replace=True)["action"] == "up_to_date"
+    assert "renamed-by-test" in _names(users["demo"], seed)
+
+
+def test_replace_restores_the_seed_and_leaves_admin_rows_untouched(seed, augment, users):
+    _load(seed, augment, users)
+    expected = demo_fingerprint(users["demo"], seed)
+    _insert_admin(seed, users["admin"], capture_id=OFFSET + 990_001,
+                  page_id=OFFSET + 990_001, page_content_id=OFFSET + 990_002,
+                  new_page_content=True)
+    before = admin_snapshot(users["admin"])
+    _rename_first_demo_cluster(users["demo"])
+
+    result = _load(seed, augment, users, sha="sha-b", replace=True)
+
+    assert result["action"] == "replaced"
+    assert result["deleted"]["captures"] == len(seed["captures"])
+    assert demo_fingerprint(users["demo"], seed) == expected
+    assert admin_snapshot(users["admin"]) == before
+    assert _sha(users["demo"]) == [("sha-b",)]
+
+
+def test_replace_keeps_page_content_an_admin_page_shares(seed, augment, users):
+    _load(seed, augment, users)
+    shared_id = seed["page_content"][0]["id"]
+    _insert_admin(seed, users["admin"], capture_id=OFFSET + 990_001,
+                  page_id=OFFSET + 990_001, page_content_id=shared_id)
+    before = admin_snapshot(users["admin"])
+
+    result = _load(seed, augment, users, sha="sha-b", replace=True)
+
+    assert result["inserted"]["shared_page_content"] == 1
+    assert result["inserted"]["page_content"] == len(seed["page_content"]) - 1
+    assert _q("SELECT count(*) FROM page_content WHERE id = %s", (shared_id,)) == [(1,)]
+    assert _q("SELECT count(*) FROM pages WHERE user_id = %s AND page_content_id = %s",
+              (users["demo"], shared_id))[0][0] >= 1
+    assert admin_snapshot(users["admin"]) == before
+
+
+def test_a_collision_aborts_and_leaves_everything_as_it_was(seed, augment, users):
+    _load(seed, augment, users)
+    before_demo = demo_fingerprint(users["demo"], seed)
+    taken = OFFSET + 990_001
+    _insert_admin(seed, users["admin"], capture_id=taken, page_id=OFFSET + 990_001,
+                  page_content_id=OFFSET + 990_002, new_page_content=True)
+    before_admin = admin_snapshot(users["admin"])
+    changed = copy.deepcopy(seed)
+    old = changed["captures"][0]["id"]
+    changed["captures"][0]["id"] = taken
+    for p in changed["pages"]:
+        if p["capture_id"] == old:
+            p["capture_id"] = taken
+
+    with pytest.raises(lds.SeedCollision) as exc:
+        _load(changed, augment, users, sha="sha-b", replace=True)
+
+    assert exc.value.table == "captures" and taken in exc.value.ids
+    assert demo_fingerprint(users["demo"], seed) == before_demo
+    assert admin_snapshot(users["admin"]) == before_admin
+    assert _sha(users["demo"]) == [("sha-a",)]
+
+
+def test_dry_run_replace_changes_nothing(seed, augment, users):
+    _load(seed, augment, users)
+    _rename_first_demo_cluster(users["demo"])
+    result = _load(seed, augment, users, sha="sha-b", replace=True, dry_run=True)
+    assert result["action"] == "replaced" and result["dry_run"] is True
+    assert result["deleted"]["captures"] == len(seed["captures"])
+    assert "renamed-by-test" in _names(users["demo"], seed)
+    assert _sha(users["demo"]) == [("sha-a",)]
+
+
+def test_replace_keeps_the_demo_accounts_login_and_sessions(seed, augment, users):
+    _load(seed, augment, users)
+    auth_repo.save_refresh_token(users["demo"], f"hash-{uuid.uuid4().hex}",
+                                 datetime.now(UTC) + timedelta(days=1))
+    login_before = _q("SELECT email, password_hash, role FROM users WHERE id = %s",
+                      (users["demo"],))
+    tokens_before = _q("SELECT count(*) FROM refresh_tokens WHERE user_id = %s",
+                       (users["demo"],))
+    _load(seed, augment, users, sha="sha-b", replace=True)
+    assert _q("SELECT email, password_hash, role FROM users WHERE id = %s",
+              (users["demo"],)) == login_before
+    assert _q("SELECT count(*) FROM refresh_tokens WHERE user_id = %s",
+              (users["demo"],)) == tokens_before
+
+
+def test_every_table_the_replace_deletes_from_has_a_user_id_column():
+    have = {r[0] for r in _q(
+        "SELECT table_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND column_name = 'user_id'")}
+    tables = lds.DEMO_SCOPED_EXTRA_TABLES + lds.DEMO_OWNED_SEED_TABLES
+    assert [t for t in tables if t not in have] == []
+
+
+def test_cli_exits_2_on_a_collision(monkeypatch):
+    def boom(*args, **kwargs):
+        raise lds.SeedCollision("captures", [1])
+
+    monkeypatch.setattr(lds, "run", boom)
+    monkeypatch.setenv("DATABASE_URL", DSN)
+    assert lds.main(["--replace"]) == 2

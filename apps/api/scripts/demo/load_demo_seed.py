@@ -35,8 +35,9 @@ Design:
   ``GENERATED ALWAYS AS IDENTITY`` column exists anywhere), so no
   ``OVERRIDING SYSTEM VALUE`` clause is needed or applicable; a plain
   explicit-id INSERT is accepted as-is. After each id-bearing table loads,
-  its sequence is fast-forwarded via ``setval(..., MAX(id))`` so the next
-  *application* insert doesn't collide with a seeded id.
+  its sequence is advanced to ``MAX(id)`` only when it is not already ahead;
+  an already-ahead sequence is never touched (``setval`` is not called), so no
+  sequence moves backwards and no issued id is reissued in a shared database.
 
 - **Vector casts.** ``chunk_embeddings.embedding``, ``page_embeddings.embedding``,
   and ``clustering_embeddings.embedding`` arrive as bracket-text strings
@@ -58,6 +59,8 @@ Design:
 - **Augment ids are not preserved.** The synthetic augment pages are
   inserted with sequence-assigned ids (nothing references them; their
   hard-coded ids would collide with real pages in a shared database).
+
+- **--replace.** Delete the demo account's rows (only those) and reload; no-op when the recorded sha matches; any seed id held by another account aborts the whole transaction (exit 2). A page_content row another account's page shares is kept, not re-inserted.
 
 - **Single transaction.** All 16 tables load (or none do) — a failure
   partway through rolls back cleanly rather than leaving a half-seeded
@@ -83,6 +86,7 @@ from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 
 SEED_PATH = Path(
     os.environ.get(
@@ -158,6 +162,52 @@ VECTOR_COLUMNS = {
 B64_COLUMN_REMAP = {
     "page_content": {"raw_html_b64": "raw_html"},
 }
+
+# --replace (tailnet-owner-demo-split, 2026-10-06). Every DELETE is filtered
+# by the resolved demo user id. Non-seed rows that can point at demo ids
+# (no FK) go first; graph_cache is rebuilt on the next graph load.
+DEMO_SCOPED_EXTRA_TABLES = (
+    "graph_cache",
+    "annotations",
+    "entity_tags",
+    "dq_recommendations",
+    "dq_overrides",
+    "dq_observations",
+    "dq_runs",
+)
+# Seed tables with a user_id. Cascades take page_clusters, cluster_edges and
+# page_content_assets; page_content (global, no user_id) is handled after.
+DEMO_OWNED_SEED_TABLES = (
+    "captures",
+    "pages",
+    "recluster_runs",
+    "clusters",
+    "super_cluster_groups",
+    "featured_singletons",
+    "captured_assets",
+)
+# Rows keyed by page_content_id that are skipped, not re-inserted, when their
+# page_content row survives because another user's page still uses it.
+PAGE_CONTENT_CHILD_TABLES = (
+    "page_chunks",
+    "page_embeddings",
+    "clustering_embeddings",
+    "embedding_gists",
+)
+
+
+class SeedCollision(RuntimeError):
+    """A seed id is held by a row outside the demo account. The transaction
+    is rolled back; nothing changed."""
+
+    def __init__(self, table: str, ids: list[int]):
+        self.table = table
+        self.ids = list(ids)
+        super().__init__(
+            f"{table}: seed ids already held by rows outside the demo account: "
+            f"{self.ids[:20]}"
+        )
+
 
 _VERSION_NUM_RE = re.compile(r"^(\d+)")
 
@@ -281,20 +331,25 @@ def _load_table(
             tup.append(v)
         values.append(tuple(tup))
 
-    sql = f"INSERT INTO {table} ({col_list}) VALUES %s"
-    psycopg2.extras.execute_values(cur, sql, values, template=template, page_size=500)
+    insert_sql = f"INSERT INTO {table} ({col_list}) VALUES %s"
+    psycopg2.extras.execute_values(cur, insert_sql, values, template=template, page_size=500)
     return len(values)
 
 
 def _reset_sequence(cur, table: str) -> None:
-    """Move the table's id sequence to at least MAX(id) -- never backwards: in
-    a database other users share, the sequence may already be ahead of every
-    surviving row, and deleted rows' ids must never be reissued."""
+    """Advance the table's id sequence to MAX(id) when -- and only when -- it
+    is not already ahead. When it is ahead (a database other users share,
+    possibly with a live API issuing ids concurrently) setval is never called,
+    so no sequence moves backwards and no issued id is reissued."""
+    cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (table,))
+    schema, name = cur.fetchone()[0].split(".", 1)
+    schema, name = schema.strip('"'), name.strip('"')
     cur.execute(
-        f"SELECT setval(pg_get_serial_sequence(%s, 'id'), GREATEST("
-        f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
-        f"COALESCE(pg_sequence_last_value(pg_get_serial_sequence(%s, 'id')::regclass), 1)))",
-        (table, table),
+        sql.SQL(
+            "SELECT setval(%s, m) FROM (SELECT MAX(id) AS m FROM {table}) s "
+            "WHERE m IS NOT NULL AND m >= (SELECT last_value FROM {seq})"
+        ).format(table=sql.Identifier(table), seq=sql.Identifier(schema, name)),
+        (f"{schema}.{name}",),
     )
 
 
@@ -358,26 +413,106 @@ def _record_sha(cur, demo_user_id: int, seed_sha: str) -> None:
     )
 
 
+def _delete_demo_rows(cur, demo_user_id: int) -> dict[str, int]:
+    deleted: dict[str, int] = {}
+    cur.execute(
+        "SELECT DISTINCT page_content_id FROM pages "
+        "WHERE user_id = %s AND page_content_id IS NOT NULL",
+        (demo_user_id,),
+    )
+    page_content_ids = [r[0] for r in cur.fetchall()]
+    for table in DEMO_SCOPED_EXTRA_TABLES + DEMO_OWNED_SEED_TABLES:
+        cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (demo_user_id,))
+        deleted[table] = cur.rowcount
+    # page_content is global: drop only rows the demo used that no remaining
+    # page (another user's) still points at. Cascades take chunks, chunk
+    # embeddings, page embeddings, clustering embeddings, gists and asset links.
+    cur.execute(
+        "DELETE FROM page_content pc WHERE pc.id = ANY(%s) "
+        "AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.page_content_id = pc.id)",
+        (page_content_ids,),
+    )
+    deleted["page_content"] = cur.rowcount
+    return deleted
+
+
+def _shared_page_content(cur, page_content_rows: list[dict]) -> set[int]:
+    """Seed page_content rows already present with the SAME id and URL are
+    shared with another user's page: keep them (skip the insert). Any other
+    clash on id or URL is a collision."""
+    if not page_content_rows:
+        return set()
+    url_by_id = {r["id"]: r["normalized_url"] for r in page_content_rows}
+    cur.execute(
+        "SELECT id, normalized_url FROM page_content "
+        "WHERE id = ANY(%s) OR normalized_url = ANY(%s)",
+        (list(url_by_id), list(url_by_id.values())),
+    )
+    shared: set[int] = set()
+    conflicts: list[int] = []
+    for pc_id, url in cur.fetchall():
+        if url_by_id.get(pc_id) == url:
+            shared.add(pc_id)
+        else:
+            conflicts.append(pc_id)
+    if conflicts:
+        raise SeedCollision("page_content", sorted(conflicts))
+    return shared
+
+
+def _rows_for(table: str, data: dict, shared: set[int], skipped_chunks: set[int]) -> list[dict]:
+    rows = data.get(table, [])
+    if table == "page_content":
+        return [r for r in rows if r["id"] not in shared]
+    if table in PAGE_CONTENT_CHILD_TABLES:
+        return [r for r in rows if r["page_content_id"] not in shared]
+    if table == "chunk_embeddings":
+        return [r for r in rows if r["page_chunk_id"] not in skipped_chunks]
+    return rows
+
+
+def _check_collisions(cur, data: dict, shared: set[int], skipped_chunks: set[int]) -> None:
+    for table in INSERT_ORDER:
+        if table not in SEQUENCE_TABLES or table == "page_content":
+            continue
+        ids = [r["id"] for r in _rows_for(table, data, shared, skipped_chunks)]
+        if not ids:
+            continue
+        cur.execute(f"SELECT id FROM {table} WHERE id = ANY(%s) ORDER BY id LIMIT 20", (ids,))
+        hits = [r[0] for r in cur.fetchall()]
+        if hits:
+            raise SeedCollision(table, hits)
+
+
 def _load_all(cur, data: dict, augment_rows: list[dict], demo_user_id: int,
               source_user_id: int) -> dict[str, int]:
+    shared = _shared_page_content(cur, data.get("page_content", []))
+    skipped_chunks = {
+        c["id"] for c in data.get("page_chunks", []) if c["page_content_id"] in shared
+    }
+    _check_collisions(cur, data, shared, skipped_chunks)
     counts: dict[str, int] = {}
     for table in INSERT_ORDER:
-        n = _load_table(cur, table, data.get(table, []), demo_user_id, source_user_id)
+        rows = _rows_for(table, data, shared, skipped_chunks)
+        n = _load_table(cur, table, rows, demo_user_id, source_user_id)
         counts[table] = n
         if table in SEQUENCE_TABLES and n:
             _reset_sequence(cur, table)
         print(f"  {table:24s} {n:6d} rows loaded")
         if table == "pages":
             counts["pages"] += _load_augment(cur, augment_rows, demo_user_id, source_user_id)
+    counts["shared_page_content"] = len(shared)
     return counts
 
 
 def run(dsn: str, *, data: dict, augment_rows: list[dict], seed_sha: str,
-        demo_email: str, dry_run: bool = False) -> dict:
+        demo_email: str, replace: bool = False, dry_run: bool = False) -> dict:
     """Load ``data`` into the demo account, in one transaction.
 
     Returns ``{"demo_user_id", "dry_run", "action", "inserted"}`` where
-    ``action`` is ``"loaded"`` or ``"already_seeded"``. A dry run does all
+    ``action`` is ``"loaded"``, ``"already_seeded"``, ``"replaced"`` or
+    ``"up_to_date"``. Replace deletes only rows owned by the demo account,
+    then reloads; a ``SeedCollision`` rolls back everything. A dry run does all
     the work inside the transaction, then rolls it back.
     """
     manifest = data["manifest"]
@@ -389,10 +524,17 @@ def run(dsn: str, *, data: dict, augment_rows: list[dict], seed_sha: str,
             _check_schema_version(cur, manifest["schema_version"])
             demo_user_id = _resolve_demo_user_id(cur, demo_email)
             result: dict = {"demo_user_id": demo_user_id, "dry_run": dry_run}
-            if _already_seeded(cur, demo_user_id):
-                conn.rollback()
-                return {**result, "action": "already_seeded"}
-            result["action"] = "loaded"
+            if replace:
+                if _recorded_sha(cur, demo_user_id) == seed_sha:
+                    conn.rollback()
+                    return {**result, "action": "up_to_date"}
+                result["action"] = "replaced"
+                result["deleted"] = _delete_demo_rows(cur, demo_user_id)
+            else:
+                if _already_seeded(cur, demo_user_id):
+                    conn.rollback()
+                    return {**result, "action": "already_seeded"}
+                result["action"] = "loaded"
             result["inserted"] = _load_all(cur, data, augment_rows, demo_user_id, source_user_id)
             _record_sha(cur, demo_user_id, seed_sha)
         if dry_run:
@@ -416,13 +558,15 @@ def _print_summary(result: dict) -> None:
             for table, n in counts.items():
                 print(f"  {table:24s} {n:6d}")
     if result.get("dry_run"):
-        print("[load_demo_seed] DRY RUN -- everything above was rolled back; nothing changed")
+        print("[load_demo_seed] DRY RUN -- rolled back; no rows changed (id sequences may have advanced)")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Load the demo seed into the demo account.")
     parser.add_argument("--dry-run", action="store_true",
                         help="do the work inside a transaction, print the counts, then roll back")
+    parser.add_argument("--replace", action="store_true",
+                        help="swap the demo account's rows for the current seed when it changed")
     args = parser.parse_args(argv)
 
     if not SEED_PATH.exists():
@@ -438,14 +582,19 @@ def main(argv: list[str] | None = None) -> int:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         fail("DATABASE_URL is not set")
-    result = run(
-        dsn,
-        data=data,
-        augment_rows=read_augment_rows(AUGMENT_PATH),
-        seed_sha=seed_sha256(SEED_PATH, AUGMENT_PATH),
-        demo_email=os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local"),
-        dry_run=args.dry_run,
-    )
+    try:
+        result = run(
+            dsn,
+            data=data,
+            augment_rows=read_augment_rows(AUGMENT_PATH),
+            seed_sha=seed_sha256(SEED_PATH, AUGMENT_PATH),
+            demo_email=os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local"),
+            replace=args.replace,
+            dry_run=args.dry_run,
+        )
+    except SeedCollision as exc:
+        print(f"[load_demo_seed] ABORTED, nothing changed: {exc}", file=sys.stderr)
+        return 2
     _print_summary(result)
     return 0
 
