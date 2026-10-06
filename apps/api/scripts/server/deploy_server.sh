@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Re-deploy the apps/api server compose stack (compendium-api) with build +
-# health verification.
+# Re-deploy one of two apps/api compose stacks with build + health
+# verification: owner (api + web, tailnet only) or demo (api + db, public).
 #
-# This targets the CURRENT monorepo cutover architecture:
+# The notes below describe the owner stack's api service. This targets the CURRENT monorepo cutover architecture:
 # apps/api/docker/docker-compose.server.yml defines a single `api` service
 # (compendium-api) against the real, already-provisioned production
 # database -- postgres and the Dash frontend stay on the OLD
@@ -28,9 +28,12 @@
 # script no longer touches that stack at all.
 #
 # Usage: see usage() below, or run with --help.
+# Exit codes: 0 ok, 1 deploy failure, 2 bad arguments, 3 deploy up but the
+# demo-copy refresh dry run failed (refresh not applied).
 #
 # What this does:
-#   1. Source ~/.secrets + ~/apps/compendium/.env so docker compose ${VAR}
+#   1. Source ~/.secrets + ~/apps/compendium/.env (owner; demo sources only
+#      ~/apps/compendium/.env.demo, never ~/.secrets) so docker compose ${VAR}
 #      substitution resolves cleanly (same two-file convention as before;
 #      see docker-compose.server.yml's header for the full list). Compose
 #      hard-requires (":?", the `up` below fails without them)
@@ -53,7 +56,7 @@
 #   - git pull (run that first if you want to deploy latest).
 #   - deploy the frontend. Vercel builds it from the push to main; it goes
 #     live only on `vercel promote` (auto-assign of the production domain
-#     is off). The closing lines print this as a reminder.
+#     is off). The closing lines print a stack-specific reminder.
 #   - touch the old postgres/Dash stack (still explorer-hosted; unaffected
 #     by this compose file).
 #   - hand off to diagnose_server.sh -- that script's checks (compendium-
@@ -63,7 +66,7 @@
 #     if a post-deploy diagnostic handoff is wanted here.
 #
 # Logs:
-#   <repo>/logs/<YYYY-MM-DD-HHMMSS>-deploy.log + logs/latest-deploy.log symlink.
+#   <repo>/logs/<YYYY-MM-DD-HHMMSS>-deploy-<stack>.log + logs/latest-deploy.log symlink.
 
 set -uo pipefail
 
@@ -77,6 +80,8 @@ Usage: bash deploy_server.sh [--stack owner|demo] [--skip-seed]
   --skip-seed    owner only: skip the demo-copy refresh step
 Env: ENV_FILE, SECRETS_FILE (owner only), API_HOST_PORT, WEB_HOST_PORT,
      SEED_APPLY=yes|no (owner: apply the demo-copy refresh without asking)
+Exit: 0 ok, 1 deploy failure, 2 bad arguments, 3 deploy up but the demo-copy
+      refresh dry run failed (refresh not applied)
 USAGE
 }
 
@@ -84,8 +89,13 @@ STACK="owner"
 SKIP_SEED=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --stack) STACK="${2:-}"; shift 2 ;;
-        --stack=*) STACK="${1#--stack=}"; shift ;;
+        --stack)
+            [ $# -ge 2 ] || { echo "ERROR: --stack needs a value (owner|demo)"; usage; exit 2; }
+            STACK="$2"; shift 2 ;;
+        --stack=*)
+            STACK="${1#--stack=}"
+            [ -n "$STACK" ] || { echo "ERROR: --stack needs a value (owner|demo)"; usage; exit 2; }
+            shift ;;
         --skip-seed) SKIP_SEED=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "ERROR: unknown argument: $1"; usage; exit 2 ;;
@@ -99,12 +109,16 @@ case "$STACK" in
         COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.server.yml"
         ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env}"
         SECRETS_FILE="${SECRETS_FILE:-$HOME/.secrets}"
+        # Historical default (the compose file's directory name, "docker"); changing
+        # it would orphan the existing containers and volumes.
+        PROJECT="docker"
         API_HOST_PORT="${API_HOST_PORT:-8001}"
         export API_HOST_PORT
         ;;
     demo)
         COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.demo.yml"
         ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env.demo}"
+        PROJECT="compendium-demo"
         SECRETS_FILE=""   # never the owner's secrets, whatever the shell exported
         API_HOST_PORT="${API_HOST_PORT:-8002}"
         export DEMO_API_HOST_PORT="$API_HOST_PORT"
@@ -126,6 +140,7 @@ seed_apply_mode() {
 
 if [ -n "${PLAN_ONLY:-}" ]; then
     echo "stack=$STACK"
+    echo "project=$PROJECT"
     echo "compose_file=$COMPOSE_FILE"
     echo "env_file=$ENV_FILE"
     echo "secrets_file=${SECRETS_FILE:-<none>}"
@@ -134,7 +149,7 @@ if [ -n "${PLAN_ONLY:-}" ]; then
     exit 0
 fi
 
-compose() { docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
+compose() { docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
 
 # --------------------------------------------------------------------------
 # 0. Log capture (mirrors start_app.sh convention)
@@ -167,7 +182,11 @@ done
 if [ "$fail" -ne 0 ]; then
     echo ""
     echo "Override paths via env vars if needed:"
-    echo "  ENV_FILE=/path/to/.env SECRETS_FILE=/path/to/.secrets bash $0"
+    if [ -n "$SECRETS_FILE" ]; then
+        echo "  ENV_FILE=/path/to/.env SECRETS_FILE=/path/to/.secrets bash $0 --stack $STACK"
+    else
+        echo "  ENV_FILE=/path/to/env bash $0 --stack $STACK"
+    fi
     exit 1
 fi
 echo "ok"
@@ -178,17 +197,22 @@ echo "ok"
 # set -a auto-exports every variable defined below (matches the section-18
 # pattern). Required because compose's ${VAR} substitution reads from env,
 # and bootstrap-style scripts may also read os.environ directly.
+# Snapshot the seed decision first: nothing sourced below may change it.
+SEED_MODE="$(seed_apply_mode)"
 set -a
 # shellcheck disable=SC1090
 if [ -n "$SECRETS_FILE" ]; then source "$SECRETS_FILE"; fi
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+# Demo: .env.demo's DEMO_API_HOST_PORT overrides the one exported above and is
+# what the container binds, so the health probe and hints must follow it.
+if [ "$STACK" = "demo" ]; then API_HOST_PORT="${DEMO_API_HOST_PORT:-$API_HOST_PORT}"; fi
 
 # --------------------------------------------------------------------------
-# 3. Build + start compendium-api
+# 3. Build + start the stack
 # --------------------------------------------------------------------------
-# Single-service compose (`api`) -- migrations run inside the container's
+# Owner: `api` + `web`; demo: `api` + `db`. Owner api -- migrations run inside the container's
 # entrypoint before uvicorn starts, so this one command covers build,
 # migrate, and start. No separate migration step, no postgres wait: this
 # compose's database is the real, already-running production database
@@ -266,22 +290,25 @@ if [ "$STACK" = "owner" ]; then
     done
 fi
 
-mode=$(seed_apply_mode)
+mode="$SEED_MODE"
+seed_dry_failed=0
 if [ "$mode" != "skip" ]; then
     echo ""
     echo "--- demo copy refresh (owner DB): dry run ---"
-    compose exec -T api python scripts/demo/load_demo_seed.py --replace --dry-run
+    compose exec -T api python scripts/demo/load_demo_seed.py --replace --dry-run </dev/null
     dry_rc=$?
     apply=no
     if [ "$dry_rc" -ne 0 ]; then
         echo "dry run failed (exit $dry_rc) -- NOT applying. Exit 2 = a seed id collision (see above)."
+        echo "WARNING: demo-copy refresh dry run failed (exit $dry_rc) -- deploy is up, refresh NOT applied"
+        seed_dry_failed=1
     elif [ "$mode" = "yes" ]; then
         apply=yes
     elif [ "$mode" = "ask" ]; then
         read -r -p "Apply this refresh to the owner DB's demo copy? Take a pg_dump first. [y/N] " ans
         if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then apply=yes; fi
     else
-        echo "no terminal and SEED_APPLY unset -- not applying (SEED_APPLY=yes applies)"
+        echo "no terminal and SEED_APPLY is not yes -- not applying (SEED_APPLY=yes applies)"
     fi
     if [ "$apply" = "yes" ]; then
         echo "--- copying demo preview assets into ${CAPTURES_ASSETS_HOST_DIR:-<unset>} (no overwrite) ---"
@@ -292,7 +319,7 @@ if [ "$mode" != "skip" ]; then
             echo "WARNING: CAPTURES_ASSETS_HOST_DIR unset; preview assets not copied"
         fi
         echo "--- demo copy refresh: apply ---"
-        compose exec -T api python scripts/demo/load_demo_seed.py --replace \
+        compose exec -T api python scripts/demo/load_demo_seed.py --replace </dev/null \
             || { echo "ERROR: refresh failed (rolled back, nothing changed)"; exit 1; }
     fi
 fi
@@ -301,8 +328,8 @@ echo ""
 echo "=== deploy complete ==="
 echo "  Log:     $LOG_PATH"
 echo "  Health:  http://127.0.0.1:${API_HOST_PORT}/health"
-echo "  Stop:    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE down"
-echo "  Logs:    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE logs -f api"
+echo "  Stop:    docker compose -p $PROJECT --env-file $ENV_FILE -f $COMPOSE_FILE down"
+echo "  Logs:    docker compose -p $PROJECT --env-file $ENV_FILE -f $COMPOSE_FILE logs -f api"
 echo ""
 if [ "$STACK" = "owner" ]; then
     echo "  Owner stack: tailnet only (tailscale serve 443 -> :3000, 8443 -> :8001)."
@@ -310,4 +337,5 @@ else
     echo "  Demo stack: public via the Cloudflare tunnel -> :${API_HOST_PORT}. Frontend changes go live via Vercel promote."
 fi
 
+if [ "$seed_dry_failed" -eq 1 ]; then exit 3; fi
 exit 0

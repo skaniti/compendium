@@ -7,11 +7,11 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts/server/deploy_server.sh"
 
 
-def _plan(*args, env=None):
+def _plan(*args, env=None, timeout=20):
     full_env = {"PATH": os.environ["PATH"], "HOME": "/nonexistent-home", "PLAN_ONLY": "1",
                 **(env or {})}
     r = subprocess.run(["bash", str(SCRIPT), *args], env=full_env,
-                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout)
     out = dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
     return r.returncode, out
 
@@ -28,6 +28,7 @@ def test_default_stack_is_owner():
     assert out["env_file"] == "/nonexistent-home/apps/compendium/.env"
     assert out["secrets_file"] == "/nonexistent-home/.secrets"
     assert out["api_host_port"] == "8001"
+    assert out["project"] == "docker"
 
 
 def test_demo_stack_uses_its_own_file_env_and_port():
@@ -36,6 +37,7 @@ def test_demo_stack_uses_its_own_file_env_and_port():
     assert out["compose_file"].endswith("docker/docker-compose.demo.yml")
     assert out["env_file"] == "/nonexistent-home/apps/compendium/.env.demo"
     assert out["api_host_port"] == "8002"
+    assert out["project"] == "compendium-demo"
 
 
 def test_demo_never_uses_a_secrets_file_even_when_one_is_exported():
@@ -61,3 +63,8 @@ def test_seed_apply_env_wins():
 def test_demo_and_skip_seed_have_no_seed_step():
     assert _plan("--stack", "demo")[1]["seed_apply"] == "skip"
     assert _plan("--skip-seed")[1]["seed_apply"] == "skip"
+
+
+def test_stack_without_a_value_exits_2_instead_of_hanging():
+    assert _plan("--stack", timeout=5)[0] == 2
+    assert _plan("--stack=", timeout=5)[0] == 2
