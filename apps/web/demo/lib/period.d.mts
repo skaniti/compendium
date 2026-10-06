@@ -1,7 +1,7 @@
-export const RANGE_DAYS: Record<string, number>;
-export const GRANULARITY: Record<string, [string, string]>;
-export const HOUR: number;
-export const DAY: number;
+export declare const RANGE_DAYS: Record<string, number>;
+export declare const GRANULARITY: Record<string, [string, string]>;
+export declare const HOUR: number;
+export declare const DAY: number;
 export function normalizeRange(range: string | null | undefined): string;
 export function isValidTz(tz: unknown): boolean;
 export function wallOf(ms: number, tz: string): number;
