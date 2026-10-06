@@ -94,17 +94,24 @@ test("comments-only terms file fails closed", () => {
   assert.match(r.stderr, /comments only/);
 });
 
-test("scan-ok marker suppresses only in test_url_guard.py", () => {
+test("scan-ok marker suppresses only in the three listed paths", () => {
   const line = "x = 'zz-private-marker'  # scan-ok: test-ip\n";
   const other = makeRepo({ "src/other.py": line });
   const r = run(other, { GITLEAKS_BIN: stubGitleaks(other, 0), SCAN_TERMS_FILE: terms(other) });
   assert.equal(r.status, 1, "marker in another file must not suppress");
-  const allowed = makeRepo({ "apps/api/tests/test_url_guard.py": line });
-  const r2 = run(allowed, { GITLEAKS_BIN: stubGitleaks(allowed, 0), SCAN_TERMS_FILE: terms(allowed) });
-  assert.equal(r2.status, 0, r2.stderr);
-  const noMarker = makeRepo({ "apps/api/tests/test_url_guard.py": "x = 'zz-private-marker'\n" });
-  const r3 = run(noMarker, { GITLEAKS_BIN: stubGitleaks(noMarker, 0), SCAN_TERMS_FILE: terms(noMarker) });
-  assert.equal(r3.status, 1, "path alone must not suppress");
+  const listed = [
+    "apps/api/tests/test_url_guard.py",
+    "apps/api/tests/test_demo_isolation_firewall.py",
+    "apps/api/scripts/server-setup/demo-isolation-firewall.sh",
+  ];
+  for (const path of listed) {
+    const allowed = makeRepo({ [path]: line });
+    const r2 = run(allowed, { GITLEAKS_BIN: stubGitleaks(allowed, 0), SCAN_TERMS_FILE: terms(allowed) });
+    assert.equal(r2.status, 0, `${path}: ${r2.stderr}`);
+    const noMarker = makeRepo({ [path]: "x = 'zz-private-marker'\n" });
+    const r3 = run(noMarker, { GITLEAKS_BIN: stubGitleaks(noMarker, 0), SCAN_TERMS_FILE: terms(noMarker) });
+    assert.equal(r3.status, 1, `${path}: path alone must not suppress`);
+  }
 });
 
 test("build-fixtures.mjs is suppressed only on lines 20 and 655", () => {

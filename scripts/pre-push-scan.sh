@@ -89,13 +89,16 @@ scan_tip() {
     fi
     # Suppressions, matching the 08a grep-matrix record (three benign hits):
     #  - `scan-ok: test-ip` lines ONLY in apps/api/tests/test_url_guard.py
-    #    (SSRF-guard private-IP fixture, 08a results: grep matrix row 1)
+    #    (SSRF-guard private-IP fixture, 08a results: grep matrix row 1) and
+    #    the two demo-isolation firewall files (script + its test): their
+    #    blocked destination ranges are generic RFC1918/CGNAT/link-local
+    #    CIDRs, not addresses of any real host.
     #  - apps/web/demo/tools/build-fixtures.mjs lines 20 and 655 ONLY (the
     #    hygiene-gate term list and its grep call, 08a rows 2-3). If those
     #    lines move, the scan refuses and the pin must be updated with a
     #    fresh justification.
     n=$(git grep -nIE -f "$pat" "$tip" -- . ':!*.png' ':!*.jpg' ':!*.ttf' </dev/null \
-        | grep -vE "^$tip:apps/api/tests/test_url_guard\.py:[0-9]+:.*scan-ok: test-ip" \
+        | grep -vE "^$tip:(apps/api/tests/test_url_guard\.py|apps/api/tests/test_demo_isolation_firewall\.py|apps/api/scripts/server-setup/demo-isolation-firewall\.sh):[0-9]+:.*scan-ok: test-ip" \
         | grep -vE "^$tip:apps/web/demo/tools/build-fixtures\.mjs:(20|655):")
     if [ -n "$n" ]; then
       printf '%s\n' "$n" >&2
