@@ -38,7 +38,7 @@ Full source list and per-domain licensing notes:
 file just describes the *processed* (post-pipeline) form of the data the
 attribution doc already covers.
 
-## Preview assets (known limitation: 70 still 404)
+## Preview assets
 
 `captured_assets` rows (image/stylesheet metadata referenced by archived
 page HTML) ship in the seed, but their binary files are not part of this
@@ -52,31 +52,30 @@ check passes for the demo login because the loader remaps every row's
 `user_id` to the demo account.
 
 Verified 2026-10-05 against a freshly built compose stack, logged in as the
-demo account: 2,971 of the 3,041 seeded rows return 200 with the seeded
-byte size, and a different login gets 404 on the same paths. All 157 pages
-with linked assets render a preview; 130 of them resolve every asset they
-reference.
+demo account: all 3,041 seeded rows return 200, and a different login gets
+404 on the same paths. All 157 pages with linked assets render a preview
+that resolves every asset it references.
 
-The other 70 rows have no file anywhere in this repo.
+70 of those files were backfilled on 2026-10-05.
 `apps/web/demo/tools/capture-fixtures.mjs` only downloads assets that the
-preview HTML referenced when the fixtures were captured, and for these pages
-that HTML referenced fewer assets than the seed links (the lilianweng post's
-fixture preview referenced none of its 19 images; the YouTube page has no
-fixture preview). All 70 belong to 32 pages:
+preview HTML referenced when the fixtures were captured, and for 32 pages
+that HTML referenced fewer assets than the seed links (the lilianweng
+diffusion post's fixture preview referenced none of its 19 images; the
+YouTube page has no fixture preview). Where they came from:
 
-| Pages | Missing files | Effect on the rendered preview |
-| --- | --- | --- |
-| 23 arXiv abstracts | 7 (shared arxiv.org assets) | 2-3 of 7-8 references broken per page |
-| lilianweng.github.io diffusion post | 19 | all 19 images broken |
-| SparkFun PWM tutorial | 8 | 6 of 8 references broken |
-| Adafruit RGB LED lesson | 23 | 1 of 2 references broken |
-| YouTube watch page | 4 (CSS) | all 4 stylesheets missing |
-| 3 Gutenberg ebooks, 2 GitHub repos | 5 + 4 | none referenced, no visible effect |
+- 66 re-downloaded from the row's `source_url`, sha256 identical to the row.
+- 3 from Wayback Machine captures, sha256 identical to the row: two
+  cdn-learn.adafruit.com lesson images and the GitHub release badge on the
+  arduino/Arduino page (via its camo.githubusercontent.com URL).
+- 1 with no byte-identical copy available: the Gutenberg cover for ebook
+  6130, at
+  `31/3172a7c489d13904dfb382f865b5603d376495d97d5f1da860ea0c4b390e687a.jpg`.
+  The file is the current version of the same URL, so its size (16,452 B)
+  and hash do not match the row (8,818 B). The route serves it anyway,
+  since it reads the file by path.
 
-That leaves 27 previews with a broken image or stylesheet. The rest of the
-app (graph, diary, topic detail, clustering) is unaffected. Closing the gap
-means shipping those 70 files next to the others. The fixture directory also
-holds 77 files with no seed row. The compose stack never requests them.
+The fixture directory also holds 77 files with no seed row. The compose stack
+never requests them.
 
 ## Synthetic augment (temporary, D10 c-1)
 
