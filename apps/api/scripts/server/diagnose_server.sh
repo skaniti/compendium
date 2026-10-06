@@ -1,36 +1,46 @@
 #!/usr/bin/env bash
-# Standalone health probe for the server compose stack + cloudflared tunnel.
-# Run anytime to triage a 502 from compendium.example.com WITHOUT redeploying.
+# Standalone, read-only health probe for the two compendium stacks on the
+# server (tailnet-owner-demo-split, 2026-10-06). Changes nothing; run anytime.
+#
+#   owner stack  (docker-compose.server.yml, tailnet only)
+#     compendium-api   127.0.0.1:8001  (+ compendium-postgres from the Dash-side stack)
+#     compendium-web   127.0.0.1:3000
+#     tailscale serve: 443 -> :3000, 8443 -> :8001
+#   demo stack   (docker-compose.demo.yml, public via the Cloudflare tunnel)
+#     compendium-demo-api  127.0.0.1:8002
+#     compendium-demo-db
+#     cloudflared routes the public API hostname to :8002 ONLY; the owner
+#     ports must never appear on the tunnel.
 #
 # Usage:
 #   bash scripts/server/diagnose_server.sh
+#   PUBLIC_API_URL=https://<public-api-host> bash scripts/server/diagnose_server.sh
 #
 # Exit code:
 #   0  if all checks pass
-#   1  if any check fails (logs of compendium-app are appended in that case)
+#   1  if any check fails (logs of the unhealthy containers are appended)
 #
-# Env overrides (defaults match the standard server install):
-#   APP_DIR       = $HOME/apps/compendium
-#   COMPOSE_FILE  = $APP_DIR/docker/server/docker-compose.yml
-#   PUBLIC_URL    = https://compendium.example.com/
+# Env:
+#   PUBLIC_API_URL   public demo API base URL (no default); probed at /health
+#                    when set, skipped otherwise
+#   CLOUDFLARED_CONFIG  default /etc/cloudflared/config.yml
 
 set -uo pipefail
 
-APP_DIR="${APP_DIR:-$HOME/apps/compendium}"
-COMPOSE_FILE="${COMPOSE_FILE:-$APP_DIR/docker/server/docker-compose.yml}"
-PUBLIC_URL="${PUBLIC_URL:-https://compendium.example.com/}"
+PUBLIC_API_URL="${PUBLIC_API_URL:-}"
+CLOUDFLARED_CONFIG="${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}"
 
 PASS=0
 FAIL=0
 WARN=0
+UNHEALTHY=()
 
 ok()   { echo "[PASS] $*"; PASS=$((PASS + 1)); }
 bad()  { echo "[FAIL] $*"; FAIL=$((FAIL + 1)); }
 warn() { echo "[WARN] $*"; WARN=$((WARN + 1)); }
 
 echo "=== compendium server diagnostic ($(date -Is)) ==="
-echo "  compose: $COMPOSE_FILE"
-echo "  public:  $PUBLIC_URL"
+echo "  public:  ${PUBLIC_API_URL:-<PUBLIC_API_URL not set; public probe skipped>}"
 echo ""
 
 # --------------------------------------------------------------------------
@@ -39,80 +49,55 @@ echo ""
 echo "--- containers ---"
 PS_LINE=$(docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null || true)
 
-for name in compendium-postgres compendium-app; do
+# name:kind -- "healthy" needs a passing healthcheck; "up" just needs Up.
+for spec in compendium-postgres:healthy compendium-api:healthy compendium-web:up \
+            compendium-demo-api:healthy compendium-demo-db:healthy; do
+    name="${spec%%:*}"
+    kind="${spec##*:}"
     line=$(echo "$PS_LINE" | grep "^${name}|" || true)
     if [ -z "$line" ]; then
         bad "$name: NOT RUNNING"
+        UNHEALTHY+=("$name")
         continue
     fi
     status="${line#*|}"
-    case "$name:$status" in
-        compendium-postgres:*"(healthy)"*)
-            ok "$name: $status" ;;
-        compendium-postgres:*)
-            warn "$name: $status (no healthcheck pass yet)" ;;
-        *)
-            # app container has no compose-level healthcheck; up == ok
-            ok "$name: $status" ;;
-    esac
+    if [ "$kind" = "up" ]; then
+        case "$status" in
+            Up*) ok "$name: $status" ;;
+            *)   bad "$name: $status"; UNHEALTHY+=("$name") ;;
+        esac
+    else
+        case "$status" in
+            *"(healthy)"*)   ok "$name: $status" ;;
+            *"(unhealthy)"*) bad "$name: $status"; UNHEALTHY+=("$name") ;;
+            *)               warn "$name: $status (no healthcheck pass yet)"; UNHEALTHY+=("$name") ;;
+        esac
+    fi
 done
 
 # --------------------------------------------------------------------------
-# 2. Frontend loopback port (cloudflared + tailscale serve target)
+# 2. Loopback probes (host -> docker port mapping)
 # --------------------------------------------------------------------------
 echo ""
-echo "--- frontend loopback (host -> docker port mapping) ---"
-# curl -w "%{http_code}" already prints "000" on connection failure; the
-# fallback handles only the unlikely case of curl itself aborting before
-# emitting anything.
-fe_code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://127.0.0.1:8051/" 2>/dev/null)
-fe_code="${fe_code:-000}"
-case "$fe_code" in
-    2*|3*) ok  "http://127.0.0.1:8051/ -> $fe_code" ;;
-    000)   bad "http://127.0.0.1:8051/ -> connection refused / timeout (frontend not listening)" ;;
-    *)     bad "http://127.0.0.1:8051/ -> $fe_code" ;;
-esac
-
-# --------------------------------------------------------------------------
-# 3. Backend health (in-container; backend binds container-loopback per Procfile)
-# --------------------------------------------------------------------------
-# The Procfile binds uvicorn to 127.0.0.1:8000 INSIDE the container, so the
-# backend is unreachable from the host even though docker-compose declares
-# a 127.0.0.1:8001:8000 mapping (loopback-in-container is invisible to
-# docker's port-forward proxy). The meaningful test is whether the backend
-# is alive on the container's loopback -- which is also where the frontend
-# proc talks to it (same network namespace, both procs in honcho).
-#
-# Why python and not curl: the python:3.11-slim base image (per Dockerfile)
-# does NOT include curl. Earlier versions of this script used curl and
-# silently false-FAILed because docker exec swallowed "curl: not found".
-# Python's stdlib urllib is guaranteed available since this is a Python app.
-echo ""
-echo "--- backend (in-container health) ---"
-if docker ps --format '{{.Names}}' | grep -q '^compendium-app$'; then
-    be_code=$(docker exec -i compendium-app python - <<'PYEOF' 2>/dev/null
-import urllib.request, urllib.error
-try:
-    print(urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=5).status)
-except urllib.error.HTTPError as ex:
-    print(ex.code)
-except Exception:
-    print("000")
-PYEOF
-)
-    be_code="${be_code:-000}"
-    case "$be_code" in
-        2*|3*) ok  "container 127.0.0.1:8000/health -> $be_code" ;;
-        404)   warn "container 127.0.0.1:8000/health -> 404 (path may not exist; uvicorn is serving though)" ;;
-        000)   bad "container 127.0.0.1:8000/health -> unreachable (uvicorn proc may have died)" ;;
-        *)     bad "container 127.0.0.1:8000/health -> $be_code" ;;
+echo "--- loopback probes ---"
+probe() {
+    local label="$1" url="$2" code
+    # curl -w "%{http_code}" already prints "000" on connection failure; the
+    # fallback covers curl aborting before emitting anything.
+    code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "$url" 2>/dev/null)
+    code="${code:-000}"
+    case "$code" in
+        2*)  ok  "$label $url -> $code" ;;
+        000) bad "$label $url -> not listening (connection refused / timeout)" ;;
+        *)   bad "$label $url -> $code" ;;
     esac
-else
-    bad "cannot check backend: compendium-app container not running"
-fi
+}
+probe "owner api: " "http://127.0.0.1:8001/health"
+probe "owner web: " "http://127.0.0.1:3000/login"
+probe "demo api:  " "http://127.0.0.1:8002/health"
 
 # --------------------------------------------------------------------------
-# 4. Cloudflared tunnel
+# 3. Cloudflared tunnel (must route the demo only)
 # --------------------------------------------------------------------------
 echo ""
 echo "--- cloudflared ---"
@@ -125,37 +110,71 @@ else
     bad "cloudflared: NOT FOUND (neither systemd service nor docker container)"
 fi
 
-# --------------------------------------------------------------------------
-# 5. Public URL (end-to-end via Cloudflare)
-# --------------------------------------------------------------------------
-echo ""
-echo "--- public URL ---"
-pub_code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$PUBLIC_URL" 2>/dev/null)
-pub_code="${pub_code:-000}"
-case "$pub_code" in
-    2*|3*)
-        ok "$PUBLIC_URL -> $pub_code" ;;
-    502)
-        bad "$PUBLIC_URL -> 502 (cloudflared cannot reach origin; check loopback section above)" ;;
-    503)
-        bad "$PUBLIC_URL -> 503 (origin overloaded or no healthy upstream)" ;;
-    000)
-        bad "$PUBLIC_URL -> no response (cloudflared down OR DNS/CF outage)" ;;
-    *)
-        warn "$PUBLIC_URL -> $pub_code" ;;
-esac
+# Only hostname:/service: lines are printed, never the credentials-file line.
+if [ -r "$CLOUDFLARED_CONFIG" ]; then
+    echo "  routes in $CLOUDFLARED_CONFIG:"
+    grep -E '^\s*-? *(hostname|service):' "$CLOUDFLARED_CONFIG" | sed 's/^/    /'
+    if grep -E '^\s*-? *service:' "$CLOUDFLARED_CONFIG" | grep -Eq 'localhost:(8001|3000)\b|127\.0\.0\.1:(8001|3000)\b'; then
+        bad "cloudflared routes to the owner stack (:8001 or :3000); the owner stack must never be on the tunnel"
+    else
+        ok "cloudflared: no route to the owner ports (:8001, :3000)"
+    fi
+else
+    warn "cloudflared config not readable at $CLOUDFLARED_CONFIG (run with sudo or set CLOUDFLARED_CONFIG)"
+fi
 
 # --------------------------------------------------------------------------
-# 6. If anything failed, dump the most relevant log
+# 4. Tailscale serve (owner web on the tailnet)
+# --------------------------------------------------------------------------
+echo ""
+echo "--- tailscale serve ---"
+TS_SERVE=$(tailscale serve status 2>&1 || true)
+echo "$TS_SERVE" | sed 's/^/  /'
+if echo "$TS_SERVE" | grep -q '127\.0\.0\.1:3000'; then
+    ok "tailscale serve maps to 127.0.0.1:3000"
+else
+    bad "tailscale serve does not mention 127.0.0.1:3000"
+fi
+
+# --------------------------------------------------------------------------
+# 5. Public demo API (end-to-end via Cloudflare)
+# --------------------------------------------------------------------------
+echo ""
+echo "--- public demo API ---"
+if [ -n "$PUBLIC_API_URL" ]; then
+    pub_url="${PUBLIC_API_URL%/}/health"
+    pub_code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$pub_url" 2>/dev/null)
+    pub_code="${pub_code:-000}"
+    case "$pub_code" in
+        2*)  ok "$pub_url -> $pub_code" ;;
+        502) bad "$pub_url -> 502 (cloudflared cannot reach the demo API; check the loopback section above)" ;;
+        503) bad "$pub_url -> 503 (origin overloaded or no healthy upstream)" ;;
+        000) bad "$pub_url -> no response (cloudflared down OR DNS/CF outage)" ;;
+        *)   warn "$pub_url -> $pub_code" ;;
+    esac
+else
+    echo "  skipped (set PUBLIC_API_URL to probe)"
+fi
+
+# --------------------------------------------------------------------------
+# 6. If anything failed, dump logs of the relevant app containers
 # --------------------------------------------------------------------------
 if [ "$FAIL" -gt 0 ]; then
-    echo ""
-    echo "=== last 50 lines of compendium-app log (failures detected) ==="
-    if docker ps --format '{{.Names}}' | grep -q '^compendium-app$'; then
-        docker logs --tail 50 compendium-app 2>&1 | sed 's/^/  /'
-    else
-        echo "  (container not running -- nothing to fetch)"
-    fi
+    for name in compendium-api compendium-web compendium-demo-api; do
+        # Show logs for any app container that is not healthy/up, or all of
+        # them when a probe failed without a container finding.
+        want=0
+        for u in "${UNHEALTHY[@]:-}"; do [ "$u" = "$name" ] && want=1; done
+        [ "${#UNHEALTHY[@]}" -eq 0 ] && want=1
+        [ "$want" -eq 1 ] || continue
+        echo ""
+        echo "=== last 30 lines of $name log (failures detected) ==="
+        if docker ps -a --format '{{.Names}}' | grep -q "^${name}\$"; then
+            docker logs --tail 30 "$name" 2>&1 | sed 's/^/  /'
+        else
+            echo "  (container does not exist -- nothing to fetch)"
+        fi
+    done
 fi
 
 # --------------------------------------------------------------------------

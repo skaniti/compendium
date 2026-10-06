@@ -17,6 +17,25 @@
 
 set -euo pipefail
 
+# tailnet-owner-demo-split: owner web + API on the tailnet, demo API on loopback
+# and (optionally) its public hostname. Hostnames come from the non-secret
+# ~/apps/compendium/.env (TAILNET_HOSTNAME, PUBLIC_API_HOSTNAME).
+url_liveness() {
+  local env_file="$HOME/apps/compendium/.env" tailnet public
+  tailnet=$(grep -h '^TAILNET_HOSTNAME=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  public=$(grep -h '^PUBLIC_API_HOSTNAME=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  if [[ -n "$tailnet" ]]; then
+    curl -s -o /dev/null -w "  owner web  https://$tailnet/login -> HTTP %{http_code}\n" -m 5 "https://$tailnet/login" || echo "  owner web: unreachable"
+    curl -s -o /dev/null -w "  owner api  https://$tailnet:8443/health -> HTTP %{http_code}\n" -m 5 "https://$tailnet:8443/health" || echo "  owner api: unreachable"
+  else
+    echo "  (TAILNET_HOSTNAME not set in $env_file; skipping tailnet probes)"
+  fi
+  curl -s -o /dev/null -w "  demo api   http://127.0.0.1:8002/health -> HTTP %{http_code}\n" -m 5 "http://127.0.0.1:8002/health" || echo "  demo api: unreachable"
+  if [[ -n "$public" ]]; then
+    curl -s -o /dev/null -w "  demo public https://$public/health -> HTTP %{http_code}\n" -m 10 "https://$public/health" || echo "  demo public: unreachable"
+  fi
+}
+
 LOGDIR="$HOME/server-setup-logs"
 mkdir -p "$LOGDIR"
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -44,7 +63,7 @@ if [[ "$MODE" == "pre" ]]; then
 
   # --- 21.1: Enable everything ---
   echo "--- 21.1: enable services for auto-start ---"
-  SERVICES=(docker tailscaled cloudflared caddy nut.target nut-server nut-monitor nut-driver-enumerator)
+  SERVICES=(docker tailscaled cloudflared nut.target nut-server nut-monitor nut-driver-enumerator)
   for svc in "${SERVICES[@]}"; do
     sudo systemctl enable "$svc" 2>&1 || echo "(could not enable $svc; may not be installed)"
   done
@@ -67,11 +86,7 @@ if [[ "$MODE" == "pre" ]]; then
 
   echo ""
   echo "--- URL liveness (should respond before the test) ---"
-  TAILNET_HOSTNAME=$(grep -h TAILNET_HOSTNAME "$HOME/apps/compendium/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || echo "")
-  if [[ -n "$TAILNET_HOSTNAME" ]]; then
-    curl -s -o /dev/null -w "  https://$TAILNET_HOSTNAME/ -> HTTP %{http_code}\n" -m 5 "https://$TAILNET_HOSTNAME/" || echo "  (app via tailnet: unreachable)"
-  fi
-  curl -s -o /dev/null -w "  https://compendium.example.com/ -> HTTP %{http_code}\n" -m 10 "https://compendium.example.com/" || echo "  (app via CF Tunnel: unreachable)"
+  url_liveness
 
   echo ""
   echo "=========================================="
@@ -116,7 +131,7 @@ else
   # Check all services
   set +x
   echo "--- service state after boot ---"
-  SERVICES=(docker tailscaled cloudflared caddy nut.target nut-server nut-monitor nut-driver-enumerator nut-driver@homeups.service)
+  SERVICES=(docker tailscaled cloudflared nut.target nut-server nut-monitor nut-driver-enumerator nut-driver@homeups.service)
   for svc in "${SERVICES[@]}"; do
     printf "%-30s %s\n" "$svc" "$(systemctl is-active "$svc" 2>/dev/null || echo 'inactive/missing')"
   done
@@ -129,11 +144,7 @@ else
 
   echo ""
   echo "--- URL liveness ---"
-  TAILNET_HOSTNAME=$(grep -h TAILNET_HOSTNAME "$HOME/apps/compendium/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || echo "")
-  if [[ -n "$TAILNET_HOSTNAME" ]]; then
-    curl -s -o /dev/null -w "  https://$TAILNET_HOSTNAME/ -> HTTP %{http_code}\n" -m 5 "https://$TAILNET_HOSTNAME/" || echo "  (app via tailnet: unreachable)"
-  fi
-  curl -s -o /dev/null -w "  https://compendium.example.com/ -> HTTP %{http_code}\n" -m 10 "https://compendium.example.com/" || echo "  (app via CF Tunnel: unreachable)"
+  url_liveness
 
   echo ""
   echo "--- recent boot errors (journalctl -b --priority=err) ---"

@@ -51,6 +51,9 @@
 #   3. restic forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune
 #
 # NOT covered:
+#   - The public demo stack's database (compose project compendium-demo): not
+#     backed up on purpose -- its only content is the demo seed, which the
+#     repo re-creates on boot (tailnet-owner-demo-split, 2026-10-06).
 #   - SSD format / fstab setup (do it manually per plan 20.1 before re-running
 #     with the disk attached; the pre-flight prints the exact commands)
 #   - Off-site USB rotation: OBSOLETE -- the cloud repo IS the off-site layer now.

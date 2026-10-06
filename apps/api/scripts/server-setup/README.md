@@ -40,9 +40,11 @@ Each script:
 | `section-16-cloudflare-tunnel.sh` | 16 | cloudflared install + interactive tunnel login + create + config.yml + DNS route + systemd service |
 | `section-17-docker.sh` | 17 | Docker Engine + Compose plugin + group setup + auto-start + verify |
 | `section-18-app-stack.sh` | 18 | git clone + docker compose up + migrate + bootstrap users (single stack; provisions BOTH primary + demo users via bootstrap_user.py; uses `docker/server/docker-compose.yml`) |
-| `section-19-caddy.sh` | 19 | Caddy install (official apt repo) + Caddyfile (loopback `:8080` -> Dash `:8051`) + repoint cloudflared + `tailscale serve` from 8051 to 8080 |
+| `section-19-caddy.sh` | 19 | SUPERSEDED 2026-10-06 (Caddy left the serving path; see demo-split-runbook.md). Caddy install (official apt repo) + Caddyfile (loopback `:8080` -> Dash `:8051`) + repoint cloudflared + `tailscale serve` from 8051 to 8080 |
 | `section-20-backups.sh` | 20 | restic install + repo init + nightly backup script + cron entry at 03:00 |
 | `section-21-autostart-verify.sh` | 21 | Enable all services for auto-start + pre/post-test verify (run with `--post-verify` after a reboot) |
 | `maintenance-quickcheck.sh` | 22 | Weekly/monthly health quickcheck (read-only): journal errors, RAM/swap, SMART, backup freshness, services, disk |
+| `demo-isolation-firewall.sh` | — | ufw rules keeping the public demo stack's containers off the tailnet, the LAN and the host (DOCKER-USER + ufw-before-input); idempotent, backs up the rule files |
+| `demo-split-runbook.md` | — | Cutover runbook: owner stack tailnet-only, public demo on its own stack, firewall + Tailscale ACL, owner demo-copy refresh |
 
 The `logs/` subdirectory is tracked (via `.gitkeep`); the `.log` files inside are gitignored.
