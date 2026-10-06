@@ -2,6 +2,10 @@
 
 Idempotent: safe to run on every deploy. Behaviour:
 
+  0. ``BOOTSTRAP_DEMO_ONLY=1`` (the public demo stack): skip step 1 entirely --
+     no primary/admin user is created, and BOOTSTRAP_EMAIL/PASSWORD are not
+     required.
+
   1. Primary user (driven by env vars ``BOOTSTRAP_EMAIL`` + ``BOOTSTRAP_PASSWORD``):
      - If a user with ``BOOTSTRAP_EMAIL`` already exists -> just refresh the
        password hash (so a redeploy with a rotated password takes effect).
@@ -57,15 +61,11 @@ def _rename_user(user_id: int, *, new_email: str, new_name: str) -> None:
             )
 
 
-def bootstrap() -> None:
+def _bootstrap_primary() -> None:
     primary_email = os.environ.get("BOOTSTRAP_EMAIL")
     primary_password = os.environ.get("BOOTSTRAP_PASSWORD")
     primary_name = os.environ.get("BOOTSTRAP_NAME", "user")
     legacy_email = os.environ.get("BOOTSTRAP_LEGACY_EMAIL", "dev@localhost")
-
-    demo_email = os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local")
-    demo_password = os.environ.get("BOOTSTRAP_DEMO_PASSWORD", "demo")
-    demo_name = os.environ.get("BOOTSTRAP_DEMO_NAME", "demo")
 
     if not primary_email or not primary_password:
         sys.exit(
@@ -110,6 +110,8 @@ def bootstrap() -> None:
         auth_repo.set_role(primary_after["id"], "admin")
         print(f"[primary] role -> admin")
 
+
+def _bootstrap_demo(demo_email: str, demo_password: str, demo_name: str) -> None:
     # ── Demo user ─────────────────────────────────────────────────────
     existing_demo = _get_user_by_email(demo_email)
     if existing_demo is not None:
@@ -135,6 +137,26 @@ def bootstrap() -> None:
     if demo_after is not None:
         auth_repo.set_role(demo_after["id"], "demo")
         print(f"[demo]    role -> demo")
+
+
+def _demo_only() -> bool:
+    return os.environ.get("BOOTSTRAP_DEMO_ONLY", "").strip().lower() in {"1", "true", "yes"}
+
+
+def bootstrap() -> None:
+    demo_email = os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local")
+    demo_password = os.environ.get("BOOTSTRAP_DEMO_PASSWORD", "demo")
+    demo_name = os.environ.get("BOOTSTRAP_DEMO_NAME", "demo")
+
+    if _demo_only():
+        # Public demo stack (tailnet-owner-demo-split): no primary/admin
+        # account exists on this database at all, so nothing here accepts a
+        # credential other than the published demo one.
+        print("[primary] BOOTSTRAP_DEMO_ONLY set -- no primary/admin user on this database")
+    else:
+        _bootstrap_primary()
+
+    _bootstrap_demo(demo_email, demo_password, demo_name)
 
 
 if __name__ == "__main__":
