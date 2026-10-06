@@ -16,5 +16,7 @@ __pycache__
 # Local-only backup/log artifacts, not needed at runtime.
 data/backups
 data/logs
+# Runtime chat traces (gitignored); never bake them into an image.
+data/agent-traces
 
 tests

@@ -61,12 +61,19 @@ def test_demo_project_and_names_never_collide_with_the_owner_stack():
         assert svc["image"] not in owner_images
 
 
-def test_demo_never_mounts_owner_secrets_or_owner_assets():
-    for svc in _load(DEMO)["services"].values():
+FIXTURES_BIND = "../../web/demo/fixtures/assets/captured-assets:/app/data/captures/assets:ro"
+
+
+def test_demo_mounts_are_an_allowlist_of_fixtures_and_named_volumes():
+    demo = _load(DEMO)
+    declared = set(demo["volumes"])
+    for svc in demo["services"].values():
         for vol in svc.get("volumes", []):
-            assert ".secrets" not in vol
-            assert "compendium-assets" not in vol
-            assert "CAPTURES_ASSETS_HOST_DIR" not in vol
+            if vol == FIXTURES_BIND:
+                continue
+            source = vol.split(":")[0]
+            assert "/" not in source and not source.startswith("."), vol
+            assert source in declared, vol
 
 
 def test_demo_assets_are_the_repo_fixtures_read_only():
@@ -119,9 +126,12 @@ def test_demo_api_runtime_env():
 def test_every_demo_interpolation_is_demo_prefixed():
     # Compose lets the calling shell override --env-file values; a plain
     # name would let an exported owner secret reach the public stack.
-    names = set(re.findall(r"\$\{([A-Za-z0-9_]+)", (COMPOSE_DIR / DEMO).read_text()))
+    # Unbraced $VAR counts too; $$ is an escape and is ignored.
+    names = set(re.findall(r"(?<!\$)\$\{?([A-Za-z_][A-Za-z0-9_]*)", (COMPOSE_DIR / DEMO).read_text()))
     assert names
     assert sorted(n for n in names if not n.startswith("DEMO_")) == []
+    for svc in _load(DEMO)["services"].values():
+        assert "env_file" not in svc
 
 
 def test_the_env_template_lists_every_required_demo_var():

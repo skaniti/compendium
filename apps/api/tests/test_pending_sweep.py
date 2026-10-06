@@ -65,5 +65,45 @@ def test_sweep_pending_once_lazy_import_branch():
         main.update_pages_from_response = orig_upfr
 
 
+def test_sweep_pending_once_skips_the_demo_account():
+    fetch = MagicMock()
+    with (
+        patch("backend.db.auth_repo.get_role", return_value="demo"),
+        patch.object(main, "get_pending_captures", new=fetch),
+    ):
+        out = asyncio.run(main.sweep_pending_once(user_id=152))
+    fetch.assert_not_called()
+    assert out["skipped"] == "demo"
+    assert out["captures_seen"] == out["processed"] == out["failed"] == 0
+
+
+def _run_startup_sweep(role):
+    recluster = MagicMock(side_effect=lambda uid: _async(None))
+    real_sleep = asyncio.sleep
+
+    async def _fast_sleep(_):
+        await real_sleep(0)
+
+    with (
+        patch("backend.db.auth_repo.get_role", return_value=role),
+        patch.object(main, "get_default_user_id", return_value=152),
+        patch.object(main, "get_pending_captures", return_value=[]),
+        patch.object(main, "_maybe_recluster", new=recluster),
+        patch.object(main.asyncio, "sleep", new=_fast_sleep),
+    ):
+        asyncio.run(main._sweep_pending_captures())
+    return recluster
+
+
+def test_startup_sweep_does_not_recluster_the_demo_account():
+    _run_startup_sweep("demo").assert_not_called()
+
+
+def test_startup_sweep_still_reclusters_a_regular_user():
+    # (c) the non-demo path; the three tests above also run it end to end
+    # (a missing user row reads as role "user").
+    _run_startup_sweep("user").assert_called_once_with(152)
+
+
 async def _async(v):
     return v

@@ -480,6 +480,13 @@ async def sweep_pending_once(user_id: int | None = None) -> dict:
 
     if user_id is None:
         user_id = get_default_user_id()
+    from backend.db import auth_repo as ar
+
+    if ar.get_role(user_id) == "demo":
+        # The demo stack's default user is the demo account; its seed holds
+        # deliberate pending pages that must never be re-processed.
+        logger.info("pending-sweep: user %s is the demo account -- skipped", user_id)
+        return {"captures_seen": 0, "processed": 0, "failed": 0, "cost_usd": 0.0, "skipped": "demo"}
     pending = get_pending_captures(user_id)
     processed = failed = 0
     cost = 0.0
@@ -509,6 +516,8 @@ async def _sweep_pending_captures() -> None:
             summary["processed"],
             summary["failed"],
         )
+        if summary.get("skipped"):
+            return
         await _maybe_recluster(user_id)
     except Exception:
         logger.exception("Startup sweep aborted")
