@@ -63,16 +63,10 @@ that HTML referenced fewer assets than the seed links (the lilianweng
 diffusion post's fixture preview referenced none of its 19 images; the
 YouTube page has no fixture preview). Where they came from:
 
-- 66 re-downloaded from the row's `source_url`, sha256 identical to the row.
+- 67 re-downloaded from the row's `source_url`, sha256 identical to the row.
 - 3 from Wayback Machine captures, sha256 identical to the row: two
   cdn-learn.adafruit.com lesson images and the GitHub release badge on the
   arduino/Arduino page (via its camo.githubusercontent.com URL).
-- 1 with no byte-identical copy available: the Gutenberg cover for ebook
-  6130, at
-  `31/3172a7c489d13904dfb382f865b5603d376495d97d5f1da860ea0c4b390e687a.jpg`.
-  The file is the current version of the same URL, so its size (16,452 B)
-  and hash do not match the row (8,818 B). The route serves it anyway,
-  since it reads the file by path.
 
 The fixture directory also holds 77 files with no seed row. The compose stack
 never requests them.
