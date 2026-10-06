@@ -35,8 +35,8 @@ Design:
   ``GENERATED ALWAYS AS IDENTITY`` column exists anywhere), so no
   ``OVERRIDING SYSTEM VALUE`` clause is needed or applicable; a plain
   explicit-id INSERT is accepted as-is. After each id-bearing table loads,
-  its sequence is advanced to ``MAX(id)`` only when it is not already ahead;
-  an already-ahead sequence is never touched (``setval`` is not called), so no
+  its sequence is advanced to ``MAX(id)`` only when it is behind it; a
+  sequence at or past ``MAX(id)`` is never touched (``setval`` is skipped), so no
   sequence moves backwards and no issued id is reissued in a shared database.
 
 - **Vector casts.** ``chunk_embeddings.embedding``, ``page_embeddings.embedding``,
@@ -175,15 +175,18 @@ DEMO_SCOPED_EXTRA_TABLES = (
     "dq_observations",
     "dq_runs",
 )
-# Seed tables with a user_id. Cascades take page_clusters, cluster_edges and
-# page_content_assets; page_content (global, no user_id) is handled after.
+# Seed tables with a user_id, CHILDREN FIRST: deleting a parent cascades to its
+# children, and rowcount excludes cascaded rows, so parents-first would report 0
+# for pages/clusters/groups/singletons. Cascades still take page_clusters,
+# cluster_edges and page_content_assets; page_content (global, no user_id) is
+# handled after. Every FK among these is CASCADE or SET NULL, so the order is legal.
 DEMO_OWNED_SEED_TABLES = (
-    "captures",
-    "pages",
-    "recluster_runs",
+    "featured_singletons",
     "clusters",
     "super_cluster_groups",
-    "featured_singletons",
+    "recluster_runs",
+    "pages",
+    "captures",
     "captured_assets",
 )
 # Rows keyed by page_content_id that are skipped, not re-inserted, when their
@@ -337,19 +340,19 @@ def _load_table(
 
 
 def _reset_sequence(cur, table: str) -> None:
-    """Advance the table's id sequence to MAX(id) when -- and only when -- it
-    is not already ahead. When it is ahead (a database other users share,
-    possibly with a live API issuing ids concurrently) setval is never called,
+    """Advance the table's id sequence to MAX(id) only when the sequence is
+    behind it. When the sequence is at or past MAX(id) (a database other users
+    share, possibly with a live API issuing ids concurrently) setval is skipped,
     so no sequence moves backwards and no issued id is reissued."""
     cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (table,))
-    schema, name = cur.fetchone()[0].split(".", 1)
-    schema, name = schema.strip('"'), name.strip('"')
+    qualified = cur.fetchone()[0]
+    schema, name = (part.strip('"') for part in qualified.split(".", 1))
     cur.execute(
         sql.SQL(
-            "SELECT setval(%s, m) FROM (SELECT MAX(id) AS m FROM {table}) s "
-            "WHERE m IS NOT NULL AND m >= (SELECT last_value FROM {seq})"
+            "SELECT setval(%s, m) FROM (SELECT MAX(id) AS m FROM {table}) s, {seq} q "
+            "WHERE m IS NOT NULL AND (m > q.last_value OR (m = q.last_value AND NOT q.is_called))"
         ).format(table=sql.Identifier(table), seq=sql.Identifier(schema, name)),
-        (f"{schema}.{name}",),
+        (qualified,),
     )
 
 
@@ -413,7 +416,43 @@ def _record_sha(cur, demo_user_id: int, seed_sha: str) -> None:
     )
 
 
+# (child table, FK column, parent table): child rows NOT owned by the demo
+# account whose parent IS the demo's would be removed by an FK cascade.
+CASCADE_GUARDS = (
+    ("pages", "capture_id", "captures"),
+    ("clusters", "recluster_run", "recluster_runs"),
+    ("super_cluster_groups", "recluster_run", "recluster_runs"),
+    ("featured_singletons", "recluster_run", "recluster_runs"),
+    ("featured_singletons", "page_id", "pages"),
+)
+
+
+class CrossAccountRows(SeedCollision):
+    """Rows owned by another account hang under the demo account's rows; a
+    cascade would delete them. Nothing changed."""
+
+    def __init__(self, label: str, ids: list[int]):
+        self.table = label
+        self.ids = list(ids)
+        RuntimeError.__init__(
+            self, f"{label}: rows outside the demo account under demo rows: {self.ids[:20]}"
+        )
+
+
+def _check_cascade_guards(cur, demo_user_id: int) -> None:
+    for child, fk, parent in CASCADE_GUARDS:
+        cur.execute(
+            f"SELECT c.id FROM {child} c JOIN {parent} p ON c.{fk} = p.id "
+            f"WHERE p.user_id = %s AND c.user_id IS DISTINCT FROM %s ORDER BY c.id LIMIT 20",
+            (demo_user_id, demo_user_id),
+        )
+        hits = [r[0] for r in cur.fetchall()]
+        if hits:
+            raise CrossAccountRows(f"{child} under demo {parent}", hits)
+
+
 def _delete_demo_rows(cur, demo_user_id: int) -> dict[str, int]:
+    _check_cascade_guards(cur, demo_user_id)
     deleted: dict[str, int] = {}
     cur.execute(
         "SELECT DISTINCT page_content_id FROM pages "
@@ -482,6 +521,14 @@ def _check_collisions(cur, data: dict, shared: set[int], skipped_chunks: set[int
         hits = [r[0] for r in cur.fetchall()]
         if hits:
             raise SeedCollision(table, hits)
+    # captures.capture_id (text) is globally unique. Runs after the demo rows
+    # are deleted, so any hit belongs to another account.
+    texts = [r["capture_id"] for r in data.get("captures", [])]
+    if texts:
+        cur.execute("SELECT capture_id FROM captures WHERE capture_id = ANY(%s) LIMIT 20", (texts,))
+        hits = [r[0] for r in cur.fetchall()]
+        if hits:
+            raise SeedCollision("captures.capture_id", hits)
 
 
 def _load_all(cur, data: dict, augment_rows: list[dict], demo_user_id: int,

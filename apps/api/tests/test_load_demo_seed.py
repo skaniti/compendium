@@ -321,6 +321,8 @@ def test_replace_restores_the_seed_and_leaves_admin_rows_untouched(seed, augment
 
     assert result["action"] == "replaced"
     assert result["deleted"]["captures"] == len(seed["captures"])
+    assert result["deleted"]["pages"] == len(seed["pages"]) + len(augment)
+    assert result["deleted"]["clusters"] == len(seed["clusters"])
     assert demo_fingerprint(users["demo"], seed) == expected
     assert admin_snapshot(users["admin"]) == before
     assert _sha(users["demo"]) == [("sha-b",)]
@@ -372,6 +374,7 @@ def test_dry_run_replace_changes_nothing(seed, augment, users):
     result = _load(seed, augment, users, sha="sha-b", replace=True, dry_run=True)
     assert result["action"] == "replaced" and result["dry_run"] is True
     assert result["deleted"]["captures"] == len(seed["captures"])
+    assert result["deleted"]["pages"] == len(seed["pages"]) + len(augment)
     assert "renamed-by-test" in _names(users["demo"], seed)
     assert _sha(users["demo"]) == [("sha-a",)]
 
@@ -401,8 +404,34 @@ def test_every_table_the_replace_deletes_from_has_a_user_id_column():
 
 def test_cli_exits_2_on_a_collision(monkeypatch):
     def boom(*args, **kwargs):
+        assert kwargs["replace"] is True
         raise lds.SeedCollision("captures", [1])
 
     monkeypatch.setattr(lds, "run", boom)
     monkeypatch.setenv("DATABASE_URL", DSN)
     assert lds.main(["--replace"]) == 2
+
+
+def test_admin_rows_under_a_demo_capture_abort_the_replace(seed, augment, users):
+    _load(seed, augment, users)
+    page = dict(seed["pages"][0])
+    page.update(id=OFFSET + 990_003, capture_id=seed["captures"][0]["id"],
+                user_id=users["admin"], page_content_id=None)
+    for key in ("url", "normalized_url"):
+        if key in page:
+            page[key] = "https://admin.test/under-demo"
+    conn = psycopg2.connect(DSN)
+    try:
+        with conn, conn.cursor() as cur:
+            lds._load_table(cur, "pages", [page], users["admin"], -1)
+    finally:
+        conn.close()
+    before_demo = demo_fingerprint(users["demo"], seed)
+    before_admin = admin_snapshot(users["admin"])
+
+    with pytest.raises(lds.CrossAccountRows):
+        _load(seed, augment, users, sha="sha-b", replace=True)
+
+    assert demo_fingerprint(users["demo"], seed) == before_demo
+    assert admin_snapshot(users["admin"]) == before_admin
+    assert _sha(users["demo"]) == [("sha-a",)]
