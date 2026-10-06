@@ -2,30 +2,23 @@
 # Re-deploy one of two apps/api compose stacks with build + health
 # verification: owner (api + web, tailnet only) or demo (api + db, public).
 #
-# The notes below describe the owner stack's api service. This targets the CURRENT monorepo cutover architecture:
-# apps/api/docker/docker-compose.server.yml defines a single `api` service
-# (compendium-api) against the real, already-provisioned production
-# database -- postgres and the Dash frontend stay on the OLD
-# explorer-hosted compose (docker/server/docker-compose.yml, a different
-# file on the server, not this repo), reached over the shared external
+# The owner stack (docker-compose.server.yml) defines `api` (compendium-api)
+# and `web` (compendium-web). The API talks to the real, already-provisioned
+# production database; postgres and the Dash frontend stay on the OLD
+# explorer-hosted compose (docker/server/docker-compose.yml, a different file
+# on the server, not this repo), reached over the shared external
 # `compendium-net` network. See docker-compose.server.yml's own header for
-# the full split rationale and required env vars.
+# the full split rationale and required env vars. The demo stack
+# (docker-compose.demo.yml) is self-contained: api + its own db.
 #
-# Schema before code, but NOT via a separate step here: this compose's
-# image entrypoint (apps/api/docker/entrypoint.sh) runs
+# Schema before code, but NOT via a separate step here: the api image's
+# entrypoint (apps/api/docker/entrypoint.sh) runs
 # `python -m backend.db.migrate --skip-backfill` INSIDE the container,
 # before exec'ing uvicorn -- so uvicorn never starts (and the container
 # never reports healthy) until migrations have already applied. There is
-# no schema/code window to sequence around for this compose; this script's
-# job is just to build+start, confirm the entrypoint's migration log line,
-# and wait for /health to report the database as actually connected.
-#
-# This is the OLD honcho-stack script's replacement for the api-only
-# cutover target -- NOT the same deployment as
-# scripts/server-setup/section-18-app-stack.sh /
-# scripts/server/diagnose_server.sh, which still drive the 3-service
-# postgres+app+frontend stack at docker/server/docker-compose.yml. This
-# script no longer touches that stack at all.
+# no schema/code window to sequence around; this script's job is just to
+# build+start, confirm the entrypoint's migration log line, and wait for
+# /health to report the database as actually connected.
 #
 # Usage: see usage() below, or run with --help.
 # Exit codes: 0 ok, 1 deploy failure, 2 bad arguments, 3 deploy up but the
@@ -34,36 +27,40 @@
 # What this does:
 #   1. Source ~/.secrets + ~/apps/compendium/.env (owner; demo sources only
 #      ~/apps/compendium/.env.demo, never ~/.secrets) so docker compose ${VAR}
-#      substitution resolves cleanly (same two-file convention as before;
-#      see docker-compose.server.yml's header for the full list). Compose
-#      hard-requires (":?", the `up` below fails without them)
-#      POSTGRES_PASSWORD, API_CORS_ORIGINS, and CAPTURES_ASSETS_HOST_DIR in
-#      this env/.env pair; JWT_SECRET_KEY is also required but is read from
-#      the mounted ~/.secrets file itself, not a compose ${VAR:?...}
-#      substitution, so a missing one won't fail the same way -- verify it's
-#      set in ~/.secrets directly. API_HOST_PORT is optional (defaults to
-#      8001 below). ENV_FILE=/path SECRETS_FILE=/path (see "Sanity checks"
-#      below) override the default paths for both files.
-#   2. docker compose -f docker-compose.server.yml up -d --build (the `api`
-#      service; migrations run inside the container at boot, see above).
+#      substitution resolves cleanly (see docker-compose.server.yml's header
+#      for the full list). Compose hard-requires (":?", the `up` below fails
+#      without them) POSTGRES_PASSWORD, API_CORS_ORIGINS, and
+#      CAPTURES_ASSETS_HOST_DIR in this env/.env pair; JWT_SECRET_KEY is also
+#      required but is read from the mounted ~/.secrets file itself, not a
+#      compose ${VAR:?...} substitution, so a missing one won't fail the same
+#      way -- verify it's set in ~/.secrets directly. API_HOST_PORT (owner) /
+#      DEMO_API_HOST_PORT (demo) are optional. ENV_FILE=/path
+#      SECRETS_FILE=/path override the default paths.
+#   2. docker compose -p <project> -f <compose file> up -d --build (owner:
+#      `api` + `web`; demo: `api` + `db`; migrations run inside the api
+#      container at boot, see above).
 #   3. docker compose ... ps (container status confirmation).
 #   4. Wait for http://127.0.0.1:${API_HOST_PORT}/health to return 200 with
 #      db_connected: true.
 #   5. Print the entrypoint's migration log lines as evidence (`logs api |
 #      grep -i migrat`).
+#   6. Owner only: wait for http://127.0.0.1:${WEB_HOST_PORT:-3000}/login to
+#      return 200 (the web container).
+#   7. Owner only (not with --skip-seed): refresh the owner DB's demo copy via
+#      scripts/demo/load_demo_seed.py --replace -- a dry run first, applied
+#      only when SEED_APPLY=yes or confirmed at a terminal (never without a
+#      terminal unless SEED_APPLY=yes).
 #
 # What this does NOT do:
 #   - git pull (run that first if you want to deploy latest).
-#   - deploy the frontend. Vercel builds it from the push to main; it goes
-#     live only on `vercel promote` (auto-assign of the production domain
-#     is off). The closing lines print a stack-specific reminder.
+#   - deploy the frontend for the public demo. Vercel builds it from the push
+#     to main; it goes live only on `vercel promote` (auto-assign of the
+#     production domain is off). The closing lines print a stack-specific
+#     reminder.
 #   - touch the old postgres/Dash stack (still explorer-hosted; unaffected
-#     by this compose file).
-#   - hand off to diagnose_server.sh -- that script's checks (compendium-
-#     postgres / compendium-app containers, :8051 frontend loopback,
-#     cloudflared) all target the OLD 3-service stack, none of which this
-#     compose defines. Re-target it (or write an api-specific diagnostic)
-#     if a post-deploy diagnostic handoff is wanted here.
+#     by these compose files).
+#   - hand off to diagnose_server.sh; run it separately for a read-only
+#     check of both stacks, the tunnel config and tailscale serve.
 #
 # Logs:
 #   <repo>/logs/<YYYY-MM-DD-HHMMSS>-deploy-<stack>.log + logs/latest-deploy.log symlink.
@@ -300,7 +297,6 @@ if [ "$mode" != "skip" ]; then
     apply=no
     if [ "$dry_rc" -ne 0 ]; then
         echo "dry run failed (exit $dry_rc) -- NOT applying. Exit 2 = a seed id collision (see above)."
-        echo "WARNING: demo-copy refresh dry run failed (exit $dry_rc) -- deploy is up, refresh NOT applied"
         seed_dry_failed=1
     elif [ "$mode" = "yes" ]; then
         apply=yes
@@ -337,5 +333,9 @@ else
     echo "  Demo stack: public via the Cloudflare tunnel -> :${API_HOST_PORT}. Frontend changes go live via Vercel promote."
 fi
 
-if [ "$seed_dry_failed" -eq 1 ]; then exit 3; fi
+if [ "$seed_dry_failed" -eq 1 ]; then
+    echo ""
+    echo "WARNING: demo-copy refresh dry run failed -- deploy is up, refresh NOT applied (exit 3)"
+    exit 3
+fi
 exit 0

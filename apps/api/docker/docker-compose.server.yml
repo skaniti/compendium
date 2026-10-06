@@ -13,7 +13,7 @@
 # This is deliberately NOT docker/server/docker-compose.yml's shape (the
 # pre-extraction explorer repo's 3-service postgres+backend+frontend
 # compose, honcho-driven, single image). That file split at extraction:
-# this compose owns the backend half; the Dash half + postgres stay on a
+# this compose owns the api + web halves; the Dash half + postgres stay on a
 # modified copy of the OLD compose, still explorer-hosted, documented in
 # the private cutover runbook (never copied here).
 #
@@ -26,6 +26,13 @@
 #     JWT_SECRET_KEY      -- same value the pre-cutover single-image
 #                            deployment used (rotating it invalidates every
 #                            live session's token)
+#     TAILNET_ONLY_DEPLOYMENT -- optional, default 0. Set to 1 ONLY once no
+#                            public route reaches the owner API (cutover
+#                            runbook step 5); the API then trusts every
+#                            request as tailnet-originated and refuses to
+#                            boot alongside RATE_LIMIT_TRUST_CF_HEADER
+#     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the
+#                            web container; tailscale serve targets it)
 #     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets
 #                            directory (mounted the same way the old `app`
 #                            service mounted it; Dash still serves preview
@@ -96,6 +103,7 @@ services:
       # No new-user signups on the production deploy -- matches the
       # pre-extraction `app` service's setting.
       DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-1}"
+      # 1 = every request is tailnet-originated (remembered sessions); only safe once no public route reaches this API.
       TAILNET_ONLY_DEPLOYMENT: "${TAILNET_ONLY_DEPLOYMENT:-0}"
       # dqBot stays available at the app level; per-role gating is
       # verify_not_plain_demo at the router. This is the deployment-wide
