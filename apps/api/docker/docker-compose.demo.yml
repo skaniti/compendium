@@ -1,0 +1,109 @@
+# Public demo stack (tailnet-owner-demo-split, 2026-10-06).
+#
+# A second, fully separate copy of the API with its OWN Postgres holding only
+# the demo seed. The Cloudflare tunnel routes the public API hostname here
+# (127.0.0.1:8002). The owner stack (docker-compose.server.yml) is reachable
+# only over the tailnet and shares nothing with this file: no network, no
+# volume, no secrets file, no assets directory, no admin account.
+#
+#   bash apps/api/scripts/server/deploy_server.sh --stack demo
+#
+# Every interpolated variable is DEMO_-prefixed ON PURPOSE: compose lets the
+# calling shell's environment override --env-file values, so a plain name
+# (JWT_SECRET_KEY, POSTGRES_PASSWORD, ...) exported in the operator's shell
+# would silently hand an owner secret to the public stack. Values live in
+# ~/apps/compendium/.env.demo on the server (template: demo-stack.env.example).
+#
+# The network has a fixed bridge name and subnet so the host firewall
+# (scripts/server-setup/demo-isolation-firewall.sh) can keep these containers
+# away from the tailnet, the LAN and the host. The API resolves names through
+# public DNS for the same reason: the router and MagicDNS sit on blocked ranges.
+
+name: compendium-demo
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: compendium-demo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tbd
+      POSTGRES_PASSWORD: "${DEMO_POSTGRES_PASSWORD:?missing DEMO_POSTGRES_PASSWORD in the demo env file}"
+      POSTGRES_DB: compendium_demo
+    volumes:
+      - demo_pgdata:/var/lib/postgresql/data
+    networks:
+      - demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tbd -d compendium_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: ..
+    image: compendium-api:demo
+    container_name: compendium-demo-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - demo
+    dns:
+      - 1.1.1.1
+      - 9.9.9.9
+    ports:
+      - "127.0.0.1:${DEMO_API_HOST_PORT:-8002}:8000"
+    environment:
+      ENVIRONMENT: production
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      DATABASE_URL: "postgresql://tbd:${DEMO_POSTGRES_PASSWORD:?missing DEMO_POSTGRES_PASSWORD in the demo env file}@db:5432/compendium_demo"
+      JWT_SECRET_KEY: "${DEMO_JWT_SECRET_KEY:?missing DEMO_JWT_SECRET_KEY in the demo env file}"
+      SESSION_INGRESS_TRUSTED_VALUE: "${DEMO_SESSION_INGRESS_TRUSTED_VALUE:?missing DEMO_SESSION_INGRESS_TRUSTED_VALUE in the demo env file}"
+      CORS_ORIGINS: "${DEMO_CORS_ORIGINS:?missing DEMO_CORS_ORIGINS in the demo env file}"
+      OPENAI_API_KEY: "${DEMO_OPENAI_API_KEY:-}"
+      RATE_LIMIT_TRUST_CF_HEADER: "${DEMO_RATE_LIMIT_TRUST_CF_HEADER:-1}"
+      PROXY_SHARED_SECRET: "${DEMO_PROXY_SHARED_SECRET:-}"
+      BOOTSTRAP_DEMO_ONLY: "1"
+      BOOTSTRAP_DEMO_EMAIL: demo@traversal.local
+      BOOTSTRAP_DEMO_NAME: demo
+      BOOTSTRAP_DEMO_PASSWORD: "${DEMO_ACCOUNT_PASSWORD:?missing DEMO_ACCOUNT_PASSWORD in the demo env file}"
+      DEV_DEFAULT_USER_EMAIL: demo@traversal.local
+      RUN_MIGRATIONS: "1"
+      SEED_DEMO: "1"
+      DEMO_SEED_ARGS: "--replace"
+      ENABLE_NIGHTLY_MAINT: "0"
+      DQ_BOT_DISABLED: "true"
+      RERANKER_DISABLED: "1"
+      DISABLE_REGISTRATION: "1"
+    volumes:
+      - ../../web/demo/fixtures/assets/captured-assets:/app/data/captures/assets:ro
+      - demo_hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+networks:
+  demo:
+    name: compendium-demo-net
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-compdemo
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  demo_pgdata:
+  demo_hf_cache:

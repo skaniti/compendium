@@ -24,6 +24,11 @@
 #                       boots) — safe to leave on for every compose `up`.
 #                       See apps/api/data/demo-seed/README.md for what the
 #                       seed contains and its one known gap (preview images).
+#   DEMO_SEED_ARGS     extra loader flags. The public demo stack
+#                       (docker-compose.demo.yml) sets "--replace", so every
+#                       boot swaps in a changed seed and no-ops otherwise.
+#                       Unset (root quickstart) keeps the load-once behaviour.
+#   BOOTSTRAP_DEMO_ONLY=1  bootstrap creates only the demo user (no admin).
 set -euo pipefail
 
 echo "[entrypoint] waiting for database..."
@@ -56,10 +61,10 @@ else
 fi
 
 if [ "${SEED_DEMO:-0}" = "1" ]; then
-  echo "[entrypoint] SEED_DEMO=1 — bootstrapping primary + demo user logins (keyless)..."
+  echo "[entrypoint] SEED_DEMO=1 — bootstrapping user logins (keyless; demo only when BOOTSTRAP_DEMO_ONLY=1)..."
   python -m backend.scripts.bootstrap_user || echo "[entrypoint] bootstrap_user failed (non-fatal, continuing)"
   echo "[entrypoint] loading demo seed data into the demo account (idempotent)..."
-  python scripts/demo/load_demo_seed.py || echo "[entrypoint] load_demo_seed failed (non-fatal, continuing — demo account may be empty)"
+  python scripts/demo/load_demo_seed.py ${DEMO_SEED_ARGS:-} || echo "[entrypoint] load_demo_seed failed (non-fatal, continuing — demo account may be empty or stale)"
 else
   echo "[entrypoint] SEED_DEMO=0 — skipping user bootstrap + demo seed load"
 fi
