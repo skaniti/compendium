@@ -1,0 +1,14 @@
+{
+  "theme": "Grey Dark",
+  "starfield": "twinkle",
+  "show_noise": false,
+  "topic_interests": [
+    {"icon_id": "dna", "keyword": "Diffusion models"},
+    {"icon_id": "octopus", "keyword": "Cephalopods"},
+    {"icon_id": "trident", "keyword": "Greek and Roman mythology"},
+    {"icon_id": "code", "keyword": "Electronics and Arduino"}
+  ],
+  "panel_left_width": "10.07%",
+  "panel_right_width": "22.69%",
+  "enable_scheduled_runs": false
+}

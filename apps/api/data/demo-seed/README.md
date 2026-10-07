@@ -87,3 +87,26 @@ Regenerate (deterministic; rewrites an identical file for the same seed):
 
 Retirement: the demo-seed-maturity re-export deletes the augment file, the
 generator, its test, and the loader step.
+
+## Demo account preferences
+
+`demo_seed_preferences.json` holds the demo account's `users.preferences`
+(theme, starfield, panel widths, and `topic_interests`). The graph marks a
+supercluster only when its name is one of the user's `topic_interests`
+keywords, and the header CLUSTERING card counts those keywords as topics, so
+without this file the demo account renders 0 topics and no supercluster
+outlines. Each keyword must match a `clusters.super_cluster` value in the
+seed, and the list order sets the supercluster colour order.
+
+Provenance: taken 2026-10-07 from the source deployment's demo account
+(`user_id 153`); the values match `apps/web/demo/fixtures/raw/me.json`.
+
+The loader merges the file's keys into the demo user's existing
+preferences on first load and on `--replace`: the file's keys overwrite,
+other keys are kept. A key later removed from the file therefore stays in
+existing databases until removed by hand. A database seeded before this file
+existed (a plain load that now reports `already_seeded`) does not pick the
+preferences up until a `--replace` run.
+
+The file is part of the seed hash (`seed_sha256`), so changing it makes the
+demo stack reload on its next deploy.

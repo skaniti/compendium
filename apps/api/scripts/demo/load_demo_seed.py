@@ -54,7 +54,15 @@ Design:
   touching anything else. Safe to run on every container boot.
 
 - **Seed version record.** Every load records ``seed_sha256()`` (the seed
-  artifact + augment file bytes) in ``demo_seed_state`` (migration 048).
+  artifact + augment + preferences file bytes) in ``demo_seed_state``
+  (migration 048).
+
+- **Demo preferences.** ``demo_seed_preferences.json`` is merged key by key
+  into the demo user's ``users.preferences`` in the same transaction (the
+  graph marks a supercluster only for ``topic_interests`` keywords, so
+  without it the demo renders no superclusters). Keys the file doesn't
+  name are kept. Written on first load and ``--replace`` only, and hashed
+  into the seed version so a change reloads.
 
 - **Augment ids are not preserved.** The synthetic augment pages are
   inserted with sequence-assigned ids (nothing references them; their
@@ -95,6 +103,7 @@ SEED_PATH = Path(
     )
 )
 AUGMENT_PATH = SEED_PATH.with_name("demo_seed_augment.json")
+PREFERENCES_PATH = SEED_PATH.with_name("demo_seed_preferences.json")
 
 # FK-safe insert order per the load contract (batch-07 Task 4 export review).
 INSERT_ORDER = [
@@ -390,14 +399,30 @@ def read_augment_rows(augment_path: Path = AUGMENT_PATH) -> list[dict]:
     return json.loads(augment_path.read_text(encoding="utf-8"))["pages"]
 
 
-def seed_sha256(seed_path: Path = SEED_PATH, augment_path: Path = AUGMENT_PATH) -> str:
+def read_preferences(preferences_path: Path = PREFERENCES_PATH) -> dict:
+    if not preferences_path.exists():
+        return {}
+    prefs = json.loads(preferences_path.read_text(encoding="utf-8"))
+    if not isinstance(prefs, dict):
+        fail(f"{preferences_path} must hold a JSON object, got {type(prefs).__name__}")
+    return prefs
+
+
+def seed_sha256(
+    seed_path: Path = SEED_PATH,
+    augment_path: Path = AUGMENT_PATH,
+    preferences_path: Path = PREFERENCES_PATH,
+) -> str:
     """Identity of the seed being loaded: the seed artifact's bytes plus the
-    augment file's (when present). Recorded per demo account in
+    augment and preferences files' (each when present). Recorded per demo account in
     demo_seed_state so --replace can tell "nothing changed" from "reload"."""
     h = hashlib.sha256(seed_path.read_bytes())
     if augment_path.exists():
         h.update(b"\x00augment\x00")
         h.update(augment_path.read_bytes())
+    if preferences_path.exists():
+        h.update(b"\x00preferences\x00")
+        h.update(preferences_path.read_bytes())
     return h.hexdigest()
 
 
@@ -414,6 +439,37 @@ def _record_sha(cur, demo_user_id: int, seed_sha: str) -> None:
         "SET seed_sha256 = EXCLUDED.seed_sha256, loaded_at = now()",
         (demo_user_id, seed_sha),
     )
+
+
+def _apply_preferences(cur, demo_user_id: int, prefs: dict) -> dict:
+    """Merge ``prefs`` into the demo user's ``users.preferences``.
+
+    Keys the seed file doesn't name are left alone (merge, not replace).
+    Returns the key-level diff against the value before the write.
+    """
+    if not prefs:
+        return {}
+    cur.execute(
+        "SELECT preferences FROM users WHERE id = %s AND role = 'demo'", (demo_user_id,)
+    )
+    row = cur.fetchone()
+    current = (row[0] if row else None) or {}
+    diff = {
+        "added": sorted(k for k in prefs if k not in current),
+        "changed": sorted(k for k in prefs if k in current and current[k] != prefs[k]),
+        "unchanged": sorted(k for k in prefs if k in current and current[k] == prefs[k]),
+    }
+    cur.execute(
+        "UPDATE users SET preferences = COALESCE(preferences, '{}'::jsonb) || %s::jsonb "
+        "WHERE id = %s AND role = 'demo'",
+        (psycopg2.extras.Json(prefs), demo_user_id),
+    )
+    if cur.rowcount != 1:
+        raise RuntimeError(
+            f"preferences: expected to update 1 demo user (id {demo_user_id}), "
+            f"updated {cur.rowcount}"
+        )
+    return diff
 
 
 # (child table, FK column, parent table): child rows NOT owned by the demo
@@ -567,12 +623,15 @@ def _load_all(cur, data: dict, augment_rows: list[dict], demo_user_id: int,
 
 
 def run(dsn: str, *, data: dict, augment_rows: list[dict], seed_sha: str,
-        demo_email: str, replace: bool = False, dry_run: bool = False) -> dict:
+        demo_email: str, replace: bool = False, dry_run: bool = False,
+        preferences: dict | None = None) -> dict:
     """Load ``data`` into the demo account, in one transaction.
 
-    Returns ``{"demo_user_id", "dry_run", "action", "inserted"}`` where
-    ``action`` is ``"loaded"``, ``"already_seeded"``, ``"replaced"`` or
-    ``"up_to_date"``. Replace deletes only rows owned by the demo account,
+    Returns ``{"demo_user_id", "dry_run", "action", ...}`` where ``action`` is
+    ``"loaded"``, ``"already_seeded"``, ``"replaced"`` or ``"up_to_date"``. Only
+    ``loaded`` and ``replaced`` add ``inserted`` and ``preferences`` (the key
+    diff from ``_apply_preferences``, ``{}`` when none were given); ``replaced``
+    also adds ``deleted``. Replace deletes only rows owned by the demo account,
     then reloads; a ``SeedCollision`` rolls back everything. A dry run does all
     the work inside the transaction, then rolls it back.
     """
@@ -597,6 +656,7 @@ def run(dsn: str, *, data: dict, augment_rows: list[dict], seed_sha: str,
                     return {**result, "action": "already_seeded"}
                 result["action"] = "loaded"
             result["inserted"] = _load_all(cur, data, augment_rows, demo_user_id, source_user_id)
+            result["preferences"] = _apply_preferences(cur, demo_user_id, preferences or {})
             _record_sha(cur, demo_user_id, seed_sha)
         if dry_run:
             conn.rollback()
@@ -618,6 +678,12 @@ def _print_summary(result: dict) -> None:
             print(f"[load_demo_seed] {label}:")
             for table, n in counts.items():
                 print(f"  {table:24s} {n:6d}")
+    prefs = result.get("preferences")
+    if prefs:
+        print(
+            f"[load_demo_seed] preferences: added={prefs['added']} "
+            f"changed={prefs['changed']} unchanged={prefs['unchanged']}"
+        )
     if result.get("dry_run"):
         print("[load_demo_seed] DRY RUN -- rolled back; no rows changed (id sequences may have advanced)")
 
@@ -643,12 +709,18 @@ def main(argv: list[str] | None = None) -> int:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         fail("DATABASE_URL is not set")
+    if not PREFERENCES_PATH.exists():
+        print(
+            f"[load_demo_seed] WARNING: no preferences file at {PREFERENCES_PATH}; "
+            "demo account preferences will not be written"
+        )
     try:
         result = run(
             dsn,
             data=data,
             augment_rows=read_augment_rows(AUGMENT_PATH),
-            seed_sha=seed_sha256(SEED_PATH, AUGMENT_PATH),
+            preferences=read_preferences(PREFERENCES_PATH),
+            seed_sha=seed_sha256(SEED_PATH, AUGMENT_PATH, PREFERENCES_PATH),
             demo_email=os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local"),
             replace=args.replace,
             dry_run=args.dry_run,

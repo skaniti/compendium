@@ -6,6 +6,7 @@ explicit-id inserts never meet another test's rows. Setup and teardown purge
 the throwaway users' rows (by email pattern) and orphaned OFFSET page_content.
 """
 import copy
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -461,3 +462,163 @@ def test_admin_page_content_linked_to_a_demo_asset_aborts_the_replace(seed, augm
         assert _sha(users["demo"]) == [("sha-a",)]
     finally:
         _q("DELETE FROM page_content_assets WHERE page_content_id = %s", (admin_pc,))
+
+
+# --- demo account preferences -------------------------------------------------
+
+PREFS = {
+    "theme": "Grey Dark",
+    "show_noise": False,
+    "topic_interests": [{"icon_id": "dna", "keyword": "Diffusion models"}],
+}
+
+
+def _prefs(user_id):
+    return _q("SELECT preferences FROM users WHERE id = %s", (user_id,))[0][0]
+
+
+def _set_prefs(user_id, value: dict):
+    _q("UPDATE users SET preferences = %s::jsonb WHERE id = %s",
+       (json.dumps(value), user_id))
+
+
+def _prefs_text(user_id):
+    return _q("SELECT preferences::text FROM users WHERE id = %s", (user_id,))[0][0]
+
+
+def test_first_load_sets_the_demo_preferences(seed, augment, users):
+    result = _load(seed, augment, users, preferences=PREFS)
+    assert _prefs(users["demo"]) == PREFS
+    assert result["preferences"] == {
+        "added": sorted(PREFS), "changed": [], "unchanged": []}
+
+
+def test_replace_merges_preferences_and_leaves_admin_untouched(seed, augment, users):
+    _set_prefs(users["demo"], {"theme": "Something Else", "extra_key": 1,
+                               "show_noise": False})
+    _set_prefs(users["admin"], {"theme": "Admin Theme", "keep": [1, 2]})
+    admin_before = _prefs_text(users["admin"])
+
+    result = _load(seed, augment, users, replace=True, preferences=PREFS)
+
+    got = _prefs(users["demo"])
+    assert got["theme"] == "Grey Dark"
+    assert got["topic_interests"] == PREFS["topic_interests"]
+    assert got["extra_key"] == 1
+    assert result["preferences"]["changed"] == ["theme"]
+    assert result["preferences"]["unchanged"] == ["show_noise"]
+    assert result["preferences"]["added"] == ["topic_interests"]
+    assert _prefs_text(users["admin"]) == admin_before
+
+
+def test_dry_run_leaves_preferences_but_reports_the_diff(seed, augment, users):
+    result = _load(seed, augment, users, dry_run=True, preferences=PREFS)
+    assert _prefs(users["demo"]) == {}
+    assert result["preferences"]["added"] == sorted(PREFS)
+
+    _set_prefs(users["demo"], {"theme": "Other"})
+    result = _load(seed, augment, users, replace=True, dry_run=True, preferences=PREFS)
+    assert _prefs(users["demo"]) == {"theme": "Other"}
+    assert result["preferences"]["changed"] == ["theme"]
+
+
+def test_up_to_date_and_already_seeded_do_not_touch_preferences(seed, augment, users):
+    _load(seed, augment, users, preferences=PREFS)
+    _set_prefs(users["demo"], {"theme": "Hand Edited"})
+    result = _load(seed, augment, users, replace=True, preferences=PREFS)
+    assert result["action"] == "up_to_date" and "preferences" not in result
+    result = _load(seed, augment, users, sha="sha-b", preferences=PREFS)
+    assert result["action"] == "already_seeded" and "preferences" not in result
+    assert _prefs(users["demo"]) == {"theme": "Hand Edited"}
+
+
+def test_empty_preferences_write_nothing(seed, augment, users):
+    _set_prefs(users["demo"], {"theme": "Keep"})
+    result = _load(seed, augment, users)
+    assert result["preferences"] == {}
+    assert _prefs(users["demo"]) == {"theme": "Keep"}
+
+
+def test_a_null_preferences_column_counts_as_empty(seed, augment, users):
+    _q("UPDATE users SET preferences = NULL WHERE id = %s", (users["demo"],))
+    result = _load(seed, augment, users, preferences=PREFS)
+    assert result["preferences"]["added"] == sorted(PREFS)
+    assert _prefs(users["demo"]) == PREFS
+
+
+def test_seed_sha256_covers_the_preferences_file(tmp_path):
+    seed_f, aug_f, pref_f = (tmp_path / n for n in ("s.gz", "a.json", "p.json"))
+    seed_f.write_bytes(b"seed")
+    aug_f.write_text("{}")
+    without = lds.seed_sha256(seed_f, aug_f, pref_f)
+    pref_f.write_text('{"theme": "A"}')
+    with_a = lds.seed_sha256(seed_f, aug_f, pref_f)
+    pref_f.write_text('{"theme": "B"}')
+    with_b = lds.seed_sha256(seed_f, aug_f, pref_f)
+    assert len({without, with_a, with_b}) == 3
+    pref_f.write_text('{"theme": "A"}')
+    assert lds.seed_sha256(seed_f, aug_f, pref_f) == with_a
+
+
+def test_read_preferences(tmp_path):
+    assert lds.read_preferences(tmp_path / "missing.json") == {}
+    good = tmp_path / "good.json"
+    good.write_text('{"theme": "X"}')
+    assert lds.read_preferences(good) == {"theme": "X"}
+    bad = tmp_path / "bad.json"
+    bad.write_text("[1, 2]")
+    with pytest.raises(SystemExit):
+        lds.read_preferences(bad)
+
+
+def test_shipped_preferences_match_the_seeds_supercluster_names(full_seed):
+    prefs = lds.read_preferences(lds.PREFERENCES_PATH)
+    keywords = [t["keyword"] for t in prefs["topic_interests"]]
+    names = {c["super_cluster"] for c in full_seed["clusters"]}
+    labels = {g["label"] for g in full_seed["super_cluster_groups"]}
+    assert keywords and set(keywords) <= names
+    assert set(keywords) <= labels
+
+
+def _apply_in_txn(user_id, prefs):
+    conn = psycopg2.connect(DSN)
+    try:
+        with conn, conn.cursor() as cur:
+            return lds._apply_preferences(cur, user_id, prefs)
+    finally:
+        conn.close()
+
+
+def test_apply_preferences_refuses_a_non_demo_user(users):
+    _set_prefs(users["admin"], {"theme": "Admin Theme"})
+    before = _prefs_text(users["admin"])
+    with pytest.raises(RuntimeError):
+        _apply_in_txn(users["admin"], PREFS)
+    assert _prefs_text(users["admin"]) == before
+
+
+def test_apply_preferences_touches_only_the_given_demo_user(users):
+    other = user_repo.create_user(
+        f"seed-demo-other-{uuid.uuid4().hex[:8]}@test.local", name="seed demo 2")
+    auth_repo.set_role(other["id"], "demo")
+    _set_prefs(other["id"], {"theme": "Other Demo"})
+    before = _prefs_text(other["id"])
+
+    _apply_in_txn(users["demo"], PREFS)
+
+    assert _prefs(users["demo"]) == PREFS
+    assert _prefs_text(other["id"]) == before
+
+
+def test_cli_passes_the_shipped_preferences_to_run(monkeypatch):
+    seen = {}
+
+    def fake_run(*args, **kwargs):
+        seen.update(kwargs)
+        raise lds.SeedCollision("captures", [1])
+
+    monkeypatch.setattr(lds, "run", fake_run)
+    monkeypatch.setenv("DATABASE_URL", DSN)
+    assert lds.main([]) == 2
+    assert seen["preferences"] == lds.read_preferences(lds.PREFERENCES_PATH)
+    assert seen["preferences"]["topic_interests"]
