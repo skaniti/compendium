@@ -22,13 +22,31 @@
 #
 # Env:
 #   PUBLIC_API_URL   public demo API base URL (no default); probed at /health
-#                    when set, skipped otherwise
+#                    when set. When unset, https://<PUBLIC_API_HOSTNAME> is
+#                    used if ~/apps/compendium/.env (ENV_FILE) defines
+#                    PUBLIC_API_HOSTNAME (the same knob section-21 reads);
+#                    otherwise the public probe is skipped.
+#   ENV_FILE         default ~/apps/compendium/.env (read for PUBLIC_API_HOSTNAME)
+#   DEMO_PORT        demo API loopback port the tunnel may target, default 8002
 #   CLOUDFLARED_CONFIG  default /etc/cloudflared/config.yml
+#
+# Tunnel gate (an allowlist): every `service:` line in the cloudflared config
+# must be http://localhost:<DEMO_PORT>, http://127.0.0.1:<DEMO_PORT> or
+# http_status:404. Anything else fails the check. The credentials-file line is
+# never printed.
 
 set -uo pipefail
 
 PUBLIC_API_URL="${PUBLIC_API_URL:-}"
 CLOUDFLARED_CONFIG="${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}"
+ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env}"
+DEMO_PORT="${DEMO_PORT:-8002}"
+
+# Public hostname knob: same source as section-21 (reads only this one name).
+if [ -z "$PUBLIC_API_URL" ] && [ -r "$ENV_FILE" ]; then
+    _ph=$(grep -h '^PUBLIC_API_HOSTNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+    [ -n "$_ph" ] && PUBLIC_API_URL="https://${_ph}"
+fi
 
 PASS=0
 FAIL=0
@@ -114,10 +132,15 @@ fi
 if [ -r "$CLOUDFLARED_CONFIG" ]; then
     echo "  routes in $CLOUDFLARED_CONFIG:"
     grep -E '^\s*-? *(hostname|service):' "$CLOUDFLARED_CONFIG" | sed 's/^/    /'
-    if grep -E '^\s*-? *service:' "$CLOUDFLARED_CONFIG" | grep -Eq 'localhost:(8001|3000)\b|127\.0\.0\.1:(8001|3000)\b'; then
-        bad "cloudflared routes to the owner stack (:8001 or :3000); the owner stack must never be on the tunnel"
+    # Allowlist: only the demo port and the catch-all 404 may appear.
+    bad_services=$(grep -E '^\s*-? *service:' "$CLOUDFLARED_CONFIG" \
+        | sed -E 's/^\s*-? *service:\s*//; s/\s*#.*$//; s/\s+$//; s/^["'"'"']//; s/["'"'"']$//' \
+        | grep -Evx "http://(localhost|127\.0\.0\.1):${DEMO_PORT}|http_status:404" || true)
+    if [ -n "$bad_services" ]; then
+        bad "cloudflared has service targets outside the allowlist (http://localhost:${DEMO_PORT}, http://127.0.0.1:${DEMO_PORT}, http_status:404):"
+        echo "$bad_services" | sed 's/^/      /'
     else
-        ok "cloudflared: no route to the owner ports (:8001, :3000)"
+        ok "cloudflared: every service target is the demo port ${DEMO_PORT} or http_status:404"
     fi
 else
     warn "cloudflared config not readable at $CLOUDFLARED_CONFIG (run with sudo or set CLOUDFLARED_CONFIG)"
@@ -153,7 +176,7 @@ if [ -n "$PUBLIC_API_URL" ]; then
         *)   warn "$pub_url -> $pub_code" ;;
     esac
 else
-    echo "  skipped (set PUBLIC_API_URL to probe)"
+    echo "  skipped (set PUBLIC_API_URL, or PUBLIC_API_HOSTNAME in $ENV_FILE, to probe)"
 fi
 
 # --------------------------------------------------------------------------
