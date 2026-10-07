@@ -112,7 +112,7 @@ probe() {
 }
 probe "owner api: " "http://127.0.0.1:8001/health"
 probe "owner web: " "http://127.0.0.1:3000/login"
-probe "demo api:  " "http://127.0.0.1:8002/health"
+probe "demo api:  " "http://127.0.0.1:${DEMO_PORT:-8002}/health"
 
 # --------------------------------------------------------------------------
 # 3. Cloudflared tunnel (must route the demo only)
@@ -136,7 +136,9 @@ if [ -r "$CLOUDFLARED_CONFIG" ]; then
     bad_services=$(grep -E '^\s*-? *service:' "$CLOUDFLARED_CONFIG" \
         | sed -E 's/^\s*-? *service:\s*//; s/\s*#.*$//; s/\s+$//; s/^["'"'"']//; s/["'"'"']$//' \
         | grep -Evx "http://(localhost|127\.0\.0\.1):${DEMO_PORT}|http_status:404" || true)
-    if [ -n "$bad_services" ]; then
+    if ! grep -qE '^\s*-? *service:' "$CLOUDFLARED_CONFIG"; then
+        bad "no service: lines found in $CLOUDFLARED_CONFIG -- cannot verify the tunnel allowlist"
+    elif [ -n "$bad_services" ]; then
         bad "cloudflared has service targets outside the allowlist (http://localhost:${DEMO_PORT}, http://127.0.0.1:${DEMO_PORT}, http_status:404):"
         echo "$bad_services" | sed 's/^/      /'
     else

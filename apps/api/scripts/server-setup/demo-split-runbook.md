@@ -80,6 +80,7 @@ The session is not remembered yet (that's step 6). Dash is no longer exposed.
 Rollback (compare against the saved `~/tailscale-serve-pre-split.json`).
 Targeted, so other serve routes are never wiped:
 
+    sudo tailscale serve --https=8443 off
     sudo tailscale serve --https=443 off && sudo tailscale serve --bg --https=443 http://127.0.0.1:8080
 
 then run `tailscale serve status --json` and confirm it matches the saved
@@ -130,13 +131,15 @@ default):
   (a) Login prints `login ok` (the demo account's username `demo` is set by
   the bootstrap).
 
-  (b) Graph. The response holds a `nodes` list of pages:
+  (b) Graph. Nodes are keyed by slugified page title, so a node's
+  `visit_count` is the number of pages merged into it. Sum it:
 
-      curl -s "127.0.0.1:$PORT/api/graph?window=all" -H "Authorization: Bearer $TOKEN" | python3 -c 'import sys,json; print("graph nodes:", len(json.load(sys.stdin)["nodes"]))'
+      curl -s "127.0.0.1:$PORT/api/graph?window=all" -H "Authorization: Bearer $TOKEN" | python3 -c 'import sys,json; n=json.load(sys.stdin)["nodes"]; print("graph nodes:", len(n), "pages:", sum(x.get("visit_count", 1) for x in n))'
 
-  Expect at least 158 (the 158 seed pages; the loader also adds the 113
-  augment pages, so the count can be higher). 0 or a number below 158 fails
-  the step.
+  Expect `pages: 158` exactly. `graph nodes: 157` is expected, because two
+  seed pages share a title and merge into one node. (The 113 augment pages
+  are archived or pending and never become nodes.) Any other pages total
+  fails the step.
 
   (c) Chat. One non-streaming agent query; expect a real answer, not
   "OpenAI API key not configured":
@@ -233,9 +236,10 @@ line). It is an allowlist: the only acceptable `service:` lines are
 `http://localhost:<demo port>` (or `http://127.0.0.1:<demo port>`, demo port
 8002 unless changed) and `http_status:404`. Any other service line (the
 owner ports `:8001` and `:3000` included) fails the gate; do not continue.
-`sudo bash apps/api/scripts/server/diagnose_server.sh` applies the same
-allowlist (set `DEMO_PORT` if it is not 8002) and exits non-zero on a
-violation.
+`sudo ENV_FILE=$HOME/apps/compendium/.env DEMO_PORT=<demo port> bash apps/api/scripts/server/diagnose_server.sh`
+applies the same allowlist and exits non-zero on a violation. (Your shell
+expands `$HOME` before sudo runs; sudo resets `HOME` and drops exported
+variables, so the hostname read and `DEMO_PORT` would otherwise be lost.)
 
 1. In `~/apps/compendium/.env`, set `TAILNET_ONLY_DEPLOYMENT=1` and
    `API_CORS_ORIGINS=https://<tailnet-host>`.
