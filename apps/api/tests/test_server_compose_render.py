@@ -146,3 +146,20 @@ def test_the_env_template_lists_every_required_demo_var():
 def test_entrypoint_passes_demo_seed_args_to_the_loader():
     text = (COMPOSE_DIR / "entrypoint.sh").read_text()
     assert "python scripts/demo/load_demo_seed.py ${DEMO_SEED_ARGS:-}" in text
+
+
+def _dockerignore_patterns() -> set[str]:
+    path = Path(__file__).resolve().parents[1] / ".dockerignore"
+    return {
+        line.strip()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
+def test_api_dockerignore_keeps_owner_artifacts_out_of_the_image():
+    patterns = _dockerignore_patterns()
+    for required in ("logs", "*.log", "data/agent-traces", "data/backups", ".env*"):
+        assert required in patterns, required
+    # the demo seed is the one data dir the image must carry
+    assert not any(p.startswith("data/demo-seed") or p == "data" for p in patterns)
