@@ -23,6 +23,10 @@ Idempotent: safe to run on every deploy. Behaviour:
        local dev DB; production should override via
        ``BOOTSTRAP_DEMO_PASSWORD``.
      - Role is set to 'demo' (migration 029).
+     - Username (the published login name): ``BOOTSTRAP_DEMO_USERNAME``
+       (default ``demo``; empty string disables). Set only when the demo row's
+       username is NULL and no other user holds it (case-insensitive);
+       otherwise left alone with a one-line message.
 
 Run locally (uses your local docker-compose Postgres):
 
@@ -137,6 +141,36 @@ def _bootstrap_demo(demo_email: str, demo_password: str, demo_name: str) -> None
     if demo_after is not None:
         auth_repo.set_role(demo_after["id"], "demo")
         print(f"[demo]    role -> demo")
+        _ensure_demo_username(
+            demo_after["id"], os.environ.get("BOOTSTRAP_DEMO_USERNAME", "demo")
+        )
+
+
+def _ensure_demo_username(demo_id: int, username: str) -> None:
+    """Give the demo row its login username (get_user_by_login matches
+    email OR lower(username)); never steals one another user holds."""
+    username = username.strip()
+    if not username:
+        print("[demo]    username skipped (BOOTSTRAP_DEMO_USERNAME empty)")
+        return
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT username FROM users WHERE id = %s", (demo_id,))
+            row = cur.fetchone()
+            if row is not None and row[0] is not None:
+                print(f"[demo]    username kept ({row[0]})")
+                return
+            cur.execute(
+                "SELECT 1 FROM users WHERE lower(username) = lower(%s) AND id <> %s",
+                (username, demo_id),
+            )
+            if cur.fetchone() is not None:
+                print(f"[demo]    username {username} skipped (held by another user)")
+                return
+            cur.execute(
+                "UPDATE users SET username = %s WHERE id = %s", (username, demo_id)
+            )
+    print(f"[demo]    username -> {username}")
 
 
 def _demo_only() -> bool:
