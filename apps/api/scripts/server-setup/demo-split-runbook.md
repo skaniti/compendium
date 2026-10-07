@@ -35,13 +35,40 @@ network declared in `apps/api/docker/docker-compose.demo.yml`).
    containing it. Also `ip -br addr | grep 172.31.250.` must print nothing.
 4. Make sure `~/apps/compendium/.env` holds `TAILNET_HOSTNAME=<tailnet-host>`
    (section-21's probes read it). Optionally add
-   `PUBLIC_API_HOSTNAME=<public-api-host>` there too so the demo public probe runs.
+   `PUBLIC_API_HOSTNAME=<public-api-host>` there too so the demo public probe
+   runs. `diagnose_server.sh` reads the same `PUBLIC_API_HOSTNAME` from that
+   file when `PUBLIC_API_URL` is not set in the environment (an exported
+   `PUBLIC_API_URL` wins).
+5. Build-context check. `deploy_server.sh` writes deploy logs under
+   `apps/api/logs/`, inside the api image's build context, and a failed
+   deploy's logs include tails of the owner api and web logs.
+   `apps/api/.dockerignore` excludes them; confirm nothing else is loose:
+
+       git status --ignored --short apps/api
+
+   Expect only caches (`__pycache__`, `.pytest_cache`, `.ruff_cache`), `.env`
+   files, `data/agent-traces/`, `data/backups/`, `logs/` and test caches. All
+   of these are excluded from the image. Any other entry must be checked
+   (and excluded or removed) before building the demo image.
+6. Compose project label. The owner stack must run under project `docker`:
+
+       docker inspect compendium-api --format '{{index .Config.Labels "com.docker.compose.project"}}'
+
+   It must print `docker`. If it prints anything else, STOP: `deploy_server.sh`
+   pins `PROJECT=docker` for the owner stack and would conflict with the
+   running containers.
+7. Variables that override the deploy script's own. Names only, never values:
+
+       grep -noE '^(export )?(STACK|PROJECT|REPO_ROOT|PROJECT_ROOT|COMPOSE_FILE|ENV_FILE|SECRETS_FILE|SEED_MODE|API_HOST_PORT)=' ~/.secrets ~/apps/compendium/.env
+
+   Any hit must be removed first (the script is sourced against those files;
+   a stray `STACK=` or `PROJECT=` there would redirect the deploy).
 
 ## 1. Owner web on the tailnet
 
     bash apps/api/scripts/server/deploy_server.sh --stack owner --skip-seed
     tailscale serve status --json > ~/tailscale-serve-pre-split.json
-    sudo tailscale serve reset
+    sudo tailscale serve --https=443 off
     sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
     sudo tailscale serve --bg --https=8443 http://127.0.0.1:8001
     tailscale serve status
@@ -50,9 +77,10 @@ Check: from your laptop or phone (on the tailnet), `https://<tailnet-host>/`
 shows the login page. Log in; the graph, diary, topic detail and chat work.
 The session is not remembered yet (that's step 6). Dash is no longer exposed.
 
-Rollback (compare against the saved `~/tailscale-serve-pre-split.json`):
+Rollback (compare against the saved `~/tailscale-serve-pre-split.json`).
+Targeted, so other serve routes are never wiped:
 
-    sudo tailscale serve reset && sudo tailscale serve --bg --https=443 http://127.0.0.1:8080
+    sudo tailscale serve --https=443 off && sudo tailscale serve --bg --https=443 http://127.0.0.1:8080
 
 then run `tailscale serve status --json` and confirm it matches the saved
 file.
@@ -88,8 +116,38 @@ default):
 - `docker logs compendium-demo-api 2>&1 | grep -A 20 'action='` shows
   `action=replaced` on the first boot, with the loader's per-table counts
   (pages inserted).
-- `curl -s -X POST 127.0.0.1:8002/api/auth/login -H 'content-type: application/json' -d '{"email":"demo","password":"<published-demo-password>"}'`
-  returns 200 (the demo account's username `demo` is set by the bootstrap).
+- Functional checks over loopback (spec section 6 requires them before the
+  flip). The block below logs in as `demo`, then checks the graph, the chat
+  and a preview asset. The token stays in a shell variable and is never
+  printed. Replace `<published-demo-password>`; set `PORT` to your
+  `DEMO_API_HOST_PORT` if it is not 8002. The login route is limited to
+  5 per minute, so run it once:
+
+      PORT=8002
+      TOKEN=$(curl -s -X POST 127.0.0.1:$PORT/api/auth/login -H 'content-type: application/json' -d '{"email":"demo","password":"<published-demo-password>"}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+      test -n "$TOKEN" && echo "login ok" || echo "login FAILED"
+
+  (a) Login prints `login ok` (the demo account's username `demo` is set by
+  the bootstrap).
+
+  (b) Graph. The response holds a `nodes` list of pages:
+
+      curl -s "127.0.0.1:$PORT/api/graph?window=all" -H "Authorization: Bearer $TOKEN" | python3 -c 'import sys,json; print("graph nodes:", len(json.load(sys.stdin)["nodes"]))'
+
+  Expect at least 158 (the 158 seed pages; the loader also adds the 113
+  augment pages, so the count can be higher). 0 or a number below 158 fails
+  the step.
+
+  (c) Chat. One non-streaming agent query; expect a real answer, not
+  "OpenAI API key not configured":
+
+      curl -s -X POST 127.0.0.1:$PORT/api/agent/query -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"query":"What topics does this compendium cover?"}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["answer"][:300])'
+
+  (d) Preview asset. Fetch one seed asset through the owner-gated route
+  (the path is a seed row's `file_path`, here a file that exists under
+  `apps/web/demo/fixtures/assets/captured-assets/`); expect `200`:
+
+      curl -s -o /dev/null -w '%{http_code}\n' "127.0.0.1:$PORT/captured-assets/92/92c33407b103e41932b666a66f07bfd5f5993e6fa35a333d370e4ffb6de255c4.png" -H "Authorization: Bearer $TOKEN"
 
 Rollback: `docker compose -p compendium-demo --env-file ~/apps/compendium/.env.demo -f apps/api/docker/docker-compose.demo.yml down`
 (the public site is still on the owner API until step 5).
@@ -110,27 +168,32 @@ lacks the stock RELATED,ESTABLISHED accept it anchors on; every edit backs the
 rule files up first; and on a failed `ufw reload` it restores both backups,
 reloads again and exits 1. It verifies DOCKER-USER after the reload.
 
-Check from inside the demo container. Expect `blocked` for the first four and
-`open` for the last:
+Check from inside the demo container. Run:
 
-    docker exec -i compendium-demo-api python - <<'EOF'
-    import socket
-    for host, port in [("<desktop-tailnet-ip>", 445), ("<lan-gateway-ip>", 80),
-                       ("<server-tailnet-ip>", 443), ("<demo-subnet-gateway-ip>", 22),
-                       ("api.openai.com", 443)]:
-        s = socket.socket(); s.settimeout(3)
-        try:
-            s.connect((host, port)); print(host, port, "open")
-        except OSError as e:
-            print(host, port, "blocked", type(e).__name__)
-        finally:
-            s.close()
-    EOF
+```
+docker exec -i compendium-demo-api python - <<'EOF'
+import socket
+for host, port in [("<desktop-tailnet-ip>", 445), ("<lan-gateway-ip>", 80),
+                   ("<server-tailnet-ip>", 443), ("<demo-subnet-gateway-ip>", 22),
+                   ("api.openai.com", 443)]:
+    s = socket.socket(); s.settimeout(3)
+    try:
+        s.connect((host, port)); print(host, port, "open")
+    except OSError as e:
+        print(host, port, "blocked", type(e).__name__)
+    finally:
+        s.close()
+EOF
+```
 
-The last line (`api.openai.com 443 open`) is the "demo chat still works"
-check. The public site is not on the demo stack yet, so confirm over
-loopback rather than through the public site. After step 5, also ask the
-public demo's chat one question; it must still answer.
+Expect `blocked` for the first four and `open` for the last
+(`api.openai.com 443 open` means the demo can still reach OpenAI).
+
+Then, with the rules applied, repeat the step 3 chat call (c) over loopback
+(log in again for a fresh `TOKEN` if needed). It must still return an answer.
+The public site is not on the demo stack yet, so confirm over loopback rather
+than through the public site. After step 5, also ask the public demo's chat
+one question; it must still answer.
 
 Rollback: the script prints its restore command only on success, so spell it
 out: find the backups it made (`ls -t /etc/ufw/*.bak-*`), restore each over
@@ -154,13 +217,25 @@ corpus; chat answers; preview images load. Your own login fails on the public
 site ("invalid credentials"; that account does not exist there).
 
 Rollback: restore the `.bak` config and `sudo systemctl restart cloudflared`.
+If step 6 is already applied, undo step 6 first: a rollback to the owner
+API (`:8001`) behind the tunnel while the owner stack is still tailnet-only
+would put the owner data on the public path. The API's tripwire (a request
+carrying `CF-Connecting-IP` is untrusted and gets the non-remembered
+session policy even under `TAILNET_ONLY_DEPLOYMENT`) is only a backstop, not
+a substitute for undoing step 6.
 
 ## 6. Owner API hardening (only after step 5)
 
 GATE: do not continue until no tunnel route reaches the owner stack. Run
-`grep -nE '^\s*-? *service:' /etc/cloudflared/config.yml` (or
-`bash apps/api/scripts/server/diagnose_server.sh`) and require that no
-`service:` line points at `:8001` or `:3000`.
+`sudo grep -E '^\s*-? *service:' /etc/cloudflared/config.yml` (the config
+may be root-only; this prints service lines only, never the credentials
+line). It is an allowlist: the only acceptable `service:` lines are
+`http://localhost:<demo port>` (or `http://127.0.0.1:<demo port>`, demo port
+8002 unless changed) and `http_status:404`. Any other service line (the
+owner ports `:8001` and `:3000` included) fails the gate; do not continue.
+`sudo bash apps/api/scripts/server/diagnose_server.sh` applies the same
+allowlist (set `DEMO_PORT` if it is not 8002) and exits non-zero on a
+violation.
 
 1. In `~/apps/compendium/.env`, set `TAILNET_ONLY_DEPLOYMENT=1` and
    `API_CORS_ORIGINS=https://<tailnet-host>`.
@@ -238,8 +313,13 @@ Rollback: paste the saved policy back and remove the tag.
 (add `NO_WEB_BUILD=1` if the web image was built off-box.) The dump must be
 non-empty (the `ls -l` line) before you continue.
 
-Read the dry run's per-table counts (deleted and inserted). Both should be
-about the size of the seed (22 captures, 158 + 113 pages, 49 clusters).
+Read the dry run's per-table counts (deleted and inserted). Inserted should
+be about the size of the seed (22 captures, 158 + 113 pages, 49 clusters).
+Deleted counts can exceed inserted: the replace deletes EVERY row the demo
+account owns that is not in the seed, including a capture the seed manifest
+deliberately left out as real developer browsing. That data survives only in
+the pg_dump you just took. Decide whether that loss is acceptable before you
+apply.
 
 Failure signals; in every case stop and report, nothing was changed:
 - The deploy script exits 3: the dry run failed. The deploy itself is up; the
@@ -261,12 +341,26 @@ without one. `--skip-seed` skips the whole step.
 Check: on `https://<tailnet-host>/`, View as demo shows the demo corpus with
 current previews. Your own graph is unchanged.
 
-Rollback: restore the dump:
+Rollback: restore the dump. Restoring rolls the WHOLE database back to the
+dump time, so do it right after taking the dump, and stop every writer first:
 
-    docker exec -i compendium-postgres pg_restore -U tbd -d traversal_discovery --clean --if-exists < ~/backups/pre-demo-replace-<ts>.dump
+    docker stop compendium-web compendium-api
+    docker stop <dash-app-container>
+    docker stop <dq-worker-container>
 
-Restoring rolls the WHOLE database back to the dump time, so run this step
-right after taking the dump.
+(`compendium-web` and `compendium-api` are the owner containers; replace the
+two placeholders with the names from `docker ps`, and skip the dq-worker line
+if it does not exist.) Then restore and check the exit status:
+
+    docker exec -i compendium-postgres pg_restore -U tbd -d traversal_discovery --clean --if-exists < ~/backups/pre-demo-replace-<ts>.dump; echo "pg_restore exit: $?"
+
+A non-zero status, including "errors ignored on restore", means read the
+output before restarting anything. Only on a clean exit, restart in reverse
+order:
+
+    docker start <dq-worker-container>
+    docker start <dash-app-container>
+    docker start compendium-api compendium-web
 
 ## Done when
 
