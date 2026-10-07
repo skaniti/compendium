@@ -231,9 +231,15 @@ its file (`sudo cp /etc/ufw/after.rules.bak-<ts> /etc/ufw/after.rules` and
 ## 5. Tunnel flip
 
 1. `sudo cp /etc/cloudflared/config.yml /etc/cloudflared/config.yml.bak-$(date +%Y%m%d-%H%M%S)`
-2. In `/etc/cloudflared/config.yml`, change the `<public-api-host>` rule's
-   `service: http://localhost:8001` to `service: http://localhost:8002` (or
-   your `DEMO_API_HOST_PORT`). Keep the `^/metrics` 404 rule above it.
+2. In `/etc/cloudflared/config.yml` (root-only, so edit with sudo), change
+   the `<public-api-host>` rule's `service: http://localhost:8001` to
+   `service: http://localhost:8002` (or your `DEMO_API_HOST_PORT`), keeping
+   the `^/metrics` 404 rule above it. One command, then a check:
+
+       sudo sed -i 's|service: http://localhost:8001$|service: http://localhost:8002|' /etc/cloudflared/config.yml && sudo grep -nE '^\s*-? *(hostname|service):' /etc/cloudflared/config.yml
+
+   Expect `http_status:404` (the `/metrics` rule), `http://localhost:8002`,
+   and the final `http_status:404`; nothing on `8001`.
 3. `sudo systemctl restart cloudflared`
 4. Vercel: Project, then Settings, then Environment Variables. Set
    `NEXT_PUBLIC_DEMO_ROLE_TOOLING` off (delete it), then redeploy production
