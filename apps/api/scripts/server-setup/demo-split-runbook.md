@@ -15,6 +15,15 @@ Placeholders: `<tailnet-host>` = the server's MagicDNS name;
 `ip -4 -br addr show br-compdemo` (the bridge exists once step 3 has run;
 network declared in `apps/api/docker/docker-compose.demo.yml`).
 
+Two directories, on purpose:
+- `<checkout>`: the compendium monorepo checkout (pre-flight 0.1). Every
+  relative `apps/api/...` path below runs from here.
+- `~/apps/compendium`: the older explorer clone. The deploy env files live
+  here, `.env` (owner stack, already exists) and `.env.demo` (created in
+  step 3), because `deploy_server.sh`, section-21 and `diagnose_server.sh`
+  read them from this directory by default. Every `~/apps/compendium/...`
+  path below is deliberate; it is not the checkout.
+
 ## 0. Pre-flight
 
 1. Find `<checkout>`: it is three levels above the directory the running API
@@ -44,7 +53,11 @@ network declared in `apps/api/docker/docker-compose.demo.yml`).
    No network other than `compendium-demo-net` may use 172.31.250.0/24 (the
    demo subnet declared in `apps/api/docker/docker-compose.demo.yml`) or any range
    containing it. Also `ip -br addr | grep 172.31.250.` must print nothing.
-4. Make sure `~/apps/compendium/.env` holds `TAILNET_HOSTNAME=<tailnet-host>`
+   `compendium-demo-net` does not exist until step 3 creates it;
+   `compendium-net` (the existing owner network) and the other default
+   networks are expected in the list.
+4. Make sure the owner env file `~/apps/compendium/.env` (it already exists;
+   `ls -l` it) holds `TAILNET_HOSTNAME=<tailnet-host>`
    (section-21's probes read it). Optionally add
    `PUBLIC_API_HOSTNAME=<public-api-host>` there too so the demo public probe
    runs. `diagnose_server.sh` reads the same `PUBLIC_API_HOSTNAME` from that
