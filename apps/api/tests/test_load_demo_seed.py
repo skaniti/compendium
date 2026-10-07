@@ -435,3 +435,29 @@ def test_admin_rows_under_a_demo_capture_abort_the_replace(seed, augment, users)
     assert demo_fingerprint(users["demo"], seed) == before_demo
     assert admin_snapshot(users["admin"]) == before_admin
     assert _sha(users["demo"]) == [("sha-a",)]
+
+
+def test_admin_page_content_linked_to_a_demo_asset_aborts_the_replace(seed, augment, users):
+    _load(seed, augment, users)
+    asset_id = seed["captured_assets"][0]["id"]
+    admin_pc = OFFSET + 990_002
+    _insert_admin(seed, users["admin"], capture_id=OFFSET + 990_001,
+                  page_id=OFFSET + 990_001, page_content_id=admin_pc,
+                  new_page_content=True)
+    _q("INSERT INTO page_content_assets (page_content_id, asset_id) VALUES (%s, %s)",
+       (admin_pc, asset_id))
+    before_demo = demo_fingerprint(users["demo"], seed)
+    before_admin = admin_snapshot(users["admin"])
+    try:
+        with pytest.raises(lds.CrossAccountRows) as exc:
+            _load(seed, augment, users, sha="sha-b", replace=True)
+
+        assert admin_pc in exc.value.ids
+        assert demo_fingerprint(users["demo"], seed) == before_demo
+        assert admin_snapshot(users["admin"]) == before_admin
+        assert _q("SELECT count(*) FROM page_content_assets "
+                  "WHERE page_content_id = %s AND asset_id = %s",
+                  (admin_pc, asset_id)) == [(1,)]
+        assert _sha(users["demo"]) == [("sha-a",)]
+    finally:
+        _q("DELETE FROM page_content_assets WHERE page_content_id = %s", (admin_pc,))

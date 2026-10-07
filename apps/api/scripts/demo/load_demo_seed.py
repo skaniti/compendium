@@ -449,6 +449,20 @@ def _check_cascade_guards(cur, demo_user_id: int) -> None:
         hits = [r[0] for r in cur.fetchall()]
         if hits:
             raise CrossAccountRows(f"{child} under demo {parent}", hits)
+    # page_content_assets cascades from captured_assets.asset_id. Before
+    # migration 031 another account's page_content could link a demo-owned
+    # asset; deleting the demo assets would silently drop that link.
+    cur.execute(
+        "SELECT DISTINCT pca.page_content_id FROM page_content_assets pca "
+        "JOIN captured_assets a ON a.id = pca.asset_id WHERE a.user_id = %s "
+        "AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.user_id = %s "
+        "AND p.page_content_id = pca.page_content_id) "
+        "ORDER BY pca.page_content_id LIMIT 20",
+        (demo_user_id, demo_user_id),
+    )
+    hits = [r[0] for r in cur.fetchall()]
+    if hits:
+        raise CrossAccountRows("page_content_assets linking demo assets", hits)
 
 
 def _delete_demo_rows(cur, demo_user_id: int) -> dict[str, int]:
