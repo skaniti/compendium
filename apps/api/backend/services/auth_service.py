@@ -135,11 +135,14 @@ def ingress_trusted(headers) -> bool:
     production by the ``Settings`` validator).
 
     On a tailnet-only deployment (``settings.tailnet_only_deployment``,
-    tailnet-owner-demo-split 2026-10-06) every request is trusted regardless
-    of the header: there is no public path to forge it from.
+    tailnet-owner-demo-split 2026-10-06) there is no public path, so a request
+    is trusted whatever the ingress header says, EXCEPT one carrying
+    ``CF-Connecting-IP``: Cloudflare adds that header to everything it
+    forwards, so its presence means the API was put back behind the tunnel
+    (e.g. a rollback) and the request is untrusted (non-remembered policy).
     """
     if settings.tailnet_only_deployment:
-        return True
+        return headers.get("CF-Connecting-IP") is None
     value = headers.get(settings.session_ingress_header)
     if value is None:
         return settings.session_trust_missing_ingress

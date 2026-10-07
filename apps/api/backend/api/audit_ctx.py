@@ -25,7 +25,12 @@ def from_request(request) -> AuditCtx:
         from backend.services import auth_service
 
         if settings.tailnet_only_deployment:
-            origin = "tailnet"
+            # No public ingress by design; a Cloudflare-borne request (the
+            # CF-Connecting-IP header) means the API was re-exposed.
+            if request.headers.get("CF-Connecting-IP") is not None:
+                origin = "public"
+            else:
+                origin = "tailnet"
         elif request.headers.get(settings.session_ingress_header) is None:
             origin = "unknown"
         elif auth_service.ingress_trusted(request.headers):

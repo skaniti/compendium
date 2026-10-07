@@ -105,7 +105,9 @@ class Settings(BaseSettings):
     # tailnet-owner-demo-split (2026-10-06): set ONLY on a deployment that has
     # no public ingress at all (the owner stack, reachable solely through
     # `tailscale serve`). Every request is then tailnet-trusted, so non-demo
-    # logins get the remembered policy without any header stamping. Never set
+    # logins get the remembered policy without any header stamping -- except
+    # a request carrying CF-Connecting-IP (it came through Cloudflare, so the
+    # API was re-exposed), which is untrusted and audited as public. Never set
     # it on a stack a public route reaches (the demo stack). Refused together
     # with RATE_LIMIT_TRUST_CF_HEADER, which only makes sense with Cloudflare
     # in front -- see _check_production_secrets. Env var

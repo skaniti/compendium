@@ -671,6 +671,23 @@ class TestTailnetOnlyDeployment:
             auth_service.ingress_trusted({"X-Compendium-Ingress": "public"}) is True
         )
 
+    def test_cloudflare_borne_request_is_untrusted(self, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        assert auth_service.ingress_trusted({"CF-Connecting-IP": "203.0.113.9"}) is False
+
+    def test_cloudflare_borne_login_is_not_remembered(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "tailnet_only_deployment", True)
+        _stub_login_user(monkeypatch, user_id=6, email="user@test.local", role="user")
+        save_calls = _capture_save_refresh_token(monkeypatch)
+        r = client.post(
+            "/api/auth/login",
+            json={"email": "user@test.local", "password": "x"},
+            headers={"CF-Connecting-IP": "203.0.113.9"},
+        )
+        assert r.status_code == 200
+        assert r.json()["session_policy"]["remembered"] is False
+        assert save_calls[0]["remembered"] is False
+
     def test_user_login_without_header_is_remembered(self, client, monkeypatch):
         monkeypatch.setattr(settings, "tailnet_only_deployment", True)
         _stub_login_user(monkeypatch, user_id=6, email="user@test.local", role="user")
