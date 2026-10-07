@@ -68,3 +68,15 @@ def test_demo_and_skip_seed_have_no_seed_step():
 def test_stack_without_a_value_exits_2_instead_of_hanging():
     assert _plan("--stack", timeout=5)[0] == 2
     assert _plan("--stack=", timeout=5)[0] == 2
+
+
+def test_web_build_defaults_to_yes_on_owner():
+    assert _plan()[1]["web_build"] == "yes"
+
+
+def test_no_web_build_skips_the_web_image_build_on_owner():
+    assert _plan(env={"NO_WEB_BUILD": "1"})[1]["web_build"] == "no"
+
+
+def test_no_web_build_has_no_effect_on_demo():
+    assert _plan("--stack", "demo", env={"NO_WEB_BUILD": "1"})[1]["web_build"] == "n/a"

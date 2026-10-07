@@ -36,7 +36,9 @@
 #      way -- verify it's set in ~/.secrets directly. API_HOST_PORT (owner) /
 #      DEMO_API_HOST_PORT (demo) are optional. ENV_FILE=/path
 #      SECRETS_FILE=/path override the default paths.
-#   2. docker compose -p <project> -f <compose file> up -d --build (owner:
+#   2. docker compose -p <project> -f <compose file> up -d --build (owner with
+#      NO_WEB_BUILD=1: `build api` then `up -d --no-build`, so an off-box built
+#      and docker-loaded compendium-web:server is used untouched; owner:
 #      `api` + `web`; demo: `api` + `db`; migrations run inside the api
 #      container at boot, see above).
 #   3. docker compose ... ps (container status confirmation).
@@ -76,7 +78,9 @@ Usage: bash deploy_server.sh [--stack owner|demo] [--skip-seed]
                  env ~/apps/compendium/.env.demo ONLY (never ~/.secrets)
   --skip-seed    owner only: skip the demo-copy refresh step
 Env: ENV_FILE, SECRETS_FILE (owner only), API_HOST_PORT, WEB_HOST_PORT,
-     SEED_APPLY=yes|no (owner: apply the demo-copy refresh without asking)
+     SEED_APPLY=yes|no (owner: apply the demo-copy refresh without asking),
+     NO_WEB_BUILD=1 (owner: build only the api image and start with --no-build,
+     so a docker-loaded compendium-web:server is used as is)
 Exit: 0 ok, 1 deploy failure, 2 bad arguments, 3 deploy up but the demo-copy
       refresh dry run failed (refresh not applied)
 USAGE
@@ -135,6 +139,13 @@ seed_apply_mode() {
     if [ -t 0 ]; then echo ask; else echo no; fi
 }
 
+# Owner only: NO_WEB_BUILD=1 keeps a docker-loaded (off-box built) web image
+# from being rebuilt on the server. Demo has no web container.
+web_build_mode() {
+    if [ "$STACK" != "owner" ]; then echo "n/a"; return; fi
+    if [ "${NO_WEB_BUILD:-}" = "1" ]; then echo no; else echo yes; fi
+}
+
 if [ -n "${PLAN_ONLY:-}" ]; then
     echo "stack=$STACK"
     echo "project=$PROJECT"
@@ -143,6 +154,7 @@ if [ -n "${PLAN_ONLY:-}" ]; then
     echo "secrets_file=${SECRETS_FILE:-<none>}"
     echo "api_host_port=$API_HOST_PORT"
     echo "seed_apply=$(seed_apply_mode)"
+    echo "web_build=$(web_build_mode)"
     exit 0
 fi
 
@@ -222,7 +234,12 @@ echo "--- docker compose up -d --build ---"
 # without this check a failed build/up would leave the OLD container running
 # untouched and the health wait below would then pass against it, masking
 # the failure entirely.
-compose up -d --build || { echo "ERROR: docker compose up failed"; exit 1; }
+if [ "$(web_build_mode)" = "no" ]; then
+    compose build api || { echo "ERROR: docker compose build api failed"; exit 1; }
+    compose up -d --no-build || { echo "ERROR: docker compose up failed"; exit 1; }
+else
+    compose up -d --build || { echo "ERROR: docker compose up failed"; exit 1; }
+fi
 
 # --------------------------------------------------------------------------
 # 4. Confirm container status
