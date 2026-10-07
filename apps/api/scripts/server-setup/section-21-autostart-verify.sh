@@ -94,7 +94,7 @@ if [[ "$MODE" == "pre" ]]; then
   echo "=========================================="
   echo ""
   echo "Now do the actual physical test (plan 21.2):"
-  echo "  1. Confirm both URLs above currently load (status 200 or 302)."
+  echo "  1. Confirm the URL probes above respond (owner web/api, demo api, demo public if shown)."
   echo "  2. Pull the UPS plug from the WALL (not laptop from UPS)."
   echo "  3. Wait 60-120 seconds."
   echo "  4. Plug the UPS back in."

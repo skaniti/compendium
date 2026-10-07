@@ -28,7 +28,7 @@
 #                            live session's token)
 #     TAILNET_ONLY_DEPLOYMENT -- optional, default 0. Set to 1 ONLY once no
 #                            public route reaches the owner API (cutover
-#                            runbook step 5); the API then trusts every
+#                            runbook step 6); the API then trusts every
 #                            request as tailnet-originated and refuses to
 #                            boot alongside RATE_LIMIT_TRUST_CF_HEADER
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the

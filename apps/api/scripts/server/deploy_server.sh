@@ -221,12 +221,13 @@ if [ "$STACK" = "demo" ]; then API_HOST_PORT="${DEMO_API_HOST_PORT:-$API_HOST_PO
 # --------------------------------------------------------------------------
 # 3. Build + start the stack
 # --------------------------------------------------------------------------
-# Owner: `api` + `web`; demo: `api` + `db`. Owner api -- migrations run inside the container's
-# entrypoint before uvicorn starts, so this one command covers build,
-# migrate, and start. No separate migration step, no postgres wait: this
-# compose's database is the real, already-running production database
-# reached over the external compendium-net network, not a compose-managed
-# service here.
+# Owner: `api` + `web`; demo: `api` + `db`. Migrations run inside the api
+# container's entrypoint before uvicorn starts, so this one command covers
+# build, migrate, and start. No separate migration step. Owner only: no
+# postgres wait either -- its database is the real, already-running
+# production database reached over the external compendium-net network, not
+# a compose-managed service. The demo compose DOES have its own db service
+# (healthchecked; the api waits for it via depends_on).
 echo ""
 echo "--- docker compose up -d --build ---"
 # Explicit exit check: this script runs under `set -uo pipefail` (no `-e`,
@@ -313,7 +314,7 @@ if [ "$mode" != "skip" ]; then
     dry_rc=$?
     apply=no
     if [ "$dry_rc" -ne 0 ]; then
-        echo "dry run failed (exit $dry_rc) -- NOT applying. Exit 2 = a seed id collision (see above)."
+        echo "dry run failed (exit $dry_rc) -- NOT applying. Exit 2 = a seed id collision, a capture-id clash or other-account rows under demo rows (see above)."
         seed_dry_failed=1
     elif [ "$mode" = "yes" ]; then
         apply=yes
@@ -321,7 +322,11 @@ if [ "$mode" != "skip" ]; then
         read -r -p "Apply this refresh to the owner DB's demo copy? Take a pg_dump first. [y/N] " ans
         if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then apply=yes; fi
     else
-        echo "no terminal and SEED_APPLY is not yes -- not applying (SEED_APPLY=yes applies)"
+        if [ "${SEED_APPLY:-}" = "no" ]; then
+            echo "SEED_APPLY=no -- not applying (SEED_APPLY=yes applies)"
+        else
+            echo "no terminal and SEED_APPLY is not yes -- not applying (SEED_APPLY=yes applies)"
+        fi
     fi
     if [ "$apply" = "yes" ]; then
         echo "--- copying demo preview assets into ${CAPTURES_ASSETS_HOST_DIR:-<unset>} (no overwrite) ---"
