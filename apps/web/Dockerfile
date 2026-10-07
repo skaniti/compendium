@@ -23,6 +23,11 @@ FROM node:22-slim AS deps
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/package.json
+# `npm ci` runs the root `prepare` script, `node .husky/install.mjs` (git-hook
+# setup). Copy the shim so node can find it; HUSKY=0 makes it exit at once,
+# since an image has no git hooks to install.
+COPY .husky/install.mjs ./.husky/install.mjs
+ENV HUSKY=0
 RUN npm ci
 
 FROM node:22-slim AS builder

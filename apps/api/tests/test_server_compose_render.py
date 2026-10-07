@@ -42,6 +42,18 @@ def test_every_owner_port_is_loopback_bound():
             assert port.startswith("127.0.0.1:"), port
 
 
+def test_web_dockerfile_deps_stage_can_run_the_prepare_script():
+    # `npm ci` runs the root `prepare` script (node .husky/install.mjs); the
+    # deps stage copies only the manifests, so it must also copy that shim
+    # and set HUSKY=0 before `npm ci`, or the build fails with
+    # "Cannot find module '/repo/.husky/install.mjs'".
+    text = (REPO_ROOT / "apps/web/Dockerfile").read_text()
+    deps = text.split("FROM node:22-slim AS deps", 1)[1].split("FROM ", 1)[0]
+    npm_ci = deps.index("RUN npm ci")
+    assert deps.index("COPY .husky/install.mjs ./.husky/install.mjs") < npm_ci
+    assert deps.index("ENV HUSKY=0") < npm_ci
+
+
 def test_web_dockerfile_takes_the_role_tooling_build_arg():
     text = (REPO_ROOT / "apps/web/Dockerfile").read_text()
     assert 'ARG NEXT_PUBLIC_DEMO_ROLE_TOOLING=""' in text
