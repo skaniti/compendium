@@ -1,8 +1,9 @@
 # Runbook: tailnet-only owner stack + separate public demo stack
 
 Cutover for the 2026-10-06 tailnet-owner-demo-split. Run the steps in order
-on the server (as the deploy user, from the checkout at `~/apps/compendium`)
-unless a step says otherwise. Check each step before starting the next.
+on the server, as the deploy user, from `<checkout>` (the compendium monorepo
+checkout; see pre-flight 0.1) unless a step says otherwise. Check each step
+before starting the next.
 Steps 1-7 are reversible. Roll back in reverse order: undo a later step
 before an earlier one (e.g. undo 6 before 5, 5 before 3).
 
@@ -16,7 +17,17 @@ network declared in `apps/api/docker/docker-compose.demo.yml`).
 
 ## 0. Pre-flight
 
-1. `cd ~/apps/compendium && git pull --ff-only`. The deploy script does no
+1. Find `<checkout>`: it is three levels above the directory the running API
+   was deployed from.
+
+       docker inspect compendium-api --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}} {{index .Config.Labels "com.docker.compose.project"}}'
+
+   The first value ends in `/apps/api/docker`; strip that to get
+   `<checkout>`. The second value must be `docker` (item 6 below).
+   `~/apps/compendium` is NOT the checkout: it holds the older explorer
+   clone and the deploy env files (`.env`, and `.env.demo` from step 3) that
+   the deploy script reads by default.
+   Then `cd <checkout> && git pull --ff-only`. The deploy script does no
    pull; deploys once ran silently 57 commits behind.
 2. `free -h`. The web image build needs several GB. If less than about 3 GB
    is available, build the image on another machine instead of on the server:
