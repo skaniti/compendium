@@ -8,15 +8,22 @@ MagicDNS name; `<checkout>` = the monorepo checkout on the server.
 
 ## Requirement
 
-The owner web must only ever be reached through `tailscale serve`: it trusts
-the `Tailscale-User-Login` header because serve sets it and strips forged
-copies. `TAILNET_LOGIN=1` is therefore only safe on a web server bound to
-`127.0.0.1` behind `tailscale serve`. Never set it on a server reachable
-directly on the tailnet or LAN (for example a dev server listening on all
-interfaces): any device that can reach it could send its own
-`Tailscale-User-Login` header. Never publish `:3000` beyond `127.0.0.1` and
-never route the Cloudflare tunnel to it (the demo-split runbook's step 6 gate
-checks the tunnel). Requests carrying Cloudflare headers are refused anyway.
+`tailscale serve` is the only route that carries a genuine Tailscale identity
+from your devices: it sets the `Tailscale-User-Login` header and strips forged
+copies. The web container is also reachable from processes on the server
+itself (`127.0.0.1:3000`) and, before this change, from other containers on
+`compendium-net`. On those paths the header can be forged. There the
+trusted-browser token is the guard: a forged header alone gets nothing, because
+sign-in also needs the `trusted_browser` cookie value, which only a browser you
+trusted holds. This change moves the web container onto a private network
+shared only with the API.
+
+Never publish `:3000` beyond `127.0.0.1`, never route the Cloudflare tunnel to
+it (the demo-split runbook's step 6 gate checks the tunnel), and never enable
+`TAILNET_LOGIN` on a server reachable directly on the tailnet or LAN (for
+example a dev server listening on all interfaces): any device that can reach
+it could send its own header. Requests carrying Cloudflare headers are refused
+anyway.
 
 ## 1. Find your Tailscale login
 
@@ -35,7 +42,9 @@ You can also read it on the Users page of the Tailscale admin console.
 ## 2. Configure
 
 Steps 2 and 3 run on the server. In `~/apps/compendium/.env` (owner env
-file), add:
+file), add the lines below. Keep `TAILNET_ASSERT_SECRET` in that file, not in
+`~/.secrets`: other containers mount `~/.secrets`, and the secret is only for
+the API and web containers.
 
     TAILNET_LOGIN=1
     TAILNET_ASSERT_SECRET=<output of: openssl rand -hex 32>
@@ -61,6 +70,9 @@ If you build the web image on another machine (demo-split-runbook pre-flight
 `NO_WEB_BUILD=1`; otherwise the old web image (without tailnet sign-in) keeps
 running.
 
+This deploy also moves the web container to a private network shared only
+with the API (no action needed).
+
 ## 4. Trust each browser once
 
 On each device (laptop, phone, desktop) open `https://<tailnet-host>/`. The
@@ -73,8 +85,9 @@ with the box unticked leaves that browser untrusted.
 - Close the browser completely and reopen `https://<tailnet-host>/`: the
   session cookie is gone, so this exercises automatic sign-in. The app opens
   with no login page.
-- Sign out: the login page shows "Continue as <your login>", which signs you
-  in with no password.
+- While signed in, opening `/login` in a trusted browser signs you in again
+  automatically. After you sign out, the login page shows "Continue as <your
+  login>", which signs you in with no password.
 - From a fresh client (not a trusted browser), run
   `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://<tailnet-host>/`.
   Expected: a 3xx status with a redirect URL ending in `/login`, not the app.
@@ -89,10 +102,29 @@ with the box unticked leaves that browser untrusted.
 without it, only accounts that still have an active trusted browser at that
 moment are affected, so after a `revoke <id>` it would end nothing.
 
+## Lost or stolen device
+
+1. Remove the device from your tailnet in the Tailscale admin console. This is
+   what cuts it off.
+2. On the server run `trusted_browsers.py list`, then `revoke <id> --sessions`:
+
+       docker exec compendium-api python scripts/trusted_browsers.py list
+       docker exec compendium-api python scripts/trusted_browsers.py revoke <id> --sessions
+
+   `--sessions` ends every session of the account; your other trusted browsers
+   sign back in automatically. Without it, a session the lost browser already
+   holds keeps refreshing until it signs out.
+
+Changing your password does not revoke trusted browsers or sessions.
+
 ## Rollback
 
 Remove the three lines from `~/apps/compendium/.env` and redeploy the owner
-stack. The API endpoint then returns 404 and the web route falls back to the
+stack:
+
+    cd <checkout> && bash apps/api/scripts/server/deploy_server.sh --stack owner --skip-seed
+
+The API endpoint then returns 404 and the web route falls back to the
 password page. Trusted-browser rows stay on the server and would work again if
 you re-enable the feature, so if you are rolling back for security reasons,
 first run `docker exec compendium-api python scripts/trusted_browsers.py revoke-all --user <your account email> --sessions`.

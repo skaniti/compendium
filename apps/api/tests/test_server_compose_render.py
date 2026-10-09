@@ -27,8 +27,17 @@ def test_owner_web_service_shape():
     assert web["environment"]["BACKEND_URL"] == "http://compendium-api:8000"
     assert web["environment"]["AUTH_REQUIRED"] == "1"
     assert web["ports"] == ["127.0.0.1:${WEB_HOST_PORT:-3000}:3000"]
-    assert web["networks"] == ["compendium-net"]
+    assert web["networks"] == ["owner-internal"]
     assert web["depends_on"]["api"]["condition"] == "service_healthy"
+
+
+def test_owner_api_bridges_both_networks_and_web_is_private():
+    compose = _load("docker-compose.server.yml")
+    services = compose["services"]
+    assert services["api"]["networks"] == ["compendium-net", "owner-internal"]
+    assert "compendium-net" not in services["web"]["networks"]
+    assert compose["networks"]["owner-internal"] == {"driver": "bridge"}
+    assert compose["networks"]["compendium-net"] == {"external": True}
 
 
 def test_owner_api_passes_the_tailnet_only_flag_defaulting_off():

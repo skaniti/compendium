@@ -35,8 +35,8 @@
 #       default off. Passwordless owner sign-in for trusted browsers
 #       (tailnet-passwordless-login; see
 #       apps/api/scripts/server-setup/tailnet-login-runbook.md). Needs
-#       the API refuses to boot if TAILNET_ASSERT_SECRET is set without
-#       TAILNET_ONLY_DEPLOYMENT=1.
+#       TAILNET_ONLY_DEPLOYMENT=1; the API refuses to boot if
+#       TAILNET_ASSERT_SECRET is set without it.
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the
 #                            web container; tailscale serve targets it)
 #     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets
@@ -94,6 +94,7 @@ services:
         max-file: "5"
     networks:
       - compendium-net
+      - owner-internal
     ports:
       # Same host port the pre-extraction stack published for the backend
       # (docker/server/docker-compose.yml: 127.0.0.1:8001:8000) -- any
@@ -184,7 +185,11 @@ services:
         max-size: "50m"
         max-file: "5"
     networks:
-      - compendium-net
+      # Only the private owner-internal network: other containers on
+      # compendium-net cannot reach the web container (and so cannot forge
+      # the Tailscale login header at it). BACKEND_URL still resolves because
+      # the api's container name is an alias on every network it joins.
+      - owner-internal
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-3000}:3000"
     environment:
@@ -201,6 +206,9 @@ networks:
   # down` on this file never deletes a network the other stack still needs.
   compendium-net:
     external: true
+  # Private to this compose project: just web <-> api.
+  owner-internal:
+    driver: bridge
 
 volumes:
   compendium_hf_cache_server:
