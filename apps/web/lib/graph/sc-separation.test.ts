@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  clampRatio, estimateNameLines, plateFootprintAtRatio, plateRect, rectsOverlap,
+  clampRatio, estimateNameLines, plateFootprintAtRatio, plateFootprintPx, plateRect, rectsOverlap,
   solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect,
   uncrossSegments, placeExiledPlates, segmentsCross,
   type FootprintParams, type SeparationPlate, type ExileItem, type ExileEnv,
@@ -34,6 +34,10 @@ describe("plateFootprintAtRatio", () => {
     expect(fp.right).toBeCloseTo(Math.max(25, nameW / 2) + 2, 6);
     expect(fp.bottom).toBeCloseTo(25 + 10 * 0.5 + 1 * fontPx * 1.25 + 2, 6);
   });
+  it("equals plateFootprintPx at the band-clamped sizes", () => {
+    expect(plateFootprintAtRatio("entertainment industry", 0.5, P)).toEqual(
+      plateFootprintPx("entertainment industry", 100 * 0.5, 22 * 0.75, 10 * 0.5, false, P));
+  });
   it("is monotone: footprint at 1.0 is at least as large as at 0.5 on every side", () => {
     const a = plateFootprintAtRatio("entertainment industry", 0.5, P);
     const b = plateFootprintAtRatio("entertainment industry", 1.0, P);
@@ -45,6 +49,18 @@ describe("plateFootprintAtRatio", () => {
 function plate(key: string, pages: number, x: number, y: number, budget: number): SeparationPlate {
   return { key, pages, x, y, fp: { left: -50, right: 50, top: -30, bottom: 30 }, budget };
 }
+
+describe("plateFootprintPx", () => {
+  it("an icon-only plate (name hidden) is the icon box plus the pad", () => {
+    expect(plateFootprintPx("zoology", 30, 12, 6, true, P)).toEqual({ left: -17, right: 17, top: -17, bottom: 17 });
+  });
+  it("a shown name widens and lengthens the plate by the pad and its lines", () => {
+    const fp = plateFootprintPx("volcanic phenomena", 30, 12, 6, false, P);
+    const nameW = 9 * 12 * (25 / 30);
+    expect(fp.right).toBeCloseTo(Math.max(15, nameW / 2) + 2, 6);
+    expect(fp.bottom).toBeCloseTo(15 + 6 + 2 * 12 * 1.25 + 2, 6);
+  });
+});
 
 describe("solveSeparation", () => {
   it("separates two overlapping plates along the min-penetration axis, splitting the move", () => {

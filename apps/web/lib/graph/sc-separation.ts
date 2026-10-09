@@ -57,23 +57,35 @@ export function estimateNameLines(name: string, maxChars: number): string[] {
   return lines;
 }
 
-export function plateFootprintAtRatio(keyword: string, ratio: number, p: FootprintParams): PlateFootprint {
-  const iconRatio = clampRatio(ratio, p.scIcon);
-  const nameRatio = clampRatio(ratio, p.scName);
-  const iconPx = p.baseIconSize * iconRatio;
-  const fontPx = p.baseNameFontPx * nameRatio;
-  const lines = estimateNameLines((keyword || "").slice(0, NAME_MAX_CHARS), p.lineBudget);
-  let maxLen = 0;
-  for (const l of lines) if (l.length > maxLen) maxLen = l.length;
-  const nameW = maxLen * fontPx * p.charAdvanceEm;
-  const nameH = lines.length * fontPx * NAME_LINE_HEIGHT_EM;
+/**
+ * Footprint from painted sizes (screen px), relative to the icon center.
+ * `nameHidden` drops the name and the icon->name pad (an icon-only plate).
+ * Same estimator plateFootprintAtRatio has always used.
+ */
+export function plateFootprintPx(
+  keyword: string, iconPx: number, namePx: number, padPx: number, nameHidden: boolean, p: FootprintParams,
+): PlateFootprint {
+  let nameW = 0, nameH = 0;
+  if (!nameHidden) {
+    const lines = estimateNameLines((keyword || "").slice(0, NAME_MAX_CHARS), p.lineBudget);
+    let maxLen = 0;
+    for (const l of lines) if (l.length > maxLen) maxLen = l.length;
+    nameW = maxLen * namePx * p.charAdvanceEm;
+    nameH = lines.length * namePx * NAME_LINE_HEIGHT_EM;
+  }
   const halfW = Math.max(iconPx / 2, nameW / 2) + p.pad;
   return {
     left: -halfW,
     right: halfW,
     top: -iconPx / 2 - p.pad,
-    bottom: iconPx / 2 + p.labelTopPad * iconRatio + nameH + p.pad,
+    bottom: iconPx / 2 + (nameHidden ? 0 : padPx) + nameH + p.pad,
   };
+}
+
+export function plateFootprintAtRatio(keyword: string, ratio: number, p: FootprintParams): PlateFootprint {
+  const iconRatio = clampRatio(ratio, p.scIcon);
+  const nameRatio = clampRatio(ratio, p.scName);
+  return plateFootprintPx(keyword, p.baseIconSize * iconRatio, p.baseNameFontPx * nameRatio, p.labelTopPad * iconRatio, false, p);
 }
 
 export function plateRect(x: number, y: number, fp: PlateFootprint): Rect {
