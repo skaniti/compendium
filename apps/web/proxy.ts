@@ -19,7 +19,10 @@ export function proxy(req: NextRequest): NextResponse {
   if (process.env.AUTH_REQUIRED !== "1") return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (pathname === "/login" || pathname.startsWith("/api/")) {
+  if (
+    pathname === "/login" || pathname.startsWith("/api/") ||
+    pathname.startsWith("/captured-assets/")
+  ) {
     return NextResponse.next();
   }
 
@@ -33,5 +36,10 @@ export const config = {
   // segment / any dotted filename): skip _next internals, the API proxy,
   // the login page itself, favicon.ico, and any static file (has a `.` in
   // its path -- covers .js/.css/.svg/etc without enumerating extensions).
-  matcher: ["/((?!_next/|api/|favicon\\.ico|login|.*\\..*).*)"],
+  // captured-assets/ is skipped too: archived-preview subresources are
+  // fetched by a sandboxed iframe that cannot send the session cookie, and
+  // an extensionless asset would otherwise be redirected to /login before
+  // its signed URL reached the route handler. The route handler + API
+  // enforce auth there (bearer or URL signature).
+  matcher: ["/((?!_next/|api/|captured-assets/|favicon\\.ico|login|.*\\..*).*)"],
 };

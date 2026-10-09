@@ -315,6 +315,12 @@ async function main() {
   const previewable = contentHits.filter((h) => h.has_usable_html);
   console.log(`  -> ${previewable.length} pages have has_usable_html:true`);
   const ASSET_RE = /(?:src|href)\s*=\s*["'](\/captured-assets\/[^"']+)["']/g;
+  // Preview HTML carries signed asset URLs (`?u=<id>&exp=..&sig=..`, the
+  // `&` HTML-escaped as `&amp;`). Strip the query from every
+  // /captured-assets/ reference so neither the saved fixture HTML nor the
+  // asset file names hold a user id or an expiring signature.
+  const SIGNED_QS_RE = /(\/captured-assets\/[^"'?]+)\?[^"']*/g;
+  const stripAssetQuery = (h) => h.replace(SIGNED_QS_RE, '$1');
   const assetPaths = new Set();
   let previewCount = 0;
   for (const { pid } of previewable) {
@@ -324,9 +330,10 @@ async function main() {
       skippedCount += 1;
     } else {
       const res = await apiFetch(`/api/pages/${pid}/preview`);
-      html = await res.text();
+      html = stripAssetQuery(await res.text());
       await writeRawBuffer(relPath, html);
     }
+    html = stripAssetQuery(html);
     previewCount += 1;
     let m;
     ASSET_RE.lastIndex = 0;

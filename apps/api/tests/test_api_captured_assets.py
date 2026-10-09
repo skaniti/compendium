@@ -151,14 +151,14 @@ def _request_raw_path(tc: TestClient, raw_path: str):
 
 @pytest.fixture
 def client():
-    """TestClient with verify_api_key overridden to a real, freshly-created
+    """TestClient with captured_asset_auth overridden to a real, freshly-created
     user -- mirrors tests/test_api_preview.py's ``client`` fixture."""
-    from backend.api.main import app, verify_api_key
+    from backend.api.main import app, captured_asset_auth
 
     user = _make_user()
-    app.dependency_overrides[verify_api_key] = lambda: user["id"]
+    app.dependency_overrides[captured_asset_auth] = lambda: user["id"]
     yield TestClient(app), user
-    app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides.pop(captured_asset_auth, None)
 
 
 @pytest.fixture
@@ -307,3 +307,136 @@ class TestCapturedAssetAuth:
 
         resp = tc.get("/captured-assets/anything.png")
         assert resp.status_code == 401
+
+
+class TestCapturedAssetSignedUrls:
+    """Signature-authenticated path: no bearer, the signed user id is the
+    identity. Sandboxed preview iframes cannot send the SameSite=Lax cookie."""
+
+    @pytest.fixture
+    def signed(self, assets_dir, monkeypatch):
+        from backend.api.main import app
+        from backend.config.settings import settings
+
+        # Production mode: no dev bypass, so an unsigned request truly 401s.
+        monkeypatch.setattr(settings, "environment", "production")
+        user = _make_user(email="signed-owner@example.com")
+        return TestClient(app), user, assets_dir
+
+    def test_signed_url_without_bearer_serves_owned_asset(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"png-bytes")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        resp = tc.get(asset_url_signer(user["id"])("pic.png"))
+        assert resp.status_code == 200
+        assert resp.content == b"png-bytes"
+
+    def test_signed_url_for_another_users_asset_404(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        other = _make_user(email="signed-other@example.com")
+        (d / "theirs.png").write_bytes(b"x")
+        _insert_asset(other["id"], "theirs.png", content_type="image/png")
+        resp = tc.get(asset_url_signer(user["id"])("theirs.png"))
+        assert resp.status_code == 404
+        assert resp.json() == {"detail": "Asset not found."}
+
+    def test_expired_signature_404(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"x")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        resp = tc.get(asset_url_signer(user["id"], now=1_000_000.0)("pic.png"))
+        assert resp.status_code == 404
+
+    def test_bad_signature_404_not_401(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"x")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        url = asset_url_signer(user["id"])("pic.png")
+        resp = tc.get(url[:-2] + ("AA" if not url.endswith("AA") else "BB"))
+        assert resp.status_code == 404
+
+    def test_signature_for_other_path_404(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        for name in ("a.png", "b.png"):
+            (d / name).write_bytes(b"x")
+            _insert_asset(user["id"], name, content_type="image/png")
+        qs = asset_url_signer(user["id"])("a.png").split("?", 1)[1]
+        assert tc.get(f"/captured-assets/b.png?{qs}").status_code == 404
+
+    def test_path_safety_still_applies_to_signed_requests(self, signed):
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        # A file that really exists outside the base dir, owned by the user
+        # and correctly signed: only the path-safety checks can stop it.
+        (d.parent / "secret.txt").write_bytes(b"secret")
+        _insert_asset(user["id"], "../secret.txt", content_type="text/plain")
+        qs = asset_url_signer(user["id"])("../secret.txt").split("?", 1)[1]
+        resp = tc.get(f"/captured-assets/%2e%2e/secret.txt?{qs}")
+        assert resp.status_code == 404
+
+    def test_verification_uses_compare_digest(self, signed, monkeypatch):
+        import hmac
+
+        from backend.services import asset_urls
+
+        calls = []
+        real = hmac.compare_digest
+
+        def spy(a, b):
+            calls.append((a, b))
+            return real(a, b)
+
+        monkeypatch.setattr(asset_urls.hmac, "compare_digest", spy)
+        _tc, user, _d = signed
+        url = asset_urls.asset_url_signer(user["id"])("pic.png")
+        q = dict(p.split("=", 1) for p in url.split("?", 1)[1].split("&"))
+        assert asset_urls.verify_asset_signature("pic.png", q["u"], q["exp"], q["sig"]) == user["id"]
+        assert calls
+
+    def test_api_key_auth_still_works_without_sig(self, signed, monkeypatch):
+        from backend.db import user_repo as ur
+
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"key-bytes")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        monkeypatch.setattr(
+            ur, "get_user_by_api_key", lambda k: {"id": user["id"]} if k == "good-key" else None
+        )
+        ok = tc.get("/captured-assets/pic.png", headers={"X-API-Key": "good-key"})
+        assert ok.status_code == 200 and ok.content == b"key-bytes"
+        bad = tc.get("/captured-assets/pic.png", headers={"X-API-Key": "nope"})
+        assert bad.status_code == 401
+
+    @pytest.mark.parametrize("suffix", ["?sig=", "?sig", "?sig=&u=1&exp=9999999999"])
+    def test_empty_sig_is_404(self, signed, suffix):
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"x")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        assert tc.get(f"/captured-assets/pic.png{suffix}").status_code == 404
+
+    def test_no_sig_no_bearer_still_401(self, signed):
+        tc, _user, _d = signed
+        assert tc.get("/captured-assets/pic.png").status_code == 401
+        assert tc.get("/captured-assets/pic.png?u=1&exp=9999999999").status_code == 401
+
+    def test_bearer_path_still_works(self, signed):
+        from backend.services.auth_service import create_access_token
+
+        tc, user, d = signed
+        (d / "pic.png").write_bytes(b"bearer-bytes")
+        _insert_asset(user["id"], "pic.png", content_type="image/png")
+        token = create_access_token(user["id"], user["email"])
+        resp = tc.get("/captured-assets/pic.png", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert resp.content == b"bearer-bytes"

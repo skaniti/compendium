@@ -3,8 +3,8 @@
 Pipeline:
     load page_content.raw_html
         → gunzip
-        → rewrite <img src> to /captured-assets/<sha>.<ext> when a local
-          copy exists
+        → rewrite <img src> to a signed /captured-assets/<file_path>?u=&exp=&sig=
+          URL (see services.asset_urls) when a local copy exists
         → normalize <a href>: open-in-new-tab, make site-relative URLs
           absolute so clicks still resolve
         → bleach.clean with HTML allowlist (defense-in-depth beyond the
@@ -12,20 +12,24 @@ Pipeline:
         → wrap in a minimal shell with per-site stylesheet links + a
           chrome-hider <style> block
 
-The output is served by the /__preview Flask route and loaded into a
-sandboxed iframe in the Dash right panel.
+The output is served by GET /api/pages/{pid}/preview and loaded into a
+sandboxed iframe (opaque origin) in the Next.js topic-detail panel. That
+iframe cannot send the session cookie, so every /captured-assets/ URL is
+signed for the viewing user instead of relying on a bearer token.
 """
 
 from __future__ import annotations
 
 import gzip
 import logging
+from collections.abc import Callable
 from urllib.parse import urljoin
 
 import bleach
 from bs4 import BeautifulSoup
 
 from backend.db.connection import get_conn
+from backend.services.asset_urls import asset_url_signer
 from backend.services.content_extractor import extract_main_content
 from backend.services.site_rules import rules_for
 
@@ -219,8 +223,13 @@ _ALLOWED_CSS_PROPS = frozenset(
 )
 
 
-def render_archived_preview(page_content_id: int) -> tuple[str, int]:
-    """Return (html_document, http_status) for the /__preview endpoint."""
+def render_archived_preview(page_content_id: int, user_id: int) -> tuple[str, int]:
+    """Return (html_document, http_status) for the /__preview endpoint.
+
+    ``user_id`` is the viewer; every ``/captured-assets/`` URL in the output
+    is signed for them (see ``asset_urls``), because the sandboxed preview
+    iframe cannot send the session cookie.
+    """
     row = _load_page_content_row(page_content_id)
     if row is None:
         return ("Preview row not found.", 404)
@@ -234,8 +243,9 @@ def render_archived_preview(page_content_id: int) -> tuple[str, int]:
         logger.exception("gunzip failed for pid=%d: %s", page_content_id, e)
         return ("Preview: archived HTML is corrupt.", 500)
 
-    asset_map = _load_asset_map(page_content_id)
-    local_css_urls = _load_local_stylesheet_urls(page_content_id)
+    sign = asset_url_signer(user_id)
+    asset_map = _load_asset_map(page_content_id, sign)
+    local_css_urls = _load_local_stylesheet_urls(page_content_id, sign)
     rewritten = _rewrite_and_sanitize(raw_html, url, asset_map)
     rules = rules_for(url)
     document = _wrap_in_shell(
@@ -259,8 +269,8 @@ def _load_page_content_row(page_content_id: int) -> dict | None:
     return {"raw_html": row[0], "url": row[1]}
 
 
-def _load_asset_map(page_content_id: int) -> dict[str, str]:
-    """Return {source_url: /captured-assets/<rel>} for linked assets."""
+def _load_asset_map(page_content_id: int, sign: Callable[[str], str]) -> dict[str, str]:
+    """Return {source_url: signed /captured-assets/<rel> URL} for linked assets."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -273,11 +283,11 @@ def _load_asset_map(page_content_id: int) -> dict[str, str]:
                 (page_content_id,),
             )
             rows = cur.fetchall()
-    return {source_url: f"/captured-assets/{file_path}" for source_url, file_path in rows}
+    return {source_url: sign(file_path) for source_url, file_path in rows}
 
 
-def _load_local_stylesheet_urls(page_content_id: int) -> list[str]:
-    """Return the local /captured-assets paths of CSS files linked to this page.
+def _load_local_stylesheet_urls(page_content_id: int, sign: Callable[[str], str]) -> list[str]:
+    """Return the signed /captured-assets URLs of CSS files linked to this page.
 
     Used to re-inject site stylesheets in the preview shell — trafilatura
     extraction strips ``<head>`` and all ``<link>`` tags as non-content,
@@ -298,7 +308,7 @@ def _load_local_stylesheet_urls(page_content_id: int) -> list[str]:
                 (page_content_id,),
             )
             rows = cur.fetchall()
-    return [f"/captured-assets/{file_path}" for (file_path,) in rows]
+    return [sign(file_path) for (file_path,) in rows]
 
 
 def _rewrite_and_sanitize(raw_html: bytes, base_url: str, asset_map: dict[str, str]) -> str:

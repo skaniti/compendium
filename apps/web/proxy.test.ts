@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 // D1 (batch 04 auth/session parity): this proxy (Next 16's rename of
 // "middleware") is UX only -- the backend's verify_api_key remains the sole
@@ -71,6 +71,20 @@ describe("proxy", () => {
       process.env.AUTH_REQUIRED = "1";
       const res = proxy(makeRequest("/api/auth/preferences"));
       expect(res.headers.get("location")).toBeNull();
+    });
+  });
+
+  describe("captured-assets exemption", () => {
+    it("AUTH_REQUIRED on, no cookie -> /captured-assets/ passes through", () => {
+      process.env.AUTH_REQUIRED = "1";
+      const res = proxy(makeRequest("/captured-assets/user_1/aa/extensionless"));
+      expect(res.headers.get("location")).toBeNull();
+    });
+
+    it("matcher excludes /captured-assets/ but still covers ordinary pages", () => {
+      const re = new RegExp(`^${config.matcher[0]}$`);
+      expect(re.test("/captured-assets/user_1/aa/extensionless")).toBe(false);
+      expect(re.test("/topics")).toBe(true);
     });
   });
 });

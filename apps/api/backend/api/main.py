@@ -2527,12 +2527,35 @@ async def get_archived_preview(pid: int, user_id: int = Depends(verify_api_key))
             headers=no_store_headers,
         )
 
-    body, status = render_archived_preview(pid)
+    body, status = render_archived_preview(pid, user_id)
     return HTMLResponse(content=body, status_code=status, headers=no_store_headers)
 
 
+async def captured_asset_auth(
+    request: Request,
+    sig: str | None = Query(None),
+    x_api_key: str | None = Header(None),
+    authorization: str | None = Header(None),
+) -> int | None:
+    """Auth for ``GET /captured-assets``: signed URL or the normal credentials.
+
+    A request carrying ``sig`` is authenticated by that signature alone, and
+    the handler verifies it (after its path-safety checks), so this returns
+    None. Without ``sig`` it is exactly ``verify_api_key``.
+    """
+    if sig is not None:
+        return None
+    return await verify_api_key(request, x_api_key, authorization)
+
+
 @app.get("/captured-assets/{rel:path}", tags=["Captures"])
-async def get_captured_asset(rel: str, user_id: int = Depends(verify_api_key)):
+async def get_captured_asset(
+    rel: str,
+    user_id: int | None = Depends(captured_asset_auth),
+    u: str | None = Query(None),
+    exp: str | None = Query(None),
+    sig: str | None = Query(None),
+):
     """Owner-gated file server for archived page-preview subresources.
 
     Dash is today's only server of these files, reading straight off disk;
@@ -2541,16 +2564,25 @@ async def get_captured_asset(rel: str, user_id: int = Depends(verify_api_key)):
     the server compose mounts (``asset_archiver._BASE_ASSETS_DIR`` --
     legacy rows look like ``<aa>/<sha>.<ext>``, post-migration-031 rows
     ``user_<id>/<aa>/<sha>.<ext>``); archived preview HTML references
-    them as ``/captured-assets/<file_path>`` (see
-    ``preview_renderer._load_asset_map``).
+    them as signed ``/captured-assets/<file_path>?u=&exp=&sig=`` URLs (see
+    ``preview_renderer._load_asset_map`` and ``services.asset_urls``).
 
     Ownership is checked with one query before any file access: no
     matching row, a NULL owner (an orphaned legacy row), or an owner that
     isn't the caller all return the same 404 -- never 403 -- so a probing
     path never learns whether the row exists at all (same rule as
-    ``GET /api/pages/{pid}/preview`` above). Auth arrives exactly like
-    every other API route, as a bearer token the Next.js route handler
-    injects (task 3b); this dependency never reads a cookie.
+    ``GET /api/pages/{pid}/preview`` above).
+
+    Two ways to authenticate. Without ``sig``: like every other API route,
+    a bearer token the Next.js route handler injects (or an API key); this
+    never reads a cookie, and no credential is a 401. With ``sig``: the
+    signed URL minted for the viewer by the preview renderer is the only
+    credential (the sandboxed preview iframe has an opaque origin, so the
+    browser withholds the session cookie and no bearer can be injected). A
+    signed request that fails verification (wrong path, tampered user or
+    expiry, expired, malformed) gets the same 404 as any unreadable asset,
+    never 401/403; a valid one proceeds as the signed user, so the
+    ownership check below still applies.
     """
     from fastapi.responses import FileResponse
 
@@ -2573,6 +2605,14 @@ async def get_captured_asset(rel: str, user_id: int = Depends(verify_api_key)):
         # Not strictly inside the base dir -- catches "../" traversal
         # (literal or already-decoded from a percent-encoded form).
         raise not_found
+
+    if sig is not None:
+        from backend.services.asset_urls import verify_asset_signature
+
+        user_id = verify_asset_signature(rel, u, exp, sig)
+        if user_id is None:
+            raise not_found
+        set_current_user_id(user_id)
 
     row = page_repo.captured_asset_for_path(rel)
     if row is None:

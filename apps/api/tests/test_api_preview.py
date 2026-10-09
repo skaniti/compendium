@@ -271,3 +271,72 @@ class TestArchivedPreviewAuth:
 
         resp = tc.get("/api/pages/1/preview")
         assert resp.status_code == 401
+
+
+class TestPreviewAssetUrlsAreSigned:
+    """Every /captured-assets/ URL in a rendered preview must carry a
+    signature valid for the viewing user (the sandboxed iframe cannot send
+    the session cookie, so the signature is its only credential)."""
+
+    def _insert_asset(self, user_id, content_id, source_url, file_path, content_type):
+        import hashlib
+
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO captured_assets
+                    (sha256, source_url, content_type, byte_size, file_path, user_id)
+                VALUES (%s, %s, %s, 0, %s, %s) RETURNING id
+                """,
+                (hashlib.sha256(file_path.encode()).hexdigest(), source_url,
+                 content_type, file_path, user_id),
+            )
+            aid = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO page_content_assets (page_content_id, asset_id) VALUES (%s, %s)",
+                (content_id, aid),
+            )
+
+    def test_all_captured_asset_urls_verify_for_user(self):
+        import re
+
+        from backend.services.asset_urls import verify_asset_signature
+        from backend.services.preview_renderer import render_archived_preview
+        from backend.services.site_rules import SITE_RULES
+
+        user = _make_user(email="signed-render@example.com")
+        url = "https://en.wikipedia.org/wiki/Signed_render"
+        content = content_repo.get_or_create_content(url)
+        body = (
+            b'<html><body><article><p>text</p>'
+            b'<img src="https://upload.wikimedia.org/pic.png"/></article></body></html>'
+        )
+        content_repo.update_content(
+            content["id"], raw_html=gzip.compress(body), raw_html_usable=True
+        )
+        load_php = SITE_RULES["en.wikipedia.org"].stylesheet_links[0]
+        self._insert_asset(user["id"], content["id"], "https://upload.wikimedia.org/pic.png",
+                           f"user_{user['id']}/aa/pic.png", "image/png")
+        self._insert_asset(user["id"], content["id"], load_php,
+                           f"user_{user['id']}/bb/site.css", "text/css")
+        self._insert_asset(user["id"], content["id"], "https://example.com/extra.css",
+                           f"user_{user['id']}/cc/extra.css", "text/css")
+
+        html, status = render_archived_preview(content["id"], user["id"])
+        assert status == 200
+
+        urls = re.findall(r'(?:src|href)="(/captured-assets/[^"]+)"', html)
+        urls = [u.replace("&amp;", "&") for u in urls]
+        paths = {u.split("?", 1)[0] for u in urls}
+        assert paths == {
+            f"/captured-assets/user_{user['id']}/aa/pic.png",
+            f"/captured-assets/user_{user['id']}/bb/site.css",
+            f"/captured-assets/user_{user['id']}/cc/extra.css",
+        }
+        from urllib.parse import parse_qs
+
+        for u in urls:
+            path, _, query = u.partition("?")
+            q = {k: v[0] for k, v in parse_qs(query).items()}
+            rel = path[len("/captured-assets/"):]
+            assert verify_asset_signature(rel, q.get("u"), q.get("exp"), q.get("sig")) == user["id"]
