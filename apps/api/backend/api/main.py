@@ -3681,3 +3681,7 @@ app.include_router(_clusters_router.router)
 from backend.api.routers import prompts as _prompts_router  # noqa: E402
 
 app.include_router(_prompts_router.router)
+
+from backend.api.routers import tailnet_auth as _tailnet_auth_router  # noqa: E402
+
+app.include_router(_tailnet_auth_router.router)
