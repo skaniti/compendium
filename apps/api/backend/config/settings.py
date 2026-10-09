@@ -1,6 +1,7 @@
 """Application settings and configuration."""
 
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,12 @@ def parse_tailnet_login_map(raw: str) -> dict[str, str]:
             raise ValueError(f"TAILNET_LOGIN_MAP lists {login!r} twice")
         result[login] = account
     return result
+
+
+def demo_only_bootstrap() -> bool:
+    """True when the api was started as the public demo stack (no admin
+    account; see backend/scripts/bootstrap_user.py:_demo_only, same parse)."""
+    return os.environ.get("BOOTSTRAP_DEMO_ONLY", "").strip().lower() in {"1", "true", "yes"}
 
 
 class Settings(BaseSettings):
@@ -148,6 +155,17 @@ class Settings(BaseSettings):
     # ("<tailscale login>=<account email or username>", comma-separated).
     tailnet_assert_secret: str = ""
     tailnet_login_map: str = ""
+    # demo-one-click-entry (2026-10-09): one-click public demo sign-in.
+    # POST /api/auth/demo verifies a Cloudflare Turnstile token and mints a
+    # 24-hour session for the single demo account. Only the public demo
+    # stack sets DEMO_PUBLIC_ENTRY=1 (with TURNSTILE_SECRET_KEY); the
+    # endpoint 404s everywhere else. Refused alongside
+    # TAILNET_ONLY_DEPLOYMENT and without BOOTSTRAP_DEMO_ONLY=1 -- see
+    # _check_production_secrets. Env vars DEMO_PUBLIC_ENTRY,
+    # TURNSTILE_SECRET_KEY, TURNSTILE_VERIFY_URL (tests only).
+    demo_public_entry: bool = False
+    turnstile_secret_key: str = ""
+    turnstile_verify_url: str = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
     # Task 7e (post-flip-closeout): the api container is reached through a
     # `127.0.0.1:8001:8000` docker port map, so uvicorn's peer address is
     # always the docker bridge gateway for every request -- one rate-limit
@@ -572,6 +590,21 @@ class Settings(BaseSettings):
                     "passwordless tailnet sign-in is for the tailnet-only owner stack."
                 )
         parse_tailnet_login_map(self.tailnet_login_map)
+        # demo-one-click-entry: the entry endpoint mints sessions with no
+        # credential, so it only belongs on the public demo stack.
+        if self.demo_public_entry:
+            if not self.turnstile_secret_key:
+                raise ValueError("DEMO_PUBLIC_ENTRY=1 requires TURNSTILE_SECRET_KEY.")
+            if not demo_only_bootstrap():
+                raise ValueError(
+                    "DEMO_PUBLIC_ENTRY=1 requires BOOTSTRAP_DEMO_ONLY=1: one-click entry "
+                    "is for the public demo stack, which has no admin account."
+                )
+            if self.tailnet_only_deployment:
+                raise ValueError(
+                    "DEMO_PUBLIC_ENTRY cannot be combined with TAILNET_ONLY_DEPLOYMENT: "
+                    "the owner stack never offers credential-free entry."
+                )
         return self
 
     @property
