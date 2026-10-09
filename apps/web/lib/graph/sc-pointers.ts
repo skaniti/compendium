@@ -108,3 +108,115 @@ export function selectPointers(inp: SelectInput): SelectResult {
     pointers: order.filter((p) => isPtr.has(p.key)).map((p) => p.key),
   };
 }
+
+// ---------------------------------------------------------------- bands
+
+export type BandSide = "L" | "R" | "T" | "B";
+export interface Band { side: BandSide; axis: "x" | "y"; edge: number; dir: -1 | 1; thick: number; from: number; to: number }
+export interface BandParams { marginPx: number; gapPx: number; layerGapPx: number; itemGapPx: number }
+export interface BandItem { key: string; ax: number; ay: number; fp: PlateFootprint }
+export interface BandPlacement { key: string; x: number; y: number; side: BandSide; column: 0 | 1 }
+
+const SIDES: BandSide[] = ["L", "R", "T", "B"];
+
+/** The four free bands around `core` in a width x height canvas. Left and
+ *  right span the full height; top and bottom span only the core's width. */
+export function buildBands(core: Rect, width: number, height: number, p: BandParams): Record<BandSide, Band> {
+  const m = p.marginPx, g = p.gapPx;
+  return {
+    L: { side: "L", axis: "y", edge: core.minX - g, dir: -1, thick: core.minX - g - m, from: m, to: height - m },
+    R: { side: "R", axis: "y", edge: core.maxX + g, dir: 1, thick: width - m - core.maxX - g, from: m, to: height - m },
+    T: { side: "T", axis: "x", edge: core.minY - g, dir: -1, thick: core.minY - g - m, from: Math.max(m, core.minX), to: Math.min(width - m, core.maxX) },
+    B: { side: "B", axis: "x", edge: core.maxY + g, dir: 1, thick: height - m - core.maxY - g, from: Math.max(m, core.minX), to: Math.min(width - m, core.maxX) },
+  };
+}
+
+/** 1D packing: each item as close to its target center as possible, no
+ *  overlaps, `gap` apart, inside [from, to]. Returns start positions in the
+ *  given order (callers sort by target), or null when they cannot fit. */
+export function packAlong(items: Array<{ target: number; len: number }>, from: number, to: number, gap: number): number[] | null {
+  let total = 0;
+  for (const it of items) total += it.len;
+  if (total + gap * Math.max(0, items.length - 1) > to - from + 1e-6) return null;
+  const st = items.map((it) => Math.min(Math.max(it.target - it.len / 2, from), to - it.len));
+  for (let i = 1; i < st.length; i++) st[i] = Math.max(st[i], st[i - 1] + items[i - 1].len + gap);
+  const last = st.length - 1;
+  if (last >= 0 && st[last] + items[last].len > to) st[last] = to - items[last].len;
+  for (let j = last - 1; j >= 0; j--) st[j] = Math.min(st[j], st[j + 1] - items[j].len - gap);
+  return st;
+}
+
+function across(b: Band, fp: PlateFootprint): number { return b.axis === "y" ? fp.right - fp.left : fp.bottom - fp.top; }
+function along(b: Band, fp: PlateFootprint): number { return b.axis === "y" ? fp.bottom - fp.top : fp.right - fp.left; }
+
+/** Lay out `items` in one band with 1 or 2 columns (rows for top/bottom).
+ *  Items are sorted along the band by anchor; with 2 columns, alternate
+ *  items go to the inner (0) and outer (1) column. Null when it does not fit. */
+export function layoutBand(band: Band, items: BandItem[], columns: 1 | 2, p: BandParams): BandPlacement[] | null {
+  const sorted = items.slice().sort((u, v) => {
+    const a = band.axis === "y" ? u.ay : u.ax, b = band.axis === "y" ? v.ay : v.ax;
+    return a - b || (u.key < v.key ? -1 : 1);
+  });
+  const cols: BandItem[][] = columns === 1 ? [sorted] : [sorted.filter((_, i) => i % 2 === 0), sorted.filter((_, i) => i % 2 === 1)];
+  const thick = cols.map((col) => col.reduce((t, it) => Math.max(t, across(band, it.fp)), 0));
+  const need = thick.reduce((s, t) => s + t, 0) + p.layerGapPx * (cols.length - 1);
+  if (need > band.thick + 1e-6) return null;
+  const out: BandPlacement[] = [];
+  let cursor = band.edge;
+  for (let ci = 0; ci < cols.length; ci++) {
+    const col = cols[ci];
+    if (!col.length) continue;
+    const mid = cursor + band.dir * thick[ci] / 2;
+    cursor += band.dir * (thick[ci] + p.layerGapPx);
+    const st = packAlong(col.map((it) => ({ target: band.axis === "y" ? it.ay : it.ax, len: along(band, it.fp) })), band.from, band.to, p.itemGapPx);
+    if (!st) return null;
+    col.forEach((it, i) => {
+      const column = ci as 0 | 1;
+      if (band.axis === "y") out.push({ key: it.key, x: mid - (it.fp.left + it.fp.right) / 2, y: st[i] - it.fp.top, side: band.side, column });
+      else out.push({ key: it.key, x: st[i] - it.fp.left, y: mid - (it.fp.top + it.fp.bottom) / 2, side: band.side, column });
+    });
+  }
+  return out;
+}
+
+/** Place every pointer in a free band, or null when they cannot all fit.
+ *  Each pointer ranks bands by how far its anchor sits toward that side of
+ *  the core; a band is usable when at least one pointer fits across and
+ *  along it. A band that overflows even with two columns gives up the
+ *  pointer that loses least by moving to its next-ranked usable band. */
+export function layoutBands(items: BandItem[], core: Rect, width: number, height: number, p: BandParams): BandPlacement[] | null {
+  if (!items.length) return [];
+  const bands = buildBands(core, width, height, p);
+  const open = SIDES.filter((s) => items.some((it) => across(bands[s], it.fp) <= bands[s].thick && along(bands[s], it.fp) <= bands[s].to - bands[s].from));
+  if (!open.length) return null;
+  const ccx = (core.minX + core.maxX) / 2, ccy = (core.minY + core.maxY) / 2;
+  const hw = Math.max(1, (core.maxX - core.minX) / 2), hh = Math.max(1, (core.maxY - core.minY) / 2);
+  const ranked = items.map((it) => {
+    const nx = (it.ax - ccx) / hw, ny = (it.ay - ccy) / hh;
+    const score: Record<BandSide, number> = { L: -nx, R: nx, T: -ny, B: ny };
+    const rank = open.slice().sort((a, b) => score[b] - score[a] || SIDES.indexOf(a) - SIDES.indexOf(b));
+    return { it, score, rank };
+  });
+  const assign: Record<string, BandSide> = {};
+  ranked.forEach((r) => { assign[r.it.key] = r.rank[0]; });
+  for (let move = 0; move <= 2 * items.length; move++) {
+    const out: BandPlacement[] = [];
+    let failSide: BandSide | null = null;
+    for (const side of SIDES) {
+      const members = ranked.filter((r) => assign[r.it.key] === side).map((r) => r.it);
+      if (!members.length) continue;
+      const got = layoutBand(bands[side], members, 1, p) || (members.length > 1 ? layoutBand(bands[side], members, 2, p) : null);
+      if (!got) { failSide = side; break; }
+      out.push(...got);
+    }
+    if (!failSide) return out;
+    const fs: BandSide = failSide;
+    const cands = ranked.filter((r) => assign[r.it.key] === fs).map((r) => {
+      const next = r.rank.find((s) => s !== fs && r.rank.indexOf(s) > r.rank.indexOf(fs));
+      return { r, next, cost: next ? r.score[fs] - r.score[next] : Infinity };
+    }).sort((a, b) => a.cost - b.cost || (a.r.it.key < b.r.it.key ? -1 : 1));
+    if (!cands.length || !isFinite(cands[0].cost) || !cands[0].next) return null;
+    assign[cands[0].r.it.key] = cands[0].next;
+  }
+  return null;
+}

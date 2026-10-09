@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  sizesAt, inflate, clearAt, crowdScale, selectPointers,
-  type BaseSizes, type FootprintOf, type ScPlate,
+  sizesAt, inflate, clearAt, crowdScale, selectPointers, buildBands, packAlong, layoutBand, layoutBands,
+  type BaseSizes, type FootprintOf, type ScPlate, type BandParams, type BandItem,
 } from "./sc-pointers";
+import { plateRect, rectsOverlap, type PlateFootprint, type Rect } from "./sc-separation";
 
 // Test geometry: a square icon, the name stacked under it (pad + one line).
 // Full size: 40 wide, 60 tall, footprint relative to the icon center.
@@ -13,6 +14,18 @@ const fpOf: FootprintOf = (_key, s) => ({
   bottom: s.iconPx / 2 + (s.nameHidden ? 0 : s.padPx + s.namePx),
 });
 const plate = (key: string, pages: number, x: number, y: number): ScPlate => ({ key, pages, x, y });
+
+const BAND: BandParams = { marginPx: 10, gapPx: 10, layerGapPx: 5, itemGapPx: 5 };
+
+function noOverlaps(fps: Array<{ x: number; y: number; fp: PlateFootprint }>): boolean {
+  for (let i = 0; i < fps.length; i++) for (let j = i + 1; j < fps.length; j++) {
+    if (rectsOverlap(plateRect(fps[i].x, fps[i].y, fps[i].fp), plateRect(fps[j].x, fps[j].y, fps[j].fp))) return false;
+  }
+  return true;
+}
+function inside(r: Rect, w: number, h: number): boolean {
+  return r.minX >= -1e-6 && r.minY >= -1e-6 && r.maxX <= w + 1e-6 && r.maxY <= h + 1e-6;
+}
 
 describe("sizesAt / inflate", () => {
   it("scales icon and pad by f and stops the name at the floor", () => {
@@ -72,5 +85,90 @@ describe("selectPointers", () => {
   });
   it("ignores previous pointers that are no longer painted", () => {
     expect(sel([plate("a", 9, 0, 0), plate("b", 1, 100, 0)], ["gone"]).pointers).toEqual([]);
+  });
+});
+
+describe("buildBands / packAlong", () => {
+  it("builds four bands; top and bottom only span the core's width", () => {
+    const b = buildBands({ minX: 100, maxX: 300, minY: 50, maxY: 250 }, 400, 300, BAND);
+    expect(b.L).toMatchObject({ edge: 90, dir: -1, thick: 80, from: 10, to: 290 });
+    expect(b.R).toMatchObject({ edge: 310, dir: 1, thick: 80, from: 10, to: 290 });
+    expect(b.T).toMatchObject({ edge: 40, dir: -1, thick: 30, from: 100, to: 300 });
+    expect(b.B).toMatchObject({ edge: 260, dir: 1, thick: 30, from: 100, to: 300 });
+  });
+  it("packs items near their targets without overlap, inside the range", () => {
+    expect(packAlong([{ target: 50, len: 20 }, { target: 55, len: 20 }], 0, 100, 5)).toEqual([40, 65]);
+    expect(packAlong([{ target: 95, len: 20 }, { target: 98, len: 20 }], 0, 100, 5)).toEqual([55, 80]);
+  });
+  it("returns null when the items cannot fit", () => {
+    expect(packAlong([1, 2, 3, 4, 5].map(() => ({ target: 50, len: 30 })), 0, 100, 5)).toBeNull();
+  });
+});
+
+describe("layoutBand", () => {
+  const core: Rect = { minX: 200, maxX: 400, minY: 20, maxY: 180 };
+  const item = (key: string, ay: number): BandItem => ({ key, ax: 250, ay, fp: fpOf(key, sizesAt(BASE, 1, FLOOR_PX)) });
+
+  it("one column: icon centers near their anchors, column against the core", () => {
+    const L = buildBands(core, 600, 200, BAND).L;
+    const out = layoutBand(L, [item("a", 50), item("b", 150)], 1, BAND)!;
+    expect(out.map((o) => o.column)).toEqual([0, 0]);
+    expect(out[0].x).toBeCloseTo(L.edge - 20, 6);       // edge 190, half-thickness 20
+    expect(out.find((o) => o.key === "b")!.y).toBeGreaterThan(out.find((o) => o.key === "a")!.y);
+  });
+  it("two columns when one is too short, alternating inner/outer", () => {
+    const L = buildBands(core, 600, 200, BAND).L;     // along 10..190 = 180: three 60-tall items + gaps = 190
+    expect(layoutBand(L, [item("a", 40), item("b", 100), item("c", 160)], 1, BAND)).toBeNull();
+    const out = layoutBand(L, [item("a", 40), item("b", 100), item("c", 160)], 2, BAND)!;
+    expect(out.map((o) => [o.key, o.column])).toEqual([["a", 0], ["c", 0], ["b", 1]]);
+    const inner = out.find((o) => o.key === "a")!.x, outer = out.find((o) => o.key === "b")!.x;
+    expect(outer).toBeLessThan(inner);                 // left band: the outer column is further left
+  });
+  it("null when two columns do not fit across", () => {
+    const L = buildBands({ ...core, minX: 90 }, 600, 200, BAND).L;   // thick 70 < 40 + 5 + 40
+    expect(layoutBand(L, [item("a", 40), item("b", 100), item("c", 160)], 2, BAND)).toBeNull();
+  });
+});
+
+describe("layoutBands", () => {
+  const full = (key: string, ax: number, ay: number): BandItem => ({ key, ax, ay, fp: fpOf(key, sizesAt(BASE, 1, FLOOR_PX)) });
+
+  it("wide, short canvas: everything goes left/right, nothing top/bottom", () => {
+    const core: Rect = { minX: 300, maxX: 500, minY: 20, maxY: 180 };
+    const items = [full("a", 320, 60), full("b", 480, 60), full("top", 400, 25), full("c", 330, 150)];
+    const out = layoutBands(items, core, 800, 200, BAND)!;
+    expect(out).not.toBeNull();
+    expect(new Set(out.map((o) => o.side))).toEqual(new Set(["L", "R"]));
+    const byKey = Object.fromEntries(out.map((o) => [o.key, o]));
+    expect(byKey.a.side).toBe("L");
+    expect(byKey.b.side).toBe("R");
+    for (const o of out) expect(inside(plateRect(o.x, o.y, fpOf(o.key, sizesAt(BASE, 1, FLOOR_PX))), 800, 200)).toBe(true);
+    expect(noOverlaps(out.map((o) => ({ x: o.x, y: o.y, fp: fpOf(o.key, sizesAt(BASE, 1, FLOOR_PX)) })))).toBe(true);
+  });
+  it("moves a pointer to its next band when its own band overflows", () => {
+    // Left band holds two 60-tall items in one column; four left-side anchors, band too thin for two columns.
+    const core: Rect = { minX: 70, maxX: 500, minY: 20, maxY: 180 };
+    const items = [full("a", 80, 40), full("b", 80, 80), full("c", 80, 120), full("d", 80, 160)];
+    const out = layoutBands(items, core, 800, 200, BAND)!;
+    expect(out).not.toBeNull();
+    expect(out.filter((o) => o.side === "L").length).toBeLessThan(4);
+    expect(out.filter((o) => o.side === "R").length).toBeGreaterThan(0);
+  });
+  it("a core panned partly off-canvas: nothing is placed outside the canvas", () => {
+    const core: Rect = { minX: -100, maxX: 300, minY: 20, maxY: 180 };
+    const items = [full("a", -50, 60), full("b", 280, 100)];
+    const out = layoutBands(items, core, 800, 200, BAND)!;
+    expect(out).not.toBeNull();
+    expect(out.every((o) => o.side !== "L")).toBe(true);
+    for (const o of out) expect(inside(plateRect(o.x, o.y, fpOf(o.key, sizesAt(BASE, 1, FLOOR_PX))), 800, 200)).toBe(true);
+  });
+  it("null when no band is usable", () => {
+    expect(layoutBands([full("a", 50, 50)], { minX: 5, maxX: 795, minY: 5, maxY: 195 }, 800, 200, BAND)).toBeNull();
+  });
+  it("is deterministic and input-order independent", () => {
+    const core: Rect = { minX: 300, maxX: 500, minY: 20, maxY: 180 };
+    const items = [full("a", 320, 60), full("b", 480, 60), full("c", 330, 150)];
+    const byKey = (out: ReturnType<typeof layoutBands>) => Object.fromEntries(out!.map((o) => [o.key, o]));
+    expect(byKey(layoutBands(items, core, 800, 200, BAND))).toEqual(byKey(layoutBands(items.slice().reverse(), core, 800, 200, BAND)));
   });
 });
