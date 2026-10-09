@@ -18,7 +18,7 @@
  *     by cluster size, then hide names smallest-first, then shrink icons,
  *     then report a ring fallback.
  */
-import { plateRect, rectsOverlap, type PlateFootprint, type Rect } from "./sc-separation";
+import { byPagesThenKey, plateRect, rectsOverlap, type PlateFootprint, type Rect } from "./sc-separation";
 
 export interface BaseSizes { iconPx: number; namePx: number; padPx: number }
 export interface PlateSizes extends BaseSizes { nameHidden: boolean }
@@ -39,17 +39,21 @@ export function inflate(fp: PlateFootprint, by: number): PlateFootprint {
   return { left: fp.left * m, right: fp.right * m, top: fp.top * m, bottom: fp.bottom * m };
 }
 
-/** More pages first, then keyword ascending (sc-separation's solveSeparation order). */
-export function byPriority(a: ScPlate, b: ScPlate): number {
-  if (b.pages !== a.pages) return b.pages - a.pages;
-  return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+/** More pages first, then keyword ascending: the same comparator solveSeparation uses. */
+export const byPriority: (a: ScPlate, b: ScPlate) => number = byPagesThenKey;
+
+/** Footprint rects of `plates` at scale `f`, each footprint inflated by `inflateBy`. */
+function rectsAt(
+  plates: ScPlate[], base: BaseSizes, f: number, nameFloorPx: number, footprintOf: FootprintOf, inflateBy = 0,
+): Rect[] {
+  return plates.map((p) => plateRect(p.x, p.y, inflate(footprintOf(p.key, sizesAt(base, f, nameFloorPx)), inflateBy)));
 }
 
 /** True when every pair of plates is disjoint at scale `f` (footprints inflated by `inflateBy`). */
 export function clearAt(
   plates: ScPlate[], base: BaseSizes, f: number, nameFloorPx: number, footprintOf: FootprintOf, inflateBy = 0,
 ): boolean {
-  const rects = plates.map((p) => plateRect(p.x, p.y, inflate(footprintOf(p.key, sizesAt(base, f, nameFloorPx)), inflateBy)));
+  const rects = rectsAt(plates, base, f, nameFloorPx, footprintOf, inflateBy);
   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) if (rectsOverlap(rects[i], rects[j])) return false;
   return true;
 }
@@ -76,22 +80,24 @@ export interface SelectInput {
 }
 export interface SelectResult { c: number; inPlace: string[]; pointers: string[] }
 
-/** Which plates stay in place and at what shared scale. Previous pointers
- *  return (highest priority first) only if the in-place set still clears at
- *  the floor with every footprint inflated by `hysteresis`; then, while the
- *  in-place set collides at the floor, its lowest-priority colliding plate
- *  becomes a pointer. Lists come back in priority order. */
+/** Which plates stay in place and at what shared scale. A fixed point: feeding
+ *  the result's pointers back in on unchanged geometry returns the same result.
+ *  1. In place = painted plates minus previous pointers.
+ *  2. Evict at the floor: while two in-place plates collide, the
+ *     lowest-priority colliding one becomes a pointer.
+ *  3. Re-admit, highest priority first, previous pointers and this call's
+ *     victims, against the growing in-place set. A previous pointer needs
+ *     slack (its footprint and each neighbour's inflated by `hysteresis`); a
+ *     plate evicted this call returns on plain clearance, so greedy
+ *     over-eviction is undone. Lists come back in priority order. */
 export function selectPointers(inp: SelectInput): SelectResult {
   const order = inp.plates.slice().sort(byPriority);
   const isPtr = new Set(order.filter((p) => inp.prevPointers.has(p.key)).map((p) => p.key));
+  const prev = new Set(isPtr);
   const inPlace = () => order.filter((p) => !isPtr.has(p.key));
-  for (const p of order) {
-    if (!isPtr.has(p.key)) continue;
-    if (clearAt(inPlace().concat([p]), inp.base, inp.crowdFloor, inp.nameFloorPx, inp.footprintOf, inp.hysteresis)) isPtr.delete(p.key);
-  }
   for (;;) {
     const ip = inPlace();
-    const rects = ip.map((p) => plateRect(p.x, p.y, inp.footprintOf(p.key, sizesAt(inp.base, inp.crowdFloor, inp.nameFloorPx))));
+    const rects = rectsAt(ip, inp.base, inp.crowdFloor, inp.nameFloorPx, inp.footprintOf);
     let victim: string | null = null;
     for (let i = ip.length - 1; i >= 0 && victim === null; i--) {
       for (let j = 0; j < ip.length; j++) {
@@ -101,11 +107,18 @@ export function selectPointers(inp: SelectInput): SelectResult {
     if (victim === null) break;
     isPtr.add(victim);
   }
+  for (const p of order) {
+    if (!isPtr.has(p.key)) continue;
+    const by = prev.has(p.key) ? inp.hysteresis : 0;
+    const own = rectsAt([p], inp.base, inp.crowdFloor, inp.nameFloorPx, inp.footprintOf, by)[0];
+    const others = rectsAt(inPlace(), inp.base, inp.crowdFloor, inp.nameFloorPx, inp.footprintOf, by);
+    if (!others.some((r) => rectsOverlap(own, r))) isPtr.delete(p.key);
+  }
   const ip = inPlace();
   return {
     c: crowdScale(ip, inp.base, inp.nameFloorPx, inp.footprintOf, inp.crowdFloor),
-    inPlace: ip.map((p) => p.key),
-    pointers: order.filter((p) => isPtr.has(p.key)).map((p) => p.key),
+    inPlace: ip.map((q) => q.key),
+    pointers: order.filter((q) => isPtr.has(q.key)).map((q) => q.key),
   };
 }
 

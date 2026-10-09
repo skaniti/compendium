@@ -68,12 +68,14 @@ describe("selectPointers", () => {
     expect(r.c).toBeLessThanOrEqual(0.75);
     expect(r.c).toBeGreaterThan(0.74);
   });
-  it("turns the lowest-priority colliding plate into a pointer, one at a time", () => {
-    // At the floor (20 wide): a-b and b-c overlap, a-c clear. c goes first, then b.
+  it("evicts lowest priority first, then over-evicted plates come back", () => {
+    // At the floor (20 wide): a-b and b-c overlap, a-c clear. c goes first,
+    // then b; c is clear of a alone, so it returns.
     const r = sel([plate("a", 30, 0, 0), plate("b", 20, 15, 0), plate("c", 10, 30, 0)]);
-    expect(r.pointers).toEqual(["b", "c"]);
-    expect(r.inPlace).toEqual(["a"]);
-    expect(r.c).toBe(1);
+    expect(r.pointers).toEqual(["b"]);
+    expect(r.inPlace).toEqual(["a", "c"]);
+    expect(r.c).toBeLessThanOrEqual(0.75);
+    expect(r.c).toBeGreaterThan(0.74);
   });
   it("breaks page ties by keyword: the later keyword gives way", () => {
     const r = sel([plate("m", 5, 0, 0), plate("z", 5, 5, 0)]);
@@ -87,6 +89,36 @@ describe("selectPointers", () => {
   });
   it("ignores previous pointers that are no longer painted", () => {
     expect(sel([plate("a", 9, 0, 0), plate("b", 1, 100, 0)], ["gone"]).pointers).toEqual([]);
+  });
+  it("is a fixed point: feeding the pointers back returns the same result", () => {
+    const geoms = [
+      [plate("a", 30, 0, 0), plate("b", 20, 15, 0), plate("c", 10, 30, 0)],
+      [plate("a", 9, 0, 0), plate("b", 1, 20.5, 0), plate("c", 5, 200, 0)],
+      [plate("a", 9, 0, 0), plate("b", 8, 20.5, 0), plate("c", 1, 12, 0)],
+    ];
+    for (const g of geoms) {
+      const r1 = sel(g);
+      expect(sel(g, r1.pointers)).toEqual(r1);
+    }
+  });
+  it("a far-away previous pointer returns despite a tight unrelated in-place pair", () => {
+    const g = [plate("a", 9, 0, 0), plate("b", 8, 20.5, 0), plate("p", 1, 500, 0)];
+    expect(sel(g, ["p"]).pointers).toEqual([]);
+  });
+  it("does not depend on input order", () => {
+    const g = [plate("a", 30, 0, 0), plate("b", 20, 15, 0), plate("c", 10, 30, 0), plate("d", 5, 45, 0)];
+    const r = sel(g);
+    expect(sel(g.slice().reverse())).toEqual(r);
+    expect(sel([g[2], g[0], g[3], g[1]])).toEqual(r);
+  });
+  it("uses the floored name width when the name is wider than the icon", () => {
+    const wide: FootprintOf = (_k, s) => {
+      const w = Math.max(s.iconPx, s.namePx * 3);
+      return { left: -w / 2, right: w / 2, top: -s.iconPx / 2, bottom: s.iconPx / 2 };
+    };
+    // Floor width = max(20, 12*3) = 36; gap 30 collides there although icons (20) would clear.
+    const r = selectPointers({ plates: [plate("a", 2, 0, 0), plate("b", 1, 30, 0)], base: BASE, nameFloorPx: FLOOR_PX, footprintOf: wide, crowdFloor: 0.5, hysteresis: 0.04, prevPointers: new Set() });
+    expect(r.pointers).toEqual(["b"]);
   });
 });
 

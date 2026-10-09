@@ -96,7 +96,8 @@ export function rectsOverlap(a: Rect, b: Rect): boolean {
   return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 }
 
-function byPriority(a: SeparationPlate, b: SeparationPlate): number {
+/** Shared priority order: more pages first, then keyword ascending. */
+export function byPagesThenKey(a: { key: string; pages: number }, b: { key: string; pages: number }): number {
   if (b.pages !== a.pages) return b.pages - a.pages;
   return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 }
@@ -113,7 +114,7 @@ function byPriority(a: SeparationPlate, b: SeparationPlate): number {
  */
 export function solveSeparation(plates: SeparationPlate[], opts?: { maxPasses?: number }): SeparationResult {
   const maxPasses = opts?.maxPasses ?? 64;
-  const order = plates.slice().sort(byPriority);
+  const order = plates.slice().sort(byPagesThenKey);
   const pos: Record<string, { x: number; y: number }> = {};
   const used: Record<string, number> = {};
   const overflow = new Set<string>();
