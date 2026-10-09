@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   sizesAt, inflate, clearAt, crowdScale, selectPointers, buildBands, packAlong, layoutBand, layoutBands,
-  type BaseSizes, type FootprintOf, type ScPlate, type BandParams, type BandItem,
+  gradedFloor, placePointers,
+  type BaseSizes, type FootprintOf, type ScPlate, type BandParams, type BandItem, type PointerParams,
 } from "./sc-pointers";
 import { plateRect, rectsOverlap, type PlateFootprint, type Rect } from "./sc-separation";
 
@@ -16,6 +17,7 @@ const fpOf: FootprintOf = (_key, s) => ({
 const plate = (key: string, pages: number, x: number, y: number): ScPlate => ({ key, pages, x, y });
 
 const BAND: BandParams = { marginPx: 10, gapPx: 10, layerGapPx: 5, itemGapPx: 5 };
+const PTR: PointerParams = { sizeMin: 0.35, sizeMax: 0.75, minIconPx: 8, hysteresis: 0.04, band: BAND };
 
 function noOverlaps(fps: Array<{ x: number; y: number; fp: PlateFootprint }>): boolean {
   for (let i = 0; i < fps.length; i++) for (let j = i + 1; j < fps.length; j++) {
@@ -170,5 +172,59 @@ describe("layoutBands", () => {
     const items = [full("a", 320, 60), full("b", 480, 60), full("c", 330, 150)];
     const byKey = (out: ReturnType<typeof layoutBands>) => Object.fromEntries(out!.map((o) => [o.key, o]));
     expect(byKey(layoutBands(items, core, 800, 200, BAND))).toEqual(byKey(layoutBands(items.slice().reverse(), core, 800, 200, BAND)));
+  });
+});
+
+describe("placePointers", () => {
+  const run = (pointers: ScPlate[], core: Rect, w: number, h: number, prevHidden: string[] = []) =>
+    placePointers({
+      pointers, c: 1, base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fpOf, core, width: w, height: h,
+      maxPages: Math.max(...pointers.map((p) => p.pages), 1), params: PTR, prevNameHidden: new Set(prevHidden),
+    });
+
+  it("no pointers: phase none", () => {
+    expect(run([], { minX: 0, maxX: 10, minY: 0, maxY: 10 }, 100, 100)).toMatchObject({ phase: "none", fallback: false });
+  });
+  it("roomy bands: full size, t = 0", () => {
+    const r = run([plate("a", 10, 320, 60), plate("b", 5, 480, 60)], { minX: 300, maxX: 500, minY: 20, maxY: 180 }, 800, 200);
+    expect(r).toMatchObject({ phase: "graded", t: 0, fallback: false });
+    expect(r.sizes.a.iconPx).toBe(40);
+  });
+  it("two columns come before any shrinking", () => {
+    // Left band: 180 along, 3 items of 60 + gaps do not fit in one column; 95 across fits two.
+    const r = run([plate("a", 10, 210, 40), plate("b", 9, 210, 100), plate("c", 8, 210, 160)], { minX: 200, maxX: 790, minY: 20, maxY: 180 }, 800, 200);
+    expect(r.t).toBe(0);
+    expect(Object.values(r.placements).some((p) => p.column === 1)).toBe(true);
+  });
+  it("graded shrink: small clusters end up smaller than big ones", () => {
+    // Left band only 50 across: one column; four items must shrink to fit 180 along.
+    const r = run([plate("big", 40, 70, 30), plate("mid", 20, 70, 80), plate("small", 5, 70, 130), plate("tiny", 1, 70, 170)], { minX: 70, maxX: 795, minY: 5, maxY: 195 }, 800, 200);
+    expect(r.fallback).toBe(false);
+    expect(r.phase).toBe("graded");
+    expect(r.t).toBeGreaterThan(0);
+    expect(r.sizes.tiny.iconPx).toBeLessThan(r.sizes.big.iconPx);
+    expect(gradedFloor(1, 40, PTR)).toBeLessThan(gradedFloor(40, 40, PTR));
+  });
+  it("hides names smallest-first once graded shrink is not enough", () => {
+    // Left band 80 across, 70 along (h = 90): three graded-floor plates with names do not fit; hiding tiny's does.
+    const r = run([plate("big", 40, 100, 20), plate("mid", 20, 100, 50), plate("tiny", 1, 100, 80)], { minX: 100, maxX: 795, minY: 2, maxY: 88 }, 800, 90);
+    expect(r).toMatchObject({ phase: "names", t: 1, fallback: false });
+    expect(r.sizes.tiny.nameHidden).toBe(true);
+    expect(r.sizes.mid.nameHidden).toBe(false);
+    expect(r.sizes.big.nameHidden).toBe(false);
+  });
+  it("reports a ring fallback when nothing fits at the smallest size", () => {
+    const r = run([plate("a", 10, 50, 50)], { minX: 5, maxX: 795, minY: 5, maxY: 195 }, 800, 200);
+    expect(r).toMatchObject({ phase: "ring", fallback: true });
+    expect(r.sizes.a.nameHidden).toBe(true);
+    expect(r.sizes.a.iconPx).toBe(8);
+  });
+  it("name hysteresis: a hidden name stays hidden when showing it would leave no slack", () => {
+    // One pointer, left band exactly tall enough for its full plate (60) but not 4% more.
+    const core: Rect = { minX: 70, maxX: 795, minY: 5, maxY: 195 };
+    const fresh = run([plate("a", 10, 60, 40)], core, 800, 80);
+    const hidden = run([plate("a", 10, 60, 40)], core, 800, 80, ["a"]);
+    expect(fresh.sizes.a.nameHidden).toBe(false);
+    expect(hidden.sizes.a.nameHidden).toBe(true);
   });
 });

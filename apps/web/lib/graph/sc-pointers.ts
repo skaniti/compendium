@@ -220,3 +220,107 @@ export function layoutBands(items: BandItem[], core: Rect, width: number, height
   }
   return null;
 }
+
+// ------------------------------------------------------- size schedule
+
+export interface PointerParams {
+  sizeMin: number;      // SC_POINTER_SIZE_MIN: graded floor for the smallest SC, fraction of c
+  sizeMax: number;      // SC_POINTER_SIZE_MAX: graded floor for the largest SC
+  minIconPx: number;    // SC_POINTER_MIN_ICON_PX
+  hysteresis: number;   // SC_FLIP_HYSTERESIS (hidden names coming back)
+  band: BandParams;
+}
+export interface PlacePointersInput {
+  pointers: ScPlate[];
+  c: number;
+  base: BaseSizes;
+  nameFloorPx: number;
+  footprintOf: FootprintOf;
+  core: Rect;
+  width: number;
+  height: number;
+  maxPages: number;
+  params: PointerParams;
+  prevNameHidden: ReadonlySet<string>;
+}
+export type PointerPhase = "none" | "graded" | "names" | "icons" | "ring";
+export interface PlacePointersResult {
+  phase: PointerPhase;
+  /** Graded crowding level reached (0..1); 1 in the later phases. */
+  t: number;
+  /** True when no band layout fits: the caller places pointers on the ring. */
+  fallback: boolean;
+  sizes: Record<string, PlateSizes>;
+  placements: Record<string, BandPlacement>;
+}
+
+export function gradedFloor(pages: number, maxPages: number, p: PointerParams): number {
+  const r = maxPages > 0 ? Math.max(0, Math.min(1, pages / maxPages)) : 1;
+  return p.sizeMin + (p.sizeMax - p.sizeMin) * Math.sqrt(r);
+}
+
+/** Sizes and band placements for the pointers. Order of escalation:
+ *  graded shrink (t = 0..1 in 0.05 steps; small SCs shrink most; names stop
+ *  at the floor) -> hide names one at a time, smallest SC first -> shrink
+ *  icons together toward minIconPx (10 steps) -> ring fallback. A name
+ *  hidden last time comes back only if the layout still fits with every
+ *  footprint inflated by `hysteresis`. */
+export function placePointers(inp: PlacePointersInput): PlacePointersResult {
+  const { pointers, params } = inp;
+  if (!pointers.length) return { phase: "none", t: 0, fallback: false, sizes: {}, placements: {} };
+  const attempt = (sizes: Record<string, PlateSizes>, inflateBy = 0): BandPlacement[] | null =>
+    layoutBands(
+      pointers.map((pt) => ({ key: pt.key, ax: pt.x, ay: pt.y, fp: inflate(inp.footprintOf(pt.key, sizes[pt.key]), inflateBy) })),
+      inp.core, inp.width, inp.height, params.band,
+    );
+  const toMap = (pl: BandPlacement[]): Record<string, BandPlacement> => {
+    const m: Record<string, BandPlacement> = {};
+    pl.forEach((b) => { m[b.key] = b; });
+    return m;
+  };
+  const graded = (t: number): Record<string, PlateSizes> => {
+    const s: Record<string, PlateSizes> = {};
+    pointers.forEach((pt) => {
+      const f = inp.c * (1 - t * (1 - gradedFloor(pt.pages, inp.maxPages, params)));
+      s[pt.key] = sizesAt(inp.base, f, inp.nameFloorPx);
+    });
+    return s;
+  };
+  // Names hide in this order: fewest pages first, then keyword descending.
+  const smallestFirst = pointers.slice().sort((a, b) => a.pages - b.pages || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+
+  const withNameHysteresis = (phase: PointerPhase, t: number, sizes: Record<string, PlateSizes>, pl: BandPlacement[]): PlacePointersResult => {
+    const returning = pointers.filter((pt) => inp.prevNameHidden.has(pt.key) && !sizes[pt.key].nameHidden);
+    if (returning.length && !attempt(sizes, params.hysteresis)) {
+      const kept: Record<string, PlateSizes> = {};
+      pointers.forEach((pt) => { kept[pt.key] = inp.prevNameHidden.has(pt.key) ? { ...sizes[pt.key], nameHidden: true } : sizes[pt.key]; });
+      const plKept = attempt(kept);
+      if (plKept) return { phase, t, fallback: false, sizes: kept, placements: toMap(plKept) };
+    }
+    return { phase, t, fallback: false, sizes, placements: toMap(pl) };
+  };
+
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20, sizes = graded(t), pl = attempt(sizes);
+    if (pl) return withNameHysteresis("graded", t, sizes, pl);
+  }
+  let sizes = graded(1);
+  for (let j = 0; j < smallestFirst.length; j++) {
+    sizes = { ...sizes, [smallestFirst[j].key]: { ...sizes[smallestFirst[j].key], nameHidden: true } };
+    const pl = attempt(sizes);
+    if (pl) return withNameHysteresis("names", 1, sizes, pl);
+  }
+  const iconsAtT1 = sizes;
+  for (let u = 1; u <= 10; u++) {
+    const s: Record<string, PlateSizes> = {};
+    pointers.forEach((pt) => {
+      const a = iconsAtT1[pt.key];
+      const icon = a.iconPx <= params.minIconPx ? a.iconPx : a.iconPx - (u / 10) * (a.iconPx - params.minIconPx);
+      s[pt.key] = { ...a, iconPx: icon };
+    });
+    sizes = s;
+    const pl = attempt(sizes);
+    if (pl) return { phase: "icons", t: 1, fallback: false, sizes, placements: toMap(pl) };
+  }
+  return { phase: "ring", t: 1, fallback: true, sizes, placements: {} };
+}
