@@ -391,6 +391,8 @@ async def lifespan(app: FastAPI):
 
     # Daily TTL: keep app_logs bounded
     asyncio.create_task(_prune_app_logs_loop())
+    # Daily refresh-token sweep (demo-one-click-entry)
+    app.state._token_cleanup_task = asyncio.create_task(_token_cleanup_loop())
 
     # Nightly scheduler for deferred-maintenance jobs (Milestone 14).
     # Off by default; enabled via ENABLE_NIGHTLY_MAINT=1. Runs registered
@@ -458,6 +460,30 @@ async def _prune_app_logs_loop(retention_days: int = 14, interval_hours: int = 2
                 logger.info(f"app_logs prune: removed {deleted} rows older than {retention_days}d")
         except Exception:
             logger.exception("app_logs prune failed")
+        await asyncio.sleep(interval_hours * 3600)
+
+
+def cleanup_tokens_once() -> int:
+    """Delete expired/revoked refresh tokens; never raises (housekeeping)."""
+    try:
+        from backend.db import auth_repo
+
+        cleaned = auth_repo.cleanup_expired_tokens()
+        if cleaned:
+            logger.info(f"refresh token sweep: removed {cleaned} expired/revoked rows")
+        return cleaned
+    except Exception:
+        logger.exception("refresh token sweep failed")
+        return 0
+
+
+async def _token_cleanup_loop(interval_hours: int = 24, *, initial_delay_seconds: int = 300) -> None:
+    """Background task (demo-one-click-entry): the one-click demo mints a
+    refresh row per visit, so expired rows are swept daily instead of only
+    at startup."""
+    await asyncio.sleep(initial_delay_seconds)
+    while True:
+        await asyncio.to_thread(cleanup_tokens_once)
         await asyncio.sleep(interval_hours * 3600)
 
 
