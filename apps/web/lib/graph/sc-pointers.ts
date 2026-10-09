@@ -278,37 +278,45 @@ export function placePointers(inp: PlacePointersInput): PlacePointersResult {
     pl.forEach((b) => { m[b.key] = b; });
     return m;
   };
-  const graded = (t: number): Record<string, PlateSizes> => {
+  const hide = (s: Record<string, PlateSizes>, keys: ReadonlySet<string>): Record<string, PlateSizes> => {
+    const o: Record<string, PlateSizes> = {};
+    pointers.forEach((pt) => { o[pt.key] = keys.has(pt.key) ? { ...s[pt.key], nameHidden: true } : s[pt.key]; });
+    return o;
+  };
+  const graded = (t: number, hidden: ReadonlySet<string> = new Set()): Record<string, PlateSizes> => {
     const s: Record<string, PlateSizes> = {};
     pointers.forEach((pt) => {
       const f = inp.c * (1 - t * (1 - gradedFloor(pt.pages, inp.maxPages, params)));
       s[pt.key] = sizesAt(inp.base, f, inp.nameFloorPx);
     });
-    return s;
+    return hide(s, hidden);
   };
   // Names hide in this order: fewest pages first, then keyword descending.
-  const smallestFirst = pointers.slice().sort((a, b) => a.pages - b.pages || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+  const smallestFirst = pointers.slice().sort((a, b) => byPriority(b, a));
 
-  const withNameHysteresis = (phase: PointerPhase, t: number, sizes: Record<string, PlateSizes>, pl: BandPlacement[]): PlacePointersResult => {
-    const returning = pointers.filter((pt) => inp.prevNameHidden.has(pt.key) && !sizes[pt.key].nameHidden);
-    if (returning.length && !attempt(sizes, params.hysteresis)) {
-      const kept: Record<string, PlateSizes> = {};
-      pointers.forEach((pt) => { kept[pt.key] = inp.prevNameHidden.has(pt.key) ? { ...sizes[pt.key], nameHidden: true } : sizes[pt.key]; });
-      const plKept = attempt(kept);
-      if (plKept) return { phase, t, fallback: false, sizes: kept, placements: toMap(plKept) };
-    }
-    return { phase, t, fallback: false, sizes, placements: toMap(pl) };
-  };
+  // Mirrors selectPointers: a name hidden last time returns one at a time,
+  // highest priority first, only if the layout still fits at the graded floor
+  // (t = 1) with every footprint inflated by `hysteresis`.
+  const hidden = new Set(pointers.filter((pt) => inp.prevNameHidden.has(pt.key)).map((pt) => pt.key));
+  pointers.slice().sort(byPriority).forEach((pt) => {
+    if (!hidden.has(pt.key)) return;
+    const rest = new Set(hidden);
+    rest.delete(pt.key);
+    if (attempt(graded(1, rest), params.hysteresis)) hidden.delete(pt.key);
+  });
 
   for (let i = 0; i <= 20; i++) {
-    const t = i / 20, sizes = graded(t), pl = attempt(sizes);
-    if (pl) return withNameHysteresis("graded", t, sizes, pl);
+    const t = i / 20, sizes = graded(t, hidden), pl = attempt(sizes);
+    if (pl) return { phase: "graded", t, fallback: false, sizes, placements: toMap(pl) };
   }
-  let sizes = graded(1);
+  let sizes = graded(1, hidden);
+  const cumulative = new Set(hidden);
   for (let j = 0; j < smallestFirst.length; j++) {
-    sizes = { ...sizes, [smallestFirst[j].key]: { ...sizes[smallestFirst[j].key], nameHidden: true } };
+    if (cumulative.has(smallestFirst[j].key)) continue;
+    cumulative.add(smallestFirst[j].key);
+    sizes = graded(1, cumulative);
     const pl = attempt(sizes);
-    if (pl) return withNameHysteresis("names", 1, sizes, pl);
+    if (pl) return { phase: "names", t: 1, fallback: false, sizes, placements: toMap(pl) };
   }
   const iconsAtT1 = sizes;
   for (let u = 1; u <= 10; u++) {

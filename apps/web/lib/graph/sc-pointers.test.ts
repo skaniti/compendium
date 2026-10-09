@@ -222,9 +222,33 @@ describe("placePointers", () => {
   it("name hysteresis: a hidden name stays hidden when showing it would leave no slack", () => {
     // One pointer, left band exactly tall enough for its full plate (60) but not 4% more.
     const core: Rect = { minX: 70, maxX: 795, minY: 5, maxY: 195 };
-    const fresh = run([plate("a", 10, 60, 40)], core, 800, 80);
-    const hidden = run([plate("a", 10, 60, 40)], core, 800, 80, ["a"]);
+    // Floor plate is 45 tall (30 icon + 15 name): fits 46 along, not 46 * 1.04.
+    const fresh = run([plate("a", 10, 60, 40)], core, 800, 66);
+    const hidden = run([plate("a", 10, 60, 40)], core, 800, 66, ["a"]);
     expect(fresh.sizes.a.nameHidden).toBe(false);
     expect(hidden.sizes.a.nameHidden).toBe(true);
+  });
+  it("a hidden name returns when the floor layout has at least 4% slack", () => {
+    const core: Rect = { minX: 70, maxX: 795, minY: 5, maxY: 195 };
+    const r = run([plate("a", 10, 60, 40)], core, 800, 200, ["a"]);
+    expect(r.sizes.a.nameHidden).toBe(false);
+  });
+  it("a hidden name returns during the graded phase when t = 1 has slack (not only at t = 0)", () => {
+    const core: Rect = { minX: 100, maxX: 795, minY: 2, maxY: 158 };
+    const ptrs = [plate("big", 40, 100, 20), plate("mid", 20, 100, 70), plate("tiny", 1, 100, 120)];
+    const r = run(ptrs, core, 800, 160, ["tiny"]);
+    expect(r.phase).toBe("graded");
+    expect(r.sizes.tiny.nameHidden).toBe(false);
+  });
+  it("icons phase: every name hidden, icons shrunk to the band thickness", () => {
+    const r = run([plate("big", 40, 40, 30), plate("mid", 20, 40, 80), plate("small", 5, 40, 120), plate("tiny", 1, 40, 170)], { minX: 40, maxX: 795, minY: 5, maxY: 195 }, 800, 200);
+    expect(r.phase).toBe("icons");
+    Object.values(r.sizes).forEach((s) => { expect(s.nameHidden).toBe(true); expect(s.iconPx).toBeLessThanOrEqual(20); });
+  });
+  it("name-drop tie-break: equal pages, the later keyword loses its name first", () => {
+    const r = run([plate("aa", 5, 50, 20), plate("zz", 5, 50, 70)], { minX: 50, maxX: 795, minY: 2, maxY: 100 }, 800, 105);
+    expect(r.phase).toBe("names");
+    expect(r.sizes.zz.nameHidden).toBe(true);
+    expect(r.sizes.aa.nameHidden).toBe(false);
   });
 });
