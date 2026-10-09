@@ -1,0 +1,65 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+
+vi.mock("next/script", () => ({ default: () => null }));
+
+import DemoEntryForm from "./DemoEntryForm";
+
+type TurnstileCallback = (token: string) => void;
+
+describe("DemoEntryForm", () => {
+  let callback: TurnstileCallback | null;
+  const reset = vi.fn();
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    callback = null;
+    reset.mockClear();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    (window as unknown as { turnstile: unknown }).turnstile = {
+      render: (_el: HTMLElement, opts: { callback: TurnstileCallback }) => {
+        callback = opts.callback;
+        return "widget-1";
+      },
+      reset,
+      remove: vi.fn(),
+    };
+    Object.defineProperty(window, "location", { value: { href: "", assign: vi.fn() }, writable: true });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the button disabled until the widget supplies a token", () => {
+    render(<DemoEntryForm siteKey="1x00000000000000000000AA" />);
+    const button = screen.getByRole("button", { name: /enter demo/i });
+    expect(button).toBeDisabled();
+    act(() => callback!("tok-1"));
+    expect(button).not.toBeDisabled();
+  });
+
+  it("posts the token and reloads to / on success", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ user: {} }) });
+    render(<DemoEntryForm siteKey="1x00000000000000000000AA" />);
+    act(() => callback!("tok-1"));
+    fireEvent.click(screen.getByRole("button", { name: /enter demo/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/auth/demo");
+    expect(JSON.parse(init.body as string)).toEqual({ turnstileToken: "tok-1" });
+    await waitFor(() => expect(window.location.href).toBe("/"));
+  });
+
+  it("shows the error, resets the widget and disables the button after a 403", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: "The challenge did not pass. Reload and try again." }) });
+    render(<DemoEntryForm siteKey="1x00000000000000000000AA" />);
+    act(() => callback!("tok-1"));
+    fireEvent.click(screen.getByRole("button", { name: /enter demo/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/did not pass/i));
+    expect(reset).toHaveBeenCalledWith("widget-1");
+    expect(screen.getByRole("button", { name: /enter demo/i })).toBeDisabled();
+  });
+});

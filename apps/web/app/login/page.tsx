@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { TAILNET_LOGIN_ROUTE, TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
+import { demoEntryEnabled } from "@/lib/demo-entry";
 import LoginPageClient from "./LoginPageClient";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
@@ -66,18 +67,28 @@ export default async function LoginPage({
   if (identityResolved) {
     redirect("/");
   }
+  // demo-one-click-entry: the hosted demo shows only the Enter button, so
+  // none of the tailnet state is read there.
+  const demoEntry = demoEntryEnabled();
   // tailnet-passwordless-login: the Tailscale login `tailscale serve`
   // attached (null unless TAILNET_LOGIN is on and the request did not come
   // through Cloudflare), whether this browser is trusted, and the notice
   // the tailnet route sent back on a failed automatic sign-in.
-  const tailnetLogin = tailnetLoginFrom(await headers());
-  const cookieStore = await cookies();
-  const trustedBrowser = tailnetLogin !== null && !!cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
-  const paused = cookieStore.has(TAILNET_PAUSED_COOKIE);
-  // A crafted ?tailnet= means nothing where tailnet login is off.
-  const tailnet = (await searchParams)?.tailnet;
-  const tailnetNotice =
-    tailnetLogin !== null && (tailnet === "failed" || tailnet === "error") ? tailnet : null;
+  let tailnetLogin: string | null = null;
+  let trustedBrowser = false;
+  let paused = false;
+  let tailnetNotice: "failed" | "error" | null = null;
+  if (!demoEntry) {
+    tailnetLogin = tailnetLoginFrom(await headers());
+    const cookieStore = await cookies();
+    trustedBrowser = tailnetLogin !== null && !!cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
+    paused = cookieStore.has(TAILNET_PAUSED_COOKIE);
+    // A crafted ?tailnet= means nothing where tailnet login is off.
+    const tailnet = (await searchParams)?.tailnet;
+    if (tailnetLogin !== null && (tailnet === "failed" || tailnet === "error")) {
+      tailnetNotice = tailnet;
+    }
+  }
   // A trusted browser that did not just sign out and was not just refused is
   // signed in again automatically (spec section 1).
   if (trustedBrowser && !paused && !tailnetNotice) {
@@ -89,6 +100,7 @@ export default async function LoginPage({
       trustedBrowser={trustedBrowser}
       paused={paused}
       tailnetNotice={tailnetNotice}
+      demoEntry={demoEntry}
     />
   );
 }

@@ -150,4 +150,28 @@ describe("LoginPage: tailnet props", () => {
     render(await LoginPage());
     expect(screen.queryByTestId("tailnet-identity")).toBeNull();
   });
+  describe("public demo entry", () => {
+    const original = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    afterEach(() => {
+      if (original === undefined) delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+      else process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = original;
+    });
+
+    it("renders the Enter demo form and no password form when the site key is set", async () => {
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+      mockFetch({ ok: false, status: 401, json: async () => ({}) });
+      render(await LoginPage());
+      expect(screen.getByRole("button", { name: /enter demo/i })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/password/i)).toBeNull();
+      expect(screen.queryByTestId("tailnet-identity")).toBeNull();
+    });
+
+    it("renders the password form when the site key is unset", async () => {
+      delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+      mockFetch({ ok: false, status: 401, json: async () => ({}) });
+      render(await LoginPage());
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /enter demo/i })).toBeNull();
+    });
+  });
 });

@@ -7,6 +7,8 @@ import { getTokens } from "@/lib/theme";
 import { recoverSession } from "@/lib/api";
 import { TAILNET_LOGIN_ROUTE } from "@/lib/tailnet-login";
 import { sessionMayResume } from "@/lib/session-policy-client";
+import { turnstileSiteKey } from "@/lib/demo-entry";
+import DemoEntryForm from "./DemoEntryForm";
 
 // Ported from explorer frontend/dash/app.py:_build_login_layout (app.py:2149-2309).
 // The Dash login view forces the Teal palette on every visitor regardless of
@@ -50,6 +52,7 @@ export interface LoginPageClientProps {
   trustedBrowser?: boolean;
   paused?: boolean;
   tailnetNotice?: "failed" | "error" | null;
+  demoEntry?: boolean;
 }
 
 function LoginForm({
@@ -57,6 +60,7 @@ function LoginForm({
   trustedBrowser = false,
   paused = false,
   tailnetNotice = null,
+  demoEntry = false,
 }: LoginPageClientProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -161,111 +165,117 @@ function LoginForm({
         >
           Knowledge graph from your browsing rabbit-holes
         </p>
-        {tailnetLogin && (
-          <p data-testid="tailnet-identity" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
-            Tailscale: signed in as {tailnetLogin}
-          </p>
-        )}
-        {tailnetNotice && (
-          <p role="status" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
-            {tailnetNotice === "failed"
-              ? "Automatic sign-in didn't work for this browser. Sign in with your password to trust it again."
-              : "Automatic sign-in is unavailable right now. Sign in with your password."}
-          </p>
-        )}
-        {tailnetLogin && trustedBrowser && (paused || tailnetNotice) && (
-          <a
-            data-testid="tailnet-continue"
-            href={`${TAILNET_LOGIN_ROUTE}?resume=1`}
-            style={{
-              display: "block",
-              textAlign: "center",
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "11px 12px",
-              marginBottom: 18,
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "var(--text)",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              textDecoration: "none",
-            }}
-          >
-            Continue as {tailnetLogin}
-          </a>
-        )}
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="login-email" style={labelStyle}>
-            Email or username
-          </label>
-          {/* type="text" (not "email"): an email-typed input makes the
-              browser reject a bare username before submit. name="email"
-              stays -- the API route reads that field and resolves
-              email-or-username server-side (get_user_by_login). */}
-          <input
-            type="text"
-            name="email"
-            id="login-email"
-            placeholder="you@example.com or username"
-            required
-            autoFocus
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
-          />
-          <label htmlFor="login-password" style={labelStyle}>
-            Password
-          </label>
-          <input
-            type="password"
-            name="password"
-            id="login-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
-          />
-          {offerTrust && (
-            <label htmlFor="login-trust" style={{ ...labelStyle, display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        {demoEntry ? (
+          <DemoEntryForm siteKey={turnstileSiteKey()} />
+        ) : (
+          <>
+            {tailnetLogin && (
+              <p data-testid="tailnet-identity" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
+                Tailscale: signed in as {tailnetLogin}
+              </p>
+            )}
+            {tailnetNotice && (
+              <p role="status" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
+                {tailnetNotice === "failed"
+                  ? "Automatic sign-in didn't work for this browser. Sign in with your password to trust it again."
+                  : "Automatic sign-in is unavailable right now. Sign in with your password."}
+              </p>
+            )}
+            {tailnetLogin && trustedBrowser && (paused || tailnetNotice) && (
+              <a
+                data-testid="tailnet-continue"
+                href={`${TAILNET_LOGIN_ROUTE}?resume=1`}
+                style={{
+                  display: "block",
+                  textAlign: "center",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "11px 12px",
+                  marginBottom: 18,
+                  fontSize: "0.95rem",
+                  fontWeight: 600,
+                  color: "var(--text)",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  textDecoration: "none",
+                }}
+              >
+                Continue as {tailnetLogin}
+              </a>
+            )}
+            <form onSubmit={handleSubmit}>
+              <label htmlFor="login-email" style={labelStyle}>
+                Email or username
+              </label>
+              {/* type="text" (not "email"): an email-typed input makes the
+                  browser reject a bare username before submit. name="email"
+                  stays -- the API route reads that field and resolves
+                  email-or-username server-side (get_user_by_login). */}
               <input
-                type="checkbox"
-                id="login-trust"
-                checked={trustBrowser}
-                onChange={(e) => setTrustBrowser(e.target.checked)}
+                type="text"
+                name="email"
+                id="login-email"
+                placeholder="you@example.com or username"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
               />
-              Trust this browser for automatic sign-in
-            </label>
-          )}
-          <div
-            role={error ? "alert" : undefined}
-            style={{
-              color: "#c0392b",
-              fontSize: "0.8rem",
-              minHeight: 20,
-              marginBottom: 14,
-            }}
-          >
-            {error}
-          </div>
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "11px 12px",
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "var(--text)",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
-            Sign in
-          </button>
-        </form>
+              <label htmlFor="login-password" style={labelStyle}>
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                id="login-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
+              />
+              {offerTrust && (
+                <label htmlFor="login-trust" style={{ ...labelStyle, display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    id="login-trust"
+                    checked={trustBrowser}
+                    onChange={(e) => setTrustBrowser(e.target.checked)}
+                  />
+                  Trust this browser for automatic sign-in
+                </label>
+              )}
+              <div
+                role={error ? "alert" : undefined}
+                style={{
+                  color: "#c0392b",
+                  fontSize: "0.8rem",
+                  minHeight: 20,
+                  marginBottom: 14,
+                }}
+              >
+                {error}
+              </div>
+              <button
+                type="submit"
+                style={{
+                  width: "100%",
+                  padding: "11px 12px",
+                  fontSize: "0.95rem",
+                  fontWeight: 600,
+                  color: "var(--text)",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+              >
+                Sign in
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
