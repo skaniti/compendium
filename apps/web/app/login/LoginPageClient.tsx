@@ -5,6 +5,7 @@ import Starfield from "@/components/Starfield";
 import StarfieldProvider, { DEFAULT_STARFIELD_VARIANT } from "@/components/StarfieldProvider";
 import { getTokens } from "@/lib/theme";
 import { recoverSession } from "@/lib/api";
+import { TAILNET_LOGIN_ROUTE } from "@/lib/tailnet-login";
 import { sessionMayResume } from "@/lib/session-policy-client";
 
 // Ported from explorer frontend/dash/app.py:_build_login_layout (app.py:2149-2309).
@@ -44,10 +45,18 @@ const labelStyle: CSSProperties = {
   color: "var(--subtle, #777)",
 };
 
-function LoginForm() {
+export interface LoginPageClientProps {
+  tailnetLogin?: string | null;
+  trustedBrowser?: boolean;
+  tailnetNotice?: "failed" | "error" | null;
+}
+
+function LoginForm({ tailnetLogin = null, trustedBrowser = false, tailnetNotice = null }: LoginPageClientProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const offerTrust = tailnetLogin !== null && !trustedBrowser;
+  const [trustBrowser, setTrustBrowser] = useState(true);
 
   // D4 (session-expiry-tuning): a remembered (or otherwise still-resumable)
   // visitor landing on /login -- e.g. a stale bookmark, or redirectToLogin
@@ -79,7 +88,7 @@ function LoginForm() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, ...(offerTrust ? { trustBrowser } : {}) }),
     });
     if (res.ok) {
       // Full reload (not router navigation) is deliberate: login must
@@ -146,6 +155,41 @@ function LoginForm() {
         >
           Knowledge graph from your browsing rabbit-holes
         </p>
+        {tailnetLogin && (
+          <p data-testid="tailnet-identity" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
+            Tailscale: signed in as {tailnetLogin}
+          </p>
+        )}
+        {tailnetNotice && (
+          <p role="status" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
+            {tailnetNotice === "failed"
+              ? "Automatic sign-in didn't work for this browser. Sign in with your password to trust it again."
+              : "Automatic sign-in is unavailable right now. Sign in with your password."}
+          </p>
+        )}
+        {tailnetLogin && trustedBrowser && (
+          <a
+            data-testid="tailnet-continue"
+            href={`${TAILNET_LOGIN_ROUTE}?resume=1`}
+            style={{
+              display: "block",
+              textAlign: "center",
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "11px 12px",
+              marginBottom: 18,
+              fontSize: "0.95rem",
+              fontWeight: 600,
+              color: "var(--text)",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              textDecoration: "none",
+            }}
+          >
+            Continue as {tailnetLogin}
+          </a>
+        )}
         <form onSubmit={handleSubmit}>
           <label htmlFor="login-email" style={labelStyle}>
             Email or username
@@ -177,6 +221,17 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
           />
+          {offerTrust && (
+            <label htmlFor="login-trust" style={{ ...labelStyle, display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                id="login-trust"
+                checked={trustBrowser}
+                onChange={(e) => setTrustBrowser(e.target.checked)}
+              />
+              Trust this browser for automatic sign-in
+            </label>
+          )}
           <div
             role={error ? "alert" : undefined}
             style={{
@@ -221,10 +276,10 @@ function LoginForm() {
 // is unchanged from before that split; it's still the ONLY thing rendered
 // when the probe can't resolve a usable identity (hosted/prod's real
 // signed-out state, or a probe failure).
-export default function LoginPageClient() {
+export default function LoginPageClient(props: LoginPageClientProps) {
   return (
     <StarfieldProvider initialVariant={DEFAULT_STARFIELD_VARIANT}>
-      <LoginForm />
+      <LoginForm {...props} />
     </StarfieldProvider>
   );
 }

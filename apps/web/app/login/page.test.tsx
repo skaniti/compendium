@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 // /login used to be a dead end on the dev stack: an idle-session lapse (or
@@ -20,7 +20,13 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers()),
+  cookies: vi.fn(async () => ({ has: () => false })),
+}));
+
 import { redirect } from "next/navigation";
+import { cookies, headers } from "next/headers";
 import LoginPage from "./page";
 
 function mockFetch(response: { ok: boolean; status?: number; json: () => Promise<unknown> }) {
@@ -72,5 +78,41 @@ describe("LoginPage (server component: dev-login recovery)", () => {
 
     expect(redirect).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/email or username/i)).toBeInTheDocument();
+  });
+});
+
+describe("LoginPage: tailnet props", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_REQUIRED", "1");
+    vi.stubEnv("TAILNET_LOGIN", "1");
+    vi.stubEnv("TAILNET_ASSERT_SECRET", "s".repeat(32));
+    mockFetch({ ok: false, status: 401, json: async () => ({}) }); // anonymous probe fails -> form
+    vi.mocked(headers).mockResolvedValue(new Headers({ "tailscale-user-login": "owner@example.com" }) as never);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.mocked(headers).mockResolvedValue(new Headers() as never);
+    vi.mocked(cookies).mockResolvedValue({ has: () => false } as never);
+  });
+
+  it("passes the Tailscale login and the failed notice to an untrusted browser's form", async () => {
+    render(await LoginPage({ searchParams: Promise.resolve({ tailnet: "failed" }) }));
+    expect(screen.getByTestId("tailnet-identity").textContent).toContain("owner@example.com");
+    expect(screen.getByRole("status").textContent).toMatch(/didn't work/i);
+    expect(screen.getByLabelText(/trust this browser/i)).toBeTruthy();
+  });
+
+  it("offers Continue as to a trusted browser", async () => {
+    vi.mocked(cookies).mockResolvedValue({ has: (n: string) => n === "trusted_browser" } as never);
+    render(await LoginPage());
+    expect(screen.getByTestId("tailnet-continue").getAttribute("href")).toBe("/api/auth/tailnet/login?resume=1");
+  });
+
+  it("ignores the header when TAILNET_LOGIN is off", async () => {
+    vi.stubEnv("TAILNET_LOGIN", "");
+    render(await LoginPage());
+    expect(screen.queryByTestId("tailnet-identity")).toBeNull();
   });
 });

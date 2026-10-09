@@ -1,4 +1,6 @@
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
 import LoginPageClient from "./LoginPageClient";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
@@ -57,10 +59,22 @@ async function probeAnonymousIdentity(): Promise<boolean> {
   }
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: { searchParams?: Promise<{ tailnet?: string }> } = {}) {
   const identityResolved = await probeAnonymousIdentity();
   if (identityResolved) {
     redirect("/");
   }
-  return <LoginPageClient />;
+  // tailnet-passwordless-login: the Tailscale login `tailscale serve`
+  // attached (null unless TAILNET_LOGIN is on and the request did not come
+  // through Cloudflare), whether this browser is trusted, and the notice
+  // the tailnet route sent back on a failed automatic sign-in.
+  const tailnetLogin = tailnetLoginFrom(await headers());
+  const trustedBrowser = tailnetLogin !== null && (await cookies()).has(TRUSTED_BROWSER_COOKIE);
+  const tailnet = (await searchParams)?.tailnet;
+  const tailnetNotice = tailnet === "failed" || tailnet === "error" ? tailnet : null;
+  return (
+    <LoginPageClient tailnetLogin={tailnetLogin} trustedBrowser={trustedBrowser} tailnetNotice={tailnetNotice} />
+  );
 }
