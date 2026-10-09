@@ -31,6 +31,11 @@
 #                            runbook step 6); the API then trusts every
 #                            request as tailnet-originated and refuses to
 #                            boot alongside RATE_LIMIT_TRUST_CF_HEADER
+#     TAILNET_LOGIN / TAILNET_ASSERT_SECRET / TAILNET_LOGIN_MAP -- optional,
+#       default off. Passwordless owner sign-in for trusted browsers
+#       (tailnet-passwordless-login; see
+#       apps/api/scripts/server-setup/tailnet-login-runbook.md). Needs
+#       TAILNET_ONLY_DEPLOYMENT=1; the API refuses to boot otherwise.
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the
 #                            web container; tailscale serve targets it)
 #     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets
@@ -105,6 +110,8 @@ services:
       DISABLE_REGISTRATION: "${DISABLE_REGISTRATION:-1}"
       # 1 = every request is tailnet-originated (remembered sessions); only safe once no public route reaches this API.
       TAILNET_ONLY_DEPLOYMENT: "${TAILNET_ONLY_DEPLOYMENT:-0}"
+      TAILNET_ASSERT_SECRET: "${TAILNET_ASSERT_SECRET:-}"
+      TAILNET_LOGIN_MAP: "${TAILNET_LOGIN_MAP:-}"
       # dqBot stays available at the app level; per-role gating is
       # verify_not_plain_demo at the router. This is the deployment-wide
       # kill switch, unaffected by the split -- see the runbook's wrinkle
@@ -182,6 +189,8 @@ services:
     environment:
       BACKEND_URL: http://compendium-api:8000
       AUTH_REQUIRED: "1"
+      TAILNET_LOGIN: "${TAILNET_LOGIN:-0}"
+      TAILNET_ASSERT_SECRET: "${TAILNET_ASSERT_SECRET:-}"
 
 networks:
   # External: created once by the runbook precheck (`docker network create

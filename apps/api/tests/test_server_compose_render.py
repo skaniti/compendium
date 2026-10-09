@@ -36,6 +36,22 @@ def test_owner_api_passes_the_tailnet_only_flag_defaulting_off():
     assert env["TAILNET_ONLY_DEPLOYMENT"] == "${TAILNET_ONLY_DEPLOYMENT:-0}"
 
 
+def test_owner_stack_passes_the_tailnet_login_settings_defaulting_off():
+    services = _load("docker-compose.server.yml")["services"]
+    api_env = services["api"]["environment"]
+    web_env = services["web"]["environment"]
+    assert api_env["TAILNET_ASSERT_SECRET"] == "${TAILNET_ASSERT_SECRET:-}"
+    assert api_env["TAILNET_LOGIN_MAP"] == "${TAILNET_LOGIN_MAP:-}"
+    assert web_env["TAILNET_LOGIN"] == "${TAILNET_LOGIN:-0}"
+    assert web_env["TAILNET_ASSERT_SECRET"] == "${TAILNET_ASSERT_SECRET:-}"
+
+
+def test_demo_stack_never_carries_tailnet_login_settings():
+    text = (COMPOSE_DIR / DEMO).read_text()
+    for name in ("TAILNET_ASSERT_SECRET", "TAILNET_LOGIN_MAP", "TAILNET_LOGIN"):
+        assert name not in text
+
+
 def test_every_owner_port_is_loopback_bound():
     for svc in _load("docker-compose.server.yml")["services"].values():
         for port in svc.get("ports", []):
