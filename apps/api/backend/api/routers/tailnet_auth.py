@@ -1,11 +1,13 @@
 """Passwordless owner sign-in over the tailnet (tailnet-passwordless-login).
 
-Only the owner web container can call these: every request must carry the
-shared TAILNET_ASSERT_SECRET (header X-Compendium-Tailnet-Assert). Both
-endpoints 404 unless tailnet login is fully configured on a tailnet-only
-deployment, and for any request that came through Cloudflare. A session
-also needs a trusted-browser token, created only by a password sign-in
-(/trust takes that sign-in's bearer token).
+Only the owner web container can reach these paths: every request must carry
+the shared TAILNET_ASSERT_SECRET (header X-Compendium-Tailnet-Assert).
+/api/auth/tailnet/login 404s unless tailnet login is fully configured on a
+tailnet-only deployment, and for any request that came through Cloudflare.
+A browser becomes trusted only inside a password sign-in:
+POST /api/auth/login calls maybe_trust_browser() and returns the browser
+token. There is no standalone registration endpoint, so a trusted-browser
+session cannot register further browsers.
 """
 
 from __future__ import annotations
@@ -19,11 +21,6 @@ from backend.db import audit_repo, auth_repo, trusted_browser_repo
 from backend.services import auth_service, tailnet_login
 
 router = APIRouter(prefix="/api/auth/tailnet", tags=["Auth"])
-
-
-class TrustRequest(BaseModel):
-    tailnet_login: str = Field(..., min_length=1, max_length=320)
-    label: str | None = Field(None, max_length=1000)
 
 
 class TailnetLoginRequest(BaseModel):
@@ -57,31 +54,26 @@ def _account(request: Request, login: str) -> dict:
     return user
 
 
-def _bearer_claims(request: Request) -> dict | None:
-    # Decoded here, not via verify_api_key: no dev-mode bypass and no
-    # API-key fallback -- registering a browser needs a real sign-in token.
-    authorization = request.headers.get("authorization") or ""
-    if not authorization.startswith("Bearer "):
+def maybe_trust_browser(
+    request: Request, user: dict, trust_tailnet_login: str | None
+) -> tuple[str, int] | None:
+    """Register the calling browser after a successful password sign-in.
+
+    Returns (raw_token, browser_id), or None when any condition fails (the
+    password login itself still succeeds). Never raises.
+    """
+    if not trust_tailnet_login or not tailnet_login.enabled():
         return None
-    return auth_service.decode_access_token(authorization[7:])
-
-
-@router.post("/trust")
-@limiter.limit("10/minute")
-async def trust_browser(request: Request, body: TrustRequest):
-    """Register the calling browser as trusted for the mapped account."""
-    _guard(request)
-    user = _account(request, body.tailnet_login)
-    claims = _bearer_claims(request)
-    if not claims or not claims.get("sub"):
-        raise _fail(request, "bearer", user["id"])
-    if claims.get("acting_as_demo"):
-        raise _fail(request, "acting", user["id"])
-    if int(claims["sub"]) != user["id"]:
-        raise _fail(request, "user", user["id"])
+    if request.headers.get("cf-connecting-ip") is not None:
+        return None
+    if not tailnet_login.assert_ok(request.headers.get(tailnet_login.TAILNET_ASSERT_HEADER)):
+        return None
+    mapped = tailnet_login.resolve_account(trust_tailnet_login)
+    if mapped is None or mapped["id"] != user["id"]:
+        return None
 
     raw, token_hash = tailnet_login.new_browser_token()
-    label = (body.label or "").strip()[:200] or None
+    label = (request.headers.get("user-agent") or "").strip()[:200] or None
     browser_id = trusted_browser_repo.create(user["id"], token_hash, label)
     ctx = _audit_ctx.from_request(request)
     audit_repo.record(
@@ -92,7 +84,7 @@ async def trust_browser(request: Request, body: TrustRequest):
         client_key=ctx.client_key,
         detail={"trusted_browser_id": browser_id},
     )
-    return {"browser_token": raw, "browser_id": browser_id}
+    return raw, browser_id
 
 
 @router.post("/login")

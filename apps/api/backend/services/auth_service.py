@@ -171,13 +171,16 @@ def rotate_refresh_token(
     # Already revoked (possible token reuse attack)
     if stored["revoked_at"] is not None:
         auth_repo.revoke_all_user_tokens(stored["user_id"])
+        from backend.db import trusted_browser_repo
+
+        browsers_revoked = trusted_browser_repo.revoke_all(stored["user_id"])
         ctx = audit_ctx or CLI
         audit_repo.record(
             "auth.refresh.reuse_detected",
             subject_user_id=stored["user_id"],
             origin_class=ctx.origin_class,
             client_key=ctx.client_key,
-            detail={"revoked_all": True},
+            detail={"revoked_all": True, "trusted_browsers_revoked": browsers_revoked},
         )
         return None
 

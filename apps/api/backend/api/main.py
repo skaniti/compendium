@@ -2839,6 +2839,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=254)
     password: str = Field(..., min_length=1, max_length=128)
+    trust_tailnet_login: str | None = Field(None, max_length=320)
 
 
 class PreferencesRequest(BaseModel):
@@ -2951,15 +2952,21 @@ async def login(request: Request, body: LoginRequest):
     access_token = auth_service.create_access_token(user["id"], user["email"])
     refresh_token = auth_service.create_refresh_token(user["id"], remembered=remembered)
 
+    from backend.api.routers.tailnet_auth import maybe_trust_browser
+
+    trusted = maybe_trust_browser(request, user, body.trust_tailnet_login)
+    detail = {"role": role, "remembered": remembered}
+    if trusted:
+        detail["trusted_browser_id"] = trusted[1]
     audit_repo.record(
         "auth.login.ok",
         actor_user_id=user["id"],
         subject_user_id=user["id"],
         origin_class=ctx.origin_class,
         client_key=ctx.client_key,
-        detail={"role": role, "remembered": remembered},
+        detail=detail,
     )
-    return {
+    response = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
@@ -2970,6 +2977,9 @@ async def login(request: Request, body: LoginRequest):
         },
         "session_policy": auth_service.session_policy(role, remembered),
     }
+    if trusted:
+        response["browser_token"] = trusted[0]
+    return response
 
 
 class ViewAsRequest(BaseModel):

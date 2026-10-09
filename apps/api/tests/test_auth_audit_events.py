@@ -123,8 +123,23 @@ def test_refresh_ok_and_reuse_and_logout(env, client):
     assert client.post("/api/auth/refresh", json={"refresh_token": tok}).status_code == 401
     row = _last("auth.refresh.reuse_detected")
     assert row["actor_user_id"] is None and row["subject_user_id"] == aid
-    assert row["detail"] == {"revoked_all": True}
+    assert row["detail"] == {"revoked_all": True, "trusted_browsers_revoked": 0}
     _no_secret(row, tok)
+
+
+def test_reuse_detection_revokes_trusted_browsers(env, client):
+    from backend.db import trusted_browser_repo
+
+    aid = env["admin"]["id"]
+    browser_hash = "h" * 64
+    trusted_browser_repo.create(aid, browser_hash, "Firefox")
+    tok = _login(client, headers=INGRESS).json()["refresh_token"]
+    assert client.post("/api/auth/refresh", json={"refresh_token": tok}, headers=INGRESS).status_code == 200
+    assert trusted_browser_repo.get_active(browser_hash) is not None
+    assert client.post("/api/auth/refresh", json={"refresh_token": tok}).status_code == 401
+    assert trusted_browser_repo.get_active(browser_hash) is None
+    row = _last("auth.refresh.reuse_detected")
+    assert row["detail"] == {"revoked_all": True, "trusted_browsers_revoked": 1}
 
 
 def test_logout(env, client):
