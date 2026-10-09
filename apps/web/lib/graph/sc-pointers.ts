@@ -263,14 +263,14 @@ export function gradedFloor(pages: number, maxPages: number, p: PointerParams): 
  *  graded shrink (t = 0..1 in 0.05 steps; small SCs shrink most; names stop
  *  at the floor) -> hide names one at a time, smallest SC first -> shrink
  *  icons together toward minIconPx (10 steps) -> ring fallback. A name
- *  hidden last time comes back only if the layout still fits with every
- *  footprint inflated by `hysteresis`. */
+ *  hidden last time comes back only if the layout still fits at the graded
+ *  floor with that name's own footprint inflated by `hysteresis`. */
 export function placePointers(inp: PlacePointersInput): PlacePointersResult {
   const { pointers, params } = inp;
   if (!pointers.length) return { phase: "none", t: 0, fallback: false, sizes: {}, placements: {} };
-  const attempt = (sizes: Record<string, PlateSizes>, inflateBy = 0): BandPlacement[] | null =>
+  const attempt = (sizes: Record<string, PlateSizes>, inflateKeys?: ReadonlySet<string>): BandPlacement[] | null =>
     layoutBands(
-      pointers.map((pt) => ({ key: pt.key, ax: pt.x, ay: pt.y, fp: inflate(inp.footprintOf(pt.key, sizes[pt.key]), inflateBy) })),
+      pointers.map((pt) => ({ key: pt.key, ax: pt.x, ay: pt.y, fp: inflate(inp.footprintOf(pt.key, sizes[pt.key]), inflateKeys && inflateKeys.has(pt.key) ? params.hysteresis : 0) })),
       inp.core, inp.width, inp.height, params.band,
     );
   const toMap = (pl: BandPlacement[]): Record<string, BandPlacement> => {
@@ -296,13 +296,13 @@ export function placePointers(inp: PlacePointersInput): PlacePointersResult {
 
   // Mirrors selectPointers: a name hidden last time returns one at a time,
   // highest priority first, only if the layout still fits at the graded floor
-  // (t = 1) with every footprint inflated by `hysteresis`.
+  // (t = 1) with that name's own footprint inflated by `hysteresis`.
   const hidden = new Set(pointers.filter((pt) => inp.prevNameHidden.has(pt.key)).map((pt) => pt.key));
   pointers.slice().sort(byPriority).forEach((pt) => {
     if (!hidden.has(pt.key)) return;
     const rest = new Set(hidden);
     rest.delete(pt.key);
-    if (attempt(graded(1, rest), params.hysteresis)) hidden.delete(pt.key);
+    if (attempt(graded(1, rest), new Set([pt.key]))) hidden.delete(pt.key);
   });
 
   for (let i = 0; i <= 20; i++) {
