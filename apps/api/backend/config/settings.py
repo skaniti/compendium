@@ -11,6 +11,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _logger = logging.getLogger(__name__)
 
 
+def parse_tailnet_login_map(raw: str) -> dict[str, str]:
+    """``"login=account,login2=account2"`` -> ``{login.lower(): account}``.
+
+    Logins are trimmed and lower-cased (Tailscale login names compare
+    case-insensitively); accounts are trimmed. Raises ValueError on an entry
+    without ``=``, with an empty side, or on a duplicate login.
+    """
+    result: dict[str, str] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        login, sep, account = entry.partition("=")
+        login, account = login.strip().lower(), account.strip()
+        if not sep or not login or not account:
+            raise ValueError(
+                f"TAILNET_LOGIN_MAP entries must be <tailscale login>=<account>: {entry!r}"
+            )
+        if login in result:
+            raise ValueError(f"TAILNET_LOGIN_MAP lists {login!r} twice")
+        result[login] = account
+    return result
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -113,6 +137,15 @@ class Settings(BaseSettings):
     # in front -- see _check_production_secrets. Env var
     # ``TAILNET_ONLY_DEPLOYMENT``.
     tailnet_only_deployment: bool = False
+    # tailnet-passwordless-login (2026-10-09): passwordless owner sign-in.
+    # The owner web container (the only holder of this secret) asserts the
+    # Tailscale login `tailscale serve` put on the request; the API maps it
+    # to an account through TAILNET_LOGIN_MAP and requires a trusted-browser
+    # token. Both empty (default) = feature off; the endpoints 404. Never set
+    # on the demo stack. Env vars TAILNET_ASSERT_SECRET / TAILNET_LOGIN_MAP
+    # ("<tailscale login>=<account email or username>", comma-separated).
+    tailnet_assert_secret: str = ""
+    tailnet_login_map: str = ""
     # Task 7e (post-flip-closeout): the api container is reached through a
     # `127.0.0.1:8001:8000` docker port map, so uvicorn's peer address is
     # always the docker bridge gateway for every request -- one rate-limit
@@ -525,6 +558,18 @@ class Settings(BaseSettings):
                 "Cloudflare ingress."
             )
 
+        # tailnet-passwordless-login: the assert secret turns a Tailscale
+        # header into a session, so it only makes sense where every request
+        # arrives through `tailscale serve` -- refused in every environment.
+        if self.tailnet_assert_secret:
+            if len(self.tailnet_assert_secret) < 32:
+                raise ValueError("TAILNET_ASSERT_SECRET must be at least 32 characters.")
+            if not self.tailnet_only_deployment:
+                raise ValueError(
+                    "TAILNET_ASSERT_SECRET requires TAILNET_ONLY_DEPLOYMENT=1: "
+                    "passwordless tailnet sign-in is for the tailnet-only owner stack."
+                )
+        parse_tailnet_login_map(self.tailnet_login_map)
         return self
 
     @property
