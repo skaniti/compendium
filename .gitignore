@@ -88,6 +88,10 @@ apps/web/fonts/almagest/glyphs/
 # project plans -- symlink to dev
 /docs/project-plans
 
+# operator runbooks -- symlink into the private explorer repo; runbooks hold
+# real hostnames, paths and accounts and are never published
+/docs/runbooks
+
 # sdd scratch
 .superpowers/
 

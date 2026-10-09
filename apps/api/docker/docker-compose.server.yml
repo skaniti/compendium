@@ -33,8 +33,8 @@
 #                            boot alongside RATE_LIMIT_TRUST_CF_HEADER
 #     TAILNET_LOGIN / TAILNET_ASSERT_SECRET / TAILNET_LOGIN_MAP -- optional,
 #       default off. Passwordless owner sign-in for trusted browsers
-#       (tailnet-passwordless-login; see
-#       apps/api/scripts/server-setup/tailnet-login-runbook.md). Needs
+#       (tailnet-passwordless-login; the operator runbook is private, under
+#       the gitignored docs/runbooks/ symlink). Needs
 #       TAILNET_ONLY_DEPLOYMENT=1; the API refuses to boot if
 #       TAILNET_ASSERT_SECRET is set without it.
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the

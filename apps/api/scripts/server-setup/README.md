@@ -2,6 +2,14 @@
 
 Idempotent bash scripts that automate the scriptable portions of the 2026-05-03 laptop-server-setup plan (private), plan.md, sections 13-22.
 
+## Runbooks are private
+
+Step-by-step operator runbooks (the demo-split cutover, tailnet sign-in setup,
+lost-device and rollback procedures) are not published: they name the
+operator's hosts, paths and accounts. They live outside this repo, reached
+through the gitignored symlink `docs/runbooks/`. Only the scripts the server
+pulls and runs stay here.
+
 ## Workflow per script
 
 1. **Transfer to server** (from workstation):
