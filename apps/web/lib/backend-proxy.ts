@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { TAILNET_ASSERT_HEADER } from "@/lib/tailnet-login";
 import { proxyAttestHeaders, stripInboundProxyAttestHeaders } from "@/lib/proxy-attest";
 
 // Same default-resolution convention as this constant used to have inline
@@ -32,6 +33,9 @@ export async function proxyToBackend(req: Request, upstreamPath: string): Promis
   // key), then set the trusted pair -- inert ({}) unless BACKEND_PROXY_
   // SECRET is configured. See lib/proxy-attest.ts.
   stripInboundProxyAttestHeaders(headers);
+  // tailnet-passwordless-login: only the auth route handlers present the
+  // tailnet assert secret; a browser can never supply its own.
+  headers.delete(TAILNET_ASSERT_HEADER);
   for (const [k, v] of Object.entries(proxyAttestHeaders(req))) headers.set(k, v);
 
   // Force identity upstream: production puts Cloudflare in front of the

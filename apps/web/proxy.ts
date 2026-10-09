@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  TAILNET_LOGIN_ROUTE,
+  TAILNET_PAUSED_COOKIE,
+  TRUSTED_BROWSER_COOKIE,
+  tailnetLoginFrom,
+} from "@/lib/tailnet-login";
 
 // D1 (batch 04 auth/session parity): this proxy (Next 16's rename of
 // "middleware" -- the "middleware" filename/export are deprecated as of
@@ -27,6 +33,21 @@ export function proxy(req: NextRequest): NextResponse {
   }
 
   if (req.cookies.has("access_token")) return NextResponse.next();
+
+  // tailnet-passwordless-login: a browser the owner trusted once signs in
+  // with no login page when `tailscale serve` vouches for the user (the
+  // header is absent on Vercel/demo, where TAILNET_LOGIN is off anyway).
+  // A paused browser (signed out) goes to /login and its "Continue as".
+  if (
+    tailnetLoginFrom(req.headers) &&
+    req.cookies.has(TRUSTED_BROWSER_COOKIE) &&
+    !req.cookies.has(TAILNET_PAUSED_COOKIE)
+  ) {
+    const next = `${pathname}${req.nextUrl.search}`;
+    return NextResponse.redirect(
+      new URL(`${TAILNET_LOGIN_ROUTE}?next=${encodeURIComponent(next)}`, req.url),
+    );
+  }
 
   return NextResponse.redirect(new URL("/login", req.url));
 }

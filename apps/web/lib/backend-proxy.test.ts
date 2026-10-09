@@ -226,4 +226,18 @@ describe("proxyToBackend", () => {
       expect(init.headers.get(PROXY_CLIENT_IP_HEADER)).toBe("198.51.100.9");
     });
   });
+
+  it("never forwards a browser-supplied tailnet assert header", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/topics", {
+      headers: { "X-Compendium-Tailnet-Assert": "forged" },
+    });
+    await proxyToBackend(req, "/api/topics");
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
+    expect(init.headers.has("x-compendium-tailnet-assert")).toBe(false);
+  });
 });

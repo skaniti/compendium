@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { config, proxy } from "./proxy";
 
@@ -86,5 +86,61 @@ describe("proxy", () => {
       expect(re.test("/captured-assets/user_1/aa/extensionless")).toBe(false);
       expect(re.test("/topics")).toBe(true);
     });
+  });
+});
+
+function makeReq(
+  path: string,
+  headers: Record<string, string>,
+  cookies: Record<string, string>,
+): NextRequest {
+  const cookie = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+  return new NextRequest(new URL(path, "https://app.example"), {
+    headers: { ...headers, ...(cookie ? { cookie } : {}) },
+  });
+}
+
+describe("proxy: automatic tailnet sign-in", () => {
+  const SECRET = "s".repeat(32);
+  beforeEach(() => {
+    vi.stubEnv("AUTH_REQUIRED", "1");
+    vi.stubEnv("TAILNET_LOGIN", "1");
+    vi.stubEnv("TAILNET_ASSERT_SECRET", SECRET);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("redirects a trusted browser with no session to the tailnet login route, keeping the path", () => {
+    const res = proxy(makeReq("/graph?x=1", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t" }));
+    expect(res.headers.get("location")).toMatch(/\/api\/auth\/tailnet\/login\?next=%2Fgraph%3Fx%3D1$/);
+  });
+
+  it("still auto-signs-in after a browser restart (refresh cookie but no access token)", () => {
+    const res = proxy(
+      makeReq("/", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t", refresh_token: "r" }),
+    );
+    expect(res.headers.get("location")).toContain("/api/auth/tailnet/login");
+  });
+
+  it.each([
+    ["no trusted cookie", { "tailscale-user-login": "owner@example.com" }, {}],
+    ["paused", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t", tailnet_login_paused: "1" }],
+    ["no header", {}, { trusted_browser: "t" }],
+    ["via Cloudflare", { "tailscale-user-login": "owner@example.com", "cf-ray": "x" }, { trusted_browser: "t" }],
+  ])("falls back to /login when %s", (_label, headers, cookies) => {
+    const res = proxy(makeReq("/", headers, cookies));
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
+  });
+
+  it("ignores a forged header when TAILNET_LOGIN is off (Vercel / demo)", () => {
+    vi.stubEnv("TAILNET_LOGIN", "");
+    const res = proxy(makeReq("/", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t" }));
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
+  });
+
+  it("leaves a request with a session alone", () => {
+    const res = proxy(
+      makeReq("/", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t", access_token: "a" }),
+    );
+    expect(res.headers.get("location")).toBeNull();
   });
 });
