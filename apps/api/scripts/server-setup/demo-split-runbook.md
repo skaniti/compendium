@@ -362,6 +362,34 @@ Failure signals; in every case stop and report, nothing was changed:
   `captures.capture_id` clash, or rows of another account under demo rows.
   The loader aborts with nothing changed.
 
+One exit 2 has a repair. If the loader's message is `page_content_assets
+linking demo assets`, pages of your account link assets the demo account
+owns: before migration 031 the assets table was shared by all accounts, and
+031 gave each shared row to one of them. The repair gives your pages their
+own copies (a same-content row you already own, or a new row and file) and
+moves the links; it changes nothing else. The pg_dump above is its rollback.
+
+1. List every pair. Each id is printed with its role; your user id is the
+   page account of the pair whose asset owner is `(demo)`. This listing run
+   may exit 1 on the other pair's files; only the next two runs must exit 0.
+
+       docker exec compendium-api python scripts/repair_cross_account_assets.py
+
+2. Dry run for your account. Expect exactly one pair,
+   `asset owner <demo user id> (demo) -> page account <your user id> (admin)`:
+
+       docker exec compendium-api python scripts/repair_cross_account_assets.py --page-account <your user id>
+
+3. Apply, then repeat this step's dry run from the top:
+
+       docker exec compendium-api python scripts/repair_cross_account_assets.py --page-account <your user id> --apply
+
+If the container has no `scripts/repair_cross_account_assets.py`, redeploy the
+owner stack with `--skip-seed` first. If run 2 or 3 exits 1, stop and report.
+`links_to_reused_rows_with_other_source_url` counts preview images that will
+load from their original site instead of the archive (they return 404 today).
+Restoring the pg_dump later leaves the copied files on disk (harmless).
+
 Then apply:
 
     SEED_APPLY=yes bash apps/api/scripts/server/deploy_server.sh --stack owner
