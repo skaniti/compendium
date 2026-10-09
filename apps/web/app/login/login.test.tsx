@@ -251,8 +251,40 @@ describe("login form: tailnet states", () => {
     expect(JSON.parse(loginCall![1].body as string).trustBrowser).toBe(true);
   });
 
-  it("offers 'Continue as' to a trusted browser, linking to the tailnet route with resume=1", () => {
+  async function submitLogin(fetchMock: ReturnType<typeof vi.fn>) {
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: "o@x" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const call = fetchMock.mock.calls.find(([url]) => String(url) === "/api/auth/login");
+    return JSON.parse(call![1].body as string) as Record<string, unknown>;
+  }
+
+  it("sends trustBrowser false when the box is unticked", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: "x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<LoginPage tailnetLogin="owner@example.com" trustedBrowser={false} />);
+    fireEvent.click(screen.getByLabelText(/trust this browser/i));
+    expect((await submitLogin(fetchMock)).trustBrowser).toBe(false);
+  });
+
+  it.each([
+    ["a trusted browser", { tailnetLogin: "owner@example.com", trustedBrowser: true }],
+    ["no Tailscale login", {}],
+  ])("omits trustBrowser for %s", async (_l, props) => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: "x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<LoginPage {...props} />);
+    expect("trustBrowser" in (await submitLogin(fetchMock))).toBe(false);
+  });
+
+  it("hides 'Continue as' for a trusted browser that is neither paused nor shown a notice", () => {
     render(<LoginPage tailnetLogin="owner@example.com" trustedBrowser />);
+    expect(screen.queryByTestId("tailnet-continue")).toBeNull();
+  });
+
+  it("offers 'Continue as' to a paused trusted browser with resume=1", () => {
+    render(<LoginPage tailnetLogin="owner@example.com" trustedBrowser paused />);
     const link = screen.getByTestId("tailnet-continue") as HTMLAnchorElement;
     expect(link.textContent).toContain("Continue as owner@example.com");
     expect(link.getAttribute("href")).toBe("/api/auth/tailnet/login?resume=1");
@@ -265,5 +297,10 @@ describe("login form: tailnet states", () => {
   ])("shows the %s notice", (notice, text) => {
     render(<LoginPage tailnetLogin="owner@example.com" tailnetNotice={notice as "failed" | "error"} />);
     expect(screen.getByRole("status").textContent).toMatch(text);
+  });
+
+  it("offers 'Continue as' to a trusted browser shown a notice", () => {
+    render(<LoginPage tailnetLogin="owner@example.com" trustedBrowser tailnetNotice="error" />);
+    expect(screen.getByTestId("tailnet-continue")).toBeTruthy();
   });
 });

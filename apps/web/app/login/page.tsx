@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
+import { TAILNET_LOGIN_ROUTE, TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
 import LoginPageClient from "./LoginPageClient";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
@@ -71,10 +71,24 @@ export default async function LoginPage({
   // through Cloudflare), whether this browser is trusted, and the notice
   // the tailnet route sent back on a failed automatic sign-in.
   const tailnetLogin = tailnetLoginFrom(await headers());
-  const trustedBrowser = tailnetLogin !== null && (await cookies()).has(TRUSTED_BROWSER_COOKIE);
+  const cookieStore = await cookies();
+  const trustedBrowser = tailnetLogin !== null && cookieStore.has(TRUSTED_BROWSER_COOKIE);
+  const paused = cookieStore.has(TAILNET_PAUSED_COOKIE);
+  // A crafted ?tailnet= means nothing where tailnet login is off.
   const tailnet = (await searchParams)?.tailnet;
-  const tailnetNotice = tailnet === "failed" || tailnet === "error" ? tailnet : null;
+  const tailnetNotice =
+    tailnetLogin !== null && (tailnet === "failed" || tailnet === "error") ? tailnet : null;
+  // A trusted browser that did not just sign out and was not just refused is
+  // signed in again automatically (spec section 1).
+  if (trustedBrowser && !paused && !tailnetNotice) {
+    redirect(`${TAILNET_LOGIN_ROUTE}?next=/`);
+  }
   return (
-    <LoginPageClient tailnetLogin={tailnetLogin} trustedBrowser={trustedBrowser} tailnetNotice={tailnetNotice} />
+    <LoginPageClient
+      tailnetLogin={tailnetLogin}
+      trustedBrowser={trustedBrowser}
+      paused={paused}
+      tailnetNotice={tailnetNotice}
+    />
   );
 }

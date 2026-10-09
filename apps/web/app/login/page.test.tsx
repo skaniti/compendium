@@ -83,6 +83,7 @@ describe("LoginPage (server component: dev-login recovery)", () => {
 
 describe("LoginPage: tailnet props", () => {
   beforeEach(() => {
+    vi.mocked(redirect).mockClear();
     vi.stubEnv("AUTH_REQUIRED", "1");
     vi.stubEnv("TAILNET_LOGIN", "1");
     vi.stubEnv("TAILNET_ASSERT_SECRET", "s".repeat(32));
@@ -104,10 +105,34 @@ describe("LoginPage: tailnet props", () => {
     expect(screen.getByLabelText(/trust this browser/i)).toBeTruthy();
   });
 
-  it("offers Continue as to a trusted browser", async () => {
-    vi.mocked(cookies).mockResolvedValue({ has: (n: string) => n === "trusted_browser" } as never);
+  const trustedCookies = (extra: string[] = []) =>
+    vi.mocked(cookies).mockResolvedValue({
+      has: (n: string) => n === "trusted_browser" || extra.includes(n),
+    } as never);
+
+  it("re-signs a trusted, unpaused browser in automatically", async () => {
+    trustedCookies();
+    await expect(LoginPage()).rejects.toThrow("NEXT_REDIRECT:/api/auth/tailnet/login?next=/");
+  });
+
+  it("offers Continue as to a paused trusted browser", async () => {
+    trustedCookies(["tailnet_login_paused"]);
     render(await LoginPage());
+    expect(redirect).not.toHaveBeenCalled();
     expect(screen.getByTestId("tailnet-continue").getAttribute("href")).toBe("/api/auth/tailnet/login?resume=1");
+  });
+
+  it("offers Continue as to a trusted browser shown a notice, without redirecting", async () => {
+    trustedCookies();
+    render(await LoginPage({ searchParams: Promise.resolve({ tailnet: "error" }) }));
+    expect(redirect).not.toHaveBeenCalled();
+    expect(screen.getByTestId("tailnet-continue")).toBeTruthy();
+  });
+
+  it("shows no notice for a crafted ?tailnet= when tailnet login is off", async () => {
+    vi.stubEnv("TAILNET_LOGIN", "");
+    render(await LoginPage({ searchParams: Promise.resolve({ tailnet: "failed" }) }));
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("ignores the header when TAILNET_LOGIN is off", async () => {

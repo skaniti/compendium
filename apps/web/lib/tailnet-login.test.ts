@@ -52,6 +52,12 @@ describe("tailnet-login helpers", () => {
     ["https://evil.example/", "/"],
     ["/ok\nSet-Cookie: x", "/"],
     ["relative", "/"],
+    ["/caf\u00e9", "/"],
+    ["/a\u202eb", "/"],
+    ["/a b", "/a b"],
+    ["/api", "/"],
+    ["/api/auth/me", "/"],
+    ["/apiary", "/apiary"],
   ])("safeNextPath(%j) -> %j", (raw, expected) => {
     expect(safeNextPath(raw as string | null)).toBe(expected);
   });

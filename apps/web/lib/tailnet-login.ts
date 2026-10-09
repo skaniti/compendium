@@ -38,7 +38,8 @@ export function tailnetLoginFrom(headers: HeaderReader): string | null {
 
 export function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
-  if (/[\u0000-\u001f\u007f]/.test(raw)) return "/";
+  if (/[^\x20-\x7e]/.test(raw)) return "/";
+  if (raw === "/api" || raw.startsWith("/api/")) return "/";
   return raw;
 }
 

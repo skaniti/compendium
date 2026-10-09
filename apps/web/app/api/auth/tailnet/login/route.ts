@@ -28,7 +28,12 @@ function seeOther(location: string): Response {
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const next = safeNextPath(url.searchParams.get("next"));
-  const resume = url.searchParams.get("resume") === "1";
+  // resume=1 lifts the sign-out pause, so only a same-origin navigation (or
+  // one the user typed: "none") may use it; a cross-site link cannot.
+  const fetchSite = req.headers.get("sec-fetch-site");
+  const resume =
+    url.searchParams.get("resume") === "1" &&
+    (fetchSite === null || fetchSite === "same-origin" || fetchSite === "none");
   const login = tailnetLoginFrom(req.headers);
   const cookieStore = await cookies();
   const browserToken = cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;

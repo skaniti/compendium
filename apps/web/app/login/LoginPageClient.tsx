@@ -48,10 +48,16 @@ const labelStyle: CSSProperties = {
 export interface LoginPageClientProps {
   tailnetLogin?: string | null;
   trustedBrowser?: boolean;
+  paused?: boolean;
   tailnetNotice?: "failed" | "error" | null;
 }
 
-function LoginForm({ tailnetLogin = null, trustedBrowser = false, tailnetNotice = null }: LoginPageClientProps) {
+function LoginForm({
+  tailnetLogin = null,
+  trustedBrowser = false,
+  paused = false,
+  tailnetNotice = null,
+}: LoginPageClientProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -167,7 +173,7 @@ function LoginForm({ tailnetLogin = null, trustedBrowser = false, tailnetNotice 
               : "Automatic sign-in is unavailable right now. Sign in with your password."}
           </p>
         )}
-        {tailnetLogin && trustedBrowser && (
+        {tailnetLogin && trustedBrowser && (paused || tailnetNotice) && (
           <a
             data-testid="tailnet-continue"
             href={`${TAILNET_LOGIN_ROUTE}?resume=1`}

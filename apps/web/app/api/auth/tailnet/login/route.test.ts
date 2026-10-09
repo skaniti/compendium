@@ -109,6 +109,23 @@ describe("GET /api/auth/tailnet/login", () => {
     expect(jar.get("tailnet_login_paused")).toBeUndefined();
   });
 
+  it.each(["cross-site", "same-site"])("ignores resume=1 on a %s request", async (site) => {
+    jar.set("tailnet_login_paused", "1");
+    const fetchMock = mockFetchResponse({ ok: true, status: 200, json: async () => ({}) });
+    const res = await GET(req("?resume=1", { "tailscale-user-login": "owner@example.com", "sec-fetch-site": site }));
+    expect(res.headers.get("location")).toBe("/login");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(jar.get("tailnet_login_paused")).toBeDefined();
+  });
+
+  it.each(["same-origin", "none"])("honours resume=1 when Sec-Fetch-Site is %s", async (site) => {
+    jar.set("tailnet_login_paused", "1");
+    mockFetchResponse({ ok: true, status: 200, json: async () => ({ access_token: makeAccessToken(9e9), refresh_token: "r" }) });
+    const res = await GET(req("?resume=1", { "tailscale-user-login": "owner@example.com", "sec-fetch-site": site }));
+    expect(res.headers.get("location")).toBe("/");
+    expect(jar.get("tailnet_login_paused")).toBeUndefined();
+  });
+
   it.each([
     ["no header", {}],
     ["via Cloudflare", { "tailscale-user-login": "owner@example.com", "cf-connecting-ip": "203.0.113.9" }],
