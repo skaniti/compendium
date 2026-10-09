@@ -14,3 +14,8 @@ apps/extension/tests/config.test.mjs:generic-api-key:135
 # sourcegraph-access-token: false positive against a vendoring-provenance
 # comment quoting a commit SHA, not a credential.
 99dfb7f9ad3a9e36c4b46ec692e63471ee332912:lib/graph/d3-graph-vendor.js:sourcegraph-access-token:4
+
+# apps/api/tests/test_tailnet_login_service.py: a synthetic high-entropy test
+# fixture (not a credential) in one historical commit; replaced by a
+# low-entropy fixture in the following commit.
+1411274603f2bc03bfd374b3660fe5699017d994:apps/api/tests/test_tailnet_login_service.py:generic-api-key:128

@@ -125,7 +125,9 @@ def test_resolve_account_refuses_unmapped_missing_and_demo(configured, accounts,
 
 
 def test_validation_errors_do_not_echo_the_secret():
-    secret = "Zq7vK3mX9pL2wR8tY5nB1cH6dF4gJ0aS7uE3iO"
+    # Low-entropy on purpose (the pre-push gitleaks scan flags random-looking
+    # fixtures); any 8-char window is still distinctive in an error message.
+    secret = "fixture-" * 5
     with pytest.raises(ValueError) as excinfo:
         _settings(tailnet_assert_secret=secret)
     text = str(excinfo.value)
