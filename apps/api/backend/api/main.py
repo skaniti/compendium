@@ -2947,6 +2947,18 @@ async def login(request: Request, body: LoginRequest):
     # Role is a DB lookup, never client-trusted, so the demo credential can
     # never obtain a remembered/90-day session.
     role = ar.get_role(user["id"])
+    # demo-one-click-entry: on the public demo stack the demo account is
+    # entered through POST /api/auth/demo only; the published password is
+    # retired. Other roles are unaffected.
+    if settings.demo_public_entry and role == "demo":
+        audit_repo.record(
+            "auth.login.failed",
+            subject_user_id=user["id"],
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"known_identifier": True, "reason": "demo_entry_only"},
+        )
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     remembered = role != "demo" and auth_service.ingress_trusted(request.headers)
 
     access_token = auth_service.create_access_token(user["id"], user["email"])
@@ -3697,3 +3709,7 @@ app.include_router(_prompts_router.router)
 from backend.api.routers import tailnet_auth as _tailnet_auth_router  # noqa: E402
 
 app.include_router(_tailnet_auth_router.router)
+
+from backend.api.routers import demo_entry as _demo_entry_router  # noqa: E402
+
+app.include_router(_demo_entry_router.router)
