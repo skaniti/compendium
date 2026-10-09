@@ -136,16 +136,23 @@ const SIDES: BandSide[] = ["L", "R", "T", "B"];
  *  right span the full height; top and bottom span only the core's width. */
 export function buildBands(core: Rect, width: number, height: number, p: BandParams): Record<BandSide, Band> {
   const m = p.marginPx, g = p.gapPx;
+  // Each band's inner edge is clamped into the canvas: a core panned fully
+  // off one side must not leave a band whose plates are off the canvas too.
+  const lEdge = Math.min(core.minX - g, width - m), rEdge = Math.max(core.maxX + g, m);
+  const tEdge = Math.min(core.minY - g, height - m), bEdge = Math.max(core.maxY + g, m);
+  const xFrom = Math.min(Math.max(m, core.minX), width - m);
+  const xTo = Math.max(xFrom, Math.min(width - m, core.maxX));
   return {
-    L: { side: "L", axis: "y", edge: core.minX - g, dir: -1, thick: core.minX - g - m, from: m, to: height - m },
-    R: { side: "R", axis: "y", edge: core.maxX + g, dir: 1, thick: width - m - core.maxX - g, from: m, to: height - m },
-    T: { side: "T", axis: "x", edge: core.minY - g, dir: -1, thick: core.minY - g - m, from: Math.max(m, core.minX), to: Math.min(width - m, core.maxX) },
-    B: { side: "B", axis: "x", edge: core.maxY + g, dir: 1, thick: height - m - core.maxY - g, from: Math.max(m, core.minX), to: Math.min(width - m, core.maxX) },
+    L: { side: "L", axis: "y", edge: lEdge, dir: -1, thick: lEdge - m, from: m, to: height - m },
+    R: { side: "R", axis: "y", edge: rEdge, dir: 1, thick: width - m - rEdge, from: m, to: height - m },
+    T: { side: "T", axis: "x", edge: tEdge, dir: -1, thick: tEdge - m, from: xFrom, to: xTo },
+    B: { side: "B", axis: "x", edge: bEdge, dir: 1, thick: height - m - bEdge, from: xFrom, to: xTo },
   };
 }
 
-/** 1D packing: each item as close to its target center as possible, no
- *  overlaps, `gap` apart, inside [from, to]. Returns start positions in the
+/** 1D packing, greedy (not globally optimal): items start at their target
+ *  center clamped into [from, to], then are pushed apart `gap` apart, forward
+ *  then back, so none overlap. Returns start positions in the
  *  given order (callers sort by target), or null when they cannot fit. */
 export function packAlong(items: Array<{ target: number; len: number }>, from: number, to: number, gap: number): number[] | null {
   let total = 0;
@@ -161,6 +168,10 @@ export function packAlong(items: Array<{ target: number; len: number }>, from: n
 
 function across(b: Band, fp: PlateFootprint): number { return b.axis === "y" ? fp.right - fp.left : fp.bottom - fp.top; }
 function along(b: Band, fp: PlateFootprint): number { return b.axis === "y" ? fp.bottom - fp.top : fp.right - fp.left; }
+/** Whether a pointer fits the band at all, across and along. */
+function fits(b: Band, fp: PlateFootprint): boolean {
+  return across(b, fp) <= b.thick + 1e-6 && along(b, fp) <= b.to - b.from + 1e-6;
+}
 
 /** Lay out `items` in one band with 1 or 2 columns (rows for top/bottom).
  *  Items are sorted along the band by anchor; with 2 columns, alternate
@@ -194,25 +205,24 @@ export function layoutBand(band: Band, items: BandItem[], columns: 1 | 2, p: Ban
 
 /** Place every pointer in a free band, or null when they cannot all fit.
  *  Each pointer ranks bands by how far its anchor sits toward that side of
- *  the core; a band is usable when at least one pointer fits across and
- *  along it. A band that overflows even with two columns gives up the
+ *  the core, among only the bands that pointer itself fits across and along
+ *  (null when some pointer fits none). A band that overflows even with two columns gives up the
  *  pointer that loses least by moving to its next-ranked usable band. */
 export function layoutBands(items: BandItem[], core: Rect, width: number, height: number, p: BandParams): BandPlacement[] | null {
   if (!items.length) return [];
   const bands = buildBands(core, width, height, p);
-  const open = SIDES.filter((s) => items.some((it) => across(bands[s], it.fp) <= bands[s].thick && along(bands[s], it.fp) <= bands[s].to - bands[s].from));
-  if (!open.length) return null;
   const ccx = (core.minX + core.maxX) / 2, ccy = (core.minY + core.maxY) / 2;
   const hw = Math.max(1, (core.maxX - core.minX) / 2), hh = Math.max(1, (core.maxY - core.minY) / 2);
   const ranked = items.map((it) => {
     const nx = (it.ax - ccx) / hw, ny = (it.ay - ccy) / hh;
     const score: Record<BandSide, number> = { L: -nx, R: nx, T: -ny, B: ny };
-    const rank = open.slice().sort((a, b) => score[b] - score[a] || SIDES.indexOf(a) - SIDES.indexOf(b));
+    const rank = SIDES.filter((s) => fits(bands[s], it.fp)).sort((a, b) => score[b] - score[a] || SIDES.indexOf(a) - SIDES.indexOf(b));
     return { it, score, rank };
   });
+  if (ranked.some((r) => !r.rank.length)) return null;
   const assign: Record<string, BandSide> = {};
   ranked.forEach((r) => { assign[r.it.key] = r.rank[0]; });
-  for (let move = 0; move <= 2 * items.length; move++) {
+  for (let move = 0; move <= 3 * items.length; move++) {
     const out: BandPlacement[] = [];
     let failSide: BandSide | null = null;
     for (const side of SIDES) {
