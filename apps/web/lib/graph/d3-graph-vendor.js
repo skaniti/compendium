@@ -1037,6 +1037,10 @@
 //      hidden smallest-first, then icon shrink, then the delta-#32 ring).
 //      In-place names stop at SC_NAME_FIT_FLOOR_PX. Dev hook
 //      __d3ScPlacement. Ten typo-gated tuner keys (TUNER_TYPO_VERSION 6).
+//      Pan ticks (k unchanged) reuse the last placement so plates ride with
+//      the graph; SC_PAN_SETTLE_MS after the last pan tick the pointers are
+//      re-placed in the new view's bands (__scPanTimer, cleared on
+//      teardown). Dev hook __d3PanBy.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1157,6 +1161,8 @@ var __vendorExpandedGroups;
     var __scPlaceState = { pointers: {}, nameHidden: {} };
     var __scPlaceGen = 0;
     var __scPanDirty = false;
+    var __scPanTimer = null;            // delta #37: pending pan-settle re-placement (cleared on teardown)
+    var __scPlaceReset = false;         // delta #37: a settle asked for hysteresis to be cleared once the fit has set fitZoom
     var HULL_OPACITY = 0.13;
     var HULL_STROKE_OPACITY = 0.35;
     var LINK_OPACITY = 0.7;
@@ -2476,8 +2482,8 @@ var __vendorExpandedGroups;
         positionGroupCaptions(zoomK);
 
         // Re-render SC watermarks so scIcon + scName scale changes take effect.
-        // Cheap: only 3 SCs in current data. drawWatermarks reads currentZoomK
-        // via clampedScale to compute its sizes.
+        // Cheap: only 3 SCs in current data. drawWatermarks takes its sizes
+        // from the placement pass, which reads the live zoom transform.
         if (currentData && currentData.clusters) {
             var root = svg.select('g.graph-root');
             if (!root.empty()) drawWatermarks(root, currentData.clusters);
@@ -4053,7 +4059,7 @@ var __vendorExpandedGroups;
      *  one crowd scale; plates that still collide at SC_CROWD_FLOOR become
      *  pointers one at a time (sc-pointers.ts selectPointers) and go into
      *  the free bands around the graph (placePointers), or onto the
-     *  delta-#32 ring when no band fits. Returns { c, t, phase, fallback,
+     *  delta-#32 ring when no band fits. Returns { c, t, phase, fallback, k,
      *  plates: { kw: { pointer, cx, cy (world icon center), iconPx, namePx,
      *  padPx (painted px), nameHidden, band, column } } }. A pan tick (zoom
      *  k unchanged, same layout generation, no pan-settle pending) reuses
@@ -4065,9 +4071,13 @@ var __vendorExpandedGroups;
         // fitZoom and plateFitScale are part of the cache key: fitToContent
         // draws once at the new transform with the PREVIOUS fitZoom, then
         // again after it updates fitZoom, at the same k.
-        if (__scPlace && __scPlace.gen === __scPlaceGen && Math.abs(__scPlace.k - k) < 1e-9 && __scPlace.fz === fitZoom && __scPlace.pfs === plateFitScale && !__scPanDirty) return __scPlace.result;
-        __scPanDirty = false;
+        // The painted keyword list is part of the key too: render() swaps
+        // currentData before the next settle bumps __scPlaceGen, and a draw
+        // in that window must not get a result built for the old plate set.
         var keys = Object.keys(groups).filter(function (kw) { return !!paintedScEntry(kw) && !!anchorByKw[kw]; }).sort();
+        var keySig = keys.join('\n');
+        if (__scPlace && __scPlace.gen === __scPlaceGen && Math.abs(__scPlace.k - k) < 1e-9 && __scPlace.fz === fitZoom && __scPlace.pfs === plateFitScale && __scPlace.ks === keySig && !__scPanDirty) return __scPlace.result;
+        __scPanDirty = false;
         var ratio = fitZoom > 0 ? k / fitZoom : 1;
         var iconR = clampRatio(ratio, SCALE_THRESHOLDS.scIcon), nameR = clampRatio(ratio, SCALE_THRESHOLDS.scName);
         var base = {
@@ -4124,7 +4134,7 @@ var __vendorExpandedGroups;
         } else {
             placed = { phase: 'none', t: 0, fallback: false, sizes: {}, placements: {} };
         }
-        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, plates: {} };
+        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, k: k, plates: {} };
         keys.forEach(function (kw) {
             var isPtr = sel.pointers.indexOf(kw) >= 0;
             var s = isPtr ? placed.sizes[kw] : inPlaceSizes;
@@ -4149,7 +4159,8 @@ var __vendorExpandedGroups;
             __scPlaceState.pointers[kw] = true;
             if (out.plates[kw].nameHidden) __scPlaceState.nameHidden[kw] = true;
         });
-        __scPlace = { k: k, fz: fitZoom, pfs: plateFitScale, gen: __scPlaceGen, result: out };
+        out.k = k;   // the k this result was placed at: drawWatermarks sizes from it, not from currentZoomK
+        __scPlace = { k: k, fz: fitZoom, pfs: plateFitScale, gen: __scPlaceGen, ks: keySig, result: out };
         return out;
     }
 
@@ -4217,7 +4228,7 @@ var __vendorExpandedGroups;
             // equal BASE * plateFitScale * clampedScale exactly (delta #36).
             var pl = placement.plates[keyword];
             if (!pl) continue;
-            var kInv = 1 / (currentZoomK || 1);
+            var kInv = 1 / (placement.k || currentZoomK || 1);   // one source of k: the zoom the placement was computed at
             var ICON_SIZE = pl.iconPx * kInv;
             var nameFontSize = pl.namePx * kInv;
             var namePadW = pl.padPx * kInv;
@@ -4236,8 +4247,8 @@ var __vendorExpandedGroups;
 
             // Delta #32: anchored placement is what R6 always drew; a
             // pointer (delta #37) is instead centered on its placement
-            // point from computeScPlacement (free band, or ring fallback). Both are recorded on the element so
-            // the glide (application pass + wmGlideStep) can compose
+            // point from computeScPlacement (free band, or ring fallback).
+            // Both are recorded on the element so the glide (application pass + wmGlideStep) can compose
             // anchor + offset and animate anchored<->exiled transitions.
             var fpNow = plateFootprintPx(keyword, pl.iconPx, pl.namePx, pl.padPx, pl.nameHidden, fpParams);
             var plateCxW = ICON_SIZE / 2 + ((fpNow.left + fpNow.right) / 2) * kInv;   // world offset from translate origin to footprint center
@@ -4473,9 +4484,8 @@ var __vendorExpandedGroups;
             wmEntries.push({ el: this, pages: +this.getAttribute('data-pages') || 0, exiled: this.getAttribute('data-exiled') === '1' ? 1 : 0 });
         });
         // Task 7: anchored plates are placed first (they hold their spot by
-        // construction); exiled plates, which the viewport clamp may have
-        // pulled inward, are placed last so any residual collision moves the
-        // exiled plate, never an anchored one.
+        // construction); pointer plates are placed last so any residual
+        // collision moves the pointer, never an in-place plate.
         wmEntries.sort(function (a, b) { return (a.exiled - b.exiled) || (b.pages - a.pages); });
         var WM_PAD = 2;
         // Delta #29's WM_GLIDE_TAU_MS / WM_GLIDE_SNAP_PX tuning constants
@@ -5011,6 +5021,13 @@ var __vendorExpandedGroups;
         // Record the fit-scale so LOD can derive "zoom ratio" relative to fit.
         fitZoom = scale;
         currentZoomK = scale;
+        if (__scPlaceReset) {
+            // Delta #37: drop what the draws above recorded at the old fitZoom,
+            // so the final fit draw starts from no previous pointers.
+            __scPlaceReset = false;
+            __scPlaceState = { pointers: {}, nameHidden: {} };
+            __scPlace = null; __scPlaceGen++;
+        }
         updateLabelLOD(scale);
         updateZoomIndicator(scale);
         updateLabelScale(scale);
@@ -5304,15 +5321,15 @@ var __vendorExpandedGroups;
      *  footprint at the 0.5x zoom floor is disjoint from every other,
      *  bounded per SC by SC_SEPARATION_BUDGET_RATIO x fog reach. Pairs that
      *  cannot be resolved within budget are NOT forced: the smaller plate
-     *  is recorded as overflow with its computed exile onset k, and
-     *  drawWatermarks exiles it to the periphery below that k. Deterministic
-     *  given the settle output. Up to 3 outer iterations because moving
+     *  is left where it is, and the per-draw placement pass (delta #37,
+     *  computeScPlacement) turns it into a pointer when it collides at the
+     *  current zoom. Deterministic given the settle output. Up to 3 outer iterations because moving
      *  SCs changes the fit bbox and therefore the floor k the footprints
      *  are measured against; re-fitting between iterations is what makes
      *  "spread them apart" a redistribution rather than a self-cancelling
      *  uniform expansion (spec, "fit-renormalization trap"). Final fix
-     *  wave: the tail (final measure, zero-budget overflow sweep, kExile,
-     *  cloud centroid, __scLayout write) now lives in remeasureScLayout, so
+     *  wave: the tail (final measure, cloud centroid, __scLayout write)
+     *  now lives in remeasureScLayout, so
      *  a later resize can re-derive the SAME record for a new canvas size
      *  without repeating the movement phase -- see that function's comment. */
     function applyScLayoutSeparation(ctx) {
@@ -5320,6 +5337,10 @@ var __vendorExpandedGroups;
         __scShiftW = {};  // final fix wave: cumulative per-SC shift, cleared per settle
         __scPlaceState = { pointers: {}, nameHidden: {} };  // delta #37: a new layout forgets pointer hysteresis
         __scPlace = null; __scPlaceGen++;
+        // The settle's own draws (chunk 2, fitToContent's first zoom event at
+        // the OLD fitZoom) repopulate the hysteresis memory before the final
+        // fit draw; fitToContent clears it again once fitZoom is the new one.
+        __scPlaceReset = true;
         wmGlideReset();   // final fix wave (Minor 3): a new layout invalidates every stored glide offset -- the first post-fit draw must snap, not glide from the previous layout's plate positions
         var nodes = ctx.nodes, clusters = ctx.clusters;
         if (!nodes.length || !__mountedIcons || !currentData) return;
@@ -5425,7 +5446,7 @@ var __vendorExpandedGroups;
 
     /** Final fix wave (Important #1): __scLayout used to be fixed at the
      *  canvas size in effect at settle -- a resize left the floor
-     *  guarantee and every plate's exile onset stale, since the
+     *  guarantee stale, since the
      *  ResizeObserver handler only re-fits, never re-measures. This is the
      *  node-immutable "recompute the report for THIS canvas size" tail,
      *  shared by applyScLayoutSeparation's own settle-time call (above) and
@@ -6195,6 +6216,11 @@ var __vendorExpandedGroups;
                                           : Math.max(minTy, Math.min(maxTy, t.y));
                 }
                 root.attr('transform', t);
+                // Delta #37: same k as the last placement = a pan tick. The
+                // draw below reuses that placement (pointers ride with the
+                // graph); re-place in the new view's free bands once the
+                // pan has been idle for SC_PAN_SETTLE_MS.
+                var scPanTick = !!(__scPlace && Math.abs(__scPlace.k - t.k) < 1e-9);
                 updateLabelLOD(t.k);
                 updateZoomIndicator(t.k);
                 updateLabelScale(t.k);
@@ -6202,6 +6228,17 @@ var __vendorExpandedGroups;
                 // (world->screen), so this must come after updateLabelScale,
                 // not before.
                 updateEdgeChips();
+                if (scPanTick) {
+                    if (__scPanTimer) clearTimeout(__scPanTimer);
+                    __scPanTimer = setTimeout(function () {
+                        __scPanTimer = null;
+                        if (!svg || !currentData || !currentData.clusters) return;
+                        var settleRoot = svg.select('g.graph-root');
+                        if (settleRoot.empty()) return;
+                        __scPanDirty = true;   // bypass the pan-reuse cache for this one draw
+                        drawWatermarks(settleRoot, currentData.clusters);
+                    }, SC_PAN_SETTLE_MS);
+                }
                 // Header comment delta #34: fires on every zoom tick (pan,
                 // wheel, pinch, the zoom-indicator's scaleBy/scaleTo, and
                 // __d3ZoomTo alike -- every path funnels through this same
@@ -7422,6 +7459,7 @@ var __vendorExpandedGroups;
     // (an explicit teardown on final unmount). Safe to call more than once
     // (each branch nulls its own handle after use).
     function teardownContainerHandlers() {
+        if (__scPanTimer) { clearTimeout(__scPanTimer); __scPanTimer = null; }  // delta #37
         if (__resizeObserverHandle) {
             __resizeObserverHandle.disconnect();
             __resizeObserverHandle = null;
@@ -7667,6 +7705,14 @@ var __vendorExpandedGroups;
             var cxs = lastCanvasDims.w / 2, cys = lastCanvasDims.h / 2;
             var nx = cxs - (cxs - t.x) * (k / t.k), ny = cys - (cys - t.y) * (k / t.k);
             svg.call(storedZoomBehavior.transform, d3.zoomIdentity.translate(nx, ny).scale(k));
+            return true;
+        };
+        // Delta #37: drives a real pan through the zoom behavior (screen px),
+        // so tests exercise the pan-tick / pan-settle path a drag would.
+        window.__d3PanBy = function (dx, dy) {
+            if (!svg || !storedZoomBehavior) return false;
+            var cur = d3.zoomTransform(svg.node());
+            svg.call(storedZoomBehavior.translateBy, dx / cur.k, dy / cur.k);
             return true;
         };
         // Almagest graph tuner (delta #33): live-preview a draft AlmagestParams

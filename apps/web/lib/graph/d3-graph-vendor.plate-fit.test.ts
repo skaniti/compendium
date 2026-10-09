@@ -77,7 +77,7 @@ type Layout = {
   kFit: number; kFloor: number; plateFitScale: number;
   contentBBox: { minX: number; minY: number; maxX: number; maxY: number };
   fpParams: { baseIconSize: number; baseNameFontPx: number; labelTopPad: number };
-  report: Array<{ keyword: string; overflow: boolean; kExile: number }>;
+  report: Array<{ keyword: string }>;
 };
 type W = Window & {
   __d3ScLayout?: () => Layout | null;

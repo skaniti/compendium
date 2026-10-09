@@ -3,7 +3,7 @@ import type { GraphPayload, GraphCluster, GraphSuperCluster, GraphNode } from "@
 import type { IconEntry } from "@/lib/icons";
 import { createSimEngine } from "@/lib/graph/sim-layout";
 import type { MainToWorkerMessage, SimStartPayload, WorkerToMainMessage } from "@/lib/graph/sim-protocol";
-import { plateFootprintAtRatio, plateRect, rectsOverlap } from "@/lib/graph/sc-separation";
+import { plateFootprintAtRatio, rectsOverlap } from "@/lib/graph/sc-separation";
 import { GRAPH_DEFAULTS } from "@/lib/graph/constants";
 
 // Delta #32 (vendor header comment) -- exercises the REAL vendor render()
@@ -151,6 +151,7 @@ type W = Window & {
   __d3SetScSeparationOptions?: (o: SeparationOptions) => void;
   __d3GetScSeparationOptions?: () => Required<SeparationOptions>;
   __d3ZoomTo?: (k: number) => boolean;
+  __d3PanBy?: (dx: number, dy: number) => boolean;
   __d3GetZoomScaleExtent?: () => [number, number];
   __d3ScPlacement?: () => Placement | null;
 };
@@ -421,27 +422,32 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     const tip = document.createElement("div");
     tip.id = "node-tooltip";
     document.body.appendChild(tip);
-    const { container } = await mountCrowded("ring");
-    applyTunerOverrides({ SC_BAND_GAP_PX: 5000 });   // every band thinner than any plate
-    flushSettleChunks();
-    await vi.advanceTimersByTimeAsync(2000);
-    const p = placement();
-    expect(p.fallback).toBe(true);
-    expect(p.phase).toBe("ring");
-    const kw = Object.keys(p.plates).find((k) => p.plates[k].pointer)!;
-    expect(p.plates[kw].nameHidden).toBe(true);
-    const g = plateEl(container, kw);
-    expect(g.querySelector("text.supercluster-label")).toBeNull();
-    g.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
-    expect(tip.textContent).toContain(kw);
-    tip.remove();
-    // Tuner state is module-level: restore it so later tests in this file see the default.
-    applyTunerOverrides({ SC_BAND_GAP_PX: GRAPH_DEFAULTS.SC_BAND_GAP_PX });
-    flushSettleChunks();
+    try {
+      const { container } = await mountCrowded("ring");
+      applyTunerOverrides({ SC_BAND_GAP_PX: 5000 });   // every band thinner than any plate
+      flushSettleChunks();
+      await vi.advanceTimersByTimeAsync(2000);
+      const p = placement();
+      expect(p.fallback).toBe(true);
+      expect(p.phase).toBe("ring");
+      const kw = Object.keys(p.plates).find((k) => p.plates[k].pointer)!;
+      expect(p.plates[kw].nameHidden).toBe(true);
+      const g = plateEl(container, kw);
+      expect(g.querySelector("text.supercluster-label")).toBeNull();
+      g.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+      expect(tip.textContent).toContain(kw);
+    } finally {
+      tip.remove();
+      // Tuner state is module-level: restore it so later tests in this file see the default.
+      applyTunerOverrides({ SC_BAND_GAP_PX: GRAPH_DEFAULTS.SC_BAND_GAP_PX });
+      flushSettleChunks();
+    }
   });
 
   it("fit is the content bbox whatever the pointer count (the cliff's feedback loop is gone)", async () => {
     await mountCrowded("fit");
+    const fitPlacement = placement();
+    expect(Object.values(fitPlacement.plates).some((pl) => pl.pointer)).toBe(true);
     const layout = (window as W).__d3ScLayout!()!;
     expect(layout.fitBBox).toEqual(layout.contentBBox);
     const [kMin] = (window as W).__d3GetZoomScaleExtent!();
@@ -451,14 +457,72 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     ), 9);
   });
 
+  it("a pan tick keeps the last placement: pointers ride with the graph", async () => {
+    await mountCrowded("pan");
+    const before = placement();
+    expect((window as W).__d3PanBy!(40, 0)).toBe(true);
+    expect(placement()).toBe(before);   // same object: no re-placement mid-pan
+  });
+
+  it("pointers re-place once the pan has been idle for SC_PAN_SETTLE_MS", async () => {
+    await mountCrowded("set");
+    const before = placement();
+    (window as W).__d3PanBy!(40, 0);
+    await vi.advanceTimersByTimeAsync(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS - 20);
+    expect(placement()).toBe(before);
+    (window as W).__d3PanBy!(40, 0);    // a second tick restarts the wait
+    await vi.advanceTimersByTimeAsync(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS - 20);
+    expect(placement()).toBe(before);
+    await vi.advanceTimersByTimeAsync(40);
+    expect(placement()).not.toBe(before);
+  });
+
+  it("dispose cancels a pending pan-settle redraw", async () => {
+    const { dispose } = await mountCrowded("dsp");
+    const before = placement();
+    (window as W).__d3PanBy!(40, 0);
+    (dispose as () => void)();
+    await vi.advanceTimersByTimeAsync(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS * 3);
+    expect(placement()).toBe(before);
+  });
+
+  it("a draw right after a re-render never reuses a placement built for another plate set", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const { container } = await mountCrowded("gen");
+    expect(Object.keys(placement().plates)).toHaveLength(4);
+    // A worker that never answers keeps the new layout from settling, which
+    // is the window where the old placement used to be served from cache.
+    vi.stubGlobal("Worker", class { onmessage = null; postMessage() {} terminate() {} });
+    render(container, crowdedPayload("gen", 3, 2), { icons: iconsFor("gen") });
+    (window as W).__d3PanBy!(10, 0);   // a draw before the new layout has settled
+    expect(Object.keys(placement().plates).filter((k) => k.includes("sc3"))).toEqual([]);
+  });
+
+  it("a refresh while zoomed out forgets the old zoom's pointers: same placement as a fresh mount", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const { container } = await mountCrowded("ref");
+    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(Object.values(placement().plates).some((pl) => pl.pointer)).toBe(true);
+    render(container, crowdedPayload("ref", 4, 2), { icons: iconsFor("ref") });
+    flushSettleChunks();
+    await vi.advanceTimersByTimeAsync(2000);
+    const refreshed = placement();
+    const ptrs = (p: Placement) => Object.keys(p.plates).filter((k) => p.plates[k].pointer).sort();
+    const refreshedPtrs = ptrs(refreshed);
+    const fresh = await mountCrowded("ref");
+    expect(ptrs(placement())).toEqual(refreshedPtrs);
+    expect(fresh.container).toBeTruthy();
+  });
+
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const container = document.createElement("div");
-    // Default separation options (generous budget) + a roomy canvas: the
-    // report shows no overflow at all, so remeasureScLayout's fixed-point
-    // loop breaks on iteration 0 with fitBBox === contentBBox exactly (the
-    // plain, padded computeFitBBox(nodes) result) -- isolating the
-    // unpadFitBBox arithmetic from the exile-inclusion loop.
+    // Default separation options (generous budget) + a roomy canvas: with
+    // nothing left to separate, fitBBox === contentBBox exactly (the plain,
+    // padded computeFitBBox(nodes) result) -- isolating the unpadFitBBox
+    // arithmetic.
     sizeContainer(container, 1600, 1240);
     document.body.appendChild(container);
     render(container, crowdedPayload("pad", 2, 4), { icons: iconsFor("pad") });
