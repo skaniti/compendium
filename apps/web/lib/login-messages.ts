@@ -5,3 +5,6 @@
 export const INVALID_CREDENTIALS_MESSAGE = "Invalid credentials.";
 export const BACKEND_UNREACHABLE_MESSAGE = "The backend is unreachable; try again shortly.";
 export const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts; wait a minute and try again.";
+
+// demo-one-click-entry: a Turnstile token is single-use and short-lived.
+export const CHALLENGE_FAILED_MESSAGE = "The challenge did not pass. Reload and try again.";
