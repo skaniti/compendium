@@ -2624,10 +2624,19 @@ async def get_captured_asset(
     if not candidate.is_file():
         raise not_found
 
+    # Archived files come from arbitrary sites (an SVG can carry script)
+    # and a signed URL works in any browser, so an asset opened directly at
+    # this origin must not execute or fetch anything. The CSP only applies
+    # when the file is loaded as a document; as an <img>/<link> subresource
+    # of a preview it is ignored.
     return FileResponse(
         candidate,
         media_type=content_type or "application/octet-stream",
-        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+        headers={
+            "Cache-Control": "private, max-age=31536000, immutable",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

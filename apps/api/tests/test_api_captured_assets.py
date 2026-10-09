@@ -188,6 +188,21 @@ class TestCapturedAssetOwnership:
         assert "private" in resp.headers["cache-control"]
         assert "immutable" in resp.headers["cache-control"]
 
+    def test_asset_response_cannot_run_as_a_document(self, client, assets_dir):
+        # Archived files come from arbitrary sites (SVG can carry script).
+        # Opened directly at the app origin they must not execute or load
+        # anything; as <img>/<link> subresources the CSP does not apply.
+        tc, user = client
+        (assets_dir / "evil.svg").write_bytes(b"<svg xmlns='http://www.w3.org/2000/svg'/>")
+        _insert_asset(user["id"], "evil.svg", content_type="image/svg+xml")
+
+        resp = tc.get("/captured-assets/evil.svg")
+        assert resp.status_code == 200
+        csp = resp.headers["content-security-policy"]
+        assert "sandbox" in [d.strip() for d in csp.split(";")]
+        assert "default-src 'none'" in csp
+        assert resp.headers["x-content-type-options"] == "nosniff"
+
     def test_other_users_asset_returns_404(self, client, assets_dir):
         tc, _user = client
         other = _make_user(email="other-captured-assets@example.com")
@@ -332,6 +347,23 @@ class TestCapturedAssetSignedUrls:
         resp = tc.get(asset_url_signer(user["id"])("pic.png"))
         assert resp.status_code == 200
         assert resp.content == b"png-bytes"
+
+    def test_signed_svg_cannot_run_as_a_document(self, signed):
+        # A signed URL works in any browser, so it must never deliver
+        # executable content: one account's archived SVG opened through its
+        # signed URL in another account's session would otherwise run at
+        # the app origin with that session.
+        from backend.services.asset_urls import asset_url_signer
+
+        tc, user, d = signed
+        (d / "evil.svg").write_bytes(b"<svg xmlns='http://www.w3.org/2000/svg'/>")
+        _insert_asset(user["id"], "evil.svg", content_type="image/svg+xml")
+        resp = tc.get(asset_url_signer(user["id"])("evil.svg"))
+        assert resp.status_code == 200
+        csp = resp.headers["content-security-policy"]
+        assert "sandbox" in [d.strip() for d in csp.split(";")]
+        assert "default-src 'none'" in csp
+        assert resp.headers["x-content-type-options"] == "nosniff"
 
     def test_signed_url_for_another_users_asset_404(self, signed):
         from backend.services.asset_urls import asset_url_signer
