@@ -92,6 +92,21 @@ export interface GraphDefaults {
   // name pad by it, so those bases are the FULL-SIZE ceiling. Typo-gated.
   SC_PLATE_FIT_REF_PX: number;
   SC_NAME_FIT_FLOOR_PX: number;
+  // SC pointer bands (the 2026-10-09 sc-pointer-bands plan, private): plates
+  // in place share one crowd scale down to SC_CROWD_FLOOR, then become
+  // pointers one at a time (SC_FLIP_HYSTERESIS on the way back); pointers go
+  // into free bands around the graph and shrink by cluster size between
+  // SC_POINTER_SIZE_MIN and _MAX of the crowd scale. Typo-gated.
+  SC_CROWD_FLOOR: number;
+  SC_FLIP_HYSTERESIS: number;
+  SC_POINTER_SIZE_MIN: number;
+  SC_POINTER_SIZE_MAX: number;
+  SC_POINTER_MIN_ICON_PX: number;
+  SC_BAND_MARGIN_PX: number;
+  SC_BAND_GAP_PX: number;
+  SC_BAND_LAYER_GAP_PX: number;
+  SC_BAND_ITEM_GAP_PX: number;
+  SC_PAN_SETTLE_MS: number;
   BASE_SINGLETON_LABEL_FONT_SIZE: number;
   LOD_BASE_THRESHOLD: number;
   LOD_POWER: number;
@@ -137,7 +152,8 @@ export interface GraphDefaults {
 // module's own defaults object.
 // v4 (2026-09-11): scName k_min 1.00 -> 0.75 (P3, sc-layout-separation); v3-stamped profiles pinning 1.00 would silently undo it.
 // v5 (2026-09-23): plate-fit scale keys SC_PLATE_FIT_REF_PX / SC_NAME_FIT_FLOOR_PX added; BASE_SC_NAME_FONT_SIZE and scName now describe the full-size ceiling that sFit scales down, which v4 profiles tuned for screen-constant plates. BASE_SC_ICON_SIZE and the icon->name pad are ceilings too but stay ungated: a v4 profile's icon size still means "full-size icon", which is the intended reading.
-export const TUNER_TYPO_VERSION = 5;
+// v6 (2026-10-09): SC pointer band keys added (crowd floor, flip hysteresis, pointer sizes, band spacing, pan settle); in-place SC names now stop at SC_NAME_FIT_FLOOR_PX under crowding, a new meaning for that key.
+export const TUNER_TYPO_VERSION = 6;
 export const TUNER_FOG_VERSION = 2;
 
 export const GRAPH_DEFAULTS: Readonly<GraphDefaults> = Object.freeze({
@@ -159,6 +175,16 @@ export const GRAPH_DEFAULTS: Readonly<GraphDefaults> = Object.freeze({
   BASE_SC_NAME_FONT_SIZE: 22,
   SC_PLATE_FIT_REF_PX: 640,
   SC_NAME_FIT_FLOOR_PX: 12,
+  SC_CROWD_FLOOR: 0.5,
+  SC_FLIP_HYSTERESIS: 0.04,
+  SC_POINTER_SIZE_MIN: 0.35,
+  SC_POINTER_SIZE_MAX: 0.75,
+  SC_POINTER_MIN_ICON_PX: 24,
+  SC_BAND_MARGIN_PX: 14,
+  SC_BAND_GAP_PX: 14,
+  SC_BAND_LAYER_GAP_PX: 10,
+  SC_BAND_ITEM_GAP_PX: 8,
+  SC_PAN_SETTLE_MS: 150,
   BASE_SINGLETON_LABEL_FONT_SIZE: 8,
   LOD_BASE_THRESHOLD: 2.5,
   LOD_POWER: 2.0,

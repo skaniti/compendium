@@ -38,12 +38,23 @@ describe("GRAPH_DEFAULTS", () => {
     // private): sFit = clamp(min(w,h)/REF, FLOOR/22, 1).
     expect(GRAPH_DEFAULTS.SC_PLATE_FIT_REF_PX).toBe(640);
     expect(GRAPH_DEFAULTS.SC_NAME_FIT_FLOOR_PX).toBe(12);
+    // SC pointer bands (the 2026-10-09 sc-pointer-bands plan, private).
+    expect(GRAPH_DEFAULTS.SC_CROWD_FLOOR).toBe(0.5);
+    expect(GRAPH_DEFAULTS.SC_FLIP_HYSTERESIS).toBe(0.04);
+    expect(GRAPH_DEFAULTS.SC_POINTER_SIZE_MIN).toBe(0.35);
+    expect(GRAPH_DEFAULTS.SC_POINTER_SIZE_MAX).toBe(0.75);
+    expect(GRAPH_DEFAULTS.SC_POINTER_MIN_ICON_PX).toBe(24);
+    expect(GRAPH_DEFAULTS.SC_BAND_MARGIN_PX).toBe(14);
+    expect(GRAPH_DEFAULTS.SC_BAND_GAP_PX).toBe(14);
+    expect(GRAPH_DEFAULTS.SC_BAND_LAYER_GAP_PX).toBe(10);
+    expect(GRAPH_DEFAULTS.SC_BAND_ITEM_GAP_PX).toBe(8);
+    expect(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS).toBe(150);
   });
 });
 
 describe("tuner version stamps", () => {
-  it("TUNER_TYPO_VERSION is 5 (plate-fit scale keys, nameplate-lod-fit-scale)", () => {
-    expect(TUNER_TYPO_VERSION).toBe(5);
+  it("TUNER_TYPO_VERSION is 6 (SC pointer band keys, sc-pointer-bands)", () => {
+    expect(TUNER_TYPO_VERSION).toBe(6);
   });
 
   it("TUNER_FOG_VERSION is 2", () => {

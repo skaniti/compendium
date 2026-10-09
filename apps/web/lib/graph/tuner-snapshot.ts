@@ -71,6 +71,16 @@ const TYPO_GATED_FLAT_KEYS: ReadonlyArray<keyof GraphDefaults> = [
   "SC_NAME_LOD_FADE_RANGE",
   "SC_PLATE_FIT_REF_PX",
   "SC_NAME_FIT_FLOOR_PX",
+  "SC_CROWD_FLOOR",
+  "SC_FLIP_HYSTERESIS",
+  "SC_POINTER_SIZE_MIN",
+  "SC_POINTER_SIZE_MAX",
+  "SC_POINTER_MIN_ICON_PX",
+  "SC_BAND_MARGIN_PX",
+  "SC_BAND_GAP_PX",
+  "SC_BAND_LAYER_GAP_PX",
+  "SC_BAND_ITEM_GAP_PX",
+  "SC_PAN_SETTLE_MS",
 ];
 
 // Keys gated on FOG_V -- dropped unless snap.FOG_V === TUNER_FOG_VERSION
