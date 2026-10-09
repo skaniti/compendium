@@ -181,39 +181,6 @@ export function solveSeparation(plates: SeparationPlate[], opts?: { maxPasses?: 
   return { shifts, overflow: order.filter((p) => overflow.has(p.key)).map((p) => p.key), passes };
 }
 
-/**
- * Smallest zoom ratio r in [rMin, rMax] (step) at which `key`'s plate is
- * clear of every anchored plate, given WORLD anchors and the fit scale
- * (screen position = anchor * kFit * r). Infinity if never clear.
- */
-export function computeExileRatio(
-  key: string,
-  anchors: Record<string, { x: number; y: number }>,
-  anchoredKeys: string[],
-  p: FootprintParams,
-  kFit: number,
-  rMin: number,
-  rMax: number,
-  step = 0.01,
-): number {
-  const me = anchors[key];
-  if (!me) return Infinity;
-  const others = anchoredKeys.filter((k) => k !== key && anchors[k]);
-  const n = Math.max(0, Math.round((rMax - rMin) / step));
-  for (let i = 0; i <= n; i++) {
-    const r = rMin + i * step;
-    const k = kFit * r;
-    const mine = plateRect(me.x * k, me.y * k, plateFootprintAtRatio(key, r, p));
-    let clear = true;
-    for (const o of others) {
-      const a = anchors[o];
-      if (rectsOverlap(mine, plateRect(a.x * k, a.y * k, plateFootprintAtRatio(o, r, p)))) { clear = false; break; }
-    }
-    if (clear) return r;
-  }
-  return Infinity;
-}
-
 function wrapAngle(a: number): number {
   while (a <= -Math.PI) a += 2 * Math.PI;
   while (a > Math.PI) a -= 2 * Math.PI;

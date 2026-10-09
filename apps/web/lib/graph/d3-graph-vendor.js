@@ -910,7 +910,8 @@
 //      (`SC_EXILE_CLAMP_MODE`), with the pre-existing radial viewport
 //      clamp kept as an opt-in `'viewport'` mode. Dev hooks
 //      __d3SetScSeparationOptions / __d3GetScSeparationOptions extended
-//      accordingly (exileClampMode, exileMarginPx).
+//      accordingly (exileClampMode, exileMarginPx; exileClampMode was
+//      removed again in delta #37).
 //  (f) 2026-09-13 user report (fit/floor cropping exiled plates): fit bbox
 //      = content bbox ∪ plates exiled at fit (+ SC_FIT_EXILE_MARGIN_PX),
 //      fixed-point in remeasureScLayout; ring perimeter = unpadded content
@@ -1021,6 +1022,21 @@
 //      Exposed on the `__scLayout` record (`plateFitScale`) for tests and
 //      the acceptance harness; REF/FLOOR are typo-gated tuner keys
 //      (TUNER_TYPO_VERSION 5), live-tunable via __d3ApplyTunerOverrides.
+//  37. SC pointers in free bands (the 2026-10-09 sc-pointer-bands plan,
+//      private). Fixes the all-at-once pointer cliff: remeasureScLayout's
+//      fit no longer includes pointer plates (fitBBox = contentBBox; the
+//      2026-09-13 fit-includes-exiles fixed point, its symmetric
+//      expansion, SC_FIT_EXILE_MARGIN_PX, the 0.5x-floor overflow sweep,
+//      kExile and SC_EXILE_CLAMP_MODE/'viewport' are gone). drawWatermarks
+//      runs one placement pass per draw (computeScPlacement ->
+//      lib/graph/sc-pointers.ts): plates in place share one crowd scale
+//      down to SC_CROWD_FLOOR, plates that still collide become pointers
+//      one at a time with SC_FLIP_HYSTERESIS on the way back, and pointers
+//      go into the free bands around the graph (own side, one column, two
+//      columns, next band, then graded shrink by cluster size, then names
+//      hidden smallest-first, then icon shrink, then the delta-#32 ring).
+//      In-place names stop at SC_NAME_FIT_FLOOR_PX. Dev hook
+//      __d3ScPlacement. Ten typo-gated tuner keys (TUNER_TYPO_VERSION 6).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1032,7 +1048,8 @@
 // =====================================================================
 
 import { GRAPH_DEFAULTS, TUNER_TYPO_VERSION, TUNER_FOG_VERSION } from "./constants";
-import { plateFootprintAtRatio, plateRect, rectsOverlap, solveSeparation, computeExileRatio, clipSegmentToRect, placeExiledPlates } from './sc-separation';
+import { plateFootprintAtRatio, plateFootprintPx, clampRatio, plateRect, rectsOverlap, solveSeparation, clipSegmentToRect, placeExiledPlates } from './sc-separation';
+import { selectPointers, placePointers, sizesAt } from './sc-pointers';
 import { layoutLine, faceForPx, averageAdvanceEm } from '../almagest/runtime';
 import { getGenerator } from '../almagest/generator';
 import d3 from "./d3";
@@ -1127,12 +1144,19 @@ var __vendorExpandedGroups;
     // view); the user's stated preference is that the supercluster moves
     // with its label.
     var SC_SEPARATION_BUDGET_MIN_PX = 60;
-    var SC_EXILE_MARGIN_PX = 16;           // gap between cloud perimeter and an exiled plate's near edge (screen px)
-    var SC_FIT_EXILE_MARGIN_PX = 12;       // 2026-09-13: fit (100%) includes every plate exiled AT fit, plus this screen-px margin
-    var SC_EXILE_CLAMP_MODE = 'periphery';  // 'periphery' (2026-09-13 user direction: exiled plates stay on the cloud perimeter and may leave the viewport) | 'viewport' (radial clamp inside the viewport minus SC_EXILE_VIEWPORT_MARGIN_PX; the behavior shipped 2026-09-11)
-    var SC_EXILE_VIEWPORT_MARGIN_PX = 28;  // same clearance updateEdgeChips uses
+    var SC_EXILE_MARGIN_PX = 16;           // ring fallback (delta #37): gap between cloud perimeter and a ring pointer's near edge (screen px)
     var __scLayout = null;                 // per-layout separation record (see applyScLayoutSeparation / remeasureScLayout)
     var __scShiftW = {};                   // final fix wave: per-SC cumulative correction-pass shift, WORLD units (keyword -> number), written by applyScLayoutSeparation's movement phase, cleared at its top; remeasureScLayout reports shiftPx = __scShiftW[kw] * kFloor at whatever floor is current
+    // Delta #37: per-draw plate placement. __scPlace is the last result
+    // (world coords), reused by a pan tick (zoom k unchanged, same layout
+    // generation, no pan-settle pending) so pointers ride with the graph.
+    // __scPlaceState is the hysteresis memory (keyword -> true), reset on
+    // every settle and kept across resizes. __scPlaceGen invalidates
+    // __scPlace on settle and resize.
+    var __scPlace = null;
+    var __scPlaceState = { pointers: {}, nameHidden: {} };
+    var __scPlaceGen = 0;
+    var __scPanDirty = false;
     var HULL_OPACITY = 0.13;
     var HULL_STROKE_OPACITY = 0.35;
     var LINK_OPACITY = 0.7;
@@ -1403,6 +1427,19 @@ var __vendorExpandedGroups;
     // record #4).
     var SC_PLATE_FIT_REF_PX = 640;
     var SC_NAME_FIT_FLOOR_PX = 12;
+    // Delta #37 (the 2026-10-09 sc-pointer-bands plan, private): crowd
+    // scale, pointer hysteresis, free-band placement and the pan-settle
+    // delay. Typo-gated tuner keys (TUNER_TYPO_VERSION 6).
+    var SC_CROWD_FLOOR = 0.5;           // smallest shared scale for plates in place
+    var SC_FLIP_HYSTERESIS = 0.04;      // footprint inflation a pointer (or a hidden name) needs before it returns
+    var SC_POINTER_SIZE_MIN = 0.35;     // graded floor for the smallest SC's pointer, fraction of the crowd scale
+    var SC_POINTER_SIZE_MAX = 0.75;     // graded floor for the largest SC's pointer
+    var SC_POINTER_MIN_ICON_PX = 24;    // pointer icon size once names are dropped and icons shrink
+    var SC_BAND_MARGIN_PX = 14;         // canvas inset for the free bands
+    var SC_BAND_GAP_PX = 14;            // gap between the graph core and the first pointer column
+    var SC_BAND_LAYER_GAP_PX = 10;      // gap between the two pointer columns
+    var SC_BAND_ITEM_GAP_PX = 8;        // gap between pointers in a column
+    var SC_PAN_SETTLE_MS = 150;         // idle time after a pan before pointers re-place
     /** Delta #36: pure. `w`/`h` are the fit's own canvas dims -- `h` already
      *  search-bar-adjusted by the caller (effectiveCanvasHeight), exactly the
      *  pair fitToContent receives. Returns 1 for a degenerate canvas or a
@@ -1850,6 +1887,16 @@ var __vendorExpandedGroups;
             SC_NAME_LOD_FADE_RANGE: SC_NAME_LOD_FADE_RANGE,
             SC_PLATE_FIT_REF_PX: SC_PLATE_FIT_REF_PX,
             SC_NAME_FIT_FLOOR_PX: SC_NAME_FIT_FLOOR_PX,
+            SC_CROWD_FLOOR: SC_CROWD_FLOOR,
+            SC_FLIP_HYSTERESIS: SC_FLIP_HYSTERESIS,
+            SC_POINTER_SIZE_MIN: SC_POINTER_SIZE_MIN,
+            SC_POINTER_SIZE_MAX: SC_POINTER_SIZE_MAX,
+            SC_POINTER_MIN_ICON_PX: SC_POINTER_MIN_ICON_PX,
+            SC_BAND_MARGIN_PX: SC_BAND_MARGIN_PX,
+            SC_BAND_GAP_PX: SC_BAND_GAP_PX,
+            SC_BAND_LAYER_GAP_PX: SC_BAND_LAYER_GAP_PX,
+            SC_BAND_ITEM_GAP_PX: SC_BAND_ITEM_GAP_PX,
+            SC_PAN_SETTLE_MS: SC_PAN_SETTLE_MS,
             ICON_LOD_FADE_START: ICON_LOD_FADE_START,
             ICON_LOD_FADE_END: ICON_LOD_FADE_END,
             GROUP_CAPTION_LOD_K_MIN: GROUP_CAPTION_LOD_K_MIN,
@@ -1914,6 +1961,16 @@ var __vendorExpandedGroups;
             if (typeof snap.SC_NAME_LOD_FADE_RANGE === 'number') SC_NAME_LOD_FADE_RANGE = snap.SC_NAME_LOD_FADE_RANGE;
             if (typeof snap.SC_PLATE_FIT_REF_PX === 'number') SC_PLATE_FIT_REF_PX = snap.SC_PLATE_FIT_REF_PX;
             if (typeof snap.SC_NAME_FIT_FLOOR_PX === 'number') SC_NAME_FIT_FLOOR_PX = snap.SC_NAME_FIT_FLOOR_PX;
+            if (typeof snap.SC_CROWD_FLOOR === 'number') SC_CROWD_FLOOR = snap.SC_CROWD_FLOOR;
+            if (typeof snap.SC_FLIP_HYSTERESIS === 'number') SC_FLIP_HYSTERESIS = snap.SC_FLIP_HYSTERESIS;
+            if (typeof snap.SC_POINTER_SIZE_MIN === 'number') SC_POINTER_SIZE_MIN = snap.SC_POINTER_SIZE_MIN;
+            if (typeof snap.SC_POINTER_SIZE_MAX === 'number') SC_POINTER_SIZE_MAX = snap.SC_POINTER_SIZE_MAX;
+            if (typeof snap.SC_POINTER_MIN_ICON_PX === 'number') SC_POINTER_MIN_ICON_PX = snap.SC_POINTER_MIN_ICON_PX;
+            if (typeof snap.SC_BAND_MARGIN_PX === 'number') SC_BAND_MARGIN_PX = snap.SC_BAND_MARGIN_PX;
+            if (typeof snap.SC_BAND_GAP_PX === 'number') SC_BAND_GAP_PX = snap.SC_BAND_GAP_PX;
+            if (typeof snap.SC_BAND_LAYER_GAP_PX === 'number') SC_BAND_LAYER_GAP_PX = snap.SC_BAND_LAYER_GAP_PX;
+            if (typeof snap.SC_BAND_ITEM_GAP_PX === 'number') SC_BAND_ITEM_GAP_PX = snap.SC_BAND_ITEM_GAP_PX;
+            if (typeof snap.SC_PAN_SETTLE_MS === 'number') SC_PAN_SETTLE_MS = snap.SC_PAN_SETTLE_MS;
         }
         if (typeof snap.BASE_SC_ICON_SIZE === 'number') BASE_SC_ICON_SIZE = snap.BASE_SC_ICON_SIZE;
         if (typeof snap.ICON_LOD_FADE_START === 'number') ICON_LOD_FADE_START = snap.ICON_LOD_FADE_START;
@@ -3831,7 +3888,7 @@ var __vendorExpandedGroups;
                 // dominant-baseline="hanging" anchors y at the visual top of
                 // the glyph rather than the baseline, so the padding between
                 // icon bottom and label top stays exactly the caller's pad
-                // (SC_LABEL_TOP_PAD * plateFitScale * iconScale) at any font size.
+                // (the placement pass's padPx) at any font size.
                 .attr('dominant-baseline', 'hanging')
                 // Use .style() not .attr() — inline style overrides the
                 // theme.css `.supercluster-label { font-size: 30px }` rule;
@@ -3991,6 +4048,111 @@ var __vendorExpandedGroups;
         __wmGlide.anchors = {};
     }
 
+    /** Delta #37 (the 2026-10-09 sc-pointer-bands plan, private): the one
+     *  placement pass drawWatermarks runs per draw. Plates in place share
+     *  one crowd scale; plates that still collide at SC_CROWD_FLOOR become
+     *  pointers one at a time (sc-pointers.ts selectPointers) and go into
+     *  the free bands around the graph (placePointers), or onto the
+     *  delta-#32 ring when no band fits. Returns { c, t, phase, fallback,
+     *  plates: { kw: { pointer, cx, cy (world icon center), iconPx, namePx,
+     *  padPx (painted px), nameHidden, band, column } } }. A pan tick (zoom
+     *  k unchanged, same layout generation, no pan-settle pending) reuses
+     *  the previous result so every plate rides with the graph. */
+    function computeScPlacement(groups, anchorByKw, fpParams) {
+        var zt = svg ? d3.zoomTransform(svg.node()) : null;
+        var k = zt ? zt.k : (currentZoomK || 1);
+        var tx = zt ? zt.x : 0, ty = zt ? zt.y : 0;
+        // fitZoom and plateFitScale are part of the cache key: fitToContent
+        // draws once at the new transform with the PREVIOUS fitZoom, then
+        // again after it updates fitZoom, at the same k.
+        if (__scPlace && __scPlace.gen === __scPlaceGen && Math.abs(__scPlace.k - k) < 1e-9 && __scPlace.fz === fitZoom && __scPlace.pfs === plateFitScale && !__scPanDirty) return __scPlace.result;
+        __scPanDirty = false;
+        var keys = Object.keys(groups).filter(function (kw) { return !!paintedScEntry(kw) && !!anchorByKw[kw]; }).sort();
+        var ratio = fitZoom > 0 ? k / fitZoom : 1;
+        var iconR = clampRatio(ratio, SCALE_THRESHOLDS.scIcon), nameR = clampRatio(ratio, SCALE_THRESHOLDS.scName);
+        var base = {
+            iconPx: BASE_SC_ICON_SIZE * plateFitScale * iconR,
+            namePx: BASE_SC_NAME_FONT_SIZE * plateFitScale * nameR,
+            padPx: SC_LABEL_TOP_PAD * plateFitScale * iconR,
+        };
+        var footprintOf = function (key, s) { return plateFootprintPx(key, s.iconPx, s.namePx, s.padPx, s.nameHidden, fpParams); };
+        var pagesOf = {}, maxPages = 0;
+        keys.forEach(function (kw) {
+            var p = 0;
+            groups[kw].forEach(function (mc) { p += (mc.page_ids || []).length; });
+            pagesOf[kw] = p;
+            if (p > maxPages) maxPages = p;
+        });
+        var byKey = {};
+        var plates = keys.map(function (kw) {
+            var p = { key: kw, pages: pagesOf[kw], x: anchorByKw[kw].x * k + tx, y: anchorByKw[kw].y * k + ty };
+            byKey[kw] = p;
+            return p;
+        });
+        var sel = selectPointers({
+            plates: plates, base: base, nameFloorPx: SC_NAME_FIT_FLOOR_PX, footprintOf: footprintOf,
+            crowdFloor: SC_CROWD_FLOOR, hysteresis: SC_FLIP_HYSTERESIS,
+            prevPointers: new Set(Object.keys(__scPlaceState.pointers)),
+        });
+        var inPlaceSizes = sizesAt(base, sel.c, SC_NAME_FIT_FLOOR_PX);
+        // Graph core in screen px: the nebula box plus every plate in place.
+        var cb = __scLayout && __scLayout.cloudBBox;
+        var core = cb ? { minX: cb.minX * k + tx, maxX: cb.maxX * k + tx, minY: cb.minY * k + ty, maxY: cb.maxY * k + ty } : null;
+        sel.inPlace.forEach(function (kw) {
+            var r = plateRect(byKey[kw].x, byKey[kw].y, footprintOf(kw, inPlaceSizes));
+            core = core
+                ? { minX: Math.min(core.minX, r.minX), maxX: Math.max(core.maxX, r.maxX), minY: Math.min(core.minY, r.minY), maxY: Math.max(core.maxY, r.maxY) }
+                : r;
+        });
+        var ptrPlates = sel.pointers.map(function (kw) { return byKey[kw]; });
+        var placed = null;
+        if (ptrPlates.length && core && lastCanvasDims) {
+            placed = placePointers({
+                pointers: ptrPlates, c: sel.c, base: base, nameFloorPx: SC_NAME_FIT_FLOOR_PX, footprintOf: footprintOf,
+                core: core, width: lastCanvasDims.w, height: lastCanvasDims.h, maxPages: maxPages,
+                params: {
+                    sizeMin: SC_POINTER_SIZE_MIN, sizeMax: SC_POINTER_SIZE_MAX, minIconPx: SC_POINTER_MIN_ICON_PX,
+                    hysteresis: SC_FLIP_HYSTERESIS,
+                    band: { marginPx: SC_BAND_MARGIN_PX, gapPx: SC_BAND_GAP_PX, layerGapPx: SC_BAND_LAYER_GAP_PX, itemGapPx: SC_BAND_ITEM_GAP_PX },
+                },
+                prevNameHidden: new Set(Object.keys(__scPlaceState.nameHidden)),
+            });
+        } else if (ptrPlates.length) {
+            // Before the first fit there are no canvas dims yet: ring, in-place sizes.
+            placed = { phase: 'ring', t: 1, fallback: true, sizes: {}, placements: {} };
+            ptrPlates.forEach(function (p) { placed.sizes[p.key] = inPlaceSizes; });
+        } else {
+            placed = { phase: 'none', t: 0, fallback: false, sizes: {}, placements: {} };
+        }
+        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, plates: {} };
+        keys.forEach(function (kw) {
+            var isPtr = sel.pointers.indexOf(kw) >= 0;
+            var s = isPtr ? placed.sizes[kw] : inPlaceSizes;
+            var rec = { pointer: isPtr, cx: anchorByKw[kw].x, cy: anchorByKw[kw].y, iconPx: s.iconPx, namePx: s.namePx, padPx: s.padPx, nameHidden: !!s.nameHidden, band: null, column: null };
+            var bp = (isPtr && !placed.fallback) ? placed.placements[kw] : null;
+            if (bp) { rec.cx = (bp.x - tx) / k; rec.cy = (bp.y - ty) / k; rec.band = bp.side; rec.column = bp.column; }
+            out.plates[kw] = rec;
+        });
+        if (placed.fallback && ptrPlates.length && __scLayout && __scLayout.cloudBBox) {
+            var items = sel.pointers.map(function (kw) {
+                return { key: kw, ax: anchorByKw[kw].x, ay: anchorByKw[kw].y, fp: footprintOf(kw, placed.sizes[kw]) };
+            });
+            var ring = placeExiledPlates(items, { cx: __scLayout.cloudCentroid.x, cy: __scLayout.cloudCentroid.y, bbox: __scLayout.cloudBBox, k: k, marginPx: SC_EXILE_MARGIN_PX });
+            items.forEach(function (it) {
+                // placeExiledPlates returns the footprint center; plates are positioned by icon center.
+                out.plates[it.key].cx = ring[it.key].x - ((it.fp.left + it.fp.right) / 2) / k;
+                out.plates[it.key].cy = ring[it.key].y - ((it.fp.top + it.fp.bottom) / 2) / k;
+            });
+        }
+        __scPlaceState = { pointers: {}, nameHidden: {} };
+        sel.pointers.forEach(function (kw) {
+            __scPlaceState.pointers[kw] = true;
+            if (out.plates[kw].nameHidden) __scPlaceState.nameHidden[kw] = true;
+        });
+        __scPlace = { k: k, fz: fitZoom, pfs: plateFitScale, gen: __scPlaceGen, result: out };
+        return out;
+    }
+
     function drawWatermarks(root, clusters) {
         if (!SANDBOX_SECTION_GATES.watermark) return;  // S2 sandbox-bar gate (header comment delta #8)
 
@@ -4027,43 +4189,15 @@ var __vendorExpandedGroups;
         var centroids = computeClusterCentroids(clusters, currentData.nodes || []);
         lastClusterCentroids = centroids;
 
-        // ── Delta #32: anchors first, then exile placement for overflow plates ──
+        // ── Delta #37: anchors first, then one placement pass for every plate ──
         var fpParams = scFootprintParams();
-        var zoomRatio = (fitZoom > 0) ? (currentZoomK / fitZoom) : 1;
         var anchorByKw = {};
         for (var kw0 in groups) {
             var ax0 = 0, ay0 = 0, an0 = 0;
             groups[kw0].forEach(function (mc) { var cen = centroids[mc.id]; if (cen) { ax0 += cen.x; ay0 += cen.y; an0++; } });
             if (an0) anchorByKw[kw0] = { x: ax0 / an0, y: ay0 / an0 };
         }
-        var exileCenter = {};
-        if (__scLayout && __scLayout.plates) {
-            var exItems = [];
-            for (var kw1 in groups) {
-                var info1 = __scLayout.plates[kw1];
-                var a1 = anchorByKw[kw1];
-                if (!info1 || !info1.overflow || !a1 || !(currentZoomK < info1.kExile)) continue;
-                exItems.push({ key: kw1, ax: a1.x, ay: a1.y, fp: plateFootprintAtRatio(kw1, zoomRatio, fpParams) });
-            }
-            if (exItems.length) {
-                var env = { cx: __scLayout.cloudCentroid.x, cy: __scLayout.cloudCentroid.y, bbox: __scLayout.cloudBBox, k: currentZoomK || 1, marginPx: SC_EXILE_MARGIN_PX };
-                // Item 3 (2026-09-13): env.viewport only gets populated in
-                // 'viewport' mode -- placeExiledPlates treats a missing
-                // viewport as "no clamp" (periphery mode's default), so
-                // exiled plates stay on the cloud perimeter and may leave
-                // the viewport instead of being radially clamped inside it.
-                if (SC_EXILE_CLAMP_MODE === 'viewport') {
-                    var vpNode = svg && svg.select('.graph-root').node();
-                    var vctm = vpNode && vpNode.getScreenCTM ? vpNode.getScreenCTM() : null;
-                    var vrect = __mountedContainer ? __mountedContainer.getBoundingClientRect() : null;
-                    if (vctm && vctm.a > 0 && vctm.d > 0 && vrect && vrect.width > 0 && vrect.height > 0) {
-                        env.viewport = { a: vctm.a, d: vctm.d, e: vctm.e, f: vctm.f, left: vrect.left, top: vrect.top, width: vrect.width, height: vrect.height, marginPx: SC_EXILE_VIEWPORT_MARGIN_PX };
-                    }
-                }
-                var placed = placeExiledPlates(exItems, env);
-                exItems.forEach(function (it) { exileCenter[it.key] = { x: placed[it.key].x, y: placed[it.key].y }; });
-            }
-        }
+        var placement = computeScPlacement(groups, anchorByKw, fpParams);
         var leaderLayer = layer.append('g').attr('class', 'watermark-leaders');  // painted beneath the plates
 
         for (var keyword in groups) {
@@ -4078,18 +4212,15 @@ var __vendorExpandedGroups;
 
             var color = nebulaColor(clusterColorMap[memberClusters[0].id] || fallbackColor());
 
-            // Apply tuner-driven scaling (clamped per SCALE_THRESHOLDS)
-            // using the most-recent zoom k. SC name uses its own scale,
-            // independent of the icon, so they tune separately.
-            var iconScale = clampedScale(currentZoomK, 'scIcon');
-            var nameScale = clampedScale(currentZoomK, 'scName');
-            // Delta #36: the canvas-derived plate-fit scale multiplies the
-            // BASE sizes (and the icon->name pad passed to renderScName
-            // below) so the whole plate scales down uniformly on small
-            // canvases; the fit-ratio bands (clampedScale) apply on top,
-            // unchanged, so zoom behavior around fit is exactly as before.
-            var ICON_SIZE = BASE_SC_ICON_SIZE * plateFitScale * iconScale;
-            var nameFontSize = BASE_SC_NAME_FONT_SIZE * plateFitScale * nameScale;
+            // Delta #37: sizes come from the placement pass (painted px ->
+            // world units at the current zoom). With crowd scale 1 these
+            // equal BASE * plateFitScale * clampedScale exactly (delta #36).
+            var pl = placement.plates[keyword];
+            if (!pl) continue;
+            var kInv = 1 / (currentZoomK || 1);
+            var ICON_SIZE = pl.iconPx * kInv;
+            var nameFontSize = pl.namePx * kInv;
+            var namePadW = pl.padPx * kInv;
 
             // Parse viewBox for scaling
             var vbParts = (icon.viewBox || '0 0 24 24').split(' ');
@@ -4103,21 +4234,20 @@ var __vendorExpandedGroups;
             // zoom-OUT).
             var nameRatio = (fitZoom > 0) ? (currentZoomK / fitZoom) : 1;
 
-            // Delta #32: anchored placement is what R6 always drew; an
-            // overflow plate below its kExile is instead centered on its
-            // peripheral exile point. Both are recorded on the element so
+            // Delta #32: anchored placement is what R6 always drew; a
+            // pointer (delta #37) is instead centered on its placement
+            // point from computeScPlacement (free band, or ring fallback). Both are recorded on the element so
             // the glide (application pass + wmGlideStep) can compose
             // anchor + offset and animate anchored<->exiled transitions.
-            var fpNow = plateFootprintAtRatio(keyword, nameRatio, fpParams);
-            var kInv = 1 / (currentZoomK || 1);
+            var fpNow = plateFootprintPx(keyword, pl.iconPx, pl.namePx, pl.padPx, pl.nameHidden, fpParams);
             var plateCxW = ICON_SIZE / 2 + ((fpNow.left + fpNow.right) / 2) * kInv;   // world offset from translate origin to footprint center
             var plateCyW = ICON_SIZE / 2 + ((fpNow.top + fpNow.bottom) / 2) * kInv;
             var plateHwW = ((fpNow.right - fpNow.left) / 2) * kInv;
             var plateHhW = ((fpNow.bottom - fpNow.top) / 2) * kInv;
             var anchoredTx = wcx - ICON_SIZE / 2, anchoredTy = wcy - ICON_SIZE / 2;
-            var ex = exileCenter[keyword];
-            var tx0 = ex ? ex.x - plateCxW : anchoredTx;
-            var ty0 = ex ? ex.y - plateCyW : anchoredTy;
+            var ex = pl.pointer;
+            var tx0 = ex ? pl.cx - ICON_SIZE / 2 : anchoredTx;
+            var ty0 = ex ? pl.cy - ICON_SIZE / 2 : anchoredTy;
 
             // Rethink R6.1: past ICON_LOD_FADE_START you're inside the
             // galaxy -- the big icon fades out and the nameplate hands off
@@ -4219,7 +4349,7 @@ var __vendorExpandedGroups;
             else nameOpacity = (nameRatio - SC_NAME_LOD_K_MIN) / SC_NAME_LOD_FADE_RANGE;
 
             var rawName = sc.keyword || '';
-            if (rawName) {
+            if (rawName && !pl.nameHidden) {  // delta #37: an icon-only pointer drops its name; hover still names it
                 var displayName = rawName.length > 36
                     ? rawName.slice(0, 36)
                     : rawName;
@@ -4232,7 +4362,7 @@ var __vendorExpandedGroups;
                 // and paintedPx feed.
                 renderScName(g, lines, {
                     x: ICON_SIZE / 2,
-                    y: ICON_SIZE + SC_LABEL_TOP_PAD * plateFitScale * iconScale,
+                    y: ICON_SIZE + namePadW,
                     fontPx: nameFontSize,
                     paintedPx: nameFontSize * currentZoomK,
                     opacity: nameOpacity,
@@ -4831,15 +4961,9 @@ var __vendorExpandedGroups;
         // veil lifts (and a test reading the DOM immediately after settle,
         // with no timer advance, observes the wrong, pre-swoop position).
         wmGlideReset();
-        // 2026-09-13 fit-includes-exiles fix: once a settle/resize has run
-        // remeasureScLayout for THIS canvas size (settle path: handleSimEnd
-        // -> applyScLayoutSeparation; resize path: the ResizeObserver calls
-        // remeasureScLayout before fitToContent -- see both call sites
-        // below), __scLayout.fitBBox is the content bbox already expanded to
-        // include every plate exiled AT fit (plus SC_FIT_EXILE_MARGIN_PX).
-        // Falling back to the plain computeFitBBox covers the pre-first-
-        // settle/no-SC-separation case (no __scLayout yet, or fewer than 2
-        // painted SCs -- remeasureScLayout no-ops and leaves fitBBox unset).
+        // Delta #37: __scLayout.fitBBox is the plain content bbox (pointers
+        // never widen the fit). Falling back to computeFitBBox covers the
+        // pre-first-settle / single-SC case where remeasureScLayout no-ops.
         var bb = (__scLayout && __scLayout.fitBBox) ? __scLayout.fitBBox : computeFitBBox(nodes);
         if (!bb) return;
         var minX = bb.minX, minY = bb.minY, maxX = bb.maxX, maxY = bb.maxY;
@@ -5194,6 +5318,8 @@ var __vendorExpandedGroups;
     function applyScLayoutSeparation(ctx) {
         __scLayout = null;
         __scShiftW = {};  // final fix wave: cumulative per-SC shift, cleared per settle
+        __scPlaceState = { pointers: {}, nameHidden: {} };  // delta #37: a new layout forgets pointer hysteresis
+        __scPlace = null; __scPlaceGen++;
         wmGlideReset();   // final fix wave (Minor 3): a new layout invalidates every stored glide offset -- the first post-fit draw must snap, not glide from the previous layout's plate positions
         var nodes = ctx.nodes, clusters = ctx.clusters;
         if (!nodes.length || !__mountedIcons || !currentData) return;
@@ -5311,33 +5437,20 @@ var __vendorExpandedGroups;
      *  settle. Per-SC shift is read from __scShiftW (world units, written
      *  by that movement phase) so shiftPx = __scShiftW[kw] * kFloor is
      *  correct at WHATEVER floor is current, settle or a later resize
-     *  alike; overflow here comes from the zero-budget check alone (mirrors
-     *  applyScLayoutSeparation's own former post-loop "guarantee by
-     *  construction" sweep, just run standalone against every painted SC
-     *  rather than only the ones the movement phase hadn't already flagged).
+     *  alike.
      *  Guard: no-op when __scLayout is null (no layout yet -- nothing for a
      *  resize to refresh) or fewer than 2 painted SCs.
      *
-     *  2026-09-13 fit-includes-exiles fix: also derives __scLayout.fitBBox
-     *  -- the content bbox expanded (bounded fixed-point search, see the
-     *  loop's own comment) to include every plate exiled AT fit -- which
-     *  fitToContent now fits to instead of the plain content bbox, so 100%
-     *  zoom (and the 0.5x floor beneath it) always contains every exiled
-     *  nameplate. cloudBBox (the ring perimeter exiled plates are placed
-     *  against) is now the UNPADDED content bbox, not the fit bbox -- see
-     *  unpadFitBBox.
-     *
-     *  Review round (2026-09-13): the record written to __scLayout (kFit,
-     *  kFloor, overflow, kExileOf, budgetPx) must ALWAYS be measured from
-     *  the SAME bbox that ends up stored as fitBBox -- measureAtBBox below
-     *  is the one place a candidate bbox turns into that record, called
-     *  immediately after fitBBox changes (never deferred to "the next loop
-     *  pass"), so every exit path (converged, cap hit, or the no-exile
-     *  reset) leaves fitZoom/kExile/the floor sweep judging the SAME scale
-     *  that is actually stored and later applied by fitToContent. */
+     *  Delta #37: fitBBox is the content bbox (cloudBBox re-padded) -- the
+     *  fit no longer depends on which plates are pointers. cloudBBox is the
+     *  unpadded content bbox (unpadFitBBox): the graph core the free
+     *  pointer bands are measured from, and the ring perimeter for the
+     *  ring fallback.
+     */
     function remeasureScLayout(canvasW, canvasH) {
         if (!__scLayout || !currentData || !__mountedIcons) return;
         if (!(canvasW > 0) || !(canvasH > 0)) return;
+        __scPlace = null; __scPlaceGen++;  // delta #37: re-place at the new size; hysteresis memory persists across resizes
         var nodes = currentData.nodes || [];
         var clusters = currentData.clusters || [];
         if (!nodes.length) return;
@@ -5366,19 +5479,15 @@ var __vendorExpandedGroups;
 
         var contentBBox = computeFitBBox(nodes);
         if (!contentBBox) return;
-        // Ring perimeter for exiled plates is the UNPADDED content bbox
-        // (2026-09-13 user direction: plates hug the nebula instead of
-        // floating out past the fit's own daylight margin) -- invariant
-        // across the fit-search loop below, since it depends only on node
-        // positions, never on canvasW/canvasH or the candidate fit bbox.
+        // Ring perimeter (and the free-band core) is the UNPADDED content
+        // bbox (2026-09-13 user direction: plates hug the nebula instead of
+        // floating out past the fit's own daylight margin); it depends only
+        // on node positions, never on canvasW/canvasH.
         var cloudBBox = unpadFitBBox(contentBBox);
 
-        // Review Minor 2: anchors (scOverlayGeometry) and the cloud
-        // centroid are pure functions of node positions -- independent of
-        // kFit/kFloor -- so both are computed ONCE here, not on every
-        // fixed-point pass below. Only budgetPx (uses kFloor) and the
-        // overflow/kExile sweep (use kFit/kFloor) are k-dependent and stay
-        // inside measureAtBBox.
+        // Anchors (scOverlayGeometry) and the cloud centroid are pure
+        // functions of node positions -- independent of kFit/kFloor. Only
+        // budgetPx (uses kFloor) is k-dependent.
         var centroids = computeClusterCentroids(clusters, nodes);
         var anchors = {}, reachOf = {};
         scKeys.forEach(function (kw) {
@@ -5394,140 +5503,22 @@ var __vendorExpandedGroups;
         cloudCx = cloudN ? cloudCx / cloudN : (contentBBox.minX + contentBBox.maxX) / 2;
         cloudCy = cloudN ? cloudCy / cloudN : (contentBBox.minY + contentBBox.maxY) / 2;
 
-        // 2026-09-13 fit-includes-exiles fix: 100% zoom must equal
-        // zoom-to-fit INCLUDING every plate exiled AT fit (plus
-        // SC_FIT_EXILE_MARGIN_PX) -- otherwise fit (and the 0.5x floor
-        // beneath it) crops peripheral plates (user report, screenshot).
-        // Growing the fit bbox to include an exiled plate SHRINKS kFit
-        // (and kFloor with it), which shrinks screen-space separation
-        // between anchors and can push another plate into overflow/exile
-        // that wasn't before -- so this is a bounded fixed-point search,
-        // not a single pass.
-        var kFit = 0, kFloor = 0, budgetPx = {}, overflow = {}, kExileOf = {};
-
-        /** Turns a candidate bbox into the k-dependent half of the record
-         *  (kFit/kFloor/budgetPx/overflow/kExileOf, all outer vars mutated
-         *  as a side effect) and returns the keys exiled AT that bbox's own
-         *  fit scale. Called immediately whenever fitBBox changes -- never
-         *  on a later pass -- so the outer vars are never left describing a
-         *  bbox other than whatever fitBBox currently holds. */
-        function measureAtBBox(bb) {
-            kFit = Math.min(canvasW / (bb.maxX - bb.minX), canvasH / (bb.maxY - bb.minY));
-            if (!(kFit > 0)) return [];
-            kFloor = kFit * MIN_ZOOM_RATIO;
-
-            budgetPx = {};
-            scKeys.forEach(function (kw) {
-                if (!anchors[kw]) return;
-                budgetPx[kw] = Math.max(reachOf[kw] * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
-            });
-
-            // Guarantee by construction: whatever is still overlapping at
-            // zero budget becomes overflow, so every plate drawn at its
-            // anchor is disjoint at the floor -- the resolver+glide safety
-            // net should never have to move an anchored plate. This is the
-            // ONLY source of overflow at a remeasure -- the movement phase
-            // (when there was one) already ran.
-            overflow = {};
-            var checkPlates = [];
-            scKeys.forEach(function (kw) {
-                if (!anchors[kw]) return;
-                checkPlates.push({ key: kw, pages: pagesByKw[kw], x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor, fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp), budget: 0 });
-            });
-            solveSeparation(checkPlates).overflow.forEach(function (kw) { overflow[kw] = true; });
-
-            kExileOf = {};
-            scKeys.forEach(function (kw) {
-                if (overflow[kw] && anchors[kw]) {
-                    // Task 7: opponents = every other painted plate at its
-                    // anchor. Restricting to anchored plates let a plate
-                    // whose only collision was with ANOTHER overflow plate
-                    // compute a floor-level kExile (already "clear"), so it
-                    // never exiled and the R6 safety net slid it ~800px on
-                    // real data.
-                    var opponents = scKeys.filter(function (k) { return k !== kw && anchors[k]; });
-                    var r = computeExileRatio(kw, anchors, opponents, fp, kFit, MIN_ZOOM_RATIO, 4);
-                    kExileOf[kw] = isFinite(r) ? kFit * r : Infinity;
-                } else {
-                    kExileOf[kw] = 0;
-                }
-            });
-
-            // "Exiled at fit" = would still be exiled if the user's current
-            // zoom were exactly THIS candidate's fit scale (currentZoomK ==
-            // kFit) -- i.e. kFit hasn't yet reached this plate's own exile
-            // onset at that same candidate scale.
-            return scKeys.filter(function (kw) { return overflow[kw] && anchors[kw] && kFit < kExileOf[kw]; });
-        }
-
-        // Review Minor 1: cap raised from a flat 4 to scKeys.length + 4 --
-        // the exiled-at-fit set can only grow by at most one plate per pass
-        // (each pass either folds the newly-discovered exiles into the
-        // bbox or proves none remain), so scKeys.length passes exhausts
-        // every plate; +4 slack covers the no-exile reset pass below and
-        // general settling. Per the task brief this cap is reported
-        // against, not raised further, if a fixture still hasn't converged.
-        var maxIterations = scKeys.length + 4;
+        // Delta #37: the 100% view is the content bbox, always. Pointers
+        // never widen it -- the 2026-09-13 fit-includes-exiles fixed point
+        // (and its symmetric expansion) was the feedback that flipped every
+        // plate at once: one pointer widened the view, which squeezed the
+        // rest into pointers. Pointer selection now runs per draw
+        // (computeScPlacement); this record keeps only the k-dependent
+        // report fields.
         var fitBBox = contentBBox;
-        var exiledAtFit = measureAtBBox(fitBBox);
-        // Review guard: measureAtBBox returns [] (not a signal) when
-        // kFit <= 0, so without this check a degenerate canvas/bbox would
-        // fall straight into the "no exile" branch below and overwrite
-        // __scLayout with a zeroed-out record. Bail out here instead,
-        // matching the pre-fix behavior of leaving any previously-valid
-        // __scLayout untouched.
+        var kFit = Math.min(canvasW / (fitBBox.maxX - fitBBox.minX), canvasH / (fitBBox.maxY - fitBBox.minY));
         if (!(kFit > 0)) return;
-        for (var it = 0; it < maxIterations; it++) {
-            var isLast = (it === maxIterations - 1);
-
-            if (!exiledAtFit.length) {
-                if (fitBBox === contentBBox) break; // record already matches fitBBox
-                // fitBBox was expanded on an earlier pass but nothing is
-                // exiled at fit against it -- drop back to contentBBox and
-                // re-measure IMMEDIATELY (not on a later pass, which the cap
-                // could cut off before it runs) so the stored record can
-                // never describe a bbox other than the one about to be
-                // stored.
-                fitBBox = contentBBox;
-                exiledAtFit = measureAtBBox(fitBBox);
-                continue;
-            }
-
-            // Predict drawWatermarks' own exile pre-pass EXACTLY (same
-            // placeExiledPlates call, same env shape) at k = kFit, ratio =
-            // 1.0 (fit) -- so the bbox this loop derives is provably what
-            // fit will actually need, not a parallel estimate.
-            var items = exiledAtFit.map(function (kw) { return { key: kw, ax: anchors[kw].x, ay: anchors[kw].y, fp: plateFootprintAtRatio(kw, 1.0, fp) }; });
-            var placed = placeExiledPlates(items, { cx: cloudCx, cy: cloudCy, bbox: cloudBBox, k: kFit, marginPx: SC_EXILE_MARGIN_PX });
-            var next = { minX: contentBBox.minX, minY: contentBBox.minY, maxX: contentBBox.maxX, maxY: contentBBox.maxY };
-            items.forEach(function (itm) {
-                var p = placed[itm.key];
-                var hw = (itm.fp.right - itm.fp.left) / 2 / kFit + SC_FIT_EXILE_MARGIN_PX / kFit;
-                var hh = (itm.fp.bottom - itm.fp.top) / 2 / kFit + SC_FIT_EXILE_MARGIN_PX / kFit;
-                if (p.x - hw < next.minX) next.minX = p.x - hw;
-                if (p.x + hw > next.maxX) next.maxX = p.x + hw;
-                if (p.y - hh < next.minY) next.minY = p.y - hh;
-                if (p.y + hh > next.maxY) next.maxY = p.y + hh;
-            });
-
-            // Task 9 (2026-09-13): keep the nebula centered at 100%. The union
-            // alone centers the union, shifting the cloud away from a one-sided
-            // exile; expand symmetrically about the CONTENT bbox center instead
-            // (equal empty margin on the lighter side; kFit slightly lower).
-            var ccx = (contentBBox.minX + contentBBox.maxX) / 2, ccy = (contentBBox.minY + contentBBox.maxY) / 2;
-            var hwN = Math.max(ccx - next.minX, next.maxX - ccx), hhN = Math.max(ccy - next.minY, next.maxY - ccy);
-            next = { minX: ccx - hwN, minY: ccy - hhN, maxX: ccx + hwN, maxY: ccy + hhN };
-
-            // Review Minor 1: relative-k convergence (was an absolute
-            // 0.5-world-unit bbox tolerance) -- converged once the NEXT
-            // candidate's own fit scale would move kFit by less than 0.1%.
-            var kNext = Math.min(canvasW / (next.maxX - next.minX), canvasH / (next.maxY - next.minY));
-            var converged = kFit > 0 && Math.abs(kNext - kFit) / kFit < 1e-3;
-            if (converged || isLast) break; // record (measured from fitBBox) already matches the stored fitBBox -- do NOT replace it with next
-
-            fitBBox = next;
-            exiledAtFit = measureAtBBox(fitBBox);
-        }
+        var kFloor = kFit * MIN_ZOOM_RATIO;
+        var budgetPx = {};
+        scKeys.forEach(function (kw) {
+            if (!anchors[kw]) return;
+            budgetPx[kw] = Math.max(reachOf[kw] * kFloor * SC_SEPARATION_BUDGET_RATIO, SC_SEPARATION_BUDGET_MIN_PX);
+        });
 
         var plateInfo = {}, report = [];
         scKeys.forEach(function (kw) {
@@ -5536,9 +5527,8 @@ var __vendorExpandedGroups;
             // is current, so shiftPx <= budgetPx stays an apples-to-apples
             // invariant at every canvas size, not just the settle-time one.
             var shiftPx = (__scShiftW[kw] || 0) * kFloor;
-            var kExile = kExileOf[kw] || 0;
-            plateInfo[kw] = { anchor: anchors[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile };
-            report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw], overflow: !!overflow[kw], kExile: kExile });
+            plateInfo[kw] = { anchor: anchors[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw] };
+            report.push({ keyword: kw, pages: pagesByKw[kw], shiftPx: shiftPx, budgetPx: budgetPx[kw] });
         });
         __scLayout = {
             kFit: kFit, kFloor: kFloor,
@@ -7642,14 +7632,11 @@ var __vendorExpandedGroups;
         };
         window.__d3ScLayoutReport = function () { return __scLayout ? __scLayout.report : null; };
         window.__d3ScLayout = function () { return __scLayout; };
+        // Delta #37: test/dev read of the last per-draw placement pass.
+        window.__d3ScPlacement = function () { return __scPlace ? __scPlace.result : null; };
         window.__d3SetScSeparationOptions = function (o) {
             if (o && typeof o.budgetRatio === 'number') SC_SEPARATION_BUDGET_RATIO = o.budgetRatio;
             if (o && typeof o.budgetMinPx === 'number') SC_SEPARATION_BUDGET_MIN_PX = o.budgetMinPx;
-            // Item 3 (2026-09-13): live-tunable exile placement, same class
-            // as the two options above -- validated against the two known
-            // modes so a typo can't silently wedge the switch into a
-            // falsy-but-not-'periphery' state.
-            if (o && (o.exileClampMode === 'periphery' || o.exileClampMode === 'viewport')) SC_EXILE_CLAMP_MODE = o.exileClampMode;
             if (o && typeof o.exileMarginPx === 'number') SC_EXILE_MARGIN_PX = o.exileMarginPx;
         };
         // Item 3 (2026-09-13): read side of the option set above, so tests
@@ -7659,7 +7646,6 @@ var __vendorExpandedGroups;
             return {
                 budgetRatio: SC_SEPARATION_BUDGET_RATIO,
                 budgetMinPx: SC_SEPARATION_BUDGET_MIN_PX,
-                exileClampMode: SC_EXILE_CLAMP_MODE,
                 exileMarginPx: SC_EXILE_MARGIN_PX,
             };
         };

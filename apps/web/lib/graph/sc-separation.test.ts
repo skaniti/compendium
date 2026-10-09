@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   clampRatio, estimateNameLines, plateFootprintAtRatio, plateFootprintPx, plateRect, rectsOverlap,
-  solveSeparation, computeExileRatio, spaceOnRing, rayExitFromRect, clipSegmentToRect,
+  solveSeparation, spaceOnRing, rayExitFromRect, clipSegmentToRect,
   uncrossSegments, placeExiledPlates, segmentsCross,
   type FootprintParams, type SeparationPlate, type ExileItem, type ExileEnv,
 } from "./sc-separation";
@@ -97,38 +97,6 @@ describe("solveSeparation", () => {
     expect(res.shifts.a).toEqual({ dx: 0, dy: 0 });
     expect(res.shifts.b).toEqual({ dx: 0, dy: 0 });
     expect(res.passes).toBe(1);
-  });
-});
-
-describe("computeExileRatio", () => {
-  const anchors = { keep: { x: 0, y: 0 }, exile: { x: 100, y: 0 } };
-  it("returns the smallest ratio at which the plate clears every anchored plate", () => {
-    // kFit 1: at ratio r the screen gap is 100 r. For these short words
-    // ("keep" 4 chars, "exile" 5 chars) the ICON term dominates, not the
-    // name term: iconPx/2 = 50 r grows faster than either name's half-width
-    // (name half-width stays below 50 r for every r up to where the icon
-    // band caps at k_max=1.15, where iconPx/2 freezes at 100/2*1.15=57.5).
-    // So for r <= 1.15 each half-width is 50 r + 2, giving a combined
-    // half-width of 100 r + 4 -- always 4px MORE than the 100 r gap, so the
-    // pair never clears in that range. Once the icon term caps, the
-    // combined half-width freezes at 2*(57.5+2)=119 while the gap keeps
-    // growing at 100 r, so the pair clears once 100 r > 119, i.e. r > 1.19:
-    // strictly inside (1.0, 1.5), not (0.5, 1.0) -- name-clamping isn't
-    // what governs this pair, icon-capping is.
-    const r = computeExileRatio("exile", anchors, ["keep"], P, 1, 0.5, 4, 0.01);
-    expect(r).toBeGreaterThan(1.0);
-    expect(r).toBeLessThan(1.5);
-    // one step below r, the plates still overlap
-    const below = r - 0.01;
-    const a = plateRect(0, 0, plateFootprintAtRatio("keep", below, P));
-    const b = plateRect(100 * below, 0, plateFootprintAtRatio("exile", below, P));
-    expect(rectsOverlap(a, b)).toBe(true);
-  });
-  it("returns rMin when already clear at the floor", () => {
-    expect(computeExileRatio("exile", { keep: { x: 0, y: 0 }, exile: { x: 5000, y: 0 } }, ["keep"], P, 1, 0.5, 4)).toBe(0.5);
-  });
-  it("returns Infinity when never clear inside [rMin, rMax]", () => {
-    expect(computeExileRatio("exile", { keep: { x: 0, y: 0 }, exile: { x: 1, y: 0 } }, ["keep"], P, 1, 0.5, 4)).toBe(Infinity);
   });
 });
 
