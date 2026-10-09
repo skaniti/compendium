@@ -46,5 +46,6 @@ Each script:
 | `maintenance-quickcheck.sh` | 22 | Weekly/monthly health quickcheck (read-only): journal errors, RAM/swap, SMART, backup freshness, services, disk |
 | `demo-isolation-firewall.sh` | — | ufw rules keeping the public demo stack's containers off the tailnet, the LAN and the host (DOCKER-USER + ufw-before-input); idempotent, backs up the rule files |
 | `demo-split-runbook.md` | — | Cutover runbook: owner stack tailnet-only, public demo on its own stack, firewall + Tailscale ACL, owner demo-copy refresh |
+| `tailnet-login-runbook.md` | — | Passwordless owner sign-in for trusted browsers over the tailnet: env vars, deploy, trust each browser once, checks, revoke, rollback |
 
 The `logs/` subdirectory is tracked (via `.gitkeep`); the `.log` files inside are gitignored.

@@ -35,7 +35,8 @@
 #       default off. Passwordless owner sign-in for trusted browsers
 #       (tailnet-passwordless-login; see
 #       apps/api/scripts/server-setup/tailnet-login-runbook.md). Needs
-#       TAILNET_ONLY_DEPLOYMENT=1; the API refuses to boot otherwise.
+#       the API refuses to boot if TAILNET_ASSERT_SECRET is set without
+#       TAILNET_ONLY_DEPLOYMENT=1.
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the
 #                            web container; tailscale serve targets it)
 #     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets

@@ -20,13 +20,22 @@ checks the tunnel). Requests carrying Cloudflare headers are refused anyway.
 
 ## 1. Find your Tailscale login
 
-On any of your devices:
+Run this on your own Linux or macOS computer, signed in to Tailscale as you.
+Not on the server: it is a tagged node, so it would print `tagged-devices`,
+which will not match your sign-in.
 
     tailscale status --json | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["User"][str(d["Self"]["UserID"])]["LoginName"])'
 
+On Windows PowerShell (one line):
+
+    $s = tailscale status --json | ConvertFrom-Json; $s.User."$($s.Self.UserID)".LoginName
+
+You can also read it on the Users page of the Tailscale admin console.
+
 ## 2. Configure
 
-In `~/apps/compendium/.env` (owner env file), add:
+Steps 2 and 3 run on the server. In `~/apps/compendium/.env` (owner env
+file), add:
 
     TAILNET_LOGIN=1
     TAILNET_ASSERT_SECRET=<output of: openssl rand -hex 32>
@@ -36,9 +45,21 @@ Names only check (never prints values):
 
     grep -noE '^(TAILNET_LOGIN|TAILNET_ASSERT_SECRET|TAILNET_LOGIN_MAP|TAILNET_ONLY_DEPLOYMENT)=' ~/apps/compendium/.env
 
+Precondition check (the value is not secret); it must print a line:
+
+    grep -nx 'TAILNET_ONLY_DEPLOYMENT=1' ~/apps/compendium/.env
+
+Without it the API refuses to boot once `TAILNET_ASSERT_SECRET` is set, which
+takes the owner stack down until you roll back.
+
 ## 3. Deploy
 
     cd <checkout> && git pull --ff-only && bash apps/api/scripts/server/deploy_server.sh --stack owner --skip-seed
+
+If you build the web image on another machine (demo-split-runbook pre-flight
+0.2), rebuild it from this commit, load it on the server and deploy with
+`NO_WEB_BUILD=1`; otherwise the old web image (without tailnet sign-in) keeps
+running.
 
 ## 4. Trust each browser once
 
@@ -49,11 +70,14 @@ with the box unticked leaves that browser untrusted.
 
 ## Check
 
-- Reload: the app opens with no login page.
-- Sign out: the login page shows "Continue as <your login>" and keeps showing
-  it until you click it; it signs you in with no password.
-- From a fresh client (e.g. `curl -s -o /dev/null -w '%{http_code}\n' https://<tailnet-host>/`)
-  you get a redirect to `/login`, not the app.
+- Close the browser completely and reopen `https://<tailnet-host>/`: the
+  session cookie is gone, so this exercises automatic sign-in. The app opens
+  with no login page.
+- Sign out: the login page shows "Continue as <your login>", which signs you
+  in with no password.
+- From a fresh client (not a trusted browser), run
+  `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://<tailnet-host>/`.
+  Expected: a 3xx status with a redirect URL ending in `/login`, not the app.
 
 ## Revoke
 
@@ -68,4 +92,7 @@ moment are affected, so after a `revoke <id>` it would end nothing.
 ## Rollback
 
 Remove the three lines from `~/apps/compendium/.env` and redeploy the owner
-stack. The endpoints return 404 and password sign-in works as before.
+stack. The API endpoint then returns 404 and the web route falls back to the
+password page. Trusted-browser rows stay on the server and would work again if
+you re-enable the feature, so if you are rolling back for security reasons,
+first run `docker exec compendium-api python scripts/trusted_browsers.py revoke-all --user <your account email> --sessions`.
