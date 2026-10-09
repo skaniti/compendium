@@ -94,25 +94,35 @@ def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
-def create_refresh_token(user_id: int, remembered: bool = False) -> str:
-    """Create a long-lived refresh token, store its hash in the DB.
+def create_refresh_token(
+    user_id: int,
+    remembered: bool = False,
+    *,
+    expires_in: timedelta | None = None,
+    expires_at_cap: datetime | None = None,
+) -> str:
+    """Create a refresh token, store its hash in the DB.
 
-    ``remembered`` (spec D1) selects the lifetime:
-    ``jwt_refresh_token_expire_days_remembered`` (90 days) when True, else
-    the default ``jwt_refresh_token_expire_days`` (7 days). Persisted
-    alongside the token hash so a later rotation can carry the flag
-    forward without re-trusting client input.
-
-    Returns the raw token (to be sent to the client).
+    ``remembered`` (spec D1) selects the lifetime (90 days when True, else
+    the 7-day default). ``expires_in`` replaces that lifetime outright
+    (demo-one-click-entry: 24 hours). ``expires_at_cap`` never extends: the
+    stored expiry is the earlier of the computed one and the cap (rotation
+    of a demo token passes the revoked row's expiry so the session cannot
+    slide). Returns the raw token (to be sent to the client).
     """
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_token(raw_token)
-    days = (
-        settings.jwt_refresh_token_expire_days_remembered
-        if remembered
-        else settings.jwt_refresh_token_expire_days
-    )
-    expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+    if expires_in is None:
+        days = (
+            settings.jwt_refresh_token_expire_days_remembered
+            if remembered
+            else settings.jwt_refresh_token_expire_days
+        )
+        expires_in = timedelta(days=days)
+    expires_at = datetime.now(timezone.utc) + expires_in
+    if expires_at_cap is not None:
+        cap = expires_at_cap if expires_at_cap.tzinfo else expires_at_cap.replace(tzinfo=timezone.utc)
+        expires_at = min(expires_at, cap)
     auth_repo.save_refresh_token(user_id, token_hash, expires_at, remembered=remembered)
     return raw_token
 
@@ -211,7 +221,11 @@ def rotate_refresh_token(
     role = auth_repo.get_role(user["id"])
     remembered = role != "demo" and ingress_trusted
     access = create_access_token(user["id"], user["email"])
-    refresh = create_refresh_token(user["id"], remembered=remembered)
+    # demo-one-click-entry: a demo session never slides. The new token
+    # inherits the revoked row's horizon (24h for one-click entries), so
+    # refreshing cannot extend it; other roles keep the sliding lifetime.
+    cap = expires if role == "demo" else None
+    refresh = create_refresh_token(user["id"], remembered=remembered, expires_at_cap=cap)
     policy = session_policy(role, remembered)
     ctx = audit_ctx or CLI
     audit_repo.record(

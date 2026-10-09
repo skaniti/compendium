@@ -92,6 +92,26 @@ def get_user_by_email(email: str) -> dict | None:
     }
 
 
+def get_user_by_role(role: str) -> dict | None:
+    """Return the single user holding ``role`` (the public demo stack has
+    exactly one ``demo`` account). None when nobody holds it; RuntimeError
+    when several do, so a misconfigured stack fails loudly instead of
+    picking one at random."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, email, name, username FROM users WHERE role = %s ORDER BY id LIMIT 2",
+                (role,),
+            )
+            rows = cur.fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        raise RuntimeError(f"more than one user holds role {role!r}")
+    cols = ("id", "email", "name", "username")
+    return dict(zip(cols, rows[0]))
+
+
 def get_user_by_login(identifier: str) -> dict | None:
     """Look up a user by email OR username, for the login path.
 

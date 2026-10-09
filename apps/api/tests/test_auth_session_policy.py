@@ -337,8 +337,10 @@ class TestRotateRefreshTokenSessionPolicy:
         }
         assert len(save_calls) == 1
         assert save_calls[0]["remembered"] is False
+        # demo-one-click-entry: the demo role's rotated token inherits the
+        # revoked row's horizon (stub: 1 day) instead of sliding to 7 days.
         delta_days = (save_calls[0]["expires_at"] - before).total_seconds() / 86400
-        assert 6.9 < delta_days < 7.1
+        assert 0.9 < delta_days < 1.1
 
 
 class TestRefreshEndpointIngressHeader:
