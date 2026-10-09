@@ -306,13 +306,13 @@ export function placePointers(inp: PlacePointersInput): PlacePointersResult {
     pointers.forEach((pt) => { o[pt.key] = keys.has(pt.key) ? { ...s[pt.key], nameHidden: true } : s[pt.key]; });
     return o;
   };
-  const graded = (t: number, hidden: ReadonlySet<string> = new Set()): Record<string, PlateSizes> => {
+  const graded = (t: number, noName: ReadonlySet<string> = new Set()): Record<string, PlateSizes> => {
     const s: Record<string, PlateSizes> = {};
     pointers.forEach((pt) => {
       const f = inp.c * (1 - t * (1 - gradedFloor(pt.pages, inp.maxPages, params)));
       s[pt.key] = sizesAt(inp.base, f, inp.nameFloorPx);
     });
-    return hide(s, hidden);
+    return hide(s, noName);
   };
   // Names hide in this order: fewest pages first, then keyword descending.
   const smallestFirst = pointers.slice().sort((a, b) => byPriority(b, a));
@@ -321,19 +321,33 @@ export function placePointers(inp: PlacePointersInput): PlacePointersResult {
   // highest priority first, only if the layout still fits at the graded floor
   // (t = 1) with that name's own footprint inflated by `hysteresis`.
   const hidden = new Set(pointers.filter((pt) => inp.prevNameHidden.has(pt.key)).map((pt) => pt.key));
-  pointers.slice().sort(byPriority).forEach((pt) => {
-    if (!hidden.has(pt.key)) return;
+  // The hidden set stays a smallest-first suffix: the pass stops at the first
+  // name that cannot return, so a lower-priority name never shows while a
+  // higher-priority one is hidden.
+  for (const pt of pointers.slice().sort(byPriority)) {
+    if (!hidden.has(pt.key)) continue;
     const rest = new Set(hidden);
     rest.delete(pt.key);
-    if (attempt(graded(1, rest), new Set([pt.key]))) hidden.delete(pt.key);
-  });
+    if (!attempt(graded(1, rest), new Set([pt.key]))) break;
+    hidden.delete(pt.key);
+  }
 
-  for (let i = 0; i <= 20; i++) {
-    const t = i / 20, sizes = graded(t, hidden), pl = attempt(sizes);
-    if (pl) return { phase: "graded", t, fallback: false, sizes, placements: toMap(pl) };
+  // Names are only ever hidden past t = 1, so while any name is still hidden
+  // the graded loop is skipped: re-running with the previous result's hidden
+  // names must land on the same sizes, not bump the plates back up.
+  if (!hidden.size) {
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20, sizes = graded(t), pl = attempt(sizes);
+      if (pl) return { phase: "graded", t, fallback: false, sizes, placements: toMap(pl) };
+    }
   }
   let sizes = graded(1, hidden);
   const cumulative = new Set(hidden);
+  // Try the still-hidden set as it is first, then hide more smallest-first.
+  if (cumulative.size) {
+    const pl = attempt(sizes);
+    if (pl) return { phase: "names", t: 1, fallback: false, sizes, placements: toMap(pl) };
+  }
   for (let j = 0; j < smallestFirst.length; j++) {
     if (cumulative.has(smallestFirst[j].key)) continue;
     cumulative.add(smallestFirst[j].key);

@@ -322,6 +322,7 @@ describe("placePointers", () => {
     const ptrs = [plate("big", 40, 100, 20), plate("mid", 20, 100, 70), plate("tiny", 1, 100, 120)];
     const r = run(ptrs, core, 800, 160, ["tiny"]);
     expect(r.phase).toBe("graded");
+    expect(r.t).toBeGreaterThan(0);
     expect(r.sizes.tiny.nameHidden).toBe(false);
   });
   it("icons phase: every name hidden, icons shrunk to the band thickness", () => {
@@ -334,5 +335,56 @@ describe("placePointers", () => {
     expect(r.phase).toBe("names");
     expect(r.sizes.zz.nameHidden).toBe(true);
     expect(r.sizes.aa.nameHidden).toBe(false);
+  });
+
+  describe("stability across redraws", () => {
+    // "small" carries a long name (wide footprint); "tiny" a short one.
+    const wideFp: FootprintOf = (key, s) => {
+      const nameW = key === "small" ? s.namePx * 6 : s.iconPx;
+      const half = Math.max(s.iconPx / 2, s.nameHidden ? 0 : nameW / 2);
+      return { left: -half, right: half, top: -s.iconPx / 2, bottom: s.iconPx / 2 + (s.nameHidden ? 0 : s.padPx + s.namePx) };
+    };
+    const go = (pointers: ScPlate[], core: Rect, w: number, h: number, prev: string[], fp: FootprintOf = fpOf) =>
+      placePointers({
+        pointers, c: 1, base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fp, core, width: w, height: h,
+        maxPages: Math.max(...pointers.map((p) => p.pages), 1), params: PTR, prevNameHidden: new Set(prev),
+      });
+    const hiddenOf = (r: ReturnType<typeof placePointers>) => Object.keys(r.sizes).filter((k) => r.sizes[k].nameHidden);
+    const cases: Array<[string, ScPlate[], Rect, number, number, FootprintOf]> = [
+      ["hides names smallest-first", [plate("big", 40, 100, 20), plate("mid", 20, 100, 50), plate("tiny", 1, 100, 80)], { minX: 100, maxX: 795, minY: 2, maxY: 88 }, 800, 90, fpOf],
+      ["name-drop tie-break", [plate("aa", 5, 50, 20), plate("zz", 5, 50, 70)], { minX: 50, maxX: 795, minY: 2, maxY: 100 }, 800, 105, fpOf],
+      ["wide names", [plate("big", 40, 60, 60), plate("small", 10, 60, 180), plate("tiny", 1, 60, 300)], { minX: 70, maxX: 795, minY: 5, maxY: 395 }, 800, 400, wideFp],
+    ];
+    cases.forEach(([name, ptrs, core, w, h, fp]) => {
+      it("re-running with its own hidden names is a fixed point: " + name, () => {
+        const r1 = go(ptrs, core, w, h, [], fp);
+        const r2 = go(ptrs, core, w, h, hiddenOf(r1), fp);
+        expect(r2.phase).toBe(r1.phase);
+        expect(r2.t).toBe(r1.t);
+        expect(r2.sizes).toEqual(r1.sizes);
+      });
+    });
+    it("a lower-priority name never shows while a higher-priority name is hidden", () => {
+      const [, ptrs, core, w, h, fp] = cases[2];
+      const r1 = go(ptrs, core, w, h, [], fp);
+      expect(hiddenOf(r1).length).toBeGreaterThan(0);
+      const r2 = go(ptrs, core, w, h, hiddenOf(r1), fp);
+      const order = ptrs.slice().sort((a, b) => b.pages - a.pages).map((p) => p.key);
+      const shown = order.map((k) => !r2.sizes[k].nameHidden);
+      // hidden names form a suffix of the priority order
+      expect(shown.join()).toBe(shown.slice().sort((a, b) => Number(b) - Number(a)).join());
+    });
+    it("candidate-only inflation: a tight neighbour does not block a name with slack", () => {
+      // Left band holds "a" (45 tall at the floor, 60 along: slack). Right band holds "b",
+      // whose footprint is exactly 60 tall at the floor: no 4% slack, but it fits plainly.
+      const tallB: FootprintOf = (key, s) => ({
+        left: -s.iconPx / 2, right: s.iconPx / 2, top: -s.iconPx / 2,
+        bottom: s.iconPx / 2 + (key === "b" ? s.iconPx : s.nameHidden ? 0 : s.padPx + s.namePx),
+      });
+      const ptrs = [plate("a", 10, 60, 40), plate("b", 10, 740, 40)];
+      const r = go(ptrs, { minX: 70, maxX: 730, minY: 5, maxY: 75 }, 800, 80, ["a"], tallB);
+      expect(r.fallback).toBe(false);
+      expect(r.sizes.a.nameHidden).toBe(false);
+    });
   });
 });
