@@ -23,6 +23,7 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
     widgetId.current = window.turnstile.render(container.current, {
       sitekey: siteKey,
       theme: "dark",
+      appearance: "interaction-only",
       callback: (t: string) => setToken(t),
       "expired-callback": () => setToken(""),
       "error-callback": () => setToken(""),

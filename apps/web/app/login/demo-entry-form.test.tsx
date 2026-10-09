@@ -9,16 +9,19 @@ type TurnstileCallback = (token: string) => void;
 
 describe("DemoEntryForm", () => {
   let callback: TurnstileCallback | null;
+  let renderOptions: { appearance?: string } | null;
   const reset = vi.fn();
   const fetchMock = vi.fn();
 
   beforeEach(() => {
     callback = null;
+    renderOptions = null;
     reset.mockClear();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     (window as unknown as { turnstile: unknown }).turnstile = {
-      render: (_el: HTMLElement, opts: { callback: TurnstileCallback }) => {
+      render: (_el: HTMLElement, opts: { callback: TurnstileCallback; appearance?: string }) => {
+        renderOptions = opts;
         callback = opts.callback;
         return "widget-1";
       },
@@ -39,6 +42,11 @@ describe("DemoEntryForm", () => {
     expect(button).toBeDisabled();
     act(() => callback!("tok-1"));
     expect(button).not.toBeDisabled();
+  });
+
+  it("renders the widget interaction-only so most visitors see nothing", () => {
+    render(<DemoEntryForm siteKey="1x00000000000000000000AA" />);
+    expect(renderOptions?.appearance).toBe("interaction-only");
   });
 
   it("posts the token and reloads to / on success", async () => {
