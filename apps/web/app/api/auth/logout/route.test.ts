@@ -88,4 +88,19 @@ describe("POST /api/auth/logout", () => {
     expect(jar.get("access_token")).toBeUndefined();
     expect(jar.get("refresh_token")).toBeUndefined();
   });
+
+  it("pauses automatic tailnet sign-in when this browser is trusted", async () => {
+    const jar = makeFakeCookieJar({ trusted_browser: "bt" });
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    await POST();
+    expect(jar.get("tailnet_login_paused")?.value).toBe("1");
+    expect(jar.get("trusted_browser")?.value).toBe("bt");
+  });
+
+  it("sets no pause for a browser that is not trusted", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    await POST();
+    expect(jar.get("tailnet_login_paused")).toBeUndefined();
+  });
 });

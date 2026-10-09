@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { clearSessionCookies, REFRESH_TOKEN_COOKIE } from "@/lib/session-cookies";
+import { TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE, longCookieOptions } from "@/lib/tailnet-login";
 
 export const runtime = "nodejs";
 
@@ -24,5 +25,10 @@ export async function POST(): Promise<Response> {
     }
   }
   clearSessionCookies(cookieStore);
+  // tailnet-passwordless-login: a trusted browser would otherwise be
+  // signed straight back in; the pause holds until "Continue as ...".
+  if (cookieStore.get(TRUSTED_BROWSER_COOKIE)) {
+    cookieStore.set(TAILNET_PAUSED_COOKIE, "1", longCookieOptions());
+  }
   return Response.json({ ok: true });
 }

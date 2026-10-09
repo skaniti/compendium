@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
 import { INGRESS_HEADER } from "@/lib/ingress";
@@ -55,7 +55,7 @@ function makeAccessToken(expSeconds: number): string {
   return `${header}.${payload}.sig`;
 }
 
-function makeLoginRequest(body: { email: string; password: string }, headers?: Record<string, string>): Request {
+function makeLoginRequest(body: { email: string; password: string; trustBrowser?: boolean }, headers?: Record<string, string>): Request {
   return new Request("http://localhost/api/auth/login", {
     method: "POST",
     headers,
@@ -401,5 +401,108 @@ describe("POST /api/auth/login", () => {
     await POST(makeLoginRequest({ email: "alice", password: "hunter2" }));
 
     expect(jar.get("session_policy")).toBeUndefined();
+  });
+});
+
+describe("POST /api/auth/login: trusting this browser (tailnet)", () => {
+  const SECRET = "s".repeat(32);
+  beforeEach(() => {
+    vi.stubEnv("AUTH_REQUIRED", "1");
+    vi.stubEnv("TAILNET_LOGIN", "1");
+    vi.stubEnv("TAILNET_ASSERT_SECRET", SECRET);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.mocked(cookies).mockReset();
+  });
+
+  function loginOk(extra: Record<string, unknown> = {}) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: makeAccessToken(9e9),
+        refresh_token: "r",
+        user: { id: 1, email: "o@x", name: "O" },
+        ...extra,
+      }),
+    };
+  }
+
+  it("asks the API to trust this browser and stores the returned token", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    jar.set("tailnet_login_paused", "1");
+    const fetchMock = vi.fn().mockResolvedValueOnce(loginOk({ browser_token: "bt" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(
+      makeLoginRequest(
+        { email: "o@x", password: "pw", trustBrowser: true },
+        { "tailscale-user-login": "owner@example.com", "user-agent": "Firefox" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/auth\/login$/);
+    const sent = init.headers as Record<string, string>;
+    expect(sent["X-Compendium-Tailnet-Assert"]).toBe(SECRET);
+    expect(sent["User-Agent"]).toBe("Firefox");
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: "o@x",
+      password: "pw",
+      trust_tailnet_login: "owner@example.com",
+    });
+    expect(jar.get("trusted_browser")?.value).toBe("bt");
+    expect(jar.get("tailnet_login_paused")).toBeUndefined();
+  });
+
+  it("signs in without a trusted-browser cookie when the API declines", async () => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(loginOk()));
+    const res = await POST(
+      makeLoginRequest(
+        { email: "o@x", password: "pw", trustBrowser: true },
+        { "tailscale-user-login": "owner@example.com" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(jar.get("trusted_browser")).toBeUndefined();
+  });
+
+  it.each([
+    ["box unticked", { trustBrowser: false }, { "tailscale-user-login": "owner@example.com" }],
+    ["no Tailscale header", { trustBrowser: true }, {}],
+  ])("sends the plain login body and no assert header when %s", async (_l, extra, headers) => {
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const fetchMock = vi.fn().mockResolvedValueOnce(loginOk());
+    vi.stubGlobal("fetch", fetchMock);
+    await POST(makeLoginRequest({ email: "o@x", password: "pw", ...extra }, headers));
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({ email: "o@x", password: "pw" });
+    const sent = init.headers as Record<string, string>;
+    expect(sent["X-Compendium-Tailnet-Assert"]).toBeUndefined();
+    expect(sent["User-Agent"]).toBeUndefined();
+  });
+
+  it("sends the plain login body when TAILNET_LOGIN is off, even with a forged header", async () => {
+    vi.stubEnv("TAILNET_LOGIN", "");
+    const jar = makeFakeCookieJar();
+    vi.mocked(cookies).mockResolvedValue(jar as never);
+    const fetchMock = vi.fn().mockResolvedValueOnce(loginOk({ browser_token: "bt" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await POST(
+      makeLoginRequest(
+        { email: "o@x", password: "pw", trustBrowser: true },
+        { "tailscale-user-login": "owner@example.com" },
+      ),
+    );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({ email: "o@x", password: "pw" });
+    expect(jar.get("trusted_browser")).toBeUndefined();
   });
 });

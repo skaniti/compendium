@@ -3,6 +3,13 @@ import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/
 import { ingressHeaders } from "@/lib/ingress";
 import { proxyAttestHeaders } from "@/lib/proxy-attest";
 import {
+  TAILNET_PAUSED_COOKIE,
+  TRUSTED_BROWSER_COOKIE,
+  longCookieOptions,
+  tailnetAssertHeaders,
+  tailnetLoginFrom,
+} from "@/lib/tailnet-login";
+import {
   BACKEND_UNREACHABLE_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
   TOO_MANY_ATTEMPTS_MESSAGE,
@@ -19,7 +26,15 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // (spec D1), which Caddy sets at the edge (spec D6) and this route simply
 // relays via ingressHeaders -- it never sets or invents the header itself.
 export async function POST(req: Request): Promise<Response> {
-  const body = (await req.json()) as { email: string; password: string };
+  const body = (await req.json()) as { email: string; password: string; trustBrowser?: boolean };
+
+  // tailnet-passwordless-login: "Trust this browser for automatic sign-in"
+  // rides on the password sign-in itself (the API registers the browser
+  // only inside a successful password login), and only when `tailscale
+  // serve` vouched for the user. Otherwise the call is exactly as before.
+  const tailnetLogin = body.trustBrowser === true ? tailnetLoginFrom(req.headers) : null;
+  const apiBody: Record<string, string> = { email: body.email, password: body.password };
+  if (tailnetLogin) apiBody.trust_tailnet_login = tailnetLogin;
 
   // Task 7a (post-flip-closeout): during the batch-06 rollback rehearsal an
   // upstream 503 surfaced as "Invalid credentials." -- a thrown fetch
@@ -30,8 +45,16 @@ export async function POST(req: Request): Promise<Response> {
   try {
     res = await fetch(`${BACKEND}/api/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...ingressHeaders(req), ...proxyAttestHeaders(req) },
-      body: JSON.stringify({ email: body.email, password: body.password }),
+      headers: {
+        "Content-Type": "application/json",
+        ...ingressHeaders(req),
+        ...proxyAttestHeaders(req),
+        // Only on a trust request: the API labels the browser from it.
+        ...(tailnetLogin
+          ? { ...tailnetAssertHeaders(), "User-Agent": req.headers.get("user-agent") ?? "" }
+          : {}),
+      },
+      body: JSON.stringify(apiBody),
     });
   } catch (err) {
     console.error("login: backend request failed:", err);
@@ -62,6 +85,7 @@ export async function POST(req: Request): Promise<Response> {
     refresh_token: string;
     user: { id: number; email: string; name: string };
     session_policy?: unknown;
+    browser_token?: string;
   };
   const cookieStore = await cookies();
   applySessionCookies(cookieStore, {
@@ -79,5 +103,9 @@ export async function POST(req: Request): Promise<Response> {
   // guard against (e.g. a demo session that idled out hours ago) --
   // overwriting with a fresh timestamp is strictly stronger than clearing.
   stampLastActive(cookieStore, Date.now());
+  if (tailnetLogin && data.browser_token) {
+    cookieStore.set(TRUSTED_BROWSER_COOKIE, data.browser_token, longCookieOptions());
+    cookieStore.delete(TAILNET_PAUSED_COOKIE);
+  }
   return Response.json({ user: data.user });
 }
