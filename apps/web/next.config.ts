@@ -25,6 +25,18 @@ const nextConfig: NextConfig = {
   // directory on every start. The pointer they carry (read the bundled
   // node_modules/next/dist/docs/) lives in .claude/CLAUDE.md instead.
   agentRules: false,
+
+  // demo-one-click-entry: keep search engines off the hosted demo. Same
+  // switch as lib/demo-entry.ts's demoEntryEnabled() (inlined: the "@/"
+  // alias may not resolve in this file). Set here rather than in proxy.ts
+  // because the proxy matcher skips /login, the one page an anonymous
+  // crawler reaches.
+  async headers() {
+    const demoHosted = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim().length > 0;
+    return demoHosted
+      ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
+      : [];
+  },
 };
 
 export default nextConfig;

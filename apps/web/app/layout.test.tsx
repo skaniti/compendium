@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { cookies } from "next/headers";
-import RootLayout, { buildThemeBootstrapScript } from "./layout";
+import RootLayout, { buildThemeBootstrapScript, generateMetadata } from "./layout";
 import { DEFAULT_VARIANT, generateCssText, getTokens, normalizeVariant } from "@/lib/theme";
 
 const STORAGE_KEY = "compendium-theme";
@@ -242,5 +242,23 @@ describe("demo sessions start on the default palette (2026-10-04)", () => {
     const element = await RootLayout({ children: <div /> });
     expect(findThemeProviderProps(element)).toMatchObject({ initialVariant: "Teal", canPersist: true, ephemeral: false });
     expect(renderToStaticMarkup(element)).toContain("localStorage.getItem");
+  });
+});
+
+describe("layout metadata", () => {
+  const original = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  afterEach(() => {
+    if (original === undefined) delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    else process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = original;
+  });
+
+  it("sets robots noindex on the hosted demo", async () => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+    expect(await generateMetadata()).toEqual({ title: "Compendium", robots: { index: false, follow: false } });
+  });
+
+  it("sets no robots rule elsewhere", async () => {
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    expect(await generateMetadata()).toEqual({ title: "Compendium" });
   });
 });

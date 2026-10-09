@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
+import { demoEntryEnabled } from "@/lib/demo-entry";
 import { DEFAULT_VARIANT, generateCssText, getPaletteNames, getTokens } from "@/lib/theme";
 import { getInitialSessionRole, getInitialThemeVariant } from "@/lib/preferences.server";
 import ThemeProvider from "@/components/ThemeProvider";
@@ -13,7 +15,13 @@ import "./styles/login.css";
 import "./styles/starry-selector.css";
 import "./styles/compendium-loader.css";
 
-export const metadata = { title: "Compendium" };
+export async function generateMetadata(): Promise<Metadata> {
+  // demo-one-click-entry: belt and braces with the X-Robots-Tag header in
+  // next.config.ts and app/robots.ts.
+  return demoEntryEnabled()
+    ? { title: "Compendium", robots: { index: false, follow: false } }
+    : { title: "Compendium" };
+}
 
 // Same key ThemeProvider reads/writes -- keep in sync.
 const THEME_STORAGE_KEY = "compendium-theme";
