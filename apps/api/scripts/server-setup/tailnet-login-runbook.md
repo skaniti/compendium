@@ -113,7 +113,8 @@ moment are affected, so after a `revoke <id>` it would end nothing.
 
    `--sessions` ends every session of the account; your other trusted browsers
    sign back in automatically. Without it, a session the lost browser already
-   holds keeps refreshing until it signs out.
+   holds keeps refreshing until it signs out. If `list` already shows the
+   browser as revoked, `revoke <id> --sessions` still ends the sessions.
 
 Changing your password does not revoke trusted browsers or sessions.
 
