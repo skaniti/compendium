@@ -42,6 +42,22 @@ def test_revoke_one(owner, capsys):
     assert cli.main(["revoke", str(bid)]) == 1
 
 
+def test_revoke_with_sessions_ends_the_accounts_refresh_tokens(owner, capsys):
+    bid = trusted_browser_repo.create(owner["id"], "d" * 64, None)
+    raw = auth_service.create_refresh_token(owner["id"], remembered=True)
+    assert cli.main(["revoke", str(bid), "--sessions"]) == 0
+    assert trusted_browser_repo.get_active("d" * 64) is None
+    assert auth_repo.get_refresh_token(auth_service._hash_token(raw))["revoked_at"] is not None
+    assert "revoked 1 refresh token" in capsys.readouterr().out
+
+
+def test_revoke_alone_leaves_refresh_tokens(owner):
+    bid = trusted_browser_repo.create(owner["id"], "e" * 64, None)
+    raw = auth_service.create_refresh_token(owner["id"], remembered=True)
+    assert cli.main(["revoke", str(bid)]) == 0
+    assert auth_repo.get_refresh_token(auth_service._hash_token(raw))["revoked_at"] is None
+
+
 def test_revoke_all_for_a_user_with_sessions(owner):
     trusted_browser_repo.create(owner["id"], "c" * 64, None)
     raw = auth_service.create_refresh_token(owner["id"], remembered=True)

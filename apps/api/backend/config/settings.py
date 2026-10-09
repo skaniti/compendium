@@ -42,6 +42,7 @@ class Settings(BaseSettings):
         env_file=(".env", str(Path.home() / ".secrets")),
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     # ==========================================================================
@@ -141,7 +142,8 @@ class Settings(BaseSettings):
     # The owner web container (the only holder of this secret) asserts the
     # Tailscale login `tailscale serve` put on the request; the API maps it
     # to an account through TAILNET_LOGIN_MAP and requires a trusted-browser
-    # token. Both empty (default) = feature off; the endpoints 404. Never set
+    # token. The feature is off (endpoints 404) unless TAILNET_ONLY_DEPLOYMENT,
+    # TAILNET_ASSERT_SECRET and TAILNET_LOGIN_MAP are all set. Never set
     # on the demo stack. Env vars TAILNET_ASSERT_SECRET / TAILNET_LOGIN_MAP
     # ("<tailscale login>=<account email or username>", comma-separated).
     tailnet_assert_secret: str = ""

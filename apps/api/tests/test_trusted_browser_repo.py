@@ -68,3 +68,16 @@ def test_rows_go_with_their_user(users):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM users WHERE id = %s", (owner["id"],))
     assert repo.get_active("1" * 64) is None
+
+
+def test_rows_older_than_the_cookie_lifetime_are_not_active(users):
+    owner, _ = users
+    old = repo.create(owner["id"], "2" * 64, None)
+    fresh = repo.create(owner["id"], "3" * 64, None)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE trusted_browsers SET created_at = now() - interval '401 days' WHERE id = %s",
+            (old,),
+        )
+    assert repo.get_active("2" * 64) is None
+    assert repo.get_active("3" * 64) == {"id": fresh, "user_id": owner["id"]}

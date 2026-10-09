@@ -56,21 +56,27 @@ def _account(request: Request, login: str) -> dict:
 
 def maybe_trust_browser(
     request: Request, user: dict, trust_tailnet_login: str | None
-) -> tuple[str, int] | None:
+) -> tuple[tuple[str, int] | None, str | None]:
     """Register the calling browser after a successful password sign-in.
 
-    Returns (raw_token, browser_id), or None when any condition fails (the
-    password login itself still succeeds). Never raises.
+    Returns (trusted, declined): trusted is (raw_token, browser_id) or None;
+    declined is the reason registration was refused (disabled, cloudflare,
+    assert, login, user) when trust was requested, else None. A declined
+    registration never fails the password login. Database errors propagate.
     """
-    if not trust_tailnet_login or not tailnet_login.enabled():
-        return None
+    if not trust_tailnet_login:
+        return None, None
+    if not tailnet_login.enabled():
+        return None, "disabled"
     if request.headers.get("cf-connecting-ip") is not None:
-        return None
+        return None, "cloudflare"
     if not tailnet_login.assert_ok(request.headers.get(tailnet_login.TAILNET_ASSERT_HEADER)):
-        return None
+        return None, "assert"
     mapped = tailnet_login.resolve_account(trust_tailnet_login)
-    if mapped is None or mapped["id"] != user["id"]:
-        return None
+    if mapped is None:
+        return None, "login"
+    if mapped["id"] != user["id"]:
+        return None, "user"
 
     raw, token_hash = tailnet_login.new_browser_token()
     label = (request.headers.get("user-agent") or "").strip()[:200] or None
@@ -84,11 +90,11 @@ def maybe_trust_browser(
         client_key=ctx.client_key,
         detail={"trusted_browser_id": browser_id},
     )
-    return raw, browser_id
+    return (raw, browser_id), None
 
 
 @router.post("/login")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def tailnet_sign_in(request: Request, body: TailnetLoginRequest):
     """Sign in a trusted browser of the mapped account; remembered session."""
     _guard(request)

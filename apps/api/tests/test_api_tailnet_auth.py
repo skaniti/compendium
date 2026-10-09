@@ -119,15 +119,22 @@ def test_trust_is_declined_without_blocking_the_password_login(env, client, monk
         dict(user=env["admin"], login="stranger@example.com"),
         dict(user=env["demo"], login="demo@example.com"),
     ]
+    reasons = []
     for kw in cases:
         client.app.state.limiter.reset()  # /api/auth/login is limited to 5/minute
         r = _trust(client, **kw)
         assert r.status_code == 200, kw
         assert "browser_token" not in r.json(), kw
+        reasons.append(audit_repo.list_events(event="auth.login.ok")[0]["detail"]["trust"])
+    assert reasons == [
+        "declined:assert", "declined:assert", "declined:cloudflare",
+        "declined:user", "declined:login", "declined:login",
+    ]
     monkeypatch.setattr(settings, "tailnet_assert_secret", "")
     client.app.state.limiter.reset()
     r = _trust(client, env["admin"])
     assert r.status_code == 200 and "browser_token" not in r.json()
+    assert audit_repo.list_events(event="auth.login.ok")[0]["detail"]["trust"] == "declined:disabled"
     assert trusted_browser_repo.list_all() == []
     assert audit_repo.list_events(event="auth.trusted_browser.added") == []
 

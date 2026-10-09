@@ -2954,10 +2954,12 @@ async def login(request: Request, body: LoginRequest):
 
     from backend.api.routers.tailnet_auth import maybe_trust_browser
 
-    trusted = maybe_trust_browser(request, user, body.trust_tailnet_login)
+    trusted, declined = maybe_trust_browser(request, user, body.trust_tailnet_login)
     detail = {"role": role, "remembered": remembered}
     if trusted:
         detail["trusted_browser_id"] = trusted[1]
+    elif declined:
+        detail["trust"] = f"declined:{declined}"
     audit_repo.record(
         "auth.login.ok",
         actor_user_id=user["id"],

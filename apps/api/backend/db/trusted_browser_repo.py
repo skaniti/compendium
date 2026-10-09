@@ -22,7 +22,8 @@ def get_active(token_hash: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, user_id FROM trusted_browsers "
-                "WHERE token_hash = %s AND revoked_at IS NULL",
+                "WHERE token_hash = %s AND revoked_at IS NULL "
+                "AND created_at > now() - interval '400 days'",
                 (token_hash,),
             )
             row = cur.fetchone()
