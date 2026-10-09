@@ -72,7 +72,7 @@ export default async function LoginPage({
   // the tailnet route sent back on a failed automatic sign-in.
   const tailnetLogin = tailnetLoginFrom(await headers());
   const cookieStore = await cookies();
-  const trustedBrowser = tailnetLogin !== null && cookieStore.has(TRUSTED_BROWSER_COOKIE);
+  const trustedBrowser = tailnetLogin !== null && !!cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
   const paused = cookieStore.has(TAILNET_PAUSED_COOKIE);
   // A crafted ?tailnet= means nothing where tailnet login is off.
   const tailnet = (await searchParams)?.tailnet;

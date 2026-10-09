@@ -54,10 +54,21 @@ describe("tailnet-login helpers", () => {
     ["relative", "/"],
     ["/caf\u00e9", "/"],
     ["/a\u202eb", "/"],
-    ["/a b", "/a b"],
+    ["/a b", "/a%20b"],
     ["/api", "/"],
     ["/api/auth/me", "/"],
     ["/apiary", "/apiary"],
+    ["/apix/y", "/apix/y"],
+    ["/dashboard?x=1", "/dashboard?x=1"],
+    ["/settings", "/settings"],
+    ["/./api/auth/me", "/"],
+    ["/x/../api/auth/me", "/"],
+    ["/%2e/api/auth/me", "/"],
+    ["/x\\..\\api/auth/me", "/"],
+    ["/api?x", "/"],
+    ["/%61pi/auth/me", "/"],
+    ["/%41PI/auth/me", "/"],
+    ["/%zz", "/"],
   ])("safeNextPath(%j) -> %j", (raw, expected) => {
     expect(safeNextPath(raw as string | null)).toBe(expected);
   });

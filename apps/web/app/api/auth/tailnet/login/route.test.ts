@@ -61,6 +61,14 @@ describe("GET /api/auth/tailnet/login", () => {
     vi.restoreAllMocks();
   });
 
+  it("sends an empty trusted_browser cookie to /login and clears it", async () => {
+    jar.set("trusted_browser", "");
+    const res = await GET(req("?next=%2F"));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/login");
+    expect(jar.get("trusted_browser")).toBeUndefined();
+  });
+
   it("signs in, sets the session cookies and redirects to next", async () => {
     const access = makeAccessToken(Math.floor(Date.now() / 1000) + 900);
     const fetchMock = mockFetchResponse({

@@ -40,7 +40,7 @@ export function proxy(req: NextRequest): NextResponse {
   // A paused browser (signed out) goes to /login and its "Continue as".
   if (
     tailnetLoginFrom(req.headers) &&
-    req.cookies.has(TRUSTED_BROWSER_COOKIE) &&
+    !!req.cookies.get(TRUSTED_BROWSER_COOKIE)?.value &&
     !req.cookies.has(TAILNET_PAUSED_COOKIE)
   ) {
     const next = `${pathname}${req.nextUrl.search}`;

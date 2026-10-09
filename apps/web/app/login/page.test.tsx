@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => new Headers()),
-  cookies: vi.fn(async () => ({ has: () => false })),
+  cookies: vi.fn(async () => ({ has: () => false, get: () => undefined })),
 }));
 
 import { redirect } from "next/navigation";
@@ -95,7 +95,7 @@ describe("LoginPage: tailnet props", () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.mocked(headers).mockResolvedValue(new Headers() as never);
-    vi.mocked(cookies).mockResolvedValue({ has: () => false } as never);
+    vi.mocked(cookies).mockResolvedValue({ has: () => false, get: () => undefined } as never);
   });
 
   it("passes the Tailscale login and the failed notice to an untrusted browser's form", async () => {
@@ -105,10 +105,20 @@ describe("LoginPage: tailnet props", () => {
     expect(screen.getByLabelText(/trust this browser/i)).toBeTruthy();
   });
 
-  const trustedCookies = (extra: string[] = []) =>
+  const trustedCookies = (extra: string[] = [], trustedValue = "t") =>
     vi.mocked(cookies).mockResolvedValue({
       has: (n: string) => n === "trusted_browser" || extra.includes(n),
+      get: (n: string) =>
+        n === "trusted_browser" ? { name: n, value: trustedValue } : extra.includes(n) ? { name: n, value: "1" } : undefined,
     } as never);
+
+  it("treats an empty trusted_browser cookie as untrusted: password form, no redirect", async () => {
+    trustedCookies([], "");
+    render(await LoginPage());
+    expect(redirect).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("tailnet-continue")).toBeNull();
+    expect(screen.getByLabelText(/trust this browser/i)).toBeTruthy();
+  });
 
   it("re-signs a trusted, unpaused browser in automatically", async () => {
     trustedCookies();

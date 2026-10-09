@@ -37,7 +37,11 @@ export async function GET(req: Request): Promise<Response> {
   const login = tailnetLoginFrom(req.headers);
   const cookieStore = await cookies();
   const browserToken = cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
-  if (!login || !browserToken) return seeOther("/login");
+  if (!login || !browserToken) {
+    // An empty cookie would otherwise bounce between here and the page/proxy.
+    if (cookieStore.get(TRUSTED_BROWSER_COOKIE) && !browserToken) cookieStore.delete(TRUSTED_BROWSER_COOKIE);
+    return seeOther("/login");
+  }
   if (cookieStore.get(TAILNET_PAUSED_COOKIE) && !resume) return seeOther("/login");
 
   let res: Response;

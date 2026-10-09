@@ -124,6 +124,7 @@ describe("proxy: automatic tailnet sign-in", () => {
   it.each([
     ["no trusted cookie", { "tailscale-user-login": "owner@example.com" }, {}],
     ["paused", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "t", tailnet_login_paused: "1" }],
+    ["empty trusted cookie", { "tailscale-user-login": "owner@example.com" }, { trusted_browser: "" }],
     ["no header", {}, { trusted_browser: "t" }],
     ["via Cloudflare", { "tailscale-user-login": "owner@example.com", "cf-ray": "x" }, { trusted_browser: "t" }],
   ])("falls back to /login when %s", (_label, headers, cookies) => {

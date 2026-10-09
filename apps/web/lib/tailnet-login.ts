@@ -39,8 +39,24 @@ export function tailnetLoginFrom(headers: HeaderReader): string | null {
 export function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
   if (/[^\x20-\x7e]/.test(raw)) return "/";
-  if (raw === "/api" || raw.startsWith("/api/")) return "/";
-  return raw;
+  // Resolve dot segments, backslashes and percent-escapes the way a browser
+  // will, then refuse anything that lands on the API.
+  let u: URL;
+  try {
+    u = new URL(raw, "http://x.invalid");
+  } catch {
+    return "/";
+  }
+  if (u.origin !== "http://x.invalid") return "/";
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(u.pathname);
+  } catch {
+    return "/";
+  }
+  decoded = decoded.toLowerCase().replace(/\\/g, "/");
+  if (decoded === "/api" || decoded.startsWith("/api/")) return "/";
+  return u.pathname + u.search;
 }
 
 export function tailnetAssertHeaders(): Record<string, string> {
