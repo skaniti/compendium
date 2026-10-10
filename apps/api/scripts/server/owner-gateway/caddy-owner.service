@@ -1,0 +1,33 @@
+# Caddy gateway for the owner Compendium (owner-gateway, 2026-10-10).
+# Installed by install-owner-gateway.sh; started only by the operator runbook's
+# cutover step (it takes the tailnet :443 from `tailscale serve`).
+[Unit]
+Description=Caddy gateway for the owner Compendium
+After=network-online.target tailscaled.service tailnet-whois.service
+Wants=network-online.target
+Wants=tailnet-whois.service
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+EnvironmentFile=/etc/caddy-owner/env
+Environment=XDG_DATA_HOME=/var/lib/caddy-owner XDG_CONFIG_HOME=/var/lib/caddy-owner
+ExecStart=/usr/local/bin/caddy-owner run --config /etc/caddy-owner/Caddyfile --adapter caddyfile
+ExecReload=/usr/local/bin/caddy-owner reload --config /etc/caddy-owner/Caddyfile --adapter caddyfile --force
+StateDirectory=caddy-owner
+RuntimeDirectory=caddy-owner
+RuntimeDirectoryMode=0700
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/caddy-owner /run/tailscale
+Restart=on-failure
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
