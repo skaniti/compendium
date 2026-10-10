@@ -34,6 +34,14 @@ services:
       - demo_pgdata:/var/lib/postgresql/data
     networks:
       - demo
+    # demo-one-click-entry: the demo shares the server with the owner stack;
+    # a burst of visitors must not starve it. Compose v2 honours these
+    # without Swarm.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tbd -d compendium_demo"]
       interval: 5s
@@ -84,6 +92,11 @@ services:
       DQ_BOT_DISABLED: "true"
       RERANKER_DISABLED: "1"
       DISABLE_REGISTRATION: "1"
+      # demo-one-click-entry: credential-free entry behind Cloudflare
+      # Turnstile. Off unless the demo env sets DEMO_PUBLIC_ENTRY=1 and the
+      # Turnstile secret; never set on the owner stack.
+      DEMO_PUBLIC_ENTRY: "${DEMO_PUBLIC_ENTRY:-0}"
+      TURNSTILE_SECRET_KEY: "${DEMO_TURNSTILE_SECRET_KEY:-}"
     volumes:
       - ../../web/demo/fixtures/assets/captured-assets:/app/data/captures/assets:ro
       - demo_hf_cache:/root/.cache/huggingface
@@ -93,6 +106,14 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+    # demo-one-click-entry: the demo shares the server with the owner stack;
+    # a burst of visitors must not starve it. Compose v2 honours these
+    # without Swarm.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2g
 
 networks:
   demo:

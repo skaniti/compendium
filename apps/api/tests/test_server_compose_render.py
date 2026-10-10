@@ -200,3 +200,27 @@ def test_api_dockerignore_keeps_owner_artifacts_out_of_the_image():
         assert required in patterns, required
     # the demo seed is the one data dir the image must carry
     assert not any(p.startswith("data/demo-seed") or p == "data" for p in patterns)
+
+
+def test_demo_stack_passes_the_one_click_entry_settings_defaulting_off():
+    env = _load("docker-compose.demo.yml")["services"]["api"]["environment"]
+    assert env["DEMO_PUBLIC_ENTRY"] == "${DEMO_PUBLIC_ENTRY:-0}"
+    assert env["TURNSTILE_SECRET_KEY"] == "${DEMO_TURNSTILE_SECRET_KEY:-}"
+
+
+def test_owner_stack_never_carries_the_one_click_entry_settings():
+    text = (COMPOSE_DIR / "docker-compose.server.yml").read_text()
+    assert "DEMO_PUBLIC_ENTRY" not in text
+    assert "TURNSTILE" not in text
+
+
+def test_demo_containers_are_resource_limited():
+    services = _load("docker-compose.demo.yml")["services"]
+    assert services["api"]["deploy"]["resources"]["limits"] == {"cpus": "1.5", "memory": "2g"}
+    assert services["db"]["deploy"]["resources"]["limits"] == {"cpus": "0.5", "memory": "768m"}
+
+
+def test_the_env_template_documents_the_one_click_entry_vars():
+    template = (COMPOSE_DIR / "demo-stack.env.example").read_text()
+    assert re.search(r"^DEMO_PUBLIC_ENTRY=", template, re.M)
+    assert re.search(r"^DEMO_TURNSTILE_SECRET_KEY=", template, re.M)
