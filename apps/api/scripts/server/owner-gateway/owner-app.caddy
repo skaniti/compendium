@@ -8,7 +8,9 @@
 # identity headers (and of the peer header) is deleted first; forward_auth
 # then asks the helper about the real TCP peer and copies only its answer.
 # Cookie and Authorization are removed from the request the helper sees, so
-# it never receives session material.
+# it never receives session material. lb_try_* make forward_auth retry the
+# helper for up to 5 s, so a helper restart (RestartSec=3) is ridden out
+# instead of answering 502.
 route {
 	request_header -Tailscale-User-Login
 	request_header -Tailscale-User-Name
@@ -20,6 +22,8 @@ route {
 		header_up -Cookie
 		header_up -Authorization
 		copy_headers Tailscale-User-Login
+		lb_try_duration 5s
+		lb_try_interval 250ms
 	}
 	reverse_proxy {args[0]}
 }

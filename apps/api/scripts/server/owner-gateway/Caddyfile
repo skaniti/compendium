@@ -2,7 +2,9 @@
 # at {$OWNER_HOSTNAME}, with {$TAILNET_HOSTNAME} (the server's ts.net name)
 # as a fallback. Values come from /etc/caddy-owner/env (template:
 # env.example); the operator runbook is private (docs/runbooks/).
-# Listens ONLY on the server's two tailnet addresses; no port 80.
+# Listens ONLY on the server's two tailnet addresses; no port 80. Defence in
+# depth: a caller whose TCP peer is outside the tailnet ranges is aborted
+# before the snippet runs (remote_ip is the peer, not X-Forwarded-For).
 # Certificates: the owner name by DNS-01 through acme-dns CNAME delegation
 # (no Cloudflare token on the server); the ts.net name from tailscaled
 # (needs TS_PERMIT_CERT_UID=caddy in tailscaled's environment).
@@ -17,7 +19,11 @@
 		dns acmedns {$ACMEDNS_CREDENTIALS}
 		resolvers 1.1.1.1 8.8.8.8
 	}
-	import owner-app.caddy 127.0.0.1:3000 127.0.0.1:9180
+	@outside_tailnet not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+	route {
+		abort @outside_tailnet
+		import owner-app.caddy 127.0.0.1:3000 127.0.0.1:9180
+	}
 }
 
 {$TAILNET_HOSTNAME} {
@@ -25,5 +31,9 @@
 	tls {
 		get_certificate tailscale
 	}
-	import owner-app.caddy 127.0.0.1:3000 127.0.0.1:9180
+	@outside_tailnet not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+	route {
+		abort @outside_tailnet
+		import owner-app.caddy 127.0.0.1:3000 127.0.0.1:9180
+	}
 }

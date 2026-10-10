@@ -108,7 +108,7 @@ if [ -x "$BIN" ] && has_modules "$BIN"; then
 else
   tmp=$(mktemp)
   trap 'rm -f "${tmp:-}"' EXIT
-  curl -fsSL -o "$tmp" "$CADDY_URL"
+  curl -fsSL --max-time 300 -o "$tmp" "$CADDY_URL"
   chmod 0755 "$tmp"
   has_modules "$tmp" || { echo "downloaded caddy lacks dns.providers.acmedns or tls.get_certificate.tailscale" >&2; rm -f "$tmp"; exit 1; }
   install -m 0755 -o root -g root "$tmp" "$BIN"

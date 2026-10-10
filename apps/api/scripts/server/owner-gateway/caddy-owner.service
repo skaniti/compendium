@@ -1,6 +1,8 @@
 # Caddy gateway for the owner Compendium (owner-gateway, 2026-10-10).
 # Installed by install-owner-gateway.sh; started only by the operator runbook's
 # cutover step (it takes the tailnet :443 from `tailscale serve`).
+# Runs as the `caddy` user created by the apt caddy package: do not purge that
+# package (or create the user by hand first).
 [Unit]
 Description=Caddy gateway for the owner Compendium
 After=network-online.target tailscaled.service tailnet-whois.service

@@ -49,7 +49,7 @@ def login_from_whois(data: object) -> str | None:
     """The login of a user-owned device from `tailscale whois --json` output."""
     if not isinstance(data, dict):
         return None
-    node = data.get("Node") or {}
+    node = data.get("Node")
     if not isinstance(node, dict) or node.get("Tags"):
         return None
     profile = data.get("UserProfile") or {}
@@ -59,6 +59,7 @@ def login_from_whois(data: object) -> str | None:
     login = login.strip()
     if (
         not login
+        or login == "tagged-devices"
         or len(login) > MAX_LOGIN_LENGTH
         or not login.isascii()
         or not login.isprintable()

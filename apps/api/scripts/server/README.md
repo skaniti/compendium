@@ -91,4 +91,6 @@ on the server's tailnet addresses, :443, for the owner hostname and the
 ts.net fallback, with a Tailscale identity helper (`tailnet-whois.service`,
 `whois_auth.py`) behind `forward_auth`. `install-owner-gateway.sh` installs
 it without taking :443; the cutover and rollback are in the private operator
-runbook. `tailscale serve` keeps 8443 for the collectors' API.
+runbook. `tailscale serve` keeps 8443 for the collectors' API. The unit runs as the
+`caddy` user created by the apt caddy package; do not purge that package (or
+create the user by hand first).

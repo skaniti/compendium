@@ -19,6 +19,9 @@ PrivateTmp=yes
 PrivateDevices=yes
 ReadWritePaths=-/run/tailscale
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Only loopback and the tailscaled unix socket are needed.
+IPAddressDeny=any
+IPAddressAllow=localhost
 
 [Install]
 WantedBy=multi-user.target

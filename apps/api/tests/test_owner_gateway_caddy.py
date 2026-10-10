@@ -194,6 +194,13 @@ def test_production_caddyfile_listens_only_on_the_tailnet_addresses(tmp_path):
     listens = sorted(addr for srv in cfg["apps"]["http"]["servers"].values() for addr in srv["listen"])
     assert listens == ["100.64.0.9:443", "[fd7a:115c:a1e0::9]:443"]
     assert "my.example.test" in out.stdout and "box.tail0000.ts.net" in out.stdout
+    for srv in cfg["apps"]["http"]["servers"].values():
+        for site in srv["routes"]:
+            inner = site["handle"][0]["routes"][0]["handle"][0]["routes"]
+            first = inner[0]
+            assert first["match"][0]["not"][0]["remote_ip"]["ranges"] == ["100.64.0.0/10", "fd7a:115c:a1e0::/48"]
+            assert first["handle"][0]["handler"] == "static_response" and first["handle"][0]["abort"] is True
+            assert "forward_auth" in json.dumps(inner[1:]) or "reverse_proxy" in json.dumps(inner[1:])
     assert cfg["admin"]["listen"] == "unix//run/caddy-owner/admin.sock"
     policies = cfg["apps"]["tls"]["automation"]["policies"]
 
@@ -206,6 +213,43 @@ def test_production_caddyfile_listens_only_on_the_tailnet_addresses(tmp_path):
     assert issuer["resolvers"] == ["1.1.1.1", "8.8.8.8"]
     ts = policy_for("box.tail0000.ts.net")
     assert [m["via"] for m in ts["get_certificate"]] == ["tailscale"]
+
+
+@needs_caddy
+def test_peer_outside_the_allowed_ranges_is_aborted(tmp_path):
+    port = _free_port()
+    shutil.copy(GW / "owner-app.caddy", tmp_path / "owner-app.caddy")
+    (tmp_path / "Test.caddyfile").write_text(
+        "{\n\tadmin off\n\tauto_https off\n}\n"
+        f"http://127.0.0.1:{port} {{\n"
+        "\tbind 127.0.0.1\n"
+        "\t@outside_tailnet not remote_ip 192.0.2.0/24\n"
+        "\troute {\n\t\tabort @outside_tailnet\n"
+        "\t\timport owner-app.caddy 127.0.0.1:1 127.0.0.1:2\n\t}\n}\n"
+    )
+    errfile = tmp_path / "caddy-stderr.log"
+    p = subprocess.Popen(
+        [CADDY, "run", "--config", "Test.caddyfile", "--adapter", "caddyfile"],
+        cwd=tmp_path, env=_xdg_env(tmp_path), stdout=subprocess.DEVNULL, stderr=errfile.open("w"),
+    )
+    try:
+        for _ in range(50):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            pytest.fail("caddy did not open its port; stderr:\n" + errfile.read_text())
+        import http.client
+
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        with pytest.raises((http.client.RemoteDisconnected, ConnectionError)):
+            conn.request("GET", "/x", headers={"X-Forwarded-For": "192.0.2.5"})
+            conn.getresponse()
+    finally:
+        p.terminate()
+        p.wait(timeout=5)
 
 
 def test_snippet_runs_in_written_order_inside_one_route():
@@ -222,6 +266,7 @@ def test_snippet_runs_in_written_order_inside_one_route():
     start = body.index("forward_auth {args[1]} {")
     block = body[start : body.index("}", start)]
     assert "header_up -Cookie" in block and "header_up -Authorization" in block
+    assert "lb_try_duration 5s" in block and "lb_try_interval 250ms" in block
     assert body.index(deletes[-1]) < body.index("forward_auth {args[1]} {") < body.index("reverse_proxy {args[0]}")
 
 

@@ -177,6 +177,9 @@ if TS_SERVE=$(tailscale serve status 2>&1); then
     echo "$serve_out"
     PASS=$((PASS + $(echo "$serve_out" | grep -c '^\[PASS\]')))
     FAIL=$((FAIL + $(echo "$serve_out" | grep -c '^\[FAIL\]')))
+    if ! echo "$serve_out" | grep -q '^\[\(PASS\|FAIL\)\]'; then
+        bad "check_serve_status.sh produced no result"
+    fi
 else
     echo "$TS_SERVE" | sed 's/^/  /'
     bad "tailscale serve status failed: $(echo "$TS_SERVE" | head -n 1)"

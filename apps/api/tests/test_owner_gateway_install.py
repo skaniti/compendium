@@ -87,7 +87,7 @@ def test_check_env_normalises_values_like_systemd(tmp_path):
 
 def test_whois_unit_is_sandboxed_and_loopback_only():
     u = _unit("tailnet-whois.service")
-    for line in SANDBOX + ["DynamicUser=yes", "Restart=always", "RestartSec=3", "StartLimitIntervalSec=0", "ReadWritePaths=-/run/tailscale"]:
+    for line in SANDBOX + ["DynamicUser=yes", "Restart=always", "RestartSec=3", "StartLimitIntervalSec=0", "ReadWritePaths=-/run/tailscale", "IPAddressDeny=any", "IPAddressAllow=localhost"]:
         assert line in u, line
     assert "--host 127.0.0.1 --port 9180" in u
     assert "/opt/owner-gateway/whois_auth.py" in u
@@ -124,6 +124,14 @@ def test_diagnose_checks_the_gateway_and_the_remaining_serve_route():
     subprocess.run(["bash", "-n", str(DIAG)], check=True)
     for needle in ("caddy-owner", "tailnet-whois", "127.0.0.1:9180/whois", "127.0.0.1:8001", "OWNER_HOSTNAME"):
         assert needle in text, needle
+
+
+def test_diagnose_fails_when_the_serve_checker_produced_no_result():
+    assert "check_serve_status.sh produced no result" in DIAG.read_text()
+
+
+def test_install_script_bounds_the_caddy_download():
+    assert "--max-time 300" in (Path(__file__).resolve().parents[1] / "scripts/server/owner-gateway/install-owner-gateway.sh").read_text()
 
 
 def test_section_21_probes_the_owner_hostname():
