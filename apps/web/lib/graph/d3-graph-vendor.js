@@ -1063,6 +1063,18 @@
 //      treats every pointer anchor dot as an obstacle, so the cluster-label
 //      overlap cull no longer lets a label sit on a dot. SC_MARK_FIT_FLOOR
 //      is a typo-gated tuner key (no TUNER_TYPO_VERSION bump: new key).
+//  40. Layout planning canvas (the 2026-10-09 sc-pointer-bands plan,
+//      private). Plate footprints are screen-constant, so converting them to
+//      world units with the load-time zoom spread superclusters ~15x further
+//      apart when the page loaded on a short canvas, and a later resize kept
+//      that sparse layout. Layout planning now assumes a canvas of at least
+//      SC_PLATE_FIT_REF_PX per side: the worker's Phase 1.5b kFloorEst uses
+//      the floored dims (payload scSeparation.minCanvasPx, footprints from
+//      scFootprintParamsFor(plateFitScaleFor(planW, planH))) and
+//      applyScLayoutSeparation's movement phase measures kFit/kFloor and the
+//      floor plates at planW/planH. Viewing (fit, plate size, crowd scale,
+//      pointers, marks, the tail remeasureScLayout) keeps the actual canvas.
+//      A canvas with both sides >= 640 plans exactly as before.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -5271,11 +5283,15 @@ var __vendorExpandedGroups;
             scNameCharWidth: SC_NAME_CHAR_WIDTH,
             // Delta #32: footprint-aware Phase 1.5b seeding.
             scSeparation: {
-                footprint: scFootprintParams(),
+                // Delta #40: footprints for the planning canvas (>= 640px per
+                // side), not the load-time canvas.
+                footprint: scFootprintParamsFor(plateFitScaleFor(
+                    Math.max(width, SC_PLATE_FIT_REF_PX), Math.max(height, SC_PLATE_FIT_REF_PX))),
                 minZoomRatio: MIN_ZOOM_RATIO,
                 fitWorldPad: FIT_WORLD_PAD,
                 hullPadding: HULL_PADDING,
                 interGapPx: 8,
+                minCanvasPx: SC_PLATE_FIT_REF_PX,
             },
             // The whole cache, not just this run's cluster names -- names
             // from a PRIOR dataset are simply never looked up by this
@@ -5370,13 +5386,20 @@ var __vendorExpandedGroups;
      *  normalizes SC_NAME_CHAR_WIDTH, which computeWatermarkBBox expresses
      *  at its own hardcoded 30px font, to an em advance. */
     function scFootprintParams() {
+        return scFootprintParamsFor(plateFitScale);
+    }
+
+    /** Delta #40: the same params for an explicit plate scale. Drawing uses
+     *  scFootprintParams() (the live plateFitScale); layout planning uses the
+     *  scale of its own planning canvas. */
+    function scFootprintParamsFor(scale) {
         return {
-            // Delta #36: pre-scaled by plateFitScale so plateFootprintAtRatio
+            // Delta #36: pre-scaled by the plate scale so plateFootprintAtRatio
             // (sc-separation.ts) needs no new input -- ratio 1.0 there IS
             // "the plate as painted at fit on this canvas".
-            baseIconSize: BASE_SC_ICON_SIZE * plateFitScale,
-            baseNameFontPx: BASE_SC_NAME_FONT_SIZE * plateFitScale,
-            labelTopPad: SC_LABEL_TOP_PAD * plateFitScale,
+            baseIconSize: BASE_SC_ICON_SIZE * scale,
+            baseNameFontPx: BASE_SC_NAME_FONT_SIZE * scale,
+            labelTopPad: SC_LABEL_TOP_PAD * scale,
             lineBudget: SC_NAME_LINE_BUDGET,
             charAdvanceEm: SC_NAME_CHAR_WIDTH / 30,
             scIcon: SCALE_THRESHOLDS.scIcon,
@@ -5420,6 +5443,12 @@ var __vendorExpandedGroups;
         plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
         markScale = markScaleFor(canvasW, canvasH);  // delta #39
         var fp = scFootprintParams();
+        // Delta #40: the movement phase plans for a canvas of at least
+        // SC_PLATE_FIT_REF_PX per side (footprints and floor k), so a short
+        // window does not turn a screen-px shift into thousands of world
+        // units. Viewing (the tail remeasure) keeps the actual dims.
+        var planW = Math.max(canvasW, SC_PLATE_FIT_REF_PX), planH = Math.max(canvasH, SC_PLATE_FIT_REF_PX);
+        var planFp = scFootprintParamsFor(plateFitScaleFor(planW, planH));
 
         var groups = {};
         clusters.forEach(function (c) {
@@ -5455,7 +5484,7 @@ var __vendorExpandedGroups;
         function measure() {
             bbox = computeFitBBox(nodes);
             if (!bbox) return false;
-            kFit = Math.min(canvasW / (bbox.maxX - bbox.minX), canvasH / (bbox.maxY - bbox.minY));
+            kFit = Math.min(planW / (bbox.maxX - bbox.minX), planH / (bbox.maxY - bbox.minY));
             kFloor = kFit * MIN_ZOOM_RATIO;
             var centroids = computeClusterCentroids(clusters, nodes);
             scKeys.forEach(function (kw) {
@@ -5477,7 +5506,7 @@ var __vendorExpandedGroups;
                 plates.push({
                     key: kw, pages: pagesByKw[kw],
                     x: anchors[kw].x * kFloor, y: anchors[kw].y * kFloor,
-                    fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, fp),
+                    fp: plateFootprintAtRatio(kw, MIN_ZOOM_RATIO, planFp),
                     // usedW (world) re-expressed at THIS iteration's kFloor so
                     // it compares against budgetPx[kw], which is also this
                     // iteration's screen px.

@@ -239,16 +239,17 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     expect(fitAtFloor).toBeGreaterThan(fitAtOne * 1.01);
   });
 
-  it("the sim-start payload's footprint carries the plate-fit scale on a FIRST mount (worker seed sees the right plate size)", async () => {
-    // buildSimStartPayload embeds scFootprintParams() and runs in render()
-    // BEFORE the settle-time write sites, so without a write right before it
-    // the worker's Phase-1.5b seed would use scale 1 on a first mount (and
-    // the previous canvas's scale on a re-render).
+  it("the sim-start payload's footprint is planned for a canvas of at least 640px per side (delta #40), not the short load canvas", async () => {
+    // Task 13: buildSimStartPayload used to embed the plate-fit scale of the
+    // load canvas (12/22 floor on 771x313), which inflated world-unit
+    // footprints ~15x. Planning now floors the canvas at SC_PLATE_FIT_REF_PX,
+    // so the footprint is the unscaled plate and the payload names the floor.
     await mount(771, 313, "seed");
     expect(lastSimStart).not.toBeNull();
-    const footprint = lastSimStart!.scSeparation!.footprint;
-    expect(footprint.baseNameFontPx).toBeCloseTo(12, 6);
-    expect(footprint.baseIconSize).toBeCloseTo(100 * FLOOR_RATIO, 6);
+    const sep = lastSimStart!.scSeparation!;
+    expect(sep.footprint.baseNameFontPx).toBeCloseTo(22, 6);
+    expect(sep.footprint.baseIconSize).toBeCloseTo(100, 6);
+    expect(sep.minCanvasPx).toBe(640);
   });
 
   it("the icon->name pad follows the plate-fit scale (name y offset at fit is 110 x scale painted px)", async () => {
@@ -260,12 +261,12 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     expect(parseFloat(el!.getAttribute("y") || "NaN") * fitZoomOf()).toBeCloseTo(110 * FLOOR_RATIO, 1);
   });
 
-  it("the sim-start payload's footprint is re-derived for a NEW canvas size on re-render (not the previous canvas's scale)", async () => {
-    const { container, render } = await mount(1100, 850, "rr");   // scale 1
+  it("the sim-start payload's footprint is the same planning footprint for a short and a large canvas on re-render", async () => {
+    const { container, render } = await mount(1100, 850, "rr");
     expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(22, 6);
     sizeContainer(container, 771, 313);
-    render(container, payload("rr"), { icons: iconsFor("rr") });   // same container, new size -> 12/22 floor
+    render(container, payload("rr"), { icons: iconsFor("rr") });
     flushSettleChunks();
-    expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(12, 6);
+    expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(22, 6);
   });
 });

@@ -379,7 +379,11 @@ function runClusterCentroidPhases(
         const padY = padX + 20;
         const bw = maxX - minX + padX, bh = maxY - minY + padY;
         if (bw > 0 && bh > 0 && width > 0 && height > 0) {
-          const kFloorEst = Math.min(width / bw, height / bh) * scSeparation.minZoomRatio;
+          // Task 13: plan for a canvas of at least minCanvasPx per side; the
+          // viewing canvas never enters the world-unit footprint.
+          const planW = Math.max(width, scSeparation.minCanvasPx);
+          const planH = Math.max(height, scSeparation.minCanvasPx);
+          const kFloorEst = Math.min(planW / bw, planH / bh) * scSeparation.minZoomRatio;
           scKeys.forEach((sk) => {
             const f = plateFootprintAtRatio(sk, scSeparation.minZoomRatio, scSeparation.footprint);
             const halfW = (f.right - f.left) / 2 + scSeparation.interGapPx / 2;

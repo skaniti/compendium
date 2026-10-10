@@ -176,8 +176,12 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
     return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, { x: v.x / v.n, y: v.y / v.n }]));
   }
   it("spreads SC centroids at least as far apart as halo-only seeding, and stays deterministic", () => {
-    const base = threeScPayload();
-    const seeded = { ...base, scSeparation: { footprint: fp, minZoomRatio: 0.5, fitWorldPad: 155, hullPadding: 20, interGapPx: 8 } };
+    // Task 13: planning floors the canvas at 640px, so the 600x400 canvas
+    // this test used to rely on no longer inflates the footprints. Scale the
+    // plate params up (a bigger plate on a 640px plan) to keep the term binding.
+    const bigFp = { ...fp, baseIconSize: 400, baseNameFontPx: 80, labelTopPad: 40 };
+    const base = threeScPayload({ width: 640, height: 640 });
+    const seeded = { ...base, scSeparation: { footprint: bigFp, minZoomRatio: 0.5, fitWorldPad: 155, hullPadding: 20, interGapPx: 8, minCanvasPx: 640 } };
     const a = scCentroids(base, settle(base));
     const b = scCentroids(seeded, settle(seeded));
     const keys = Object.keys(a);
@@ -186,11 +190,36 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
       minA = Math.min(minA, Math.hypot(a[keys[i]].x - a[keys[j]].x, a[keys[i]].y - a[keys[j]].y));
       minB = Math.min(minB, Math.hypot(b[keys[i]].x - b[keys[j]].x, b[keys[i]].y - b[keys[j]].y));
     }
-    // Strict, not >=: observed margin for this fixture is ~82 world units
+    // Strict, not >=: observed margin for the original fixture was ~82 world units
     // (base 447.29 vs seeded 529.88), so 1 unit of slack still fails if the
     // footprint term stops binding (e.g. scSeparation gets disconnected from
     // the repulsion loop) instead of passing vacuously on minB === minA.
     expect(minB).toBeGreaterThan(minA + 1);
     expect(settle(seeded)).toEqual(settle(seeded));
+  });
+
+  // Task 13 (the 2026-10-09 sc-pointer-bands plan, private): the seeding
+  // plans for a canvas at least minCanvasPx on each side.
+  function spread(payload: SimStartPayload): number {
+    const c = scCentroids(payload, settle(payload));
+    const k = Object.keys(c);
+    let m = 0;
+    for (let i = 0; i < k.length; i++) for (let j = i + 1; j < k.length; j++)
+      m = Math.max(m, Math.hypot(c[k[i]].x - c[k[j]].x, c[k[i]].y - c[k[j]].y));
+    return m;
+  }
+  function withCanvas(w: number, h: number, minCanvasPx?: number): SimStartPayload {
+    const sep = { footprint: fp, minZoomRatio: 0.5, fitWorldPad: 155, hullPadding: 20, interGapPx: 8 };
+    return threeScPayload({ width: w, height: h, scSeparation: minCanvasPx === undefined ? { ...sep, minCanvasPx: 1 } : { ...sep, minCanvasPx } });
+  }
+  it("a short canvas seeds the same SC spread as a 640px-tall one (minCanvasPx floors kFloorEst)", () => {
+    const short = spread(withCanvas(1700, 180, 640));
+    const ref = spread(withCanvas(1700, 640, 640));
+    expect(Math.abs(short - ref) / ref).toBeLessThan(0.02);
+  });
+  it("a canvas with both sides >= minCanvasPx seeds exactly as without the floor", () => {
+    const a = settle(withCanvas(1700, 900, 640));
+    const b = settle(withCanvas(1700, 900, 1));
+    expect(a).toEqual(b);
   });
 });

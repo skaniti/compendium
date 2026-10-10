@@ -775,4 +775,50 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     expect(layout.cloudBBox.minY - layout.fitBBox.minY).toBeCloseTo(195, 6);
     expect(layout.fitBBox.maxY - layout.cloudBBox.maxY).toBeCloseTo(175, 6);
   });
+
+  // Task 13 (the 2026-10-09 sc-pointer-bands plan, private): layout planning
+  // assumes a canvas of at least 640px per side, so the load window's height
+  // does not change the world-unit spacing.
+  async function loadSpread(prefix: string, w: number, h: number): Promise<{ spread: number; anchors: Record<string, { x: number; y: number }> }> {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const container = document.createElement("div");
+    sizeContainer(container, w, h);
+    document.body.appendChild(container);
+    const dispose = render(container, crowdedPayload(prefix, 4, 2), { icons: iconsFor(prefix) });
+    flushSettleChunks();
+    await vi.advanceTimersByTimeAsync(2000);
+    const plates = (window as W).__d3ScLayout!()!.plates;
+    const anchors: Record<string, { x: number; y: number }> = {};
+    Object.keys(plates).sort().forEach((k) => { anchors[k.replace(prefix, "")] = plates[k].anchor!; });
+    const pts = Object.values(anchors);
+    let spread = 0;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++)
+      spread = Math.max(spread, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+    dispose();
+    container.remove();
+    return { spread, anchors };
+  }
+
+  it("loading on a short canvas gives the same SC spacing as loading at 640px tall", async () => {
+    const short = await loadSpread("shortA", 1010, 181);
+    const ref = await loadSpread("shortA", 1010, 640);
+    expect(Math.abs(short.spread - ref.spread) / ref.spread).toBeLessThan(0.1);
+  }, 30000);
+
+  it("a canvas with both sides >= 640 keeps the same anchors regardless of extra size", async () => {
+    const a = await loadSpread("bigA", 1700, 900);
+    // Pinned from the pre-change code (e171abd lineage, b796fe5): a canvas
+    // with both sides >= 640 plans exactly as before.
+    const before: Record<string, [number, number]> = {
+      "-sc0 extremely long supercluster name": [1431.751216, 283.475702],
+      "-sc1 extremely long supercluster name": [805.486283, 616.526458],
+      "-sc2 extremely long supercluster name": [949.552823, 72.552548],
+      "-sc3 extremely long supercluster name": [1287.684677, 827.449611],
+    };
+    expect(Object.keys(a.anchors).sort()).toEqual(Object.keys(before).sort());
+    for (const k of Object.keys(before)) {
+      expect(a.anchors[k].x).toBeCloseTo(before[k][0], 4);
+      expect(a.anchors[k].y).toBeCloseTo(before[k][1], 4);
+    }
+  }, 30000);
 });

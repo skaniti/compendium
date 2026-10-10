@@ -131,6 +131,10 @@ export interface SimStartPayload {
     fitWorldPad: number;   // vendor FIT_WORLD_PAD
     hullPadding: number;   // vendor HULL_PADDING
     interGapPx: number;    // extra screen px between two plates at the floor
+    /** Task 13: the layout is planned as if the canvas were at least this
+     *  many px on each side (vendor SC_PLATE_FIT_REF_PX), so a short load
+     *  window does not inflate world-unit footprints. */
+    minCanvasPx: number;
   };
   /** Real DOM-measured label dims, keyed by cluster NAME (vendor's
    *  labelDimsCache). measureLabelDims() draws into a hidden SVG text
