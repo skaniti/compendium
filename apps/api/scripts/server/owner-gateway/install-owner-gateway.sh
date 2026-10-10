@@ -4,10 +4,13 @@
 # Run on the server with sudo, from the checkout:
 #   sudo bash apps/api/scripts/server/owner-gateway/install-owner-gateway.sh
 #   sudo bash apps/api/scripts/server/owner-gateway/install-owner-gateway.sh register-acmedns <fqdn>
+#   bash apps/api/scripts/server/owner-gateway/install-owner-gateway.sh check-env <path>   (no root)
 #
 # Installs the Caddy binary (with the acmedns module) as /usr/local/bin/caddy-owner,
 # the identity helper, the config and both systemd units; enables and starts
-# tailnet-whois; enables caddy-owner WITHOUT starting it. It never runs
+# tailnet-whois. caddy-owner is installed but NEVER enabled or started by this
+# script (an enabled unit would race `tailscale serve` for :443 on a cold boot);
+# a re-run only reloads it if it is already running. It never runs
 # `tailscale serve` and never edits tailscaled: the cutover is the private
 # operator runbook's. Idempotent: safe to re-run.
 set -euo pipefail
@@ -34,7 +37,12 @@ check_env() {
     case "$k" in
       ''|'#'*) continue ;;
       OWNER_HOSTNAME|TAILNET_HOSTNAME|TAILNET_IPV4|TAILNET_IPV6|ACMEDNS_CREDENTIALS)
-        v="${v%$'\r'}"
+        v="${v#"${v%%[![:space:]]*}"}"   # strip leading blanks
+        v="${v%"${v##*[![:space:]]}"}"   # strip trailing blanks (incl. CR)
+        case "$v" in
+          \"*\") [ "${#v}" -ge 2 ] && v="${v:1:${#v}-2}" ;;
+          \'*\') [ "${#v}" -ge 2 ] && v="${v:1:${#v}-2}" ;;
+        esac
         export "$k=$v" ;;
     esac
   done < "$file"
@@ -140,11 +148,10 @@ done
 say "5/5 gateway config"
 check_env "$ETC/env" || exit 1
 "$BIN" validate --config "$ETC/Caddyfile" --adapter caddyfile >/dev/null
-systemctl enable caddy-owner.service
 if systemctl is-active --quiet caddy-owner; then
   systemctl reload caddy-owner
-  say "    Caddyfile valid; caddy-owner was running and has been reloaded"
+  say "    Caddyfile valid; caddy-owner was running and has been reloaded (re-run after the cutover)"
 else
-  say "    Caddyfile valid; caddy-owner enabled but NOT started (cutover is the runbook's)"
+  say "    caddy-owner installed but not enabled; the runbook's cutover enables and starts it"
 fi
 say "done"

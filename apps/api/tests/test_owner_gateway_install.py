@@ -66,9 +66,23 @@ def test_check_env_accepts_a_valid_env_without_root(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
-def test_install_script_enables_only_after_validate():
-    code = SCRIPT.read_text()
-    assert code.index('"$BIN" validate') < code.index("systemctl enable caddy-owner.service")
+def test_install_script_never_enables_the_gateway():
+    code = "\n".join(l for l in SCRIPT.read_text().splitlines() if not l.lstrip().startswith("#"))
+    assert "enable caddy-owner" not in code
+    assert "enable --now caddy-owner" not in code
+
+
+def test_check_env_normalises_values_like_systemd(tmp_path):
+    for old, new, ok in [
+        ("TAILNET_IPV4=100.64.0.7", 'TAILNET_IPV4=""', False),
+        ("TAILNET_IPV4=100.64.0.7", "TAILNET_IPV4=   ", False),
+        ("OWNER_HOSTNAME=my.owner.test", 'OWNER_HOSTNAME="my.example.test"', False),
+        ("TAILNET_IPV4=100.64.0.7", "TAILNET_IPV4=100.64.0.7 ", True),
+        ("OWNER_HOSTNAME=my.owner.test", "OWNER_HOSTNAME='my.real.test'", True),
+        ("OWNER_HOSTNAME=my.owner.test", "OWNER_HOSTNAME=my.real.test\t", True),
+    ]:
+        r = _check_env(tmp_path, GOOD_ENV.replace(old, new))
+        assert (r.returncode == 0) == ok, (new, r.stderr)
 
 
 def test_whois_unit_is_sandboxed_and_loopback_only():
