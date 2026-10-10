@@ -499,21 +499,33 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   });
 
   it("a refresh while zoomed out forgets the old zoom's pointers: same placement as a fresh mount", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    const { container } = await mountCrowded("ref");
-    const [kMin] = (window as W).__d3GetZoomScaleExtent!();
-    expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(Object.values(placement().plates).some((pl) => pl.pointer)).toBe(true);
-    render(container, crowdedPayload("ref", 4, 2), { icons: iconsFor("ref") });
-    flushSettleChunks();
-    await vi.advanceTimersByTimeAsync(2000);
-    const refreshed = placement();
+    const { render, applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
     const ptrs = (p: Placement) => Object.keys(p.plates).filter((k) => p.plates[k].pointer).sort();
-    const refreshedPtrs = ptrs(refreshed);
-    const fresh = await mountCrowded("ref");
-    expect(ptrs(placement())).toEqual(refreshedPtrs);
-    expect(fresh.container).toBeTruthy();
+    // A wide hysteresis makes an inherited pointer stick, so the test fails
+    // if the memory survives the refresh's settle.
+    const wide = async () => {
+      applyTunerOverrides({ SC_FLIP_HYSTERESIS: 0.5 });
+      flushSettleChunks();
+      await vi.advanceTimersByTimeAsync(2000);
+    };
+    try {
+      const { container } = await mountCrowded("ref");
+      await wide();
+      const [kMin] = (window as W).__d3GetZoomScaleExtent!();
+      expect((window as W).__d3ZoomTo!(kMin)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(ptrs(placement()).length).toBeGreaterThan(0);
+      render(container, crowdedPayload("ref", 4, 2), { icons: iconsFor("ref") });
+      flushSettleChunks();
+      await vi.advanceTimersByTimeAsync(2000);
+      const refreshed = ptrs(placement());
+      await mountCrowded("ref");
+      await wide();
+      expect(refreshed).toEqual(ptrs(placement()));
+    } finally {
+      applyTunerOverrides({ SC_FLIP_HYSTERESIS: GRAPH_DEFAULTS.SC_FLIP_HYSTERESIS });
+      flushSettleChunks();
+    }
   });
 
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {

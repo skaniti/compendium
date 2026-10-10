@@ -4134,7 +4134,7 @@ var __vendorExpandedGroups;
         } else {
             placed = { phase: 'none', t: 0, fallback: false, sizes: {}, placements: {} };
         }
-        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, k: k, plates: {} };
+        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, k: k, plates: {} };   // k: the zoom this was placed at; drawWatermarks sizes from it, not from currentZoomK
         keys.forEach(function (kw) {
             var isPtr = sel.pointers.indexOf(kw) >= 0;
             var s = isPtr ? placed.sizes[kw] : inPlaceSizes;
@@ -4159,7 +4159,6 @@ var __vendorExpandedGroups;
             __scPlaceState.pointers[kw] = true;
             if (out.plates[kw].nameHidden) __scPlaceState.nameHidden[kw] = true;
         });
-        out.k = k;   // the k this result was placed at: drawWatermarks sizes from it, not from currentZoomK
         __scPlace = { k: k, fz: fitZoom, pfs: plateFitScale, gen: __scPlaceGen, ks: keySig, result: out };
         return out;
     }
@@ -4243,13 +4242,14 @@ var __vendorExpandedGroups;
             // "how deep into the galaxy are you" measure, just in opposite
             // directions (icon fades OUT on zoom-IN, name fades IN on
             // zoom-OUT).
-            var nameRatio = (fitZoom > 0) ? (currentZoomK / fitZoom) : 1;
+            var nameRatio = (fitZoom > 0) ? ((placement.k || currentZoomK) / fitZoom) : 1;
 
             // Delta #32: anchored placement is what R6 always drew; a
             // pointer (delta #37) is instead centered on its placement
             // point from computeScPlacement (free band, or ring fallback).
-            // Both are recorded on the element so the glide (application pass + wmGlideStep) can compose
-            // anchor + offset and animate anchored<->exiled transitions.
+            // Both are recorded on the element so the glide (application
+            // pass + wmGlideStep) can compose anchor + offset and animate
+            // anchored<->exiled transitions.
             var fpNow = plateFootprintPx(keyword, pl.iconPx, pl.namePx, pl.padPx, pl.nameHidden, fpParams);
             var plateCxW = ICON_SIZE / 2 + ((fpNow.left + fpNow.right) / 2) * kInv;   // world offset from translate origin to footprint center
             var plateCyW = ICON_SIZE / 2 + ((fpNow.top + fpNow.bottom) / 2) * kInv;
@@ -4375,7 +4375,7 @@ var __vendorExpandedGroups;
                     x: ICON_SIZE / 2,
                     y: ICON_SIZE + namePadW,
                     fontPx: nameFontSize,
-                    paintedPx: nameFontSize * currentZoomK,
+                    paintedPx: pl.namePx,
                     opacity: nameOpacity,
                 });
             }
@@ -5323,8 +5323,8 @@ var __vendorExpandedGroups;
      *  cannot be resolved within budget are NOT forced: the smaller plate
      *  is left where it is, and the per-draw placement pass (delta #37,
      *  computeScPlacement) turns it into a pointer when it collides at the
-     *  current zoom. Deterministic given the settle output. Up to 3 outer iterations because moving
-     *  SCs changes the fit bbox and therefore the floor k the footprints
+     *  current zoom. Deterministic given the settle output. Up to 3 outer
+     *  iterations because moving SCs changes the fit bbox and therefore the floor k the footprints
      *  are measured against; re-fitting between iterations is what makes
      *  "spread them apart" a redistribution rather than a self-cancelling
      *  uniform expansion (spec, "fit-renormalization trap"). Final fix
@@ -5446,8 +5446,7 @@ var __vendorExpandedGroups;
 
     /** Final fix wave (Important #1): __scLayout used to be fixed at the
      *  canvas size in effect at settle -- a resize left the floor
-     *  guarantee stale, since the
-     *  ResizeObserver handler only re-fits, never re-measures. This is the
+     *  guarantee stale, since the ResizeObserver handler only re-fits, never re-measures. This is the
      *  node-immutable "recompute the report for THIS canvas size" tail,
      *  shared by applyScLayoutSeparation's own settle-time call (above) and
      *  the ResizeObserver handler's later resize-time call. Recomputes
@@ -5995,8 +5994,7 @@ var __vendorExpandedGroups;
                         // Final fix wave (Important #1): re-derive the SC
                         // layout record for the NEW canvas size before the
                         // fit below redraws watermarks -- otherwise the
-                        // floor guarantee and every plate's exile onset
-                        // stay pinned to whatever size was current at
+                        // floor guarantee stays pinned to whatever size was current at
                         // settle. Must run BEFORE fitToContent so its zoom
                         // handler (which calls drawWatermarks) sees the
                         // fresh record on this same tick.
@@ -6228,6 +6226,10 @@ var __vendorExpandedGroups;
                 // (world->screen), so this must come after updateLabelScale,
                 // not before.
                 updateEdgeChips();
+                if (!scPanTick && __scPanTimer) {
+                    // A zoom tick supersedes a pending pan-settle redraw.
+                    clearTimeout(__scPanTimer); __scPanTimer = null;
+                }
                 if (scPanTick) {
                     if (__scPanTimer) clearTimeout(__scPanTimer);
                     __scPanTimer = setTimeout(function () {
