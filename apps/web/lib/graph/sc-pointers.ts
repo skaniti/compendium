@@ -131,7 +131,8 @@ export function selectPointers(inp: SelectInput): SelectResult {
   else if ([...prev].some((k) => !isPtr.has(k))) cap = 1;
   else cap = prevCap;
   return {
-    c: Math.min(crowdScale(ip, inp.base, inp.nameFloorPx, inp.footprintOf, inp.crowdFloor), cap),
+    // The floor wins over a held cap, so a floor raised live never leaves c below it.
+    c: Math.max(inp.crowdFloor, Math.min(crowdScale(ip, inp.base, inp.nameFloorPx, inp.footprintOf, inp.crowdFloor), cap)),
     cap,
     inPlace: ip.map((q) => q.key),
     pointers: now,

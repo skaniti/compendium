@@ -594,19 +594,20 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       if (n > prevN) evictions++;
       prevC = c; prevN = n;
     }
-    expect(evictions).toBeGreaterThan(0);
+    expect(evictions).toBeGreaterThanOrEqual(2);
     // Growing back past the return point lifts the cap, so c rises again.
     const peak = ptrCount();
-    const low = placement().c;
-    let returned = false, max = low;
+    let returned = false;
     for (let h = 400; h <= 900 && !returned; h += 2) {
       resize(h);
-      max = Math.max(max, placement().c);
       returned = ptrCount() < peak;
     }
     expect(returned).toBe(true);
+    expect(placement().cap).toBe(1);
+    const atReturn = placement().c;
+    let max = atReturn;
     for (let h = 900; h <= 1100; h += 2) { resize(h); max = Math.max(max, placement().c); }
-    expect(max).toBeGreaterThan(low + 1e-6);
+    expect(max).toBeGreaterThan(atReturn + 1e-6);
   }, 30000);
 
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {

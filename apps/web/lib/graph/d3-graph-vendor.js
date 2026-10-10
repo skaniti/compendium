@@ -1154,7 +1154,8 @@ var __vendorExpandedGroups;
     // Delta #37: per-draw plate placement. __scPlace is the last result
     // (world coords), reused by a pan tick (zoom k unchanged, same layout
     // generation, no pan-settle pending) so pointers ride with the graph.
-    // __scPlaceState is the hysteresis memory (keyword -> true), reset on
+    // __scPlaceState is the hysteresis memory (pointers/nameHidden: keyword
+    // -> true) plus the previous draw's crowd scale c and its cap, reset on
     // every settle and kept across resizes. __scPlaceGen invalidates
     // __scPlace on settle and resize.
     var __scPlace = null;

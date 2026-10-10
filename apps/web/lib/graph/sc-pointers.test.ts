@@ -101,6 +101,25 @@ describe("selectPointers crowd-scale cap", () => {
     expect(again.cap).toBe(st!.cap);
     expect(again.pointers).toEqual(st!.pointers);
   });
+  it("lifts the cap when one of two pointers returns and the other stays out", () => {
+    const plates = [plate("a", 30, 0, 0), plate("b", 20, 60, 0), plate("c", 10, 5, 0)];
+    const r = selectPointers({
+      plates, base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fpOf, crowdFloor: 0.5, hysteresis: 0.04,
+      prevPointers: new Set(["b", "c"]), prevC: 0.6, prevCap: 0.6,
+    });
+    expect(r.pointers).toEqual(["c"]);
+    expect(r.cap).toBe(1);
+    expect(r.c).toBe(1);
+  });
+  it("never lets c fall below the crowd floor, even under a stale lower cap", () => {
+    const r = selectPointers({
+      plates: [plate("a", 30, 0, 0), plate("b", 10, 15, 0)], base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fpOf,
+      crowdFloor: 0.5, hysteresis: 0.04, prevPointers: new Set(), prevC: 0.3, prevCap: 0.3,
+    });
+    expect(r.pointers).toEqual(["b"]);
+    expect(r.cap).toBe(0.3);
+    expect(r.c).toBe(0.5);
+  });
   it("defaults prevC and prevCap to 1: a fresh call keeps today's largest clearing scale", () => {
     const r = step(19, null);
     expect(r.pointers).toEqual(["b"]);
