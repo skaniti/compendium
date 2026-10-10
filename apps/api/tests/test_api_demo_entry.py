@@ -149,6 +149,29 @@ def test_missing_demo_account_is_503(env, client, siteverify):
     assert _failed_reasons() == ["no_demo_account"]
 
 
+def test_verify_json_list_body_is_503(env, client, siteverify, monkeypatch):
+    async def post(self, url, **k):
+        return httpx.Response(200, json=[1], request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    assert _enter(client).status_code == 503
+    assert _failed_reasons() == ["verify_unavailable"]
+
+
+def test_verify_string_true_is_not_success(env, client, siteverify):
+    siteverify(body={"success": "true"})
+    assert _enter(client).status_code == 403
+    assert _failed_reasons() == ["challenge"]
+
+
+def test_ambiguous_demo_role_is_503_no_demo_account(env, client, siteverify):
+    siteverify(body={"success": True})
+    other = user_repo.create_user("demo2@test.local", name="Demo2")
+    auth_repo.set_role(other["id"], "demo")
+    assert _enter(client).status_code == 503
+    assert _failed_reasons() == ["no_demo_account"]
+
+
 def test_token_is_never_in_audit_details(env, client, siteverify):
     siteverify(body={"success": False, "error-codes": ["invalid-input-response"]})
     token = "tok-" + "z" * 40

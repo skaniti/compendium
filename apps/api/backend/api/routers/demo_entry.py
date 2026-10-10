@@ -10,6 +10,7 @@ rows; the audit detail carries a reason and Cloudflare's error codes only.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 import httpx
@@ -22,6 +23,8 @@ from backend.api.rate_limit_key import client_key
 from backend.config.settings import settings
 from backend.db import audit_repo, auth_repo
 from backend.services import auth_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -53,8 +56,10 @@ async def verify_turnstile(token: str, remoteip: str) -> tuple[bool, list[str]] 
         body = res.json()
     except ValueError:
         return None
+    if not isinstance(body, dict):
+        return None
     codes = body.get("error-codes") or []
-    return bool(body.get("success")), [str(c) for c in codes][:10]
+    return body.get("success") is True, [str(c) for c in codes][:10]
 
 
 def _fail(request: Request, status: int, detail: str, reason: str, error_codes: list[str] | None = None):
@@ -86,7 +91,8 @@ async def demo_entry(request: Request, body: DemoEntryRequest):
 
     try:
         user = auth_repo.get_user_by_role("demo")
-    except RuntimeError:
+    except RuntimeError as exc:
+        logger.error("demo entry: %s", exc)
         user = None
     if user is None:
         raise _fail(request, 503, "Demo account unavailable", "no_demo_account")
