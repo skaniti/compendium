@@ -46,7 +46,8 @@ CLOUDFLARED_CONFIG="${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}"
 ENV_FILE="${ENV_FILE:-$HOME/apps/compendium/.env}"
 DEMO_PORT="${DEMO_PORT:-8002}"
 
-# Public hostname knob: same source as section-21 (reads only this one name).
+# ENV_FILE keys read: PUBLIC_API_HOSTNAME here (same source as section-21),
+# OWNER_HOSTNAME and TAILNET_HOSTNAME in section 4. Nothing else is read.
 if [ -z "$PUBLIC_API_URL" ] && [ -r "$ENV_FILE" ]; then
     _ph=$(grep -h '^PUBLIC_API_HOSTNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
     [ -n "$_ph" ] && PUBLIC_API_URL="https://${_ph}"
@@ -172,16 +173,10 @@ else
 fi
 if TS_SERVE=$(tailscale serve status 2>&1); then
     echo "$TS_SERVE" | sed 's/^/  /'
-    if echo "$TS_SERVE" | grep -E ':8443' | grep -q '127\.0\.0\.1:8001'; then
-        ok "tailscale serve keeps :8443 -> 127.0.0.1:8001"
-    else
-        bad "tailscale serve has no :8443 -> 127.0.0.1:8001 line (collectors need it)"
-    fi
-    if echo "$TS_SERVE" | grep -E '^https://' | grep -vq ':8443'; then
-        bad "tailscale serve still holds https :443 (the gateway owns tailnet :443)"
-    else
-        ok "tailscale serve does not hold :443"
-    fi
+    serve_out=$(echo "$TS_SERVE" | bash "$(dirname "${BASH_SOURCE[0]}")/check_serve_status.sh")
+    echo "$serve_out"
+    PASS=$((PASS + $(echo "$serve_out" | grep -c '^\[PASS\]')))
+    FAIL=$((FAIL + $(echo "$serve_out" | grep -c '^\[FAIL\]')))
 else
     echo "$TS_SERVE" | sed 's/^/  /'
     bad "tailscale serve status failed: $(echo "$TS_SERVE" | head -n 1)"

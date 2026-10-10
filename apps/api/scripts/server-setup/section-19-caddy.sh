@@ -1,10 +1,12 @@
 #!/bin/bash
 #
-# SUPERSEDED 2026-10-06 (tailnet-owner-demo-split): Caddy is no longer in the
-# serving path. `tailscale serve` maps 443 -> the owner web container (:3000)
-# and 8443 -> the owner API (:8001) directly, and the owner API trusts every
-# request via TAILNET_ONLY_DEPLOYMENT instead of a Caddy-stamped header. Kept
-# for history and rollback only -- do not run it on the current topology.
+# SUPERSEDED 2026-10-06 (tailnet-owner-demo-split): Caddy was taken out of the
+# serving path. `tailscale serve` then mapped 443 -> the owner web container
+# (:3000) and 8443 -> the owner API (:8001) directly, and the owner API
+# trusts every request via TAILNET_ONLY_DEPLOYMENT instead of a Caddy-stamped
+# header. The owner gateway (apps/api/scripts/server/owner-gateway) now serves
+# tailnet :443 after its cutover. Kept for history and rollback only -- do not
+# run it on the current topology.
 #
 # section-19-caddy.sh
 #
