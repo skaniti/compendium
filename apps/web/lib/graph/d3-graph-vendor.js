@@ -1009,7 +1009,8 @@
 //      SC_NAME_FIT_FLOOR_PX / BASE_SC_NAME_FONT_SIZE, 1)` (pure
 //      `plateFitScaleFor`; module var beside `fitZoom`) is written at the
 //      four places that know the canvas -- render() right before the
-//      sim-start payload is built (so the worker's Phase-1.5b seed sees it),
+//      sim-start payload is built (it serves tick-time paints; the payload's
+//      own footprint is planned for a >= 640px canvas, delta #40),
 //      applyScLayoutSeparation, remeasureScLayout, fitToContent, all from
 //      the SAME search-bar-adjusted dims -- and multiplies the BASE plate
 //      sizes at three seams: drawWatermarks (icon, name, icon->name pad),
@@ -4884,8 +4885,11 @@ var __vendorExpandedGroups;
      *  same bbox math the fit itself uses, never a parallel estimate. Body
      *  is byte-identical to what fitToContent inlined before; returns null
      *  where fitToContent used to early-return. */
-    function computeFitBBox(nodes) {
+    function computeFitBBox(nodes, plateScale) {
         if (!nodes.length) return null;
+        // Delta #40: layout planning passes the planning canvas's plate scale;
+        // every other caller uses the live module plateFitScale.
+        var pfs = plateScale == null ? plateFitScale : plateScale;
         var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         nodes.forEach(function (n) {
             if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
@@ -4914,10 +4918,10 @@ var __vendorExpandedGroups;
                 var lines = wrapLabelLines(kw.slice(0, 36), SC_NAME_LINE_BUDGET).length;
                 // Delta #36: plate padding in the same plate-fit scale the
                 // draw uses (still the pre-existing world-unit approximation).
-                var bottom = cy + BASE_SC_ICON_SIZE * plateFitScale / 2 + SC_LABEL_TOP_PAD * plateFitScale
-                    + lines * BASE_SC_NAME_FONT_SIZE * plateFitScale * 1.3 + 8;
+                var bottom = cy + BASE_SC_ICON_SIZE * pfs / 2 + SC_LABEL_TOP_PAD * pfs
+                    + lines * BASE_SC_NAME_FONT_SIZE * pfs * 1.3 + 8;
                 if (bottom > maxY) maxY = bottom;
-                var top = cy - BASE_SC_ICON_SIZE * plateFitScale / 2 - 8;
+                var top = cy - BASE_SC_ICON_SIZE * pfs / 2 - 8;
                 if (top < minY) minY = top;
             });
         }
@@ -5442,13 +5446,13 @@ var __vendorExpandedGroups;
         if (!(canvasW > 0) || !(canvasH > 0)) return;
         plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
         markScale = markScaleFor(canvasW, canvasH);  // delta #39
-        var fp = scFootprintParams();
         // Delta #40: the movement phase plans for a canvas of at least
         // SC_PLATE_FIT_REF_PX per side (footprints and floor k), so a short
         // window does not turn a screen-px shift into thousands of world
         // units. Viewing (the tail remeasure) keeps the actual dims.
         var planW = Math.max(canvasW, SC_PLATE_FIT_REF_PX), planH = Math.max(canvasH, SC_PLATE_FIT_REF_PX);
-        var planFp = scFootprintParamsFor(plateFitScaleFor(planW, planH));
+        var planScale = plateFitScaleFor(planW, planH);
+        var planFp = scFootprintParamsFor(planScale);
 
         var groups = {};
         clusters.forEach(function (c) {
@@ -5482,7 +5486,7 @@ var __vendorExpandedGroups;
         var kFit = 0, kFloor = 0, bbox = null, anchors = {};
 
         function measure() {
-            bbox = computeFitBBox(nodes);
+            bbox = computeFitBBox(nodes, planScale);
             if (!bbox) return false;
             kFit = Math.min(planW / (bbox.maxX - bbox.minX), planH / (bbox.maxY - bbox.minY));
             kFloor = kFit * MIN_ZOOM_RATIO;
@@ -6441,12 +6445,11 @@ var __vendorExpandedGroups;
         if (!__simClient) {
             __simClient = createWorkerSim({ onTick: handleSimTick, onEnd: handleSimEnd });
         }
-        // Delta #36 (Task 4b): the sim-start payload embeds scFootprintParams(),
-        // which is pre-scaled by plateFitScale -- write the scale for THIS
-        // canvas first, or the worker's Phase-1.5b seed uses scale 1 on a
-        // first mount and the previous canvas's scale on a re-render (the
-        // settle-time write sites all run later). Same dims the settle path
-        // uses: width, search-bar-adjusted height.
+        // Delta #36: write the plate/mark scales for THIS canvas before any
+        // tick-time paint reads them (the settle-time write sites run later).
+        // Since delta #40 the sim-start payload no longer reads plateFitScale:
+        // its footprint is built for the planning canvas. Same dims the settle
+        // path uses: width, search-bar-adjusted height.
         plateFitScale = plateFitScaleFor(width, effectiveCanvasHeight(height));
         markScale = markScaleFor(width, effectiveCanvasHeight(height));  // delta #39
         __simClient.start(buildSimStartPayload(nodes, clusters, validLinks, width, height));

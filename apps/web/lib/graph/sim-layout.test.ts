@@ -190,8 +190,8 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
       minA = Math.min(minA, Math.hypot(a[keys[i]].x - a[keys[j]].x, a[keys[i]].y - a[keys[j]].y));
       minB = Math.min(minB, Math.hypot(b[keys[i]].x - b[keys[j]].x, b[keys[i]].y - b[keys[j]].y));
     }
-    // Strict, not >=: observed margin for the original fixture was ~82 world units
-    // (base 447.29 vs seeded 529.88), so 1 unit of slack still fails if the
+    // Strict, not >=: observed margin for this fixture is ~716 world units
+    // (base 447.29 vs seeded 1163.77), so 1 unit of slack still fails if the
     // footprint term stops binding (e.g. scSeparation gets disconnected from
     // the repulsion loop) instead of passing vacuously on minB === minA.
     expect(minB).toBeGreaterThan(minA + 1);
@@ -208,9 +208,9 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
       m = Math.max(m, Math.hypot(c[k[i]].x - c[k[j]].x, c[k[i]].y - c[k[j]].y));
     return m;
   }
-  function withCanvas(w: number, h: number, minCanvasPx?: number): SimStartPayload {
+  function withCanvas(w: number, h: number, minCanvasPx: number): SimStartPayload {
     const sep = { footprint: fp, minZoomRatio: 0.5, fitWorldPad: 155, hullPadding: 20, interGapPx: 8 };
-    return threeScPayload({ width: w, height: h, scSeparation: minCanvasPx === undefined ? { ...sep, minCanvasPx: 1 } : { ...sep, minCanvasPx } });
+    return threeScPayload({ width: w, height: h, scSeparation: { ...sep, minCanvasPx } });
   }
   it("a short canvas seeds the same SC spread as a 640px-tall one (minCanvasPx floors kFloorEst)", () => {
     const short = spread(withCanvas(1700, 180, 640));

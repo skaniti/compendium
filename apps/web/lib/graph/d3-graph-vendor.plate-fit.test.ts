@@ -267,6 +267,7 @@ describe("d3-graph-vendor plate-fit scale (delta #36)", () => {
     sizeContainer(container, 771, 313);
     render(container, payload("rr"), { icons: iconsFor("rr") });
     flushSettleChunks();
+    expect(lastSimStart!.height).toBe(313);  // a fresh payload for the new canvas
     expect(lastSimStart!.scSeparation!.footprint.baseNameFontPx).toBeCloseTo(22, 6);
   });
 });

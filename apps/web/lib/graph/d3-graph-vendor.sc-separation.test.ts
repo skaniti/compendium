@@ -799,13 +799,30 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     return { spread, anchors };
   }
 
+  it("a wide, short load (height-bound fit) gives exactly the anchors of a 640px-tall load", async () => {
+    const short = await loadSpread("hb", 1700, 181);
+    const ref = await loadSpread("hb", 1700, 640);
+    // The worker centres the seed on height / 2, so the two layouts differ by
+    // a pure translation; compare them about their own centroid.
+    const centred = (a: Record<string, { x: number; y: number }>) => {
+      const v = Object.values(a);
+      const cx = v.reduce((t, p) => t + p.x, 0) / v.length, cy = v.reduce((t, p) => t + p.y, 0) / v.length;
+      return Object.fromEntries(Object.entries(a).map(([k, p]) => [k, { x: p.x - cx, y: p.y - cy }]));
+    };
+    const cs = centred(short.anchors), cr = centred(ref.anchors);
+    for (const k of Object.keys(cr)) {
+      expect(cs[k].x).toBeCloseTo(cr[k].x, 6);
+      expect(cs[k].y).toBeCloseTo(cr[k].y, 6);
+    }
+  }, 30000);
+
   it("loading on a short canvas gives the same SC spacing as loading at 640px tall", async () => {
     const short = await loadSpread("shortA", 1010, 181);
     const ref = await loadSpread("shortA", 1010, 640);
-    expect(Math.abs(short.spread - ref.spread) / ref.spread).toBeLessThan(0.1);
+    expect(Math.abs(short.spread - ref.spread) / ref.spread).toBeLessThan(0.01);
   }, 30000);
 
-  it("a canvas with both sides >= 640 keeps the same anchors regardless of extra size", async () => {
+  it("a 1700x900 load (both sides >= 640) keeps the pre-change anchors", async () => {
     const a = await loadSpread("bigA", 1700, 900);
     // Pinned from the pre-change code (e171abd lineage, b796fe5): a canvas
     // with both sides >= 640 plans exactly as before.
