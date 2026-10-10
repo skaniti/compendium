@@ -23,6 +23,14 @@ CADDY = shutil.which("caddy")
 needs_caddy = pytest.mark.skipif(CADDY is None, reason="caddy binary not installed")
 
 
+def _xdg_env(tmp_path, **extra):
+    """Keep Caddy off the real ~/.config/caddy and ~/.local/share/caddy."""
+    cfg, data = tmp_path / "xdg-config", tmp_path / "xdg-data"
+    cfg.mkdir(exist_ok=True)
+    data.mkdir(exist_ok=True)
+    return dict(os.environ, XDG_CONFIG_HOME=str(cfg), XDG_DATA_HOME=str(data), **extra)
+
+
 def _free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -39,7 +47,11 @@ def _serve(handler_cls):
 
 class _Echo(BaseHTTPRequestHandler):
     def do_GET(self):
-        body = json.dumps({k.lower(): v for k, v in self.headers.items()}).encode()
+        out = {k.lower(): v for k, v in self.headers.items()}
+        out["_all"] = {}
+        for k, v in self.headers.items():
+            out["_all"].setdefault(k.lower(), []).append(v)
+        body = json.dumps(out).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -80,12 +92,15 @@ def gateway(tmp_path):
         (tmp_path / "Test.caddyfile").write_text(
             "{\n\tadmin off\n\tauto_https off\n}\n"
             f"http://127.0.0.1:{port} {{\n"
+            "\tbind 127.0.0.1\n"
             f"\timport owner-app.caddy 127.0.0.1:{echo.server_address[1]} 127.0.0.1:{helper.server_address[1]}\n"
             "}\n"
         )
+        errfile = tmp_path / "caddy-stderr.log"
         p = subprocess.Popen(
             [CADDY, "run", "--config", "Test.caddyfile", "--adapter", "caddyfile"],
-            cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cwd=tmp_path, env=_xdg_env(tmp_path), stdout=subprocess.DEVNULL,
+            stderr=errfile.open("w"),
         )
         procs.append(p)
         for _ in range(50):
@@ -94,6 +109,8 @@ def gateway(tmp_path):
                 break
             except OSError:
                 time.sleep(0.1)
+        else:
+            pytest.fail("caddy did not open its port; stderr:\n" + errfile.read_text())
         return port, seen
 
     yield start
@@ -130,6 +147,22 @@ def test_helper_login_replaces_a_forged_one(gateway):
 
 
 @needs_caddy
+def test_duplicate_and_lowercase_forged_logins_are_all_replaced(gateway):
+    import http.client
+
+    port, _ = gateway("owner@example.test")
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.putrequest("GET", "/x")
+    conn.putheader("Tailscale-User-Login", "attacker1@evil.test")
+    conn.putheader("Tailscale-User-Login", "attacker2@evil.test")
+    conn.putheader("tailscale-user-login", "attacker3@evil.test")
+    conn.endheaders()
+    got = json.loads(conn.getresponse().read())
+    conn.close()
+    assert got["_all"]["tailscale-user-login"] == ["owner@example.test"]
+
+
+@needs_caddy
 def test_no_helper_login_means_no_identity_reaches_the_web(gateway):
     port, _ = gateway(None)
     got = _fetch(port, FORGED)
@@ -139,11 +172,14 @@ def test_no_helper_login_means_no_identity_reaches_the_web(gateway):
 
 @needs_caddy
 def test_production_caddyfile_listens_only_on_the_tailnet_addresses(tmp_path):
+    mods = subprocess.run([CADDY, "list-modules"], capture_output=True, text=True, check=True).stdout
+    if "dns.providers.acmedns" not in mods:
+        pytest.skip("caddy build lacks the acmedns module")
     shutil.copy(GW / "Caddyfile", tmp_path / "Caddyfile")
     shutil.copy(GW / "owner-app.caddy", tmp_path / "owner-app.caddy")
     (tmp_path / "acmedns.json").write_text("{}")
-    env = dict(
-        os.environ,
+    env = _xdg_env(
+        tmp_path,
         OWNER_HOSTNAME="my.example.test",
         TAILNET_HOSTNAME="box.tail0000.ts.net",
         TAILNET_IPV4="100.64.0.9",
@@ -158,6 +194,18 @@ def test_production_caddyfile_listens_only_on_the_tailnet_addresses(tmp_path):
     listens = sorted(addr for srv in cfg["apps"]["http"]["servers"].values() for addr in srv["listen"])
     assert listens == ["100.64.0.9:443", "[fd7a:115c:a1e0::9]:443"]
     assert "my.example.test" in out.stdout and "box.tail0000.ts.net" in out.stdout
+    assert cfg["admin"]["listen"] == "unix//run/caddy-owner/admin.sock"
+    policies = cfg["apps"]["tls"]["automation"]["policies"]
+
+    def policy_for(name):
+        return next(p for p in policies if name in p.get("subjects", []))
+
+    owner = policy_for("my.example.test")
+    issuer = owner["issuers"][0]["challenges"]["dns"]
+    assert issuer["provider"]["name"] == "acmedns"
+    assert issuer["resolvers"] == ["1.1.1.1", "8.8.8.8"]
+    ts = policy_for("box.tail0000.ts.net")
+    assert [m["via"] for m in ts["get_certificate"]] == ["tailscale"]
 
 
 def test_snippet_runs_in_written_order_inside_one_route():
@@ -171,6 +219,9 @@ def test_snippet_runs_in_written_order_inside_one_route():
         "request_header -Tailscale-User-Profile-Pic",
         "request_header -X-Compendium-Peer",
     ]
+    start = body.index("forward_auth {args[1]} {")
+    block = body[start : body.index("}", start)]
+    assert "header_up -Cookie" in block and "header_up -Authorization" in block
     assert body.index(deletes[-1]) < body.index("forward_auth {args[1]} {") < body.index("reverse_proxy {args[0]}")
 
 

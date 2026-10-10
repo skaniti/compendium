@@ -8,6 +8,7 @@
 # (needs TS_PERMIT_CERT_UID=caddy in tailscaled's environment).
 {
 	auto_https disable_redirects
+	admin unix//run/caddy-owner/admin.sock
 }
 
 {$OWNER_HOSTNAME} {

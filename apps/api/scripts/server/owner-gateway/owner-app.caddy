@@ -7,6 +7,8 @@
 # delete the identity the helper just stamped. Every client copy of the
 # identity headers (and of the peer header) is deleted first; forward_auth
 # then asks the helper about the real TCP peer and copies only its answer.
+# Cookie and Authorization are removed from the request the helper sees, so
+# it never receives session material.
 route {
 	request_header -Tailscale-User-Login
 	request_header -Tailscale-User-Name
@@ -15,6 +17,8 @@ route {
 	forward_auth {args[1]} {
 		uri /whois
 		header_up X-Compendium-Peer {remote_host}
+		header_up -Cookie
+		header_up -Authorization
 		copy_headers Tailscale-User-Login
 	}
 	reverse_proxy {args[0]}
