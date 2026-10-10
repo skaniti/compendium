@@ -61,6 +61,54 @@ describe("crowdScale", () => {
   });
 });
 
+describe("selectPointers crowd-scale cap", () => {
+  // Three in a row at spacing s: 40f <= s clears at scale f; floor width is 20.
+  const row = (s: number) => [plate("a", 30, 0, 0), plate("b", 20, s, 0), plate("c", 10, 2 * s, 0)];
+  type St = { pointers: string[]; c: number; cap: number };
+  const step = (s: number, st: St | null) =>
+    selectPointers({
+      plates: row(s), base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fpOf, crowdFloor: 0.5, hysteresis: 0.04,
+      prevPointers: new Set(st ? st.pointers : []), prevC: st?.c, prevCap: st?.cap,
+    });
+
+  it("c does not grow back across the call where a plate becomes a pointer", () => {
+    let st: St | null = null;
+    let last = Infinity;
+    for (const s of [40, 36, 30, 26, 22, 19, 18]) {
+      const r = step(s, st);
+      expect(r.c).toBeLessThanOrEqual(last + 1e-9);
+      last = r.c;
+      st = { pointers: r.pointers, c: r.c, cap: r.cap };
+    }
+    expect(st!.pointers.length).toBeGreaterThan(0);
+  });
+  it("lifts the cap when the pointer returns, and c follows the clearing scale again", () => {
+    let st: St | null = null;
+    for (const s of [40, 30, 22, 19]) { const r = step(s, st); st = { pointers: r.pointers, c: r.c, cap: r.cap }; }
+    expect(st!.pointers).toEqual(["b"]);
+    expect(st!.cap).toBeLessThan(1);
+    const back = step(24, st);
+    expect(back.pointers).toEqual([]);
+    expect(back.cap).toBe(1);
+    expect(back.c).toBeCloseTo(0.6, 1);
+    expect(step(30, { pointers: back.pointers, c: back.c, cap: back.cap }).c).toBeGreaterThan(0.7);
+  });
+  it("is a fixed point on c, cap and pointers", () => {
+    let st: St | null = null;
+    for (const s of [40, 30, 22, 19]) { const r = step(s, st); st = { pointers: r.pointers, c: r.c, cap: r.cap }; }
+    const again = step(19, st);
+    expect(again.c).toBe(st!.c);
+    expect(again.cap).toBe(st!.cap);
+    expect(again.pointers).toEqual(st!.pointers);
+  });
+  it("defaults prevC and prevCap to 1: a fresh call keeps today's largest clearing scale", () => {
+    const r = step(19, null);
+    expect(r.pointers).toEqual(["b"]);
+    expect(r.cap).toBe(1);
+    expect(r.c).toBeGreaterThan(0.9);
+  });
+});
+
 describe("selectPointers", () => {
   const sel = (plates: ScPlate[], prev: string[] = []) =>
     selectPointers({ plates, base: BASE, nameFloorPx: FLOOR_PX, footprintOf: fpOf, crowdFloor: 0.5, hysteresis: 0.04, prevPointers: new Set(prev) });

@@ -77,8 +77,11 @@ export interface SelectInput {
   crowdFloor: number;
   hysteresis: number;
   prevPointers: ReadonlySet<string>;
+  /** The previous draw's shared scale and cap (both default 1 = no memory). */
+  prevC?: number;
+  prevCap?: number;
 }
-export interface SelectResult { c: number; inPlace: string[]; pointers: string[] }
+export interface SelectResult { c: number; cap: number; inPlace: string[]; pointers: string[] }
 
 /** Which plates stay in place and at what shared scale. A fixed point: feeding
  *  the result's pointers back in on unchanged geometry returns the same result.
@@ -89,7 +92,11 @@ export interface SelectResult { c: number; inPlace: string[]; pointers: string[]
  *     victims, against the growing in-place set. A previous pointer needs
  *     slack (its footprint and each neighbour's inflated by `hysteresis`); a
  *     plate evicted this call returns on plain clearance, so greedy
- *     over-eviction is undone. Lists come back in priority order. */
+ *     over-eviction is undone. Lists come back in priority order.
+ *  4. The shared scale never grows back when a plate leaves (the 2026-10-09
+ *     sc-pointer-bands plan, private): a call that turns a new plate into a
+ *     pointer caps c at the previous call's c; a pointer returning, or none
+ *     left, lifts the cap. c = min(largest clearing scale, cap). */
 export function selectPointers(inp: SelectInput): SelectResult {
   const order = inp.plates.slice().sort(byPriority);
   const isPtr = new Set(order.filter((p) => inp.prevPointers.has(p.key)).map((p) => p.key));
@@ -115,10 +122,19 @@ export function selectPointers(inp: SelectInput): SelectResult {
     if (!others.some((r) => rectsOverlap(own, r))) isPtr.delete(p.key);
   }
   const ip = inPlace();
+  const now = order.filter((q) => isPtr.has(q.key)).map((q) => q.key);
+  const prevC = inp.prevC ?? 1;
+  const prevCap = inp.prevCap ?? 1;
+  let cap: number;
+  if (now.length === 0) cap = 1;
+  else if (now.some((k) => !prev.has(k))) cap = Math.min(prevCap, prevC);
+  else if ([...prev].some((k) => !isPtr.has(k))) cap = 1;
+  else cap = prevCap;
   return {
-    c: crowdScale(ip, inp.base, inp.nameFloorPx, inp.footprintOf, inp.crowdFloor),
+    c: Math.min(crowdScale(ip, inp.base, inp.nameFloorPx, inp.footprintOf, inp.crowdFloor), cap),
+    cap,
     inPlace: ip.map((q) => q.key),
-    pointers: order.filter((q) => isPtr.has(q.key)).map((q) => q.key),
+    pointers: now,
   };
 }
 

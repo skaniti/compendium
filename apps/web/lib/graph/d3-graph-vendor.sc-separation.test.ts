@@ -138,7 +138,7 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number }>;
 type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; contentBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
 type PlacementPlate = { pointer: boolean; cx: number; cy: number; iconPx: number; namePx: number; padPx: number; nameHidden: boolean; band: "L" | "R" | "T" | "B" | null; column: 0 | 1 | null };
-type Placement = { c: number; t: number; phase: "none" | "graded" | "names" | "icons" | "ring"; fallback: boolean; plates: Record<string, PlacementPlate> };
+type Placement = { c: number; cap: number; t: number; phase: "none" | "graded" | "names" | "icons" | "ring"; fallback: boolean; plates: Record<string, PlacementPlate> };
 type SeparationOptions = {
   budgetRatio?: number;
   budgetMinPx?: number;
@@ -564,6 +564,49 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     resize(432);
     const grown = ptrs();
     expect(grown.filter((k) => !atMin.includes(k))).toEqual([]);
+  }, 30000);
+
+  it("the crowd scale holds when a plate becomes a pointer and lifts once one returns", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const callbacks: Array<() => void> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: () => void) { callbacks.push(cb); }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 1300, 620);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("cap", 14, 1, "x"), { icons: iconsFor("cap") });
+    flushSettleChunks();
+    await vi.advanceTimersByTimeAsync(2000);
+    const ptrCount = () => Object.values(placement().plates).filter((p) => p.pointer).length;
+    const resize = (h: number) => { sizeContainer(container, 1300, h); callbacks.forEach((cb) => cb()); };
+    let prevC = placement().c;
+    let prevN = ptrCount();
+    let evictions = 0;
+    for (let h = 620; h >= 400 && evictions < 2; h -= 2) {
+      resize(h);
+      const c = placement().c, n = ptrCount();
+      if (n >= prevN) expect(c).toBeLessThanOrEqual(prevC + 1e-9);
+      if (n > prevN) evictions++;
+      prevC = c; prevN = n;
+    }
+    expect(evictions).toBeGreaterThan(0);
+    // Growing back past the return point lifts the cap, so c rises again.
+    const peak = ptrCount();
+    const low = placement().c;
+    let returned = false, max = low;
+    for (let h = 400; h <= 900 && !returned; h += 2) {
+      resize(h);
+      max = Math.max(max, placement().c);
+      returned = ptrCount() < peak;
+    }
+    expect(returned).toBe(true);
+    for (let h = 900; h <= 1100; h += 2) { resize(h); max = Math.max(max, placement().c); }
+    expect(max).toBeGreaterThan(low + 1e-6);
   }, 30000);
 
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {

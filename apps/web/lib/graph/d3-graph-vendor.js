@@ -1158,7 +1158,7 @@ var __vendorExpandedGroups;
     // every settle and kept across resizes. __scPlaceGen invalidates
     // __scPlace on settle and resize.
     var __scPlace = null;
-    var __scPlaceState = { pointers: {}, nameHidden: {} };
+    var __scPlaceState = { pointers: {}, nameHidden: {}, c: 1, cap: 1 };
     var __scPlaceGen = 0;
     var __scPanDirty = false;
     var __scPanTimer = null;            // delta #37: pending pan-settle re-placement (cleared on teardown)
@@ -4103,6 +4103,7 @@ var __vendorExpandedGroups;
             plates: plates, base: base, nameFloorPx: SC_NAME_FIT_FLOOR_PX, footprintOf: footprintOf,
             crowdFloor: SC_CROWD_FLOOR, hysteresis: SC_FLIP_HYSTERESIS,
             prevPointers: new Set(Object.keys(__scPlaceState.pointers)),
+            prevC: __scPlaceState.c, prevCap: __scPlaceState.cap,   // the crowd scale does not grow back when a plate leaves
         });
         var inPlaceSizes = sizesAt(base, sel.c, SC_NAME_FIT_FLOOR_PX);
         // Graph core in screen px: the nebula box plus every plate in place.
@@ -4134,7 +4135,7 @@ var __vendorExpandedGroups;
         } else {
             placed = { phase: 'none', t: 0, fallback: false, sizes: {}, placements: {} };
         }
-        var out = { c: sel.c, t: placed.t, phase: placed.phase, fallback: placed.fallback, k: k, plates: {} };   // k: the zoom this was placed at; drawWatermarks sizes from it, not from currentZoomK
+        var out = { c: sel.c, cap: sel.cap, t: placed.t, phase: placed.phase, fallback: placed.fallback, k: k, plates: {} };   // k: the zoom this was placed at; drawWatermarks sizes from it, not from currentZoomK
         keys.forEach(function (kw) {
             var isPtr = sel.pointers.indexOf(kw) >= 0;
             var s = isPtr ? placed.sizes[kw] : inPlaceSizes;
@@ -4154,7 +4155,7 @@ var __vendorExpandedGroups;
                 out.plates[it.key].cy = ring[it.key].y - ((it.fp.top + it.fp.bottom) / 2) / k;
             });
         }
-        __scPlaceState = { pointers: {}, nameHidden: {} };
+        __scPlaceState = { pointers: {}, nameHidden: {}, c: sel.c, cap: sel.cap };
         sel.pointers.forEach(function (kw) {
             __scPlaceState.pointers[kw] = true;
             if (out.plates[kw].nameHidden) __scPlaceState.nameHidden[kw] = true;
@@ -5030,7 +5031,7 @@ var __vendorExpandedGroups;
             // Delta #37: drop what the draws above recorded at the old fitZoom,
             // so the final fit draw starts from no previous pointers.
             __scPlaceReset = false;
-            __scPlaceState = { pointers: {}, nameHidden: {} };
+            __scPlaceState = { pointers: {}, nameHidden: {}, c: 1, cap: 1 };
             __scPlace = null; __scPlaceGen++;
         } else {
             // Resize / refit: keep the memory from before the pre-fit draw;
@@ -5346,7 +5347,7 @@ var __vendorExpandedGroups;
     function applyScLayoutSeparation(ctx) {
         __scLayout = null;
         __scShiftW = {};  // final fix wave: cumulative per-SC shift, cleared per settle
-        __scPlaceState = { pointers: {}, nameHidden: {} };  // delta #37: a new layout forgets pointer hysteresis
+        __scPlaceState = { pointers: {}, nameHidden: {}, c: 1, cap: 1 };  // delta #37: a new layout forgets pointer hysteresis
         __scPlace = null; __scPlaceGen++;
         // The settle's own draws (chunk 2, fitToContent's first zoom event at
         // the OLD fitZoom) repopulate the hysteresis memory before the final
