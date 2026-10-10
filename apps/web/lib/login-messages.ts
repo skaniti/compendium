@@ -8,3 +8,5 @@ export const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts; wait a minute and t
 
 // demo-one-click-entry: a Turnstile token is single-use and short-lived.
 export const CHALLENGE_FAILED_MESSAGE = "The challenge did not pass. Reload and try again.";
+export const DEMO_UNAVAILABLE_MESSAGE = "The demo is unavailable right now; try again later.";
+export const WIDGET_FAILED_MESSAGE = "The verification check could not load. Reload the page to try again.";

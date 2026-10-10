@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
+import { demoEntryEnabled } from "@/lib/demo-entry";
 import { proxyAttestHeaders } from "@/lib/proxy-attest";
 import {
   BACKEND_UNREACHABLE_MESSAGE,
   CHALLENGE_FAILED_MESSAGE,
+  DEMO_UNAVAILABLE_MESSAGE,
   TOO_MANY_ATTEMPTS_MESSAGE,
 } from "@/lib/login-messages";
 
@@ -17,8 +19,9 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // real visitor instead of the Vercel egress address. No ingress headers:
 // the demo role is never remembered.
 export async function POST(req: Request): Promise<Response> {
-  const body = (await req.json().catch(() => ({}))) as { turnstileToken?: unknown };
-  const token = typeof body.turnstileToken === "string" ? body.turnstileToken.trim() : "";
+  if (!demoEntryEnabled()) return Response.json({ error: DEMO_UNAVAILABLE_MESSAGE }, { status: 404 });
+  const body = (await req.json().catch(() => null)) as { turnstileToken?: unknown } | null;
+  const token = typeof body?.turnstileToken === "string" ? body.turnstileToken.trim() : "";
   if (!token) return Response.json({ error: CHALLENGE_FAILED_MESSAGE }, { status: 400 });
 
   let res: Response;
@@ -33,7 +36,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: BACKEND_UNREACHABLE_MESSAGE }, { status: 503 });
   }
 
-  if (res.status === 404) return new Response(null, { status: 404 });
+  if (res.status === 404) return Response.json({ error: DEMO_UNAVAILABLE_MESSAGE }, { status: 404 });
   if (res.status === 403) return Response.json({ error: CHALLENGE_FAILED_MESSAGE }, { status: 403 });
   if (res.status === 429) return Response.json({ error: TOO_MANY_ATTEMPTS_MESSAGE }, { status: 429 });
   if (!res.ok) {

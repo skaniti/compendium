@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
-import { demoEntryEnabled } from "@/lib/demo-entry";
 
-// demo-one-click-entry: the hosted demo tells crawlers to stay out; every
-// other deployment (owner web, local) is unaffected.
+// demo-one-click-entry: Allow on every deployment, the hosted demo included.
+// A Disallow would stop crawlers from fetching the pages, so they would
+// never see the noindex response header and meta tag the hosted demo sends
+// (next.config.ts headers(), layout generateMetadata); those still apply.
 export default function robots(): MetadataRoute.Robots {
-  return demoEntryEnabled()
-    ? { rules: { userAgent: "*", disallow: "/" } }
-    : { rules: { userAgent: "*", allow: "/" } };
+  return { rules: { userAgent: "*", allow: "/" } };
 }

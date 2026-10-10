@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEMO_ENTRY_ROUTE, TURNSTILE_SCRIPT_URL } from "@/lib/demo-entry";
-import { CHALLENGE_FAILED_MESSAGE } from "@/lib/login-messages";
+import { BACKEND_UNREACHABLE_MESSAGE, CHALLENGE_FAILED_MESSAGE, WIDGET_FAILED_MESSAGE } from "@/lib/login-messages";
 
 // demo-one-click-entry: the hosted demo's login card. Cloudflare Turnstile
 // renders into the container (managed mode: most visitors see nothing);
@@ -26,7 +26,10 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
       appearance: "interaction-only",
       callback: (t: string) => setToken(t),
       "expired-callback": () => setToken(""),
-      "error-callback": () => setToken(""),
+      "error-callback": () => {
+        setToken("");
+        setError(WIDGET_FAILED_MESSAGE);
+      },
     });
   }, [siteKey]);
 
@@ -56,6 +59,8 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
       if (res.ok) {
         // Full reload (not router navigation), same idiom as the password
         // login: the app must hydrate every client cache fresh.
+        // busy stays set: the navigation is pending and a second click
+        // would replay the used token.
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after login
         window.location.href = "/";
         return;
@@ -63,10 +68,10 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       setError(data.error || CHALLENGE_FAILED_MESSAGE);
       resetWidget();
+      setBusy(false);
     } catch {
-      setError(CHALLENGE_FAILED_MESSAGE);
+      setError(BACKEND_UNREACHABLE_MESSAGE);
       resetWidget();
-    } finally {
       setBusy(false);
     }
   }
@@ -74,7 +79,12 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
   const disabled = !token || busy;
   return (
     <div data-testid="demo-entry">
-      <Script src={TURNSTILE_SCRIPT_URL} strategy="afterInteractive" onLoad={renderWidget} />
+      <Script
+        src={TURNSTILE_SCRIPT_URL}
+        strategy="afterInteractive"
+        onLoad={renderWidget}
+        onError={() => setError(WIDGET_FAILED_MESSAGE)}
+      />
       <p style={{ color: "var(--subtle, #777)", fontSize: "0.85rem", margin: "0 0 16px 0" }}>
         Read-only hosted demo of a sample compendium. No account needed.
       </p>

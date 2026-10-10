@@ -5,6 +5,7 @@ import { PROXY_CLIENT_IP_HEADER, PROXY_SECRET_HEADER } from "@/lib/proxy-attest"
 import {
   BACKEND_UNREACHABLE_MESSAGE,
   CHALLENGE_FAILED_MESSAGE,
+  DEMO_UNAVAILABLE_MESSAGE,
   TOO_MANY_ATTEMPTS_MESSAGE,
 } from "@/lib/login-messages";
 
@@ -48,7 +49,7 @@ describe("POST /api/auth/demo (web route)", () => {
     vi.mocked(cookies).mockResolvedValue(jar as never);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    process.env.BACKEND_URL = "http://api.test.local";
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
     process.env.BACKEND_PROXY_SECRET = "proxy-secret";
   });
 
@@ -81,9 +82,25 @@ describe("POST /api/auth/demo (web route)", () => {
     expect(jar._store.size).toBe(0);
   });
 
-  it("maps 404 (entry off) to 404", async () => {
+  it("maps a backend 404 (entry off) to 404 with the unavailable copy", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 404 }));
-    expect((await POST(makeReq({ turnstileToken: "tok-1" }))).status).toBe(404);
+    const res = await POST(makeReq({ turnstileToken: "tok-1" }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: DEMO_UNAVAILABLE_MESSAGE });
+  });
+
+  it("404s without calling the backend when the site key is unset", async () => {
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    const res = await POST(makeReq({ turnstileToken: "tok-1" }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: DEMO_UNAVAILABLE_MESSAGE });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("answers a JSON null body with 400", async () => {
+    const res = await POST(makeReq(null));
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("maps 429 to the too-many copy", async () => {

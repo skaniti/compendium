@@ -8,9 +8,9 @@ describe("robots.txt", () => {
     else process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = original;
   });
 
-  it("disallows everything on the hosted demo", () => {
+  it("still allows crawling on the hosted demo so the noindex signals are seen", () => {
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
-    expect(robots()).toEqual({ rules: { userAgent: "*", disallow: "/" } });
+    expect(robots()).toEqual({ rules: { userAgent: "*", allow: "/" } });
   });
 
   it("allows everything elsewhere", () => {
