@@ -465,7 +465,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
   });
 
   it("pointers re-place once the pan has been idle for SC_PAN_SETTLE_MS", async () => {
-    await mountCrowded("set");
+    const { container } = await mountCrowded("set");
     const before = placement();
     (window as W).__d3PanBy!(40, 0);
     await vi.advanceTimersByTimeAsync(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS - 20);
@@ -474,7 +474,19 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     await vi.advanceTimersByTimeAsync(GRAPH_DEFAULTS.SC_PAN_SETTLE_MS - 20);
     expect(placement()).toBe(before);
     await vi.advanceTimersByTimeAsync(40);
-    expect(placement()).not.toBe(before);
+    const after = placement();
+    expect(after).not.toBe(before);
+    // Re-placed in the panned view: every band pointer is still on the canvas.
+    const tr = rootTransform(container);
+    const bandPtrs = Object.keys(after.plates).filter((k) => after.plates[k].pointer && after.plates[k].band);
+    expect(bandPtrs.length).toBeGreaterThan(0);
+    for (const kw of bandPtrs) {
+      const r = worldRect(plateEl(container, kw));
+      expect(r.minX * tr.k + tr.x).toBeGreaterThanOrEqual(-1e-6);
+      expect(r.maxX * tr.k + tr.x).toBeLessThanOrEqual(CROWD_W + 1e-6);
+      expect(r.minY * tr.k + tr.y).toBeGreaterThanOrEqual(-1e-6);
+      expect(r.maxY * tr.k + tr.y).toBeLessThanOrEqual(CROWD_H + 1e-6);
+    }
   });
 
   it("dispose cancels a pending pan-settle redraw", async () => {
@@ -527,6 +539,32 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       flushSettleChunks();
     }
   });
+
+  it("growing the panel by 2px never evicts a plate that the shrink had kept in place", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const callbacks: Array<() => void> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: () => void) { callbacks.push(cb); }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 1300, 620);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("u", 14, 1, "x"), { icons: iconsFor("u") });
+    flushSettleChunks();
+    await vi.advanceTimersByTimeAsync(2000);
+    const ptrs = () => Object.keys(placement().plates).filter((k) => placement().plates[k].pointer).sort();
+    const resize = (h: number) => { sizeContainer(container, 1300, h); callbacks.forEach((cb) => cb()); };
+    for (let h = 620; h >= 430; h -= 2) resize(h);
+    const atMin = ptrs();
+    expect(atMin.length).toBeGreaterThan(0);
+    resize(432);
+    const grown = ptrs();
+    expect(grown.filter((k) => !atMin.includes(k))).toEqual([]);
+  }, 30000);
 
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");

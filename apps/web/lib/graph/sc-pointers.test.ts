@@ -215,8 +215,8 @@ describe("layoutBands", () => {
     ];
     for (const core of cores) {
       const items = [full("a", (core.minX + core.maxX) / 2, (core.minY + core.maxY) / 2), full("b", 400, 200)];
-      const out = layoutBands(items, core, 800, 400, BAND);
-      if (out === null) continue;
+      const out = layoutBands(items, core, 800, 400, BAND)!;
+      expect(out).not.toBeNull();
       expect(out.length).toBe(2);
       for (const o of out) expect(inside(plateRect(o.x, o.y, fpOf(o.key, sizesAt(BASE, 1, FLOOR_PX))), 800, 400)).toBe(true);
     }
@@ -363,6 +363,18 @@ describe("placePointers", () => {
         expect(r2.t).toBe(r1.t);
         expect(r2.sizes).toEqual(r1.sizes);
       });
+    });
+    it("a previously hidden big name pulls every lower-priority name into the hidden set", () => {
+      // Height 84: with only big hidden, mid and tiny still fit with names
+      // shown, but big cannot return -- the old pass left that split in place.
+      const [, ptrs, , w, , fp] = cases[0];
+      const core: Rect = { minX: 100, maxX: 795, minY: 2, maxY: 82 };
+      const r = go(ptrs, core, w, 84, ["big"], fp);
+      expect(r.sizes.big.nameHidden).toBe(true);
+      expect(r.sizes.mid.nameHidden).toBe(true);
+      expect(r.sizes.tiny.nameHidden).toBe(true);
+      const again = go(ptrs, core, w, 84, hiddenOf(r), fp);
+      expect(again.sizes).toEqual(r.sizes);
     });
     it("a lower-priority name never shows while a higher-priority name is hidden", () => {
       const [, ptrs, core, w, h, fp] = cases[2];

@@ -324,7 +324,10 @@ export function placePointers(inp: PlacePointersInput): PlacePointersResult {
   // The hidden set stays a smallest-first suffix: the pass stops at the first
   // name that cannot return, so a lower-priority name never shows while a
   // higher-priority one is hidden.
-  for (const pt of pointers.slice().sort(byPriority)) {
+  const byPrio = pointers.slice().sort(byPriority);
+  const firstHidden = byPrio.findIndex((pt) => hidden.has(pt.key));
+  if (firstHidden >= 0) byPrio.slice(firstHidden).forEach((pt) => hidden.add(pt.key));
+  for (const pt of byPrio) {
     if (!hidden.has(pt.key)) continue;
     const rest = new Set(hidden);
     rest.delete(pt.key);

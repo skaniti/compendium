@@ -5004,6 +5004,11 @@ var __vendorExpandedGroups;
         // apparent screen-space `x` shift zooming about a fixed point
         // otherwise produces.
         __fitTransform = { x: transform.x, y: transform.y, k: scale, cx: canvasW / 2, cy: canvasH / 2 };
+        // Delta #37: the dispatch below draws at the new k with the OLD
+        // fitZoom; whatever hysteresis memory that draw records is not a
+        // real placement, so the pre-dispatch memory is put back after
+        // fitZoom is updated (fitZoom must stay assigned after the dispatch).
+        var keepPlaceState = __scPlaceState;
         svg.call(zoomBehavior.transform, transform);
         // Zoom range in RELATIVE terms (× fit-scale) so behavior is
         // compendium-size-agnostic.
@@ -5026,6 +5031,12 @@ var __vendorExpandedGroups;
             // so the final fit draw starts from no previous pointers.
             __scPlaceReset = false;
             __scPlaceState = { pointers: {}, nameHidden: {} };
+            __scPlace = null; __scPlaceGen++;
+        } else {
+            // Resize / refit: keep the memory from before the pre-fit draw;
+            // the gen bump stops the cache serving that draw's result when
+            // fitZoom is unchanged (refitView).
+            __scPlaceState = keepPlaceState;
             __scPlace = null; __scPlaceGen++;
         }
         updateLabelLOD(scale);
