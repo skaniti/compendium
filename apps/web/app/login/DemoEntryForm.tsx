@@ -86,7 +86,7 @@ export default function DemoEntryForm({ siteKey }: { siteKey: string }) {
         onError={() => setError(WIDGET_FAILED_MESSAGE)}
       />
       <p style={{ color: "var(--subtle, #777)", fontSize: "0.85rem", margin: "0 0 16px 0" }}>
-        Read-only hosted demo of a sample compendium. No account needed.
+        Read-only hosted demo of a sample compendium.
       </p>
       <div ref={container} style={{ minHeight: 0, marginBottom: 12 }} />
       {error && (
