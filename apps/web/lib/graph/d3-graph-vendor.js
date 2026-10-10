@@ -1493,6 +1493,7 @@ var __vendorExpandedGroups;
      *  canvas or any canvas whose short side is >= SC_PLATE_FIT_REF_PX. */
     function markScaleFor(w, h) {
         if (!(w > 0) || !(h > 0) || !(SC_PLATE_FIT_REF_PX > 0)) return 1;
+        if (!(SC_MARK_FIT_FLOOR < 1)) return 1;  // mirrors plateFitScaleFor: a floor at/above the base has nothing to scale
         var s = Math.min(w, h) / SC_PLATE_FIT_REF_PX;
         if (!(s < 1)) return 1;
         return s < SC_MARK_FIT_FLOOR ? SC_MARK_FIT_FLOOR : s;

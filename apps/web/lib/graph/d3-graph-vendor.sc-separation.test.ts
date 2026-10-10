@@ -711,24 +711,48 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     });
 
     it("large panel: marks paint exactly today's sizes", async () => {
-      const { container } = await mountCrowded("msL", 1300, 700);
+      const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+      (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+      const container = document.createElement("div");
+      sizeContainer(container, 1000, 700);   // short side >= 640; many plates so pointers exist
+      document.body.appendChild(container);
+      render(container, crowdedPayload("msL", 40, 1, "x"), { icons: iconsFor("msL") });
+      flushSettleChunks();
+      await vi.advanceTimersByTimeAsync(2000);
       expect((window as W).__d3ScLayout!()!.markScale).toBe(1);
+      expect(Object.values(placement().plates).some((x) => x.pointer)).toBe(true);
       const p = painted(container);
       expect(p.page).toBeCloseTo(1.5, 6);
       expect(p.starOpacity).toBeCloseTo(0.35 * 0.78, 6);
-      if (!Number.isNaN(p.dot)) {
-        expect(p.dot).toBeCloseTo(4, 6);
-        expect(p.stroke).toBeCloseTo(1.25, 6);
-      }
+      expect(p.dot).toBeCloseTo(4, 6);
+      expect(p.stroke).toBeCloseTo(1.25, 6);
     });
 
     it("SC_MARK_FIT_FLOOR is live-tunable", async () => {
       const { applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
       await mountCrowded("msT", 900, 100);
       expect((window as W).__d3ScLayout!()!.markScale).toBeCloseTo(0.35, 9);
-      applyTunerOverrides({ SC_MARK_FIT_FLOOR: 0.5 } as never);
-      flushSettleChunks();
-      expect((window as W).__d3ScLayout!()!.markScale).toBeCloseTo(0.5, 9);
+      try {
+        applyTunerOverrides({ SC_MARK_FIT_FLOOR: 0.5 });
+        flushSettleChunks();
+        expect((window as W).__d3ScLayout!()!.markScale).toBeCloseTo(0.5, 9);
+      } finally {
+        applyTunerOverrides({ SC_MARK_FIT_FLOOR: GRAPH_DEFAULTS.SC_MARK_FIT_FLOOR });
+        flushSettleChunks();
+      }
+    });
+
+    it("a floor at or above 1 leaves markScale at 1", async () => {
+      const { applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
+      await mountCrowded("msF", 900, 240);
+      try {
+        applyTunerOverrides({ SC_MARK_FIT_FLOOR: 1.2 });
+        flushSettleChunks();
+        expect((window as W).__d3ScLayout!()!.markScale).toBe(1);
+      } finally {
+        applyTunerOverrides({ SC_MARK_FIT_FLOOR: GRAPH_DEFAULTS.SC_MARK_FIT_FLOOR });
+        flushSettleChunks();
+      }
     });
   });
 
