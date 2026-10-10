@@ -203,7 +203,7 @@ describe("resolveTunerSnapshot: version gating (port of applyTunerSnapshot)", ()
     const keys = {
       SC_CROWD_FLOOR: 0.6, SC_FLIP_HYSTERESIS: 0.05, SC_POINTER_SIZE_MIN: 0.3, SC_POINTER_SIZE_MAX: 0.8,
       SC_POINTER_MIN_ICON_PX: 20, SC_BAND_MARGIN_PX: 12, SC_BAND_GAP_PX: 16, SC_BAND_LAYER_GAP_PX: 9,
-      SC_BAND_ITEM_GAP_PX: 7, SC_PAN_SETTLE_MS: 200,
+      SC_BAND_ITEM_GAP_PX: 7, SC_PAN_SETTLE_MS: 200, SC_MARK_FIT_FLOOR: 0.25,
     };
     const current = resolveTunerSnapshot(withSlot1(fullSnapshot(keys)), "1", makeStorage());
     for (const [k, v] of Object.entries(keys)) expect(current[k as keyof typeof keys]).toBe(v);

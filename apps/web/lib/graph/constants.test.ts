@@ -38,6 +38,7 @@ describe("GRAPH_DEFAULTS", () => {
     // private): sFit = clamp(min(w,h)/REF, FLOOR/22, 1).
     expect(GRAPH_DEFAULTS.SC_PLATE_FIT_REF_PX).toBe(640);
     expect(GRAPH_DEFAULTS.SC_NAME_FIT_FLOOR_PX).toBe(12);
+    expect(GRAPH_DEFAULTS.SC_MARK_FIT_FLOOR).toBe(0.35);
     // SC pointer bands (the 2026-10-09 sc-pointer-bands plan, private).
     expect(GRAPH_DEFAULTS.SC_CROWD_FLOOR).toBe(0.5);
     expect(GRAPH_DEFAULTS.SC_FLIP_HYSTERESIS).toBe(0.04);

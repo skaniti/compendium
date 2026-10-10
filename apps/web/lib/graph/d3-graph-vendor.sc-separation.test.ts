@@ -136,7 +136,7 @@ function sizeContainer(el: HTMLElement, w: number, h: number): void {
     ({ x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return {}; } }) as DOMRect;
 }
 type Report = Array<{ keyword: string; pages: number; shiftPx: number; budgetPx: number }>;
-type Layout = { kFit: number; kFloor: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; contentBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
+type Layout = { kFit: number; kFloor: number; markScale: number; cloudBBox: { minX: number; minY: number; maxX: number; maxY: number }; contentBBox: { minX: number; minY: number; maxX: number; maxY: number }; fitBBox: { minX: number; minY: number; maxX: number; maxY: number }; plates: Record<string, { anchor: { x: number; y: number } | null; shiftPx: number; budgetPx: number }>; fpParams: Parameters<typeof plateFootprintAtRatio>[2]; report: Report };
 type PlacementPlate = { pointer: boolean; cx: number; cy: number; iconPx: number; namePx: number; padPx: number; nameHidden: boolean; band: "L" | "R" | "T" | "B" | null; column: 0 | 1 | null };
 type Placement = { c: number; cap: number; t: number; phase: "none" | "graded" | "names" | "icons" | "ring"; fallback: boolean; plates: Record<string, PlacementPlate> };
 type SeparationOptions = {
@@ -641,6 +641,96 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     for (let h = 900; h <= 1100; h += 2) { resize(h); max = Math.max(max, placement().c); }
     expect(max).toBeGreaterThan(atReturn + 1e-6);
   }, 30000);
+
+  // Task 12 (the 2026-10-09 sc-pointer-bands plan, private): marks shrink
+  // with the panel on small canvases. markScale = clamp(min(w, h) / REF,
+  // SC_MARK_FIT_FLOOR, 1), written beside plateFitScale.
+  describe("small-panel mark scale", () => {
+    function markScaleAt(w: number, h: number): number {
+      return (window as W).__d3ScLayoutRemeasure!(w, h)!.markScale;
+    }
+    function painted(container: HTMLElement) {
+      const k = rootTransform(container).k;
+      const pageDot = container.querySelector("circle.page");
+      const dot = container.querySelector("circle.watermark-anchor-dot");
+      const line = container.querySelector("line.watermark-leader-line");
+      return {
+        k,
+        page: pageDot ? parseFloat(pageDot.getAttribute("r")!) * k : NaN,
+        dot: dot ? parseFloat(dot.getAttribute("r")!) * k : NaN,
+        stroke: line ? parseFloat(line.getAttribute("stroke-width")!) * k : NaN,
+        starOpacity: container.querySelector("use.star-spikes")
+          ? parseFloat(container.querySelector("use.star-spikes")!.getAttribute("opacity")!) : NaN,
+      };
+    }
+
+    it("markScale is 1 at >= 640 short side, proportional below, floored at 0.35", async () => {
+      await mountCrowded("ms", 1100, 850);
+      expect(markScaleAt(1100, 850)).toBe(1);
+      expect(markScaleAt(640, 900)).toBe(1);
+      expect(markScaleAt(900, 480)).toBeCloseTo(0.75, 9);
+      expect(markScaleAt(900, 240)).toBeCloseTo(0.375, 9);
+      expect(markScaleAt(900, 100)).toBeCloseTo(0.35, 9);
+    });
+
+    it("small panel: page dots, star opacity, anchor dots and leaders shrink with the panel", async () => {
+      const { container } = await mountCrowded("msS");
+      const ms = (window as W).__d3ScLayout!()!.markScale;
+      expect(ms).toBeCloseTo(0.375, 9);
+      const p = painted(container);
+      expect(Object.values(placement().plates).some((x) => x.pointer)).toBe(true);
+      expect(p.page).toBeCloseTo(1.5 * ms, 6);
+      expect(p.dot).toBeCloseTo(Math.max(1.5, 4 * ms), 6);
+      expect(p.stroke).toBeCloseTo(Math.max(0.75, 1.25 * ms), 6);
+      expect(p.starOpacity).toBeCloseTo(0.35 * 0.78 * Math.max(0.5, ms), 6);
+    });
+
+    it("a resize re-applies the page dot radius and star opacity", async () => {
+      const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+      const callbacks: Array<() => void> = [];
+      vi.stubGlobal("ResizeObserver", class {
+        constructor(cb: () => void) { callbacks.push(cb); }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      });
+      (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+      const container = document.createElement("div");
+      sizeContainer(container, 900, 700);
+      document.body.appendChild(container);
+      render(container, crowdedPayload("msR", 4, 2), { icons: iconsFor("msR") });
+      flushSettleChunks();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(painted(container).page).toBeCloseTo(1.5, 6);
+      expect(painted(container).starOpacity).toBeCloseTo(0.35 * 0.78, 6);
+      sizeContainer(container, 900, 240);
+      callbacks.forEach((cb) => cb());
+      await vi.advanceTimersByTimeAsync(500);
+      expect(painted(container).page).toBeCloseTo(1.5 * 0.375, 6);
+      expect(painted(container).starOpacity).toBeCloseTo(0.35 * 0.78 * 0.5, 6);
+    });
+
+    it("large panel: marks paint exactly today's sizes", async () => {
+      const { container } = await mountCrowded("msL", 1300, 700);
+      expect((window as W).__d3ScLayout!()!.markScale).toBe(1);
+      const p = painted(container);
+      expect(p.page).toBeCloseTo(1.5, 6);
+      expect(p.starOpacity).toBeCloseTo(0.35 * 0.78, 6);
+      if (!Number.isNaN(p.dot)) {
+        expect(p.dot).toBeCloseTo(4, 6);
+        expect(p.stroke).toBeCloseTo(1.25, 6);
+      }
+    });
+
+    it("SC_MARK_FIT_FLOOR is live-tunable", async () => {
+      const { applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
+      await mountCrowded("msT", 900, 100);
+      expect((window as W).__d3ScLayout!()!.markScale).toBeCloseTo(0.35, 9);
+      applyTunerOverrides({ SC_MARK_FIT_FLOOR: 0.5 } as never);
+      flushSettleChunks();
+      expect((window as W).__d3ScLayout!()!.markScale).toBeCloseTo(0.5, 9);
+    });
+  });
 
   it("cloudBBox is the content bbox minus the flat fit pad", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");

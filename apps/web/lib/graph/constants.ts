@@ -92,6 +92,10 @@ export interface GraphDefaults {
   // name pad by it, so those bases are the FULL-SIZE ceiling. Typo-gated.
   SC_PLATE_FIT_REF_PX: number;
   SC_NAME_FIT_FLOOR_PX: number;
+  // Small-panel mark scale (the 2026-10-09 sc-pointer-bands plan, private):
+  // page dots, star glyphs, pointer anchor dots and leaders scale by
+  // clamp(min(w, h) / SC_PLATE_FIT_REF_PX, SC_MARK_FIT_FLOOR, 1). Typo-gated.
+  SC_MARK_FIT_FLOOR: number;
   // SC pointer bands (the 2026-10-09 sc-pointer-bands plan, private): plates
   // in place share one crowd scale down to SC_CROWD_FLOOR, then become
   // pointers one at a time (SC_FLIP_HYSTERESIS on the way back); pointers go
@@ -175,6 +179,7 @@ export const GRAPH_DEFAULTS: Readonly<GraphDefaults> = Object.freeze({
   BASE_SC_NAME_FONT_SIZE: 22,
   SC_PLATE_FIT_REF_PX: 640,
   SC_NAME_FIT_FLOOR_PX: 12,
+  SC_MARK_FIT_FLOOR: 0.35,
   SC_CROWD_FLOOR: 0.5,
   SC_FLIP_HYSTERESIS: 0.04,
   SC_POINTER_SIZE_MIN: 0.35,

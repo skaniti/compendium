@@ -1048,6 +1048,21 @@
 //      the old width / 2). They now read `currentRawW`/`currentRawH`, kept
 //      current by render's read and the ResizeObserver handler (reset on
 //      teardown). What the clamp computes is unchanged.
+//  39. Small-panel mark scale (the 2026-10-09 sc-pointer-bands plan,
+//      private). On a very short panel the nebula shrinks with the fit but
+//      page dots, star glyphs, pointer anchor dots and leaders kept their
+//      full screen size and swamped it. `markScale = clamp(min(w, h) /
+//      SC_PLATE_FIT_REF_PX, SC_MARK_FIT_FLOOR, 1)` (pure `markScaleFor`;
+//      module var beside `plateFitScale`, written at the same four sites
+//      from the same dims; exposed on `__scLayout`) multiplies
+//      pageDotRadius (star glyphs follow), the anchor dot radius
+//      (floor 1.5px) and the leader stroke (floor 0.75px), and star glyph
+//      opacity by max(0.5, markScale); updatePageDotScale re-applies that
+//      opacity so a resize updates it. A canvas with a short side >= 640
+//      gives 1, so desktop sizes are unchanged. collectObstacleRects also
+//      treats every pointer anchor dot as an obstacle, so the cluster-label
+//      overlap cull no longer lets a label sit on a dot. SC_MARK_FIT_FLOOR
+//      is a typo-gated tuner key (no TUNER_TYPO_VERSION bump: new key).
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1372,6 +1387,7 @@ var __vendorExpandedGroups;
     }
 
     var fitZoom = 1;  // scale factor fitToContent applies; LOD thresholds derive from zoom / fitZoom
+    var markScale = 1;      // delta #39: small-panel scale for page dots, stars, anchor dots and leaders; written beside plateFitScale
     var plateFitScale = 1;  // delta #36: canvas-derived nameplate scale at fit; stays 1 until a canvas size is known
     var currentZoomK = 1;  // most recent zoom transform.k; used by updateLabelScale
     var zoomIndicatorPctEl = null;  // span inside the upper-right zoom indicator
@@ -1447,6 +1463,7 @@ var __vendorExpandedGroups;
     // record #4).
     var SC_PLATE_FIT_REF_PX = 640;
     var SC_NAME_FIT_FLOOR_PX = 12;
+    var SC_MARK_FIT_FLOOR = 0.35;       // delta #39: smallest small-panel mark scale
     // Delta #37 (the 2026-10-09 sc-pointer-bands plan, private): crowd
     // scale, pointer hysteresis, free-band placement and the pan-settle
     // delay. Typo-gated tuner keys (TUNER_TYPO_VERSION 6).
@@ -1471,6 +1488,14 @@ var __vendorExpandedGroups;
         var s = Math.min(w, h) / SC_PLATE_FIT_REF_PX;
         if (!(s < 1)) return 1;
         return s < floorRatio ? floorRatio : s;
+    }
+    /** Delta #39: pure, same dims as plateFitScaleFor. 1 for a degenerate
+     *  canvas or any canvas whose short side is >= SC_PLATE_FIT_REF_PX. */
+    function markScaleFor(w, h) {
+        if (!(w > 0) || !(h > 0) || !(SC_PLATE_FIT_REF_PX > 0)) return 1;
+        var s = Math.min(w, h) / SC_PLATE_FIT_REF_PX;
+        if (!(s < 1)) return 1;
+        return s < SC_MARK_FIT_FLOOR ? SC_MARK_FIT_FLOOR : s;
     }
     // Almagest optical tiers (theme.css @font-face; fonts/almagest/README.md
     // §3). Chosen by PAINTED px, not CSS px: SC names are screen-clamped via
@@ -1907,6 +1932,7 @@ var __vendorExpandedGroups;
             SC_NAME_LOD_FADE_RANGE: SC_NAME_LOD_FADE_RANGE,
             SC_PLATE_FIT_REF_PX: SC_PLATE_FIT_REF_PX,
             SC_NAME_FIT_FLOOR_PX: SC_NAME_FIT_FLOOR_PX,
+            SC_MARK_FIT_FLOOR: SC_MARK_FIT_FLOOR,
             SC_CROWD_FLOOR: SC_CROWD_FLOOR,
             SC_FLIP_HYSTERESIS: SC_FLIP_HYSTERESIS,
             SC_POINTER_SIZE_MIN: SC_POINTER_SIZE_MIN,
@@ -1981,6 +2007,7 @@ var __vendorExpandedGroups;
             if (typeof snap.SC_NAME_LOD_FADE_RANGE === 'number') SC_NAME_LOD_FADE_RANGE = snap.SC_NAME_LOD_FADE_RANGE;
             if (typeof snap.SC_PLATE_FIT_REF_PX === 'number') SC_PLATE_FIT_REF_PX = snap.SC_PLATE_FIT_REF_PX;
             if (typeof snap.SC_NAME_FIT_FLOOR_PX === 'number') SC_NAME_FIT_FLOOR_PX = snap.SC_NAME_FIT_FLOOR_PX;
+            if (typeof snap.SC_MARK_FIT_FLOOR === 'number') SC_MARK_FIT_FLOOR = snap.SC_MARK_FIT_FLOOR;
             if (typeof snap.SC_CROWD_FLOOR === 'number') SC_CROWD_FLOOR = snap.SC_CROWD_FLOOR;
             if (typeof snap.SC_FLIP_HYSTERESIS === 'number') SC_FLIP_HYSTERESIS = snap.SC_FLIP_HYSTERESIS;
             if (typeof snap.SC_POINTER_SIZE_MIN === 'number') SC_POINTER_SIZE_MIN = snap.SC_POINTER_SIZE_MIN;
@@ -2540,6 +2567,7 @@ var __vendorExpandedGroups;
     // selected/armed x1.8 emphasis is applied by callers, not here.
     function pageDotRadius(d, zoomK) {
         var s = BASE_PAGE_DOT_SIZE * clampedScale(zoomK, 'pageDot');
+        s = s * markScale;  // delta #39
         return (d && d.kind === 'singleton') ? s * 0.85 : s;
     }
 
@@ -2555,9 +2583,10 @@ var __vendorExpandedGroups;
     // star glyph, scaled up slightly with visit_count (capped at +3 visits).
     function starGlyphOpacity(d) {
         var v = (d && d.visit_count) || 1;
-        return STAR_GLYPH_OPACITY_MULT * Math.min(1, 0.78 + 0.08 * Math.min(3, v - 1));
+        return STAR_GLYPH_OPACITY_MULT * Math.min(1, 0.78 + 0.08 * Math.min(3, v - 1)) * Math.max(0.5, markScale);  // delta #39
     }
 
+    var starOpacityMark = 1;  // delta #39: markScale the star glyph opacity was last applied at
     function updatePageDotScale(zoomK) {
         if (!svg) return;
         svg.selectAll('circle.page').attr('r', function (d) {
@@ -2573,6 +2602,14 @@ var __vendorExpandedGroups;
             // one-time-only assignment.
             .attr('cx', function (d) { return d.x; })
             .attr('cy', function (d) { return d.y; });
+        // Delta #39: resting star opacity depends on markScale, which a
+        // resize changes. Re-apply only when markScale changed, through
+        // updateHighlighting (it owns resting vs selection-dim opacity), so
+        // the per-zoom-tick path never clobbers a selection or hover.
+        if (starOpacityMark !== markScale) {
+            starOpacityMark = markScale;
+            updateHighlighting();
+        }
         svg.selectAll('use.star-spikes').attr('transform', function (d) {
             // Glyph paths span 1.3-3 units; 0.95x the anchor radius
             // (checkpoint-A tuned down from 1.15) mutes the stars; the
@@ -2783,6 +2820,12 @@ var __vendorExpandedGroups;
                 // placement just because its geometry is still in the DOM.
                 var iconPath = this.querySelector('path');
                 if (computedOpacity(iconPath) <= 0.05) return;
+                var r = screenBBoxOf(this);
+                if (r) rects.push(r);
+            });
+            // Delta #39: a pointer's anchor dot is small but a label on top
+            // of it reads as a mistake.
+            svg.selectAll('circle.watermark-anchor-dot').each(function () {
                 var r = screenBBoxOf(this);
                 if (r) rects.push(r);
             });
@@ -4410,13 +4453,13 @@ var __vendorExpandedGroups;
                     // 2026-09-13 user direction: opaque white, not the SC's
                     // nebula color -- all eight palettes are dark.
                     .attr('stroke', '#ffffff')
-                    .attr('stroke-width', 1.25 * kInv)
+                    .attr('stroke-width', Math.max(0.75, 1.25 * markScale) * kInv)  // delta #39
                     .attr('x1', wcx).attr('y1', wcy)
                     .attr('x2', wcx).attr('y2', wcy);   // real end set by updateLeaderEnd below
                 lg.append('circle')
                     .attr('class', 'watermark-anchor-dot')
                     .attr('cx', wcx).attr('cy', wcy)
-                    .attr('r', 4 * kInv)
+                    .attr('r', Math.max(1.5, 4 * markScale) * kInv)  // delta #39
                     // 2026-09-13 user direction: opaque white fill, no
                     // outline (stroke-width dropped along with the color).
                     .attr('fill', '#ffffff')
@@ -4970,6 +5013,7 @@ var __vendorExpandedGroups;
     function fitToContent(nodes, canvasW, canvasH, zoomBehavior, setContentBBox) {
         if (!nodes.length || !svg) return;
         plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: same dims the fit uses
+        markScale = markScaleFor(canvasW, canvasH);  // delta #39
         // 2026-09-13 swoop fix: a fit is never a wheel gesture (settle,
         // resize, or an explicit refit -- the only three call sites below)
         // so the very next watermark draw should always SNAP, never glide.
@@ -5373,6 +5417,7 @@ var __vendorExpandedGroups;
         var canvasW = ctx.width, canvasH = effectiveCanvasHeight(ctx.height);
         if (!(canvasW > 0) || !(canvasH > 0)) return;
         plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
+        markScale = markScaleFor(canvasW, canvasH);  // delta #39
         var fp = scFootprintParams();
 
         var groups = {};
@@ -5501,6 +5546,7 @@ var __vendorExpandedGroups;
         var clusters = currentData.clusters || [];
         if (!nodes.length) return;
         plateFitScale = plateFitScaleFor(canvasW, canvasH);  // delta #36: before scFootprintParams()/computeFitBBox read it
+        markScale = markScaleFor(canvasW, canvasH);  // delta #39
         var fp = scFootprintParams();
 
         var groups = {};
@@ -5579,6 +5625,7 @@ var __vendorExpandedGroups;
         __scLayout = {
             kFit: kFit, kFloor: kFloor,
             plateFitScale: plateFitScale,
+            markScale: markScale,
             cloudCentroid: { x: cloudCx, y: cloudCy },
             cloudBBox: cloudBBox,
             contentBBox: contentBBox,
@@ -6371,6 +6418,7 @@ var __vendorExpandedGroups;
         // settle-time write sites all run later). Same dims the settle path
         // uses: width, search-bar-adjusted height.
         plateFitScale = plateFitScaleFor(width, effectiveCanvasHeight(height));
+        markScale = markScaleFor(width, effectiveCanvasHeight(height));  // delta #39
         __simClient.start(buildSimStartPayload(nodes, clusters, validLinks, width, height));
 
         // Noise filter is now applied at render input (see render() entry),
