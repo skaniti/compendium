@@ -1041,6 +1041,13 @@
 //      the graph; SC_PAN_SETTLE_MS after the last pan tick the pointers are
 //      re-placed in the new view's bands (__scPanTimer, cleared on
 //      teardown). Dev hook __d3PanBy.
+//  38. Pan clamp follows the current canvas size (fix, 2026-10-09). The zoom
+//      handler's pan clamp and parallax fallback closed over render()'s
+//      first-read `width`/`height`, so after a resize fitToContent's new
+//      transform was pulled back toward the OLD canvas (content centred at
+//      the old width / 2). They now read `currentRawW`/`currentRawH`, kept
+//      current by render's read and the ResizeObserver handler (reset on
+//      teardown). What the clamp computes is unchanged.
 //
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
@@ -1194,6 +1201,12 @@ var __vendorExpandedGroups;
     var currentData = null;   // data currently laid out + rendered (may be noise-filtered)
     var rawData = null;       // last unfiltered dataset passed to render(); source of truth for toggle re-entry
     var storedZoomBehavior = null;
+    // Delta #38: the container's RAW size (before effectiveCanvasHeight),
+    // refreshed wherever the canvas size is learned (render's fresh read and
+    // the ResizeObserver handler). The zoom handler's pan clamp and parallax
+    // fallback read it instead of render()'s closed-over width/height, which
+    // go stale after a resize.
+    var currentRawW = 0, currentRawH = 0;
     var lastCanvasDims = null;  // { w, h } from the most recent fitToContent call -- frameWorldBBox/refitView need this to convert a world bbox into a zoom transform
     // World-space content bounds from the most recent fitToContent call --
     // the live zoom handler's pan-clamp reads it (render()'s `if
@@ -5897,6 +5910,7 @@ var __vendorExpandedGroups;
         var rect = container.getBoundingClientRect();
         var width = rect.width || 800;
         var height = rect.height || 600;
+        currentRawW = width; currentRawH = height;  // delta #38
 
         // Header comment delta #30: captured BEFORE the svg/if-else branch
         // below runs (which unconditionally (re)assigns `svg` either way).
@@ -5997,6 +6011,7 @@ var __vendorExpandedGroups;
                     var r = container.getBoundingClientRect();
                     if (r.width <= 0 || r.height <= 0) return;
                     var effH = effectiveCanvasHeight(r.height);
+                    currentRawW = r.width; currentRawH = r.height;  // delta #38
                     svg.attr('viewBox', [0, 0, r.width, r.height].join(' '));
                     if (currentData && storedZoomBehavior) {
                         // Keep frameWorldBBox/refitView's notion of canvas
@@ -6217,12 +6232,14 @@ var __vendorExpandedGroups;
                     var ey = cy - bh2 / 2;
 
                     var maxTx = -ex * t.k;
-                    var minTx = width - (ex + bw2) * t.k;
+                    // Delta #38: current canvas size, not render()'s `width`.
+                    var clampW = currentRawW || width, clampH = currentRawH || height;
+                    var minTx = clampW - (ex + bw2) * t.k;
                     t.x = (minTx > maxTx) ? (minTx + maxTx) / 2
                                           : Math.max(minTx, Math.min(maxTx, t.x));
 
                     var maxTy = -ey * t.k;
-                    var minTy = height - (ey + bh2) * t.k;
+                    var minTy = clampH - (ey + bh2) * t.k;
                     t.y = (minTy > maxTy) ? (minTy + maxTy) / 2
                                           : Math.max(minTy, Math.min(maxTy, t.y));
                 }
@@ -6266,7 +6283,7 @@ var __vendorExpandedGroups;
                 // offset), the correct "no pan yet" reading rather than an
                 // undefined reference point.
                 if (opts && typeof opts.onViewChange === 'function') {
-                    var fit = __fitTransform || { x: t.x, y: t.y, k: t.k, cx: width / 2, cy: effectiveCanvasHeight(height) / 2 };
+                    var fit = __fitTransform || { x: t.x, y: t.y, k: t.k, cx: (currentRawW || width) / 2, cy: effectiveCanvasHeight(currentRawH || height) / 2 };
                     opts.onViewChange({
                         x: t.x, y: t.y, k: t.k,
                         fitX: fit.x, fitY: fit.y, fitK: fit.k,
@@ -7534,6 +7551,7 @@ var __vendorExpandedGroups;
             svg = null;
             storedZoomBehavior = null;
             lastCanvasDims = null;
+            currentRawW = 0; currentRawH = 0;
             rawData = null;
             __tunerInitialized = false;
         }
@@ -7622,6 +7640,7 @@ var __vendorExpandedGroups;
             svg = null;
             storedZoomBehavior = null;
             lastCanvasDims = null;
+            currentRawW = 0; currentRawH = 0;
             rawData = null;
             __tunerInitialized = false;
             // Task group W fix round 1 (review finding, Medium): final

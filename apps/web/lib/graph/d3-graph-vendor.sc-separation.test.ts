@@ -566,6 +566,38 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     expect(grown.filter((k) => !atMin.includes(k))).toEqual([]);
   }, 30000);
 
+  it("the pan clamp follows the current canvas size after a resize (graph stays centred)", async () => {
+    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const callbacks: Array<() => void> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: () => void) { callbacks.push(cb); }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    (window as W).__d3SetScSeparationOptions!({ budgetRatio: 0, budgetMinPx: 0 });
+    const container = document.createElement("div");
+    sizeContainer(container, 1010, 781);
+    document.body.appendChild(container);
+    render(container, crowdedPayload("ctr", 4, 2), { icons: iconsFor("ctr") });
+    flushSettleChunks();
+    await vi.advanceTimersByTimeAsync(2000);
+    const resize = (w: number) => { sizeContainer(container, w, 781); callbacks.forEach((cb) => cb()); };
+    const centreX = () => {
+      const bb = (window as W).__d3ScLayout!()!.contentBBox;
+      const t = rootTransform(container);
+      return t.x + t.k * (bb.minX + bb.maxX) / 2;
+    };
+    expect(Math.abs(centreX() - 505)).toBeLessThan(1);
+    resize(410);
+    expect(Math.abs(centreX() - 205)).toBeLessThan(1);
+    // A zoom tick at fit runs the clamp again; it must not drag the graph back.
+    expect((window as W).__d3ZoomTo!((window as W).__d3ScLayout!()!.kFit)).toBe(true);
+    expect(Math.abs(centreX() - 205)).toBeLessThan(1);
+    resize(1010);
+    expect(Math.abs(centreX() - 505)).toBeLessThan(1);
+  }, 30000);
+
   it("the crowd scale holds when a plate becomes a pointer and lifts once one returns", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
     const callbacks: Array<() => void> = [];
