@@ -83,3 +83,12 @@ It uses sudo to create the directories, installs `~/bin/ops`, and installs the
 logrotate drop-in. `RENDER_ONLY=1` prints the plan without sudo. Add
 `umask 027` to your shell profile so journal files are group-readable but not
 world-readable, and put `~/bin` on `PATH`.
+
+## Owner gateway (`owner-gateway/`)
+
+The owner Compendium's tailnet entry point: Caddy (`caddy-owner.service`)
+on the server's tailnet addresses, :443, for the owner hostname and the
+ts.net fallback, with a Tailscale identity helper (`tailnet-whois.service`,
+`whois_auth.py`) behind `forward_auth`. `install-owner-gateway.sh` installs
+it without taking :443; the cutover and rollback are in the private operator
+runbook. `tailscale serve` keeps 8443 for the collectors' API.

@@ -113,3 +113,20 @@ def test_caddy_unit_runs_unprivileged_with_only_the_bind_capability():
     ]:
         assert line in u, line
     assert "/usr/local/bin/caddy-owner run --config /etc/caddy-owner/Caddyfile --adapter caddyfile" in u
+
+
+DIAG = Path(__file__).resolve().parents[1] / "scripts/server/diagnose_server.sh"
+S21 = Path(__file__).resolve().parents[1] / "scripts/server-setup/section-21-autostart-verify.sh"
+
+
+def test_diagnose_checks_the_gateway_and_the_remaining_serve_route():
+    text = DIAG.read_text()
+    subprocess.run(["bash", "-n", str(DIAG)], check=True)
+    for needle in ("caddy-owner", "tailnet-whois", "127.0.0.1:9180/whois", "127.0.0.1:8001", "OWNER_HOSTNAME"):
+        assert needle in text, needle
+
+
+def test_section_21_probes_the_owner_hostname():
+    text = S21.read_text()
+    subprocess.run(["bash", "-n", str(S21)], check=True)
+    assert "OWNER_HOSTNAME" in text

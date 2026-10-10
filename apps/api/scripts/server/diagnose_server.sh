@@ -5,7 +5,9 @@
 #   owner stack  (docker-compose.server.yml, tailnet only)
 #     compendium-api   127.0.0.1:8001  (+ compendium-postgres from the Dash-side stack)
 #     compendium-web   127.0.0.1:3000
-#     tailscale serve: 443 -> :3000, 8443 -> :8001
+#     owner gateway (caddy-owner.service): tailnet :443 -> :3000 for
+#       OWNER_HOSTNAME and TAILNET_HOSTNAME, identity via tailnet-whois
+#       (127.0.0.1:9180); tailscale serve keeps only 8443 -> :8001
 #   demo stack   (docker-compose.demo.yml, public via the Cloudflare tunnel)
 #     compendium-demo-api  127.0.0.1:8002
 #     compendium-demo-db
@@ -27,6 +29,7 @@
 #                    PUBLIC_API_HOSTNAME (the same knob section-21 reads);
 #                    otherwise the public probe is skipped.
 #   ENV_FILE         default ~/apps/compendium/.env (read for PUBLIC_API_HOSTNAME)
+#   OWNER_HOSTNAME / TAILNET_HOSTNAME  read from ENV_FILE for the gateway probe
 #   DEMO_PORT        demo API loopback port the tunnel may target, default 8002
 #   CLOUDFLARED_CONFIG  default /etc/cloudflared/config.yml
 #
@@ -149,16 +152,44 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# 4. Tailscale serve (owner web on the tailnet)
+# 4. Owner gateway (caddy-owner + tailnet-whois) and the remaining serve route
 # --------------------------------------------------------------------------
 echo ""
-echo "--- tailscale serve ---"
+echo "--- owner gateway ---"
+for unit in caddy-owner tailnet-whois; do
+    if systemctl is-active --quiet "$unit"; then
+        ok "$unit is active"
+    else
+        bad "$unit is not active (systemctl status $unit)"
+    fi
+done
+whois_code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 http://127.0.0.1:9180/whois 2>/dev/null)
+if [ "${whois_code:-000}" = "200" ]; then
+    ok "identity helper 127.0.0.1:9180/whois -> 200"
+else
+    bad "identity helper 127.0.0.1:9180/whois -> ${whois_code:-000}"
+fi
 TS_SERVE=$(tailscale serve status 2>&1 || true)
 echo "$TS_SERVE" | sed 's/^/  /'
-if echo "$TS_SERVE" | grep -q '127\.0\.0\.1:3000'; then
-    ok "tailscale serve maps to 127.0.0.1:3000"
+if echo "$TS_SERVE" | grep -q '127\.0\.0\.1:8001'; then
+    ok "tailscale serve keeps 8443 -> 127.0.0.1:8001 for the collectors"
 else
-    bad "tailscale serve does not mention 127.0.0.1:3000"
+    bad "tailscale serve no longer maps 127.0.0.1:8001 (collectors need 8443)"
+fi
+if echo "$TS_SERVE" | grep -q '127\.0\.0\.1:3000'; then
+    bad "tailscale serve still maps 127.0.0.1:3000 (the gateway owns tailnet :443)"
+else
+    ok "tailscale serve does not hold the web route"
+fi
+OWNER_HOSTNAME_VAL=$(grep -h '^OWNER_HOSTNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+if [ -n "$OWNER_HOSTNAME_VAL" ]; then
+    gw_code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "https://$OWNER_HOSTNAME_VAL/login" 2>/dev/null)
+    case "${gw_code:-000}" in
+        2*|3*) ok "https://$OWNER_HOSTNAME_VAL/login -> $gw_code" ;;
+        *)     bad "https://$OWNER_HOSTNAME_VAL/login -> ${gw_code:-000}" ;;
+    esac
+else
+    warn "OWNER_HOSTNAME not set in $ENV_FILE; skipping the gateway probe"
 fi
 
 # --------------------------------------------------------------------------

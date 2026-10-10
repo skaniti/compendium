@@ -1,9 +1,10 @@
 // Passwordless owner sign-in over the tailnet (tailnet-passwordless-login,
-// 2026-10-09). `tailscale serve` puts the requester's Tailscale login on
-// every proxied request as Tailscale-User-Login and strips any copy the
-// client sent, so the owner web (listening on localhost behind serve) can
-// trust it. Off unless the owner stack sets TAILNET_LOGIN=1 and the shared
-// TAILNET_ASSERT_SECRET; Vercel and the demo stack never do, so a header a
+// 2026-10-09). The owner gateway (caddy-owner on the server,
+// apps/api/scripts/server/owner-gateway) deletes every client copy of
+// Tailscale-User-Login and stamps the login the local tailscaled reports for
+// the caller's tailnet address, so the owner web (listening on localhost
+// behind the gateway) can trust it. Off unless the owner stack sets
+// TAILNET_LOGIN=1 and the shared TAILNET_ASSERT_SECRET; Vercel and the demo stack never do, so a header a
 // public client forges is ignored there. A request that came through
 // Cloudflare is never treated as a tailnet request.
 

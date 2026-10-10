@@ -1,9 +1,10 @@
 # Server-side compose for the OWNER stack: apps/api + apps/web
 # (tailnet-owner-demo-split, 2026-10-06).
 #
-# Reachable ONLY over the tailnet: `tailscale serve` maps HTTPS 443 to the
-# web container (127.0.0.1:3000) and HTTPS 8443 to the API (127.0.0.1:8001,
-# for the collectors). No public route reaches either port. The public demo
+# Reachable ONLY over the tailnet: the owner gateway (caddy-owner) serves
+# HTTPS 443 to the web container (127.0.0.1:3000) and `tailscale serve` maps
+# HTTPS 8443 to the API (127.0.0.1:8001, for the collectors). No public route
+# reaches either port. The public demo
 # runs from docker-compose.demo.yml, a separate project that shares nothing
 # with this one. There is no `db` service here: postgres is owned by the
 # Dash-side stack that stays on compendium-server (see the cutover runbook).
@@ -38,7 +39,7 @@
 #       TAILNET_ONLY_DEPLOYMENT=1; the API refuses to boot if
 #       TAILNET_ASSERT_SECRET is set without it.
 #     WEB_HOST_PORT       -- optional, default 3000 (loopback port of the
-#                            web container; tailscale serve targets it)
+#                            web container; the owner gateway targets it)
 #     CAPTURES_ASSETS_HOST_DIR -- host path of the EXISTING captures-assets
 #                            directory (mounted the same way the old `app`
 #                            service mounted it; Dash still serves preview

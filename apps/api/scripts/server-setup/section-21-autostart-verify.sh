@@ -19,11 +19,15 @@ set -euo pipefail
 
 # tailnet-owner-demo-split: owner web + API on the tailnet, demo API on loopback
 # and (optionally) its public hostname. Hostnames come from the non-secret
-# ~/apps/compendium/.env (TAILNET_HOSTNAME, PUBLIC_API_HOSTNAME).
+# ~/apps/compendium/.env (TAILNET_HOSTNAME, OWNER_HOSTNAME, PUBLIC_API_HOSTNAME).
 url_liveness() {
-  local env_file="$HOME/apps/compendium/.env" tailnet public
+  local env_file="$HOME/apps/compendium/.env" tailnet owner public
   tailnet=$(grep -h '^TAILNET_HOSTNAME=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  owner=$(grep -h '^OWNER_HOSTNAME=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
   public=$(grep -h '^PUBLIC_API_HOSTNAME=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  if [[ -n "$owner" ]]; then
+    curl -s -o /dev/null -w "  owner web  https://$owner/login -> HTTP %{http_code}\n" -m 5 "https://$owner/login" || echo "  owner web (gateway): unreachable"
+  fi
   if [[ -n "$tailnet" ]]; then
     curl -s -o /dev/null -w "  owner web  https://$tailnet/login -> HTTP %{http_code}\n" -m 5 "https://$tailnet/login" || echo "  owner web: unreachable"
     curl -s -o /dev/null -w "  owner api  https://$tailnet:8443/health -> HTTP %{http_code}\n" -m 5 "https://$tailnet:8443/health" || echo "  owner api: unreachable"
