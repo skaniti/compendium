@@ -1,0 +1,21 @@
+# owner-app.caddy -- the owner gateway's request path (owner-gateway, 2026-10-10).
+# Imported by Caddyfile (production) and apps/api/tests/test_owner_gateway_caddy.py.
+#   {args[0]} = owner web upstream (production 127.0.0.1:3000)
+#   {args[1]} = identity helper (production 127.0.0.1:9180, whois_auth.py)
+# Everything sits in one `route` so it runs in the written order: Caddy's
+# default directive order would run forward_auth BEFORE request_header and
+# delete the identity the helper just stamped. Every client copy of the
+# identity headers (and of the peer header) is deleted first; forward_auth
+# then asks the helper about the real TCP peer and copies only its answer.
+route {
+	request_header -Tailscale-User-Login
+	request_header -Tailscale-User-Name
+	request_header -Tailscale-User-Profile-Pic
+	request_header -X-Compendium-Peer
+	forward_auth {args[1]} {
+		uri /whois
+		header_up X-Compendium-Peer {remote_host}
+		copy_headers Tailscale-User-Login
+	}
+	reverse_proxy {args[0]}
+}
