@@ -244,6 +244,16 @@ def cleanup_expired_tokens() -> int:
             return cur.rowcount
 
 
+def cleanup_expired_only() -> int:
+    """Delete tokens past their expiry; revoked-but-unexpired rows stay so
+    refresh-token reuse detection keeps working until they expire.
+    Returns count deleted."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM refresh_tokens WHERE expires_at < NOW()")
+            return cur.rowcount
+
+
 # ── User preferences ───────────────────────────────────────────────────
 
 

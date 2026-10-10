@@ -8,7 +8,7 @@ def test_cleanup_tokens_once_returns_the_count(monkeypatch):
     from backend.api import main
     from backend.db import auth_repo
 
-    monkeypatch.setattr(auth_repo, "cleanup_expired_tokens", lambda: 7)
+    monkeypatch.setattr(auth_repo, "cleanup_expired_only", lambda: 7)
     assert main.cleanup_tokens_once() == 7
 
 
@@ -19,7 +19,7 @@ def test_cleanup_tokens_once_swallows_errors(monkeypatch):
     def boom():
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(auth_repo, "cleanup_expired_tokens", boom)
+    monkeypatch.setattr(auth_repo, "cleanup_expired_only", boom)
     assert main.cleanup_tokens_once() == 0
 
 

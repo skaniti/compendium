@@ -464,13 +464,14 @@ async def _prune_app_logs_loop(retention_days: int = 14, interval_hours: int = 2
 
 
 def cleanup_tokens_once() -> int:
-    """Delete expired/revoked refresh tokens; never raises (housekeeping)."""
+    """Delete expired refresh tokens (revoked-but-unexpired rows stay for reuse
+    detection); never raises (housekeeping)."""
     try:
         from backend.db import auth_repo
 
-        cleaned = auth_repo.cleanup_expired_tokens()
+        cleaned = auth_repo.cleanup_expired_only()
         if cleaned:
-            logger.info(f"refresh token sweep: removed {cleaned} expired/revoked rows")
+            logger.info(f"refresh token sweep: removed {cleaned} expired rows")
         return cleaned
     except Exception:
         logger.exception("refresh token sweep failed")

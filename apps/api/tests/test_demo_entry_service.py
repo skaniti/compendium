@@ -100,3 +100,18 @@ def test_audit_allow_list_accepts_the_demo_entry_events(accounts, event):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM audit_events WHERE event = %s", (event,))
         assert cur.fetchone()[0] == 1
+
+
+def test_cleanup_expired_only_keeps_revoked_unexpired_rows(accounts):
+    uid = accounts["demo"]["id"]
+    expired = auth_service.create_refresh_token(uid, expires_in=timedelta(hours=1))
+    revoked = auth_service.create_refresh_token(uid, expires_in=timedelta(hours=1))
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE refresh_tokens SET expires_at = NOW() - INTERVAL '1 hour' WHERE token_hash = %s",
+            (auth_service._hash_token(expired),),
+        )
+    auth_repo.revoke_refresh_token(auth_service._hash_token(revoked))
+    assert auth_repo.cleanup_expired_only() == 1
+    assert _row(expired) is None
+    assert _row(revoked) is not None
