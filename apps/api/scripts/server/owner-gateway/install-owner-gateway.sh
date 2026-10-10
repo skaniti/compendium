@@ -21,6 +21,41 @@ CADDY_URL="https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com
 
 say() { printf '[owner-gateway] %s\n' "$*"; }
 
+# Load the five gateway variables from an env file WITHOUT evaluating it (the
+# file is also read by systemd's EnvironmentFile, whose parsing differs from
+# bash's), then refuse an empty or still-placeholder value. With both tailnet
+# addresses empty Caddy adapts to an empty config, validate passes, and
+# nothing is served.
+check_env() {
+  local file="$1" k v
+  unset OWNER_HOSTNAME TAILNET_HOSTNAME TAILNET_IPV4 TAILNET_IPV6 ACMEDNS_CREDENTIALS
+  [ -r "$file" ] || { echo "cannot read env file $file" >&2; return 1; }
+  while IFS='=' read -r k v || [ -n "$k" ]; do
+    case "$k" in
+      ''|'#'*) continue ;;
+      OWNER_HOSTNAME|TAILNET_HOSTNAME|TAILNET_IPV4|TAILNET_IPV6|ACMEDNS_CREDENTIALS)
+        v="${v%$'\r'}"
+        export "$k=$v" ;;
+    esac
+  done < "$file"
+  if [ -z "${OWNER_HOSTNAME:-}" ] || [ -z "${TAILNET_HOSTNAME:-}" ] ||
+     [ -z "${TAILNET_IPV4:-}" ] || [ -z "${TAILNET_IPV6:-}" ] ||
+     [ -z "${ACMEDNS_CREDENTIALS:-}" ] ||
+     [ "$OWNER_HOSTNAME" = "my.example.test" ] ||
+     [ "$TAILNET_HOSTNAME" = "<server>.<tailnet>.ts.net" ] ||
+     [ "$TAILNET_IPV4" = "100.64.0.1" ] ||
+     [ "$TAILNET_IPV6" = "fd7a:115c:a1e0::1" ]; then
+    echo "$file still has an empty or placeholder value for one of OWNER_HOSTNAME, TAILNET_HOSTNAME, TAILNET_IPV4, TAILNET_IPV6, ACMEDNS_CREDENTIALS; fill in the real values (runbook), then re-run" >&2
+    return 1
+  fi
+}
+
+if [ "${1:-}" = "check-env" ]; then
+  check_env "${2:?usage: check-env <path>}" || exit 1
+  say "env ok"
+  exit 0
+fi
+
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo" >&2; exit 2; }
 
 has_modules() {
@@ -64,6 +99,7 @@ if [ -x "$BIN" ] && has_modules "$BIN"; then
   say "    $BIN already has the required modules"
 else
   tmp=$(mktemp)
+  trap 'rm -f "${tmp:-}"' EXIT
   curl -fsSL -o "$tmp" "$CADDY_URL"
   chmod 0755 "$tmp"
   has_modules "$tmp" || { echo "downloaded caddy lacks dns.providers.acmedns or tls.get_certificate.tailscale" >&2; rm -f "$tmp"; exit 1; }
@@ -94,23 +130,21 @@ say "4/5 identity helper"
 systemctl enable --now tailnet-whois.service
 systemctl restart tailnet-whois.service
 sleep 1
-curl -fsS -o /dev/null -w '    helper on 127.0.0.1:9180 -> HTTP %{http_code}\n' http://127.0.0.1:9180/whois
+ok=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsS -o /dev/null -w '    helper on 127.0.0.1:9180 -> HTTP %{http_code}\n' http://127.0.0.1:9180/whois; then ok=1; break; fi
+  sleep 1
+done
+[ -n "$ok" ] || { echo "identity helper did not answer on 127.0.0.1:9180 after 10 tries; see: journalctl -u tailnet-whois" >&2; exit 1; }
 
-say "5/5 gateway config (enabled, not started)"
-systemctl enable caddy-owner.service
-set -a; . "$ETC/env"; set +a
-# Refuse an empty or still-placeholder env: with both tailnet addresses empty
-# Caddy adapts to an empty config, validate passes, and nothing is served.
-if [ -z "${OWNER_HOSTNAME:-}" ] || [ -z "${TAILNET_HOSTNAME:-}" ] ||
-   [ -z "${TAILNET_IPV4:-}" ] || [ -z "${TAILNET_IPV6:-}" ] ||
-   [ -z "${ACMEDNS_CREDENTIALS:-}" ] ||
-   [ "$OWNER_HOSTNAME" = "my.example.test" ] ||
-   [ "$TAILNET_HOSTNAME" = "<server>.<tailnet>.ts.net" ] ||
-   [ "$TAILNET_IPV4" = "100.64.0.1" ] ||
-   [ "$TAILNET_IPV6" = "fd7a:115c:a1e0::1" ]; then
-  echo "$ETC/env still has an empty or placeholder value for one of OWNER_HOSTNAME, TAILNET_HOSTNAME, TAILNET_IPV4, TAILNET_IPV6, ACMEDNS_CREDENTIALS; fill in the real values (runbook), then re-run" >&2
-  exit 1
-fi
+say "5/5 gateway config"
+check_env "$ETC/env" || exit 1
 "$BIN" validate --config "$ETC/Caddyfile" --adapter caddyfile >/dev/null
-say "    Caddyfile valid; caddy-owner enabled but NOT started (cutover is the runbook's)"
+systemctl enable caddy-owner.service
+if systemctl is-active --quiet caddy-owner; then
+  systemctl reload caddy-owner
+  say "    Caddyfile valid; caddy-owner was running and has been reloaded"
+else
+  say "    Caddyfile valid; caddy-owner enabled but NOT started (cutover is the runbook's)"
+fi
 say "done"

@@ -6,6 +6,9 @@ Description=Caddy gateway for the owner Compendium
 After=network-online.target tailscaled.service tailnet-whois.service
 Wants=network-online.target
 Wants=tailnet-whois.service
+Wants=tailscaled.service
+
+StartLimitIntervalSec=0
 
 [Service]
 Type=notify
@@ -24,8 +27,11 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/var/lib/caddy-owner /run/tailscale
+ReadWritePaths=/var/lib/caddy-owner -/run/tailscale
 Restart=on-failure
+RestartSec=3
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 TimeoutStopSec=5s
 LimitNOFILE=1048576
 

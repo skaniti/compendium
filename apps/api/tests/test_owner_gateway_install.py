@@ -35,21 +35,45 @@ def test_install_script_verifies_the_required_caddy_modules():
     assert "dns.providers.acmedns" in text and "tls.get_certificate.tailscale" in text
 
 
-def test_install_script_refuses_empty_or_placeholder_env_before_validate():
-    text = SCRIPT.read_text()
-    guard_at = text.index("OWNER_HOSTNAME")
-    assert guard_at < text.index('"$BIN" validate')
-    guard = text[guard_at:text.index('"$BIN" validate')]
-    for name in ["OWNER_HOSTNAME", "TAILNET_HOSTNAME", "TAILNET_IPV4", "TAILNET_IPV6", "ACMEDNS_CREDENTIALS"]:
-        assert name in guard, name
-    for placeholder in ["my.example.test", "<server>.<tailnet>.ts.net", "100.64.0.1", "fd7a:115c:a1e0::1"]:
-        assert placeholder in guard, placeholder
-    assert "exit 1" in guard
+def _check_env(tmp_path, text):
+    env = tmp_path / "env"
+    env.write_text(text)
+    return subprocess.run(["bash", str(SCRIPT), "check-env", str(env)], capture_output=True, text=True)
+
+
+GOOD_ENV = (
+    "OWNER_HOSTNAME=my.owner.test\n# comment\n\n"
+    "TAILNET_HOSTNAME=host.net.ts.net\nTAILNET_IPV4=100.64.0.7\n"
+    "TAILNET_IPV6=fd7a:115c:a1e0::7\nACMEDNS_CREDENTIALS=/etc/caddy-owner/acmedns.json\n"
+)
+
+
+def test_check_env_rejects_the_example_placeholders(tmp_path):
+    r = _check_env(tmp_path, (GW / "env.example").read_text())
+    assert r.returncode != 0
+    assert "placeholder" in r.stderr + r.stdout
+    assert "No such file" not in r.stderr  # the env is read, never evaluated by bash
+
+
+def test_check_env_rejects_an_empty_value(tmp_path):
+    r = _check_env(tmp_path, GOOD_ENV.replace("TAILNET_IPV4=100.64.0.7", "TAILNET_IPV4="))
+    assert r.returncode != 0
+    assert "empty or placeholder" in r.stderr + r.stdout
+
+
+def test_check_env_accepts_a_valid_env_without_root(tmp_path):
+    r = _check_env(tmp_path, GOOD_ENV)
+    assert r.returncode == 0, r.stderr
+
+
+def test_install_script_enables_only_after_validate():
+    code = SCRIPT.read_text()
+    assert code.index('"$BIN" validate') < code.index("systemctl enable caddy-owner.service")
 
 
 def test_whois_unit_is_sandboxed_and_loopback_only():
     u = _unit("tailnet-whois.service")
-    for line in SANDBOX + ["DynamicUser=yes", "Restart=always", "ReadWritePaths=/run/tailscale"]:
+    for line in SANDBOX + ["DynamicUser=yes", "Restart=always", "RestartSec=3", "StartLimitIntervalSec=0", "ReadWritePaths=-/run/tailscale"]:
         assert line in u, line
     assert "--host 127.0.0.1 --port 9180" in u
     assert "/opt/owner-gateway/whois_auth.py" in u
@@ -65,7 +89,12 @@ def test_caddy_unit_runs_unprivileged_with_only_the_bind_capability():
         "StateDirectory=caddy-owner",
         "RuntimeDirectory=caddy-owner",
         "RuntimeDirectoryMode=0700",
-        "ReadWritePaths=/var/lib/caddy-owner /run/tailscale",
+        "ReadWritePaths=/var/lib/caddy-owner -/run/tailscale",
+        "RestartSec=3",
+        "StartLimitIntervalSec=0",
+        "Wants=tailscaled.service",
+        "PrivateDevices=yes",
+        "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "Wants=tailnet-whois.service",
     ]:
         assert line in u, line
