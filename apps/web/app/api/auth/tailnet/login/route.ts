@@ -21,7 +21,8 @@ function seeOther(location: string): Response {
 }
 
 // tailnet-passwordless-login: signs in a trusted browser of the owner from
-// the Tailscale login `tailscale serve` attached (proxy.ts sends page
+// the Tailscale login the owner gateway (caddy-owner;
+// `tailscale serve` before its cutover and after a rollback) stamped (proxy.ts sends page
 // requests here; the login page's "Continue as" link adds resume=1, which
 // also lifts the sign-out pause). Any missing condition falls back to the
 // password form at /login.

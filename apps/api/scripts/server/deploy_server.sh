@@ -62,7 +62,7 @@
 #   - touch the old postgres/Dash stack (still explorer-hosted; unaffected
 #     by these compose files).
 #   - hand off to diagnose_server.sh; run it separately for a read-only
-#     check of both stacks, the tunnel config and tailscale serve.
+#     check of both stacks, the tunnel config, the owner gateway and tailscale serve.
 #
 # Logs:
 #   <repo>/logs/<YYYY-MM-DD-HHMMSS>-deploy-<stack>.log + logs/latest-deploy.log symlink.
@@ -350,7 +350,7 @@ echo "  Stop:    docker compose -p $PROJECT --env-file $ENV_FILE -f $COMPOSE_FIL
 echo "  Logs:    docker compose -p $PROJECT --env-file $ENV_FILE -f $COMPOSE_FILE logs -f api"
 echo ""
 if [ "$STACK" = "owner" ]; then
-    echo "  Owner stack: tailnet only (tailscale serve 443 -> :3000, 8443 -> :8001)."
+    echo "  Owner stack: tailnet only. Web: OWNER_HOSTNAME via caddy-owner on tailnet :443 once cut over, else tailscale serve 443 -> :3000. API: tailscale serve 8443 -> :8001."
 else
     echo "  Demo stack: public via the Cloudflare tunnel -> :${API_HOST_PORT}. Frontend changes go live via Vercel promote."
 fi

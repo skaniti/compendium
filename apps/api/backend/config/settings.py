@@ -136,7 +136,7 @@ class Settings(BaseSettings):
     session_trust_missing_ingress: bool = False
     # tailnet-owner-demo-split (2026-10-06): set ONLY on a deployment that has
     # no public ingress at all (the owner stack, reachable solely through
-    # `tailscale serve`). Every request is then tailnet-trusted, so non-demo
+    # the owner gateway / `tailscale serve`). Every request is then tailnet-trusted, so non-demo
     # logins get the remembered policy without any header stamping -- except
     # a request carrying CF-Connecting-IP (it came through Cloudflare, so the
     # API was re-exposed), which is untrusted and audited as public. Never set
@@ -147,7 +147,9 @@ class Settings(BaseSettings):
     tailnet_only_deployment: bool = False
     # tailnet-passwordless-login (2026-10-09): passwordless owner sign-in.
     # The owner web container (the only holder of this secret) asserts the
-    # Tailscale login `tailscale serve` put on the request; the API maps it
+    # Tailscale login the owner gateway (caddy-owner; `tailscale serve` before
+    # its cutover and after a rollback) stamped on the request, deleting every
+    # client copy first; the API maps it
     # to an account through TAILNET_LOGIN_MAP and requires a trusted-browser
     # token. The feature is off (endpoints 404) unless TAILNET_ONLY_DEPLOYMENT,
     # TAILNET_ASSERT_SECRET and TAILNET_LOGIN_MAP are all set. Never set
@@ -580,7 +582,8 @@ class Settings(BaseSettings):
 
         # tailnet-passwordless-login: the assert secret turns a Tailscale
         # header into a session, so it only makes sense where every request
-        # arrives through `tailscale serve` -- refused in every environment.
+        # arrives through the tailnet front door (the owner gateway, or
+        # `tailscale serve` before its cutover) -- refused in every environment.
         if self.tailnet_assert_secret:
             if len(self.tailnet_assert_secret) < 32:
                 raise ValueError("TAILNET_ASSERT_SECRET must be at least 32 characters.")

@@ -1,7 +1,8 @@
 """Passwordless owner sign-in over the tailnet (tailnet-passwordless-login).
 
-The owner web container asserts the Tailscale login `tailscale serve` put on
-the request, presenting TAILNET_ASSERT_SECRET; the API maps the login to an
+The owner web container asserts the Tailscale login the owner gateway
+(caddy-owner; `tailscale serve` before its cutover and after a rollback)
+stamped on the request, presenting TAILNET_ASSERT_SECRET; the API maps the login to an
 account (TAILNET_LOGIN_MAP) and checks a trusted-browser token. See
 backend/api/routers/tailnet_auth.py for the endpoints.
 """

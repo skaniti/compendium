@@ -162,7 +162,7 @@ set +e
 curl -s -o /dev/null -w "Dash    loopback :8051 -> HTTP %{http_code} (expect 200 or 302)\n" -m 5 http://127.0.0.1:8051/
 curl -s -o /dev/null -w "Backend loopback :8001 -> HTTP %{http_code}\n" -m 5 http://127.0.0.1:8001/
 if [[ -n "$TAILNET_HOSTNAME_VAL" ]]; then
-  curl -s -o /dev/null -w "Tailnet https://$TAILNET_HOSTNAME_VAL/ -> HTTP %{http_code}\n" -m 10 "https://$TAILNET_HOSTNAME_VAL/" || echo "(tailnet URL unreachable; check tailscale serve setup)"
+  curl -s -o /dev/null -w "Tailnet https://$TAILNET_HOSTNAME_VAL/ -> HTTP %{http_code}\n" -m 10 "https://$TAILNET_HOSTNAME_VAL/" || echo "(tailnet URL unreachable; check the tailnet front door: caddy-owner or tailscale serve)"
 fi
 curl -s -o /dev/null -w "Public  https://compendium.example.com/ -> HTTP %{http_code} (via CF Tunnel; expect 200 or 302)\n" -m 10 "https://compendium.example.com/"
 set -e

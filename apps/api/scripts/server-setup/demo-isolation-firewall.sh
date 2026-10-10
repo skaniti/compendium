@@ -13,7 +13,7 @@
 #     egress (OpenAI, the first-boot model download) is untouched.
 #   /etc/ufw/before.rules -- inserts one ufw-before-input rule dropping NEW
 #     connections arriving on the demo bridge: the host's own listeners
-#     (tailscale serve 443/8443, ssh) become unreachable from demo containers.
+#     (the owner gateway on 443, tailscale serve 8443, ssh) become unreachable from demo containers.
 #     It goes right after the stock RELATED,ESTABLISHED accept inside *filter,
 #     i.e. before ufw's NEW-accepting ICMP/DHCP/mDNS/SSDP rules; the script
 #     refuses (touching nothing) if that anchor line is not found there.

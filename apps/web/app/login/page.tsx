@@ -70,8 +70,9 @@ export default async function LoginPage({
   // demo-one-click-entry: the hosted demo shows only the Enter button, so
   // none of the tailnet state is read there.
   const demoEntry = demoEntryEnabled();
-  // tailnet-passwordless-login: the Tailscale login `tailscale serve`
-  // attached (null unless TAILNET_LOGIN is on and the request did not come
+  // tailnet-passwordless-login: the Tailscale login the owner gateway
+  // (caddy-owner; `tailscale serve` before its cutover and after a rollback)
+  // stamped (null unless TAILNET_LOGIN is on and the request did not come
   // through Cloudflare), whether this browser is trusted, and the notice
   // the tailnet route sent back on a failed automatic sign-in.
   let tailnetLogin: string | null = null;

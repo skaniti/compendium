@@ -35,8 +35,12 @@ export function proxy(req: NextRequest): NextResponse {
   if (req.cookies.has("access_token")) return NextResponse.next();
 
   // tailnet-passwordless-login: a browser the owner trusted once signs in
-  // with no login page when `tailscale serve` vouches for the user (the
-  // header is absent on Vercel/demo, where TAILNET_LOGIN is off anyway).
+  // with no login page when the owner gateway (caddy-owner, apps/api/scripts/
+  // server/owner-gateway) vouches for the user: it deletes every client copy
+  // of Tailscale-User-Login and stamps the login tailscaled reports for the
+  // caller's tailnet address; before its cutover, and after a rollback,
+  // `tailscale serve` does the same. (The header is absent on Vercel/demo,
+  // where TAILNET_LOGIN is off anyway.)
   // A paused browser (signed out) goes to /login and its "Continue as".
   if (
     tailnetLoginFrom(req.headers) &&
