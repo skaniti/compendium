@@ -142,6 +142,34 @@ def test_reuse_detection_revokes_trusted_browsers(env, client):
     assert row["detail"] == {"revoked_all": True, "trusted_browsers_revoked": 1}
 
 
+def _refresh(client, tok):
+    return client.post("/api/auth/refresh", json={"refresh_token": tok}, headers=INGRESS)
+
+
+def test_demo_reuse_refuses_only_the_replayed_token(env, client):
+    tok_a = _login(client, ident="demo@traversal.local", pw=DEMO_PW, headers=INGRESS).json()[
+        "refresh_token"
+    ]
+    tok_b = _login(client, ident="demo@traversal.local", pw=DEMO_PW, headers=INGRESS).json()[
+        "refresh_token"
+    ]
+    assert _refresh(client, tok_a).status_code == 200
+    assert _refresh(client, tok_a).status_code == 401
+    # the other demo session survives: one replay must not log out every visitor
+    assert _refresh(client, tok_b).status_code == 200
+    row = _last("auth.refresh.reuse_detected")
+    assert row["subject_user_id"] == env["demo"]["id"]
+    assert row["detail"] == {"revoked_all": False, "role": "demo"}
+
+
+def test_reuse_by_other_roles_still_revokes_everything(env, client):
+    tok_a = _login(client, headers=INGRESS).json()["refresh_token"]
+    tok_b = _login(client, headers=INGRESS).json()["refresh_token"]
+    assert _refresh(client, tok_a).status_code == 200
+    assert _refresh(client, tok_a).status_code == 401
+    assert _refresh(client, tok_b).status_code == 401
+
+
 def test_logout(env, client):
     tok = _login(client, headers=INGRESS).json()["refresh_token"]
     assert (

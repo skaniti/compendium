@@ -170,7 +170,9 @@ def rotate_refresh_token(
     token's own ``remembered`` flag is audit/record-keeping only and no
     longer carries forward on its own. A device that leaves the tailnet
     drops to the default policy at its next rotation; one that joins the
-    tailnet upgrades at its next rotation.
+    tailnet upgrades at its next rotation. Replaying an already-rotated token
+    revokes every session of the account, except for the shared ``demo`` role,
+    where only the replayed token is refused.
     """
     token_hash = _hash_token(raw_token)
     stored = auth_repo.get_refresh_token(token_hash)
@@ -180,11 +182,24 @@ def rotate_refresh_token(
 
     # Already revoked (possible token reuse attack)
     if stored["revoked_at"] is not None:
+        ctx = audit_ctx or CLI
+        # Every public-demo visitor shares the single demo account, so one
+        # replay (a two-tab race or a deliberate attempt) must not log out
+        # every visitor; the read-only demo identity has nothing to protect.
+        # Refuse only the replayed token, still audit it.
+        if auth_repo.get_role(stored["user_id"]) == "demo":
+            audit_repo.record(
+                "auth.refresh.reuse_detected",
+                subject_user_id=stored["user_id"],
+                origin_class=ctx.origin_class,
+                client_key=ctx.client_key,
+                detail={"revoked_all": False, "role": "demo"},
+            )
+            return None
         auth_repo.revoke_all_user_tokens(stored["user_id"])
         from backend.db import trusted_browser_repo
 
         browsers_revoked = trusted_browser_repo.revoke_all(stored["user_id"])
-        ctx = audit_ctx or CLI
         audit_repo.record(
             "auth.refresh.reuse_detected",
             subject_user_id=stored["user_id"],
