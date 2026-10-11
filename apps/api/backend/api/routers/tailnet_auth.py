@@ -4,9 +4,10 @@ Only the owner web container can reach these paths: every request must carry
 the shared TAILNET_ASSERT_SECRET (header X-Compendium-Tailnet-Assert).
 /api/auth/tailnet/login 404s unless tailnet login is fully configured on a
 tailnet-only deployment, and for any request that came through Cloudflare.
-A browser becomes trusted only inside a password sign-in:
-POST /api/auth/login calls maybe_trust_browser() and returns the browser
-token. There is no standalone registration endpoint, so a trusted-browser
+A browser becomes trusted only inside a password or passkey sign-in (POST
+/api/auth/login via maybe_trust_browser(), or the passkey endpoints in
+passkey_auth.py via trust_browser()), which return the browser token. There is no standalone registration
+endpoint, so a trusted-browser
 session cannot register further browsers.
 """
 
@@ -54,6 +55,24 @@ def _account(request: Request, login: str) -> dict:
     return user
 
 
+def trust_browser(request: Request, user: dict) -> tuple[str, int]:
+    """Register the calling browser for `user` and audit it. The caller has
+    already checked the tailnet preconditions. Returns (raw_token, browser_id)."""
+    raw, token_hash = tailnet_login.new_browser_token()
+    label = (request.headers.get("user-agent") or "").strip()[:200] or None
+    browser_id = trusted_browser_repo.create(user["id"], token_hash, label)
+    ctx = _audit_ctx.from_request(request)
+    audit_repo.record(
+        "auth.trusted_browser.added",
+        actor_user_id=user["id"],
+        subject_user_id=user["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"trusted_browser_id": browser_id},
+    )
+    return raw, browser_id
+
+
 def maybe_trust_browser(
     request: Request, user: dict, trust_tailnet_login: str | None
 ) -> tuple[tuple[str, int] | None, str | None]:
@@ -78,19 +97,7 @@ def maybe_trust_browser(
     if mapped["id"] != user["id"]:
         return None, "user"
 
-    raw, token_hash = tailnet_login.new_browser_token()
-    label = (request.headers.get("user-agent") or "").strip()[:200] or None
-    browser_id = trusted_browser_repo.create(user["id"], token_hash, label)
-    ctx = _audit_ctx.from_request(request)
-    audit_repo.record(
-        "auth.trusted_browser.added",
-        actor_user_id=user["id"],
-        subject_user_id=user["id"],
-        origin_class=ctx.origin_class,
-        client_key=ctx.client_key,
-        detail={"trusted_browser_id": browser_id},
-    )
-    return (raw, browser_id), None
+    return trust_browser(request, user), None
 
 
 @router.post("/login")

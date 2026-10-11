@@ -465,13 +465,17 @@ async def _prune_app_logs_loop(retention_days: int = 14, interval_hours: int = 2
 
 def cleanup_tokens_once() -> int:
     """Delete expired refresh tokens (revoked-but-unexpired rows stay for reuse
-    detection); never raises (housekeeping)."""
+    detection) and expired passkey challenges; never raises (housekeeping).
+    Returns the refresh-token count."""
     try:
-        from backend.db import auth_repo
+        from backend.db import auth_repo, passkey_repo
 
         cleaned = auth_repo.cleanup_expired_only()
         if cleaned:
             logger.info(f"refresh token sweep: removed {cleaned} expired rows")
+        challenges = passkey_repo.delete_expired_challenges()
+        if challenges:
+            logger.info(f"passkey challenge sweep: removed {challenges} expired rows")
         return cleaned
     except Exception:
         logger.exception("refresh token sweep failed")
@@ -3740,3 +3744,7 @@ app.include_router(_tailnet_auth_router.router)
 from backend.api.routers import demo_entry as _demo_entry_router  # noqa: E402
 
 app.include_router(_demo_entry_router.router)
+
+from backend.api.routers import passkey_auth as _passkey_auth_router  # noqa: E402
+
+app.include_router(_passkey_auth_router.router)
