@@ -112,3 +112,94 @@ def test_non_dict_responses_are_tolerated_by_the_readers():
         assert wa.challenge_of(value) is None
         assert wa.credential_id_of(value) is None
         assert wa.user_handle_of(value) is None
+
+
+def test_over_nested_client_data_never_escapes():
+    nested = "[" * 100000
+    import base64
+
+    cd = base64.urlsafe_b64encode(nested.encode()).rstrip(b"=").decode()
+    resp = {"id": "AA", "rawId": "AA", "type": "public-key", "response": {"clientDataJSON": cd}}
+    assert wa.challenge_of(resp) is None
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_registration(resp, challenge=b"c" * 32)
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_authentication(resp, challenge=b"c" * 32, public_key=b"k" * 77)
+
+
+def _registration_with(auth, mutate):
+    options, challenge = wa.registration_options(
+        user_handle=b"h" * 64, user_name="o", display_name="o", exclude=[]
+    )
+    response = auth.register(options)
+    mutate(response)
+    return response, challenge
+
+
+def test_non_map_cose_key_is_refused(monkeypatch):
+    auth = SoftAuthenticator(RP, ORIGIN)
+    monkeypatch.setattr(auth, "_cose_public_key", lambda: __import__("cbor2").dumps([1, 2, 3]))
+    response, challenge = _registration_with(auth, lambda r: None)
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_registration(response, challenge=challenge)
+
+
+def test_non_list_transports_are_dropped():
+    auth = SoftAuthenticator(RP, ORIGIN)
+    response, challenge = _registration_with(auth, lambda r: r["response"].__setitem__("transports", 5))
+    assert wa.verify_registration(response, challenge=challenge).transports == []
+
+
+def test_transports_are_filtered_to_known_values():
+    auth = SoftAuthenticator(RP, ORIGIN)
+    response, challenge = _registration_with(
+        auth, lambda r: r["response"].__setitem__("transports", ["usb", "bogus", 3, "hybrid"])
+    )
+    assert wa.verify_registration(response, challenge=challenge).transports == ["usb", "hybrid"]
+    response, challenge = _registration_with(auth, lambda r: r["response"].__setitem__("transports", "usb"))
+    assert wa.verify_registration(response, challenge=challenge).transports == []
+
+
+def test_oversized_credential_id_is_refused():
+    auth = SoftAuthenticator(RP, ORIGIN)
+    auth.credential_id = b"i" * 1024
+    response, challenge = _registration_with(auth, lambda r: None)
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_registration(response, challenge=challenge)
+
+
+def test_registration_without_user_verification_is_refused():
+    auth = SoftAuthenticator(RP, ORIGIN, user_verified=False)
+    response, challenge = _registration_with(auth, lambda r: None)
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_registration(response, challenge=challenge)
+
+
+def _enrolled():
+    auth = SoftAuthenticator(RP, ORIGIN)
+    response, challenge = _registration_with(auth, lambda r: None)
+    return auth, wa.verify_registration(response, challenge=challenge)
+
+
+def test_authentication_without_user_verification_is_refused():
+    auth, cred = _enrolled()
+    auth.user_verified = False
+    options, challenge = wa.authentication_options()
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_authentication(auth.authenticate(options), challenge=challenge, public_key=cred.public_key)
+
+
+def test_authentication_wrong_origin_is_refused():
+    auth, cred = _enrolled()
+    options, challenge = wa.authentication_options()
+    response = auth.authenticate(options, origin="https://evil.example.com")
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_authentication(response, challenge=challenge, public_key=cred.public_key)
+
+
+def test_authentication_wrong_rp_id_hash_is_refused():
+    auth, cred = _enrolled()
+    auth.rp_id = "other.example.com"
+    options, challenge = wa.authentication_options()
+    with pytest.raises(wa.WebAuthnError):
+        wa.verify_authentication(auth.authenticate(options), challenge=challenge, public_key=cred.public_key)

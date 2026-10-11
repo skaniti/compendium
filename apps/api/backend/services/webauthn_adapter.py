@@ -20,10 +20,10 @@ from webauthn import (
 )
 from webauthn.helpers import base64url_to_bytes
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
-from webauthn.helpers.exceptions import WebAuthnException
 from webauthn.helpers.structs import (
     AttestationConveyancePreference,
     AuthenticatorSelectionCriteria,
+    AuthenticatorTransport,
     CredentialDeviceType,
     PublicKeyCredentialDescriptor,
     ResidentKeyRequirement,
@@ -38,8 +38,8 @@ _ALGORITHMS = [
     COSEAlgorithmIdentifier.EDDSA,
     COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
 ]
-# Anything the library or the JSON walk can raise on a malformed response.
-_PARSE_ERRORS = (WebAuthnException, ValueError, KeyError, TypeError, AttributeError)
+_TRANSPORTS = frozenset(t.value for t in AuthenticatorTransport)
+MAX_CREDENTIAL_ID_BYTES = 1023  # WebAuthn spec limit
 
 
 class WebAuthnError(Exception):
@@ -104,18 +104,27 @@ def verify_registration(response: dict, *, challenge: bytes) -> NewCredential:
             require_user_verification=True,
             supported_pub_key_algs=_ALGORITHMS,
         )
-        raw_transports = response["response"].get("transports") or []
-    except _PARSE_ERRORS as exc:
+        raw_transports = response["response"].get("transports")
+        transports = (
+            [t for t in raw_transports if isinstance(t, str) and t in _TRANSPORTS][:8]
+            if isinstance(raw_transports, list)
+            else []
+        )
+        if len(verified.credential_id) > MAX_CREDENTIAL_ID_BYTES:
+            raise WebAuthnError("credential id too long")
+        return NewCredential(
+            credential_id=verified.credential_id,
+            public_key=verified.credential_public_key,
+            sign_count=verified.sign_count,
+            aaguid=str(verified.aaguid),
+            backup_eligible=verified.credential_device_type == CredentialDeviceType.MULTI_DEVICE,
+            backed_up=bool(verified.credential_backed_up),
+            transports=transports,
+        )
+    except WebAuthnError:
+        raise
+    except Exception as exc:
         raise WebAuthnError(str(exc)) from exc
-    return NewCredential(
-        credential_id=verified.credential_id,
-        public_key=verified.credential_public_key,
-        sign_count=verified.sign_count,
-        aaguid=str(verified.aaguid),
-        backup_eligible=verified.credential_device_type == CredentialDeviceType.MULTI_DEVICE,
-        backed_up=bool(verified.credential_backed_up),
-        transports=[t for t in raw_transports if isinstance(t, str)][:8],
-    )
 
 
 def verify_authentication(response: dict, *, challenge: bytes, public_key: bytes) -> Assertion:
@@ -131,9 +140,9 @@ def verify_authentication(response: dict, *, challenge: bytes, public_key: bytes
             credential_current_sign_count=0,
             require_user_verification=True,
         )
-    except _PARSE_ERRORS as exc:
+        return Assertion(new_sign_count=verified.new_sign_count, backed_up=bool(verified.credential_backed_up))
+    except Exception as exc:
         raise WebAuthnError(str(exc)) from exc
-    return Assertion(new_sign_count=verified.new_sign_count, backed_up=bool(verified.credential_backed_up))
 
 
 def _b64(value) -> bytes | None:
@@ -141,7 +150,7 @@ def _b64(value) -> bytes | None:
         return None
     try:
         return base64url_to_bytes(value)
-    except (ValueError, TypeError):
+    except Exception:
         return None
 
 
@@ -152,19 +161,19 @@ def challenge_of(response) -> bytes | None:
         if raw is None:
             return None
         return _b64(json.loads(raw).get("challenge"))
-    except (KeyError, TypeError, ValueError, AttributeError):
+    except Exception:
         return None
 
 
 def credential_id_of(response) -> bytes | None:
     try:
         return _b64(response.get("rawId"))
-    except AttributeError:
+    except Exception:
         return None
 
 
 def user_handle_of(response) -> bytes | None:
     try:
         return _b64(response["response"].get("userHandle"))
-    except (KeyError, TypeError, AttributeError):
+    except Exception:
         return None

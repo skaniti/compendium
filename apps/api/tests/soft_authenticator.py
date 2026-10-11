@@ -29,11 +29,12 @@ def unb64u(text: str) -> bytes:
 class SoftAuthenticator:
     AAGUID = bytes(16)
 
-    def __init__(self, rp_id: str, origin: str, *, backup_eligible: bool = True, sign_count_step: int = 0):
+    def __init__(self, rp_id: str, origin: str, *, backup_eligible: bool = True, sign_count_step: int = 0, user_verified: bool = True):
         self.rp_id = rp_id
         self.origin = origin
         self.backup_eligible = backup_eligible
         self.sign_count_step = sign_count_step
+        self.user_verified = user_verified
         self.sign_count = 0
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.credential_id = os.urandom(32)
@@ -46,7 +47,9 @@ class SoftAuthenticator:
         )
 
     def _authenticator_data(self, *, attested: bool) -> bytes:
-        flags = 0x01 | 0x04  # user present, user verified
+        flags = 0x01  # user present
+        if self.user_verified:
+            flags |= 0x04
         if self.backup_eligible:
             flags |= 0x08 | 0x10  # backup eligible, backed up
         if attested:
