@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     private val handler = Handler(Looper.getMainLooper())
     private var lastCommittedUrl: String? = null
     private var isPageFullScreen = false
+    private var imeVisible = false
 
     /** Set before sessions are closed so a late state callback cannot persist an empty tab list. */
     private var tornDown = false
@@ -133,9 +134,15 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         })
     }
 
+    /** The bottom bar gives way to page fullscreen and to the soft keyboard. */
+    private fun updateBottomBar() {
+        findViewById<View>(R.id.bottomBar)?.visibility =
+            if (isPageFullScreen || imeVisible) View.GONE else View.VISIBLE
+    }
+
     private fun setFullScreenChrome(fullscreen: Boolean) {
         findViewById<View>(R.id.topBar)?.visibility = if (fullscreen) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.bottomBar)?.visibility = if (fullscreen) View.GONE else View.VISIBLE
+        updateBottomBar()
         swipeRefresh.isEnabled = !fullscreen
         val controller = WindowCompat.getInsetsController(window, geckoView)
         if (fullscreen) {
@@ -164,6 +171,18 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         // GeckoView (Fenix forces YES for the same reason); this is what lets
         // 1Password and other system autofill services fill web forms (dev-note N3).
         geckoView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+        // The keyboard resizes the window (adjustResize in the manifest); the bottom bar
+        // steps aside so the page reaches down to the keyboard. GeckoView owns the root
+        // view's insets listener, so observe through it instead of replacing it.
+        geckoView.addWindowInsetsListener("bottom-bar-ime") { _, insets ->
+            val visible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            if (visible != imeVisible) {
+                android.util.Log.i(TAG, "imeVisible=$visible")
+                imeVisible = visible
+                updateBottomBar()
+            }
+            insets
+        }
         swipeRefresh = SwipeRefreshLayout(this).apply {
             addView(
                 geckoView,
