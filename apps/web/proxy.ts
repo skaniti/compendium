@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-names";
 import {
   TAILNET_LOGIN_ROUTE,
   TAILNET_PAUSED_COOKIE,
@@ -32,7 +33,7 @@ export function proxy(req: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  if (req.cookies.has("access_token")) return NextResponse.next();
+  if (req.cookies.has(ACCESS_TOKEN_COOKIE)) return NextResponse.next();
 
   // tailnet-passwordless-login: a browser the owner trusted once signs in
   // with no login page when the owner gateway (caddy-owner, apps/api/scripts/

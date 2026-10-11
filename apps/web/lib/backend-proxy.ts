@@ -1,3 +1,4 @@
+import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-names";
 import { cookies } from "next/headers";
 import { TAILNET_ASSERT_HEADER } from "@/lib/tailnet-login";
 import { proxyAttestHeaders, stripInboundProxyAttestHeaders } from "@/lib/proxy-attest";
@@ -51,7 +52,7 @@ export async function proxyToBackend(req: Request, upstreamPath: string): Promis
   // collector) and must win over the ambient cookie: the API prefers a
   // Bearer token over X-API-Key, so injecting here would silently
   // re-attribute the upload to whoever's session cookie the browser holds.
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
   if (token && !headers.has("authorization") && !headers.has("x-api-key")) headers.set("authorization", `Bearer ${token}`);
 
   // Proxy hygiene (batch-06 deploy-flip fix wave): the API authenticates

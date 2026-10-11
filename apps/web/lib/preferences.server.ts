@@ -9,6 +9,7 @@
 // `except Exception: pass`: an unauthenticated request or any backend
 // failure returns {} so the panel CSS's own `var(--panel-left-width, 20%)`
 // fallback takes over -- this never breaks the shell render.
+import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-names";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getPaletteNames, normalizeVariant } from "@/lib/theme";
@@ -79,7 +80,7 @@ export async function getInitialPanelWidths(): Promise<InitialPanelWidths> {
   // a thrown DynamicServerError that a catch-all here would swallow,
   // producing a spurious build-time log without changing the outcome --
   // app/api/[...path]/route.ts's proxy calls it the same unguarded way).
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 
   // Task V3 item 5 fix: no longer short-circuits to {} when `token` is
   // absent -- attempts fetchPreferencesRow() regardless (which now only
@@ -132,7 +133,7 @@ export async function getInitialPanelWidths(): Promise<InitialPanelWidths> {
 export async function getInitialStarfieldVariant(): Promise<string> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 
   // Sibling fix to getInitialPanelWidths (V3 item 5) and
   // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
@@ -193,7 +194,7 @@ export interface InitialCompendiumLoaderState {
 export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiumLoaderState> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 
   // V3 fix-round (coordinator review after item 3): same fix shape as
   // getInitialPanelWidths (item 5) -- no longer short-circuits to
@@ -244,7 +245,7 @@ export async function getInitialCompendiumLoaderSeen(): Promise<InitialCompendiu
 export async function getInitialThemeVariant(): Promise<string | null> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 
   // Sibling fix to getInitialPanelWidths (V3 item 5) and
   // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
@@ -352,7 +353,7 @@ const fetchMeRow = cache(async (token: string | undefined): Promise<MeFetchResul
 export async function getInitialSessionRole(): Promise<InitialSessionRole> {
   // Deliberately outside the try/catch below -- see the comment on the
   // equivalent line in getInitialPanelWidths.
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 
   // Sibling fix to getInitialPanelWidths (V3 item 5) and
   // getInitialCompendiumLoaderSeen (V3 fix-round): no longer short-circuits
@@ -387,7 +388,7 @@ export async function getInitialSessionRole(): Promise<InitialSessionRole> {
 const PERSISTED_TIME_WINDOWS: readonly TimeWindow[] = ["7", "30", "90", "all"];
 
 export async function getInitialTimeWindow(): Promise<TimeWindow> {
-  const token = (await cookies()).get("access_token")?.value;
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
   const fetched = await fetchPreferencesRow(token);
   if (!fetched.ok) return "all";
   const prefs = fetched.body;

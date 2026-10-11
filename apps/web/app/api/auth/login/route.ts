@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
+import { applySessionCookies, deleteAuthCookie, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
 import { proxyAttestHeaders } from "@/lib/proxy-attest";
 import {
@@ -105,7 +105,7 @@ export async function POST(req: Request): Promise<Response> {
   stampLastActive(cookieStore, Date.now());
   if (tailnetLogin && data.browser_token) {
     cookieStore.set(TRUSTED_BROWSER_COOKIE, data.browser_token, longCookieOptions());
-    cookieStore.delete(TAILNET_PAUSED_COOKIE);
+    deleteAuthCookie(cookieStore, TAILNET_PAUSED_COOKIE);
   }
   return Response.json({ user: data.user });
 }

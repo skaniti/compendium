@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
+import { applySessionCookies, deleteAuthCookie, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
 import { proxyAttestHeaders } from "@/lib/proxy-attest";
 import {
   TAILNET_PAUSED_COOKIE,
@@ -40,7 +40,7 @@ export async function GET(req: Request): Promise<Response> {
   const browserToken = cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
   if (!login || !browserToken) {
     // An empty cookie would otherwise bounce between here and the page/proxy.
-    if (cookieStore.get(TRUSTED_BROWSER_COOKIE) && !browserToken) cookieStore.delete(TRUSTED_BROWSER_COOKIE);
+    if (cookieStore.get(TRUSTED_BROWSER_COOKIE) && !browserToken) deleteAuthCookie(cookieStore, TRUSTED_BROWSER_COOKIE);
     return seeOther("/login");
   }
   if (cookieStore.get(TAILNET_PAUSED_COOKIE) && !resume) return seeOther("/login");
@@ -59,7 +59,7 @@ export async function GET(req: Request): Promise<Response> {
   if (res.status === 401) {
     // Revoked, or this browser's token is unknown: forget it so the next
     // visit shows the password form with "Trust this browser" again.
-    cookieStore.delete(TRUSTED_BROWSER_COOKIE);
+    deleteAuthCookie(cookieStore, TRUSTED_BROWSER_COOKIE);
     return seeOther("/login?tailnet=failed");
   }
   if (!res.ok) {
@@ -74,6 +74,6 @@ export async function GET(req: Request): Promise<Response> {
     policy: parseSessionPolicy(data.session_policy) ?? undefined,
   });
   stampLastActive(cookieStore, Date.now());
-  if (resume) cookieStore.delete(TAILNET_PAUSED_COOKIE);
+  if (resume) deleteAuthCookie(cookieStore, TAILNET_PAUSED_COOKIE);
   return seeOther(next);
 }

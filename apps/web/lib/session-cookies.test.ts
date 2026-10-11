@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
@@ -290,5 +290,74 @@ describe("clearSessionCookies", () => {
     expect(jar.get(SESSION_EXPIRES_AT_COOKIE)).toBeUndefined();
     expect(jar.get(SESSION_POLICY_COOKIE)).toBeUndefined();
     expect(jar.get(SESSION_LAST_ACTIVE_COOKIE)).toBeUndefined();
+  });
+});
+
+describe("production cookie handling (owner-passkeys R12)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  function recordingJar(initial: Record<string, string> = {}) {
+    const values = new Map(Object.entries(initial));
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      set(name: string, value: string, options?: Record<string, unknown>) {
+        calls.push(["set", name, value, options]);
+        values.set(name, value);
+      },
+      get(name: string) {
+        return values.has(name) ? { name, value: values.get(name) as string } : undefined;
+      },
+      delete(name: string) {
+        calls.push(["delete", name]);
+        values.delete(name);
+      },
+    };
+  }
+
+  it("deletes a __Host- cookie with a Secure expiry, not a bare delete", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.resetModules();
+    const { deleteAuthCookie, ACCESS_TOKEN_COOKIE } = await import("./session-cookies");
+    const jar = recordingJar();
+    deleteAuthCookie(jar as never, ACCESS_TOKEN_COOKIE);
+    expect(jar.calls).toEqual([
+      ["set", "__Host-access_token", "", expect.objectContaining({ secure: true, path: "/", maxAge: 0 })],
+    ]);
+  });
+
+  it("uses a plain delete in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+    const { deleteAuthCookie } = await import("./session-cookies");
+    const jar = recordingJar();
+    deleteAuthCookie(jar as never, "access_token");
+    expect(jar.calls).toEqual([["delete", "access_token"]]);
+  });
+
+  it("drops old plain-named cookies on sign-in and sign-out in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.resetModules();
+    const { applySessionCookies, clearSessionCookies } = await import("./session-cookies");
+    const jar = recordingJar({ access_token: "old", trusted_browser: "old" });
+    applySessionCookies(jar as never, { accessToken: "a.b.c" });
+    expect(jar.calls).toContainEqual(["delete", "access_token"]);
+    expect(jar.calls).toContainEqual(["delete", "trusted_browser"]);
+    const jar2 = recordingJar({ refresh_token: "old" });
+    clearSessionCookies(jar2 as never);
+    expect(jar2.calls).toContainEqual(["delete", "refresh_token"]);
+    expect(jar2.calls).toContainEqual(["set", "__Host-refresh_token", "", expect.objectContaining({ maxAge: 0 })]);
+  });
+
+  it("never touches plain names in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+    const { deleteLegacyAuthCookies } = await import("./session-cookies");
+    const jar = recordingJar({ access_token: "current" });
+    deleteLegacyAuthCookies(jar as never);
+    expect(jar.calls).toEqual([]);
   });
 });

@@ -6,11 +6,26 @@
 
 import type { cookies } from "next/headers";
 
-export const ACCESS_TOKEN_COOKIE = "access_token";
-export const REFRESH_TOKEN_COOKIE = "refresh_token";
+import {
+  ACCESS_TOKEN_COOKIE,
+  AUTH_COOKIE_PREFIX,
+  LEGACY_AUTH_COOKIE_NAMES,
+  REFRESH_TOKEN_COOKIE,
+  SESSION_EXPIRES_AT_COOKIE,
+  SESSION_LAST_ACTIVE_COOKIE,
+  SESSION_POLICY_COOKIE,
+} from "./cookie-names";
+
+export {
+  ACCESS_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  SESSION_EXPIRES_AT_COOKIE,
+  SESSION_POLICY_COOKIE,
+  SESSION_LAST_ACTIVE_COOKIE,
+};
+// Cookie names (with the production __Host- prefix) live in ./cookie-names.
 // Non-HttpOnly: the whole point is that SessionKeeper (client component)
 // can read it. Holds the access token's `exp` claim as epoch millis.
-export const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";
 // D1/D2 (session-expiry-tuning): non-HttpOnly, informational cookies read
 // by lib/session-policy-client.ts (client-side) and this module (server
 // route handlers). session_policy carries the backend's per-role decision
@@ -19,8 +34,6 @@ export const SESSION_EXPIRES_AT_COOKIE = "session_expires_at";
 // (never here -- see applySessionCookies' own note below). Neither cookie
 // enforces anything: the backend's token lifetimes remain the sole
 // enforcement, exactly like session_expires_at above.
-export const SESSION_POLICY_COOKIE = "session_policy";
-export const SESSION_LAST_ACTIVE_COOKIE = "session_last_active";
 
 // Policy + last-active cookies are informational and outlive a single
 // access/refresh token pair (a remembered session's refresh token alone
@@ -116,6 +129,23 @@ const baseCookieOptions = {
   path: "/",
 };
 
+// A __Host- cookie is only replaced or removed by a Set-Cookie that is
+// itself Secure with Path=/; cookieStore.delete(name) sends neither, so the
+// browser would ignore it. In production the delete is a set() of an empty
+// value with maxAge 0 and the same base options.
+export function deleteAuthCookie(cookieStore: CookieStore, name: string): void {
+  if (AUTH_COOKIE_PREFIX) cookieStore.set(name, "", { ...baseCookieOptions, httpOnly: true, maxAge: 0 });
+  else cookieStore.delete(name);
+}
+
+// Production only: drop the plain-named cookies from before the prefix.
+export function deleteLegacyAuthCookies(cookieStore: CookieStore): void {
+  if (!AUTH_COOKIE_PREFIX) return;
+  for (const name of LEGACY_AUTH_COOKIE_NAMES) {
+    if (cookieStore.get(name)) cookieStore.delete(name);
+  }
+}
+
 // Decodes -- does NOT verify -- a JWT payload to read its `exp` claim
 // (seconds since epoch). No signature check is performed or needed: this is
 // purely informational, letting SessionKeeper know when to attempt a
@@ -171,7 +201,7 @@ export function applySessionCookies(cookieStore: CookieStore, tokens: SessionTok
   } else {
     // No readable exp (unexpected token shape) -- don't leave a stale
     // expiry cookie around; SessionKeeper treats its absence as inert.
-    cookieStore.delete(SESSION_EXPIRES_AT_COOKIE);
+    deleteAuthCookie(cookieStore, SESSION_EXPIRES_AT_COOKIE);
   }
 
   if (tokens.policy !== undefined) {
@@ -182,6 +212,8 @@ export function applySessionCookies(cookieStore: CookieStore, tokens: SessionTok
     });
   }
   // else: no-op -- see the SessionTokens.policy doc comment above.
+
+  deleteLegacyAuthCookies(cookieStore);
 }
 
 // Item 3 (session-expiry-tuning review fixes): used by the login route to
@@ -201,9 +233,14 @@ export function stampLastActive(cookieStore: CookieStore, nowMs: number): void {
 }
 
 export function clearSessionCookies(cookieStore: CookieStore): void {
-  cookieStore.delete(ACCESS_TOKEN_COOKIE);
-  cookieStore.delete(REFRESH_TOKEN_COOKIE);
-  cookieStore.delete(SESSION_EXPIRES_AT_COOKIE);
-  cookieStore.delete(SESSION_POLICY_COOKIE);
-  cookieStore.delete(SESSION_LAST_ACTIVE_COOKIE);
+  for (const name of [
+    ACCESS_TOKEN_COOKIE,
+    REFRESH_TOKEN_COOKIE,
+    SESSION_EXPIRES_AT_COOKIE,
+    SESSION_POLICY_COOKIE,
+    SESSION_LAST_ACTIVE_COOKIE,
+  ]) {
+    deleteAuthCookie(cookieStore, name);
+  }
+  deleteLegacyAuthCookies(cookieStore);
 }

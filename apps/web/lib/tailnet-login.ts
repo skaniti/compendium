@@ -12,8 +12,7 @@ export type HeaderReader = Pick<Headers, "get" | "has">;
 
 export const TAILSCALE_LOGIN_HEADER = "tailscale-user-login";
 export const TAILNET_ASSERT_HEADER = "X-Compendium-Tailnet-Assert";
-export const TRUSTED_BROWSER_COOKIE = "trusted_browser";
-export const TAILNET_PAUSED_COOKIE = "tailnet_login_paused";
+export { TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE } from "./cookie-names";
 export const TAILNET_LOGIN_ROUTE = "/api/auth/tailnet/login";
 
 const LONG_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 3600; // browsers cap max-age at 400 days
