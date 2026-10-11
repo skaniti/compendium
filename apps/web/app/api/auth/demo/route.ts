@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { cookies } from "next/headers";
 import { applySessionCookies, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
 import { demoEntryEnabled } from "@/lib/demo-entry";
@@ -19,6 +20,8 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // real visitor instead of the Vercel egress address. No ingress headers:
 // the demo role is never remembered.
 export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   if (!demoEntryEnabled()) return Response.json({ error: DEMO_UNAVAILABLE_MESSAGE }, { status: 404 });
   const body = (await req.json().catch(() => null)) as { turnstileToken?: unknown } | null;
   const token = typeof body?.turnstileToken === "string" ? body.turnstileToken.trim() : "";

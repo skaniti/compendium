@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { cookies } from "next/headers";
 import { applySessionCookies, deleteAuthCookie, parseSessionPolicy, stampLastActive } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
@@ -26,6 +27,8 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // (spec D1), which Caddy sets at the edge (spec D6) and this route simply
 // relays via ingressHeaders -- it never sets or invents the header itself.
 export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   const body = (await req.json()) as { email: string; password: string; trustBrowser?: boolean };
 
   // tailnet-passwordless-login: "Trust this browser for automatic sign-in"

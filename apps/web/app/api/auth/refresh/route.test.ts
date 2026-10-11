@@ -354,4 +354,16 @@ describe("POST /api/auth/refresh", () => {
     const headers = (call[1] as { headers: Record<string, string> }).headers;
     expect(Object.keys(headers)).not.toContain(INGRESS_HEADER);
   });
+
+  it("refuses a same-site POST before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await POST(new Request("https://app.test/api/auth/refresh", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-site", "Content-Type": "application/json" },
+      body: "{}",
+    }));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

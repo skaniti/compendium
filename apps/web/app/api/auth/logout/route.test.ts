@@ -47,7 +47,7 @@ describe("POST /api/auth/logout", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await POST();
+    const res = await POST(new Request("https://app.test/api/auth/logout", { method: "POST" }));
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/auth/logout"),
@@ -69,7 +69,7 @@ describe("POST /api/auth/logout", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await POST();
+    const res = await POST(new Request("https://app.test/api/auth/logout", { method: "POST" }));
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
@@ -82,7 +82,7 @@ describe("POST /api/auth/logout", () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await POST();
+    const res = await POST(new Request("https://app.test/api/auth/logout", { method: "POST" }));
 
     expect(res.status).toBe(200);
     expect(jar.get("access_token")).toBeUndefined();
@@ -92,7 +92,7 @@ describe("POST /api/auth/logout", () => {
   it("pauses automatic tailnet sign-in when this browser is trusted", async () => {
     const jar = makeFakeCookieJar({ trusted_browser: "bt" });
     vi.mocked(cookies).mockResolvedValue(jar as never);
-    await POST();
+    await POST(new Request("https://app.test/api/auth/logout", { method: "POST" }));
     expect(jar.get("tailnet_login_paused")?.value).toBe("1");
     expect(jar.get("trusted_browser")?.value).toBe("bt");
   });
@@ -100,7 +100,19 @@ describe("POST /api/auth/logout", () => {
   it("sets no pause for a browser that is not trusted", async () => {
     const jar = makeFakeCookieJar();
     vi.mocked(cookies).mockResolvedValue(jar as never);
-    await POST();
+    await POST(new Request("https://app.test/api/auth/logout", { method: "POST" }));
     expect(jar.get("tailnet_login_paused")).toBeUndefined();
+  });
+
+  it("refuses a same-site POST before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await POST(new Request("https://app.test/api/auth/logout", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-site", "Content-Type": "application/json" },
+      body: "{}",
+    }));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

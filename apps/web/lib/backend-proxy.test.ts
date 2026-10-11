@@ -240,4 +240,23 @@ describe("proxyToBackend", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Headers }];
     expect(init.headers.has("x-compendium-tailnet-assert")).toBe(false);
   });
+
+  it("refuses a same-site POST before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await proxyToBackend(
+      new Request("https://app.test/api/topics", { method: "POST", headers: { "sec-fetch-site": "same-site" }, body: "{}" }),
+      "/api/topics",
+    );
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still forwards a cross-site GET", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await proxyToBackend(new Request("https://app.test/api/topics", { headers: { "sec-fetch-site": "cross-site" } }), "/api/topics");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

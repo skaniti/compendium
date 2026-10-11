@@ -505,4 +505,16 @@ describe("POST /api/auth/login: trusting this browser (tailnet)", () => {
     expect(JSON.parse(init.body as string)).toEqual({ email: "o@x", password: "pw" });
     expect(jar.get("trusted_browser")).toBeUndefined();
   });
+
+  it("refuses a same-site POST before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await POST(new Request("https://app.test/api/auth/login", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-site", "Content-Type": "application/json" },
+      body: "{}",
+    }));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

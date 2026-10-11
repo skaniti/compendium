@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { cookies } from "next/headers";
 import { clearSessionCookies, REFRESH_TOKEN_COOKIE } from "@/lib/session-cookies";
 import { TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE, longCookieOptions } from "@/lib/tailnet-login";
@@ -6,7 +7,9 @@ export const runtime = "nodejs";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
   if (refreshToken) {

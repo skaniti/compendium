@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE, applySessionCookies, parseSessionPolicy } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
@@ -37,6 +38,8 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
 // request still 401s, now from the backend's own real check instead of
 // this route's redundant one, an identical outcome.
 export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
 

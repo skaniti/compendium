@@ -123,4 +123,15 @@ describe("POST /api/auth/demo (web route)", () => {
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("refuses a same-site POST before calling the backend", async () => {
+    fetchMock.mockClear();
+    const res = await POST(new Request("https://app.test/api/auth/demo", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-site", "Content-Type": "application/json" },
+      body: "{}",
+    }));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

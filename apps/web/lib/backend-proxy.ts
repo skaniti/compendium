@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-names";
 import { cookies } from "next/headers";
 import { TAILNET_ASSERT_HEADER } from "@/lib/tailnet-login";
@@ -23,6 +24,8 @@ const HOP_BY_HOP = new Set([
 // or "/captured-assets/a/b/load.php"); the caller's own query string is
 // appended here.
 export async function proxyToBackend(req: Request, upstreamPath: string): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   const search = new URL(req.url).search;
   const url = `${BACKEND}${upstreamPath}${search}`;
 

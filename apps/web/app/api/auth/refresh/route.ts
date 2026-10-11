@@ -1,3 +1,4 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
 import { cookies } from "next/headers";
 import { applySessionCookies, clearSessionCookies, parseSessionPolicy, REFRESH_TOKEN_COOKIE } from "@/lib/session-cookies";
 import { ingressHeaders } from "@/lib/ingress";
@@ -89,6 +90,8 @@ async function performBackendRefresh(
 // shape); a multi-instance deploy would make this best-effort only (see
 // spec D3).
 export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
   if (!refreshToken) {
