@@ -33,6 +33,14 @@
             android:textColor="?attr/colorOnSurface"
             android:textSize="20sp"
             android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btnHubSettings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="Settings"
+            android:background="?attr/selectableItemBackgroundBorderless" />
     </LinearLayout>
 
     <!-- Content area (swapped by bottom nav) -->

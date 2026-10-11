@@ -572,15 +572,13 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 BookmarkStore.isBookmarked(this, tab.url)
             menu.menu.add(0, 3, 2, if (bookmarked) "Remove bookmark" else "Add bookmark")
             menu.menu.add(0, 4, 3, "Bookmarks")
-            menu.menu.add(0, 5, 4, "Settings")
-            menu.menu.add(0, 6, 5, "Add note")
+            menu.menu.add(0, 6, 4, "Add note")
             menu.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> { showFindBar(); true }
                     2 -> { toggleDesktopMode(); true }
                     3 -> { toggleBookmark(); true }
                     4 -> { startActivity(Intent(this, BookmarksActivity::class.java)); true }
-                    5 -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
                     6 -> { addNoteFromBrowser(); true }
                     else -> false
                 }

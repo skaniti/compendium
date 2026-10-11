@@ -1,6 +1,7 @@
 package dev.skaniti.compendium
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
@@ -82,6 +83,9 @@ class AnalysisActivity : AppCompatActivity(), ImagePicker {
         hubContent = findViewById(R.id.hubContent)
 
         findViewById<ImageButton>(R.id.btnBackToMain).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.btnHubSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.hubBottomNav)
         bottomNav.setOnItemSelectedListener { item ->
