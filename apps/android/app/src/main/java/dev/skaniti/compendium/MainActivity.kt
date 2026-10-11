@@ -28,12 +28,12 @@ import dev.skaniti.compendium.gecko.CollectorPromptDelegate
 import dev.skaniti.compendium.gecko.DownloadHelper
 import dev.skaniti.compendium.gecko.GeckoEngine
 import dev.skaniti.compendium.gecko.GeckoTransitionMapper
+import dev.skaniti.compendium.gecko.PullRefreshGeckoView
 import dev.skaniti.compendium.gecko.TabsStore
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoSessionSettings
-import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebResponse
 
 class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener, ImagePicker {
@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
     private lateinit var urlBar: EditText
     private lateinit var webViewContainer: FrameLayout
-    private lateinit var geckoView: GeckoView
+    private lateinit var geckoView: PullRefreshGeckoView
     private lateinit var swipeRefresh: SwipeRefreshLayout
 
     private val sessionManager = SessionManager()
@@ -136,6 +136,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     private fun setFullScreenChrome(fullscreen: Boolean) {
         findViewById<View>(R.id.topBar)?.visibility = if (fullscreen) View.GONE else View.VISIBLE
         findViewById<View>(R.id.bottomBar)?.visibility = if (fullscreen) View.GONE else View.VISIBLE
+        swipeRefresh.isEnabled = !fullscreen
         val controller = WindowCompat.getInsetsController(window, geckoView)
         if (fullscreen) {
             controller.systemBarsBehavior =
@@ -158,7 +159,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         urlBar = findViewById(R.id.urlBar)
         webViewContainer = findViewById(R.id.webViewContainer)
 
-        geckoView = GeckoView(this)
+        geckoView = PullRefreshGeckoView(this)
         // The default "auto" never triggers the Android Autofill framework for
         // GeckoView (Fenix forces YES for the same reason); this is what lets
         // 1Password and other system autofill services fill web forms (dev-note N3).
@@ -171,6 +172,9 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                     FrameLayout.LayoutParams.MATCH_PARENT,
                 )
             )
+            // Pull-to-refresh engages only when Gecko says the gesture can overscroll the
+            // page at its top (see PullRefreshGeckoView).
+            setOnChildScrollUpCallback { _, _ -> !geckoView.canPullToRefresh() }
             setOnRefreshListener {
                 val tab = tabManager.activeTab()
                 if (tab != null) {
@@ -369,10 +373,6 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         s.scrollDelegate = object : GeckoSession.ScrollDelegate {
             override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
                 tab.scrollY = scrollY
-                if (tab.id == tabManager.activeTabId) {
-                    // Pull-to-refresh only engages at the very top of the page.
-                    swipeRefresh.isEnabled = scrollY == 0 && !isPageFullScreen
-                }
             }
         }
 
