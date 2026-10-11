@@ -53,11 +53,13 @@ def test_owner_stack_passes_the_tailnet_login_settings_defaulting_off():
     assert api_env["TAILNET_LOGIN_MAP"] == "${TAILNET_LOGIN_MAP:-}"
     assert web_env["TAILNET_LOGIN"] == "${TAILNET_LOGIN:-0}"
     assert web_env["TAILNET_ASSERT_SECRET"] == "${TAILNET_ASSERT_SECRET:-}"
+    assert api_env["WEBAUTHN_RP_ID"] == "${WEBAUTHN_RP_ID:-}"
+    assert web_env["WEBAUTHN_RP_ID"] == "${WEBAUTHN_RP_ID:-}"
 
 
 def test_demo_stack_never_carries_tailnet_login_settings():
     text = (COMPOSE_DIR / DEMO).read_text()
-    for name in ("TAILNET_ASSERT_SECRET", "TAILNET_LOGIN_MAP", "TAILNET_LOGIN"):
+    for name in ("TAILNET_ASSERT_SECRET", "TAILNET_LOGIN_MAP", "TAILNET_LOGIN", "WEBAUTHN_RP_ID"):
         assert name not in text
 
 

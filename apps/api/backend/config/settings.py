@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -157,6 +158,16 @@ class Settings(BaseSettings):
     # ("<tailscale login>=<account email or username>", comma-separated).
     tailnet_assert_secret: str = ""
     tailnet_login_map: str = ""
+    # owner-passkeys (2026-10-11): WebAuthn passkeys for the owner account.
+    # On only where WEBAUTHN_RP_ID is set, which also requires the tailnet
+    # login (TAILNET_ONLY_DEPLOYMENT, TAILNET_ASSERT_SECRET, TAILNET_LOGIN_MAP):
+    # passkey sign-in needs the owner's tailnet identity too. WEBAUTHN_ORIGIN
+    # defaults to https://<rp id>; the only override allowed is
+    # http://localhost:<port> with WEBAUTHN_RP_ID=localhost in development
+    # (tests). Never set on the demo stack.
+    webauthn_rp_id: str = ""
+    webauthn_origin: str = ""
+    webauthn_rp_name: str = "Compendium"
     # demo-one-click-entry (2026-10-09): one-click public demo sign-in.
     # POST /api/auth/demo verifies a Cloudflare Turnstile token and mints a
     # 24-hour session for the single demo account. Only the public demo
@@ -593,6 +604,31 @@ class Settings(BaseSettings):
                     "passwordless tailnet sign-in is for the tailnet-only owner stack."
                 )
         parse_tailnet_login_map(self.tailnet_login_map)
+        # owner-passkeys: a passkey signs in only together with the owner's
+        # tailnet identity, so the relying party needs the tailnet login.
+        if self.webauthn_rp_id:
+            if not (
+                self.tailnet_only_deployment
+                and self.tailnet_assert_secret
+                and parse_tailnet_login_map(self.tailnet_login_map)
+            ):
+                raise ValueError(
+                    "WEBAUTHN_RP_ID requires the tailnet login (TAILNET_ONLY_DEPLOYMENT=1, "
+                    "TAILNET_ASSERT_SECRET and TAILNET_LOGIN_MAP)."
+                )
+            if self.webauthn_origin and self.webauthn_origin != f"https://{self.webauthn_rp_id}":
+                local_dev = (
+                    self.webauthn_rp_id == "localhost"
+                    and self.environment == "development"
+                    and re.fullmatch(r"http://localhost:\d{1,5}", self.webauthn_origin)
+                )
+                if not local_dev:
+                    raise ValueError(
+                        "WEBAUTHN_ORIGIN must be https://<WEBAUTHN_RP_ID>, or "
+                        "http://localhost:<port> with WEBAUTHN_RP_ID=localhost in development."
+                    )
+        elif self.webauthn_origin:
+            raise ValueError("WEBAUTHN_ORIGIN is set without WEBAUTHN_RP_ID.")
         # demo-one-click-entry: the entry endpoint mints sessions with no
         # credential, so it only belongs on the public demo stack.
         if self.demo_public_entry:
@@ -609,6 +645,13 @@ class Settings(BaseSettings):
                     "the owner stack never offers credential-free entry."
                 )
         return self
+
+    @property
+    def webauthn_expected_origin(self) -> str:
+        """The origin a passkey response must carry ("" when passkeys are off)."""
+        if self.webauthn_origin:
+            return self.webauthn_origin
+        return f"https://{self.webauthn_rp_id}" if self.webauthn_rp_id else ""
 
     @property
     def is_development(self) -> bool:

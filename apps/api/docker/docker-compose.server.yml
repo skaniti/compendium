@@ -115,6 +115,8 @@ services:
       TAILNET_ONLY_DEPLOYMENT: "${TAILNET_ONLY_DEPLOYMENT:-0}"
       TAILNET_ASSERT_SECRET: "${TAILNET_ASSERT_SECRET:-}"
       TAILNET_LOGIN_MAP: "${TAILNET_LOGIN_MAP:-}"
+      # owner-passkeys: WebAuthn relying party (the owner hostname); empty = passkeys off.
+      WEBAUTHN_RP_ID: "${WEBAUTHN_RP_ID:-}"
       # dqBot stays available at the app level; per-role gating is
       # verify_not_plain_demo at the router. This is the deployment-wide
       # kill switch, unaffected by the split -- see the runbook's wrinkle
@@ -198,6 +200,7 @@ services:
       AUTH_REQUIRED: "1"
       TAILNET_LOGIN: "${TAILNET_LOGIN:-0}"
       TAILNET_ASSERT_SECRET: "${TAILNET_ASSERT_SECRET:-}"
+      WEBAUTHN_RP_ID: "${WEBAUTHN_RP_ID:-}"
 
 networks:
   # External: created once by the runbook precheck (`docker network create
