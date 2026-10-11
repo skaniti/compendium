@@ -12,7 +12,8 @@ import java.io.File
  * Restart-surviving tab persistence. Written through on every
  * onSessionStateChange push (the spike showed grab-at-save lags one
  * navigation; continuous write-through is the correct pattern).
- * Small file (<= MAX_TABS entries), so whole-snapshot rewrites are fine.
+ * Whole-snapshot rewrites (up to MAX_TABS entries); MainActivity coalesces
+ * the state pushes and flushes on onStop.
  */
 object TabsStore {
 
@@ -48,8 +49,10 @@ object TabsStore {
 
     fun decodeResult(text: String): Result<TabsSnapshot> = runCatching { decode(text) }
 
-    fun save(context: Context, manager: TabManager) {
-        val snapshot = snapshotOf(manager)
+    fun save(context: Context, manager: TabManager) = write(context, snapshotOf(manager))
+
+    /** Write a snapshot taken on the UI thread; safe to call from a background thread. */
+    fun write(context: Context, snapshot: TabsSnapshot) {
         if (!shouldPersist(snapshot)) {
             Log.w(TAG, "Skipping zero-tab snapshot (teardown or transient state)")
             return

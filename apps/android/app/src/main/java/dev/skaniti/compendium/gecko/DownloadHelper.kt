@@ -20,12 +20,15 @@ object DownloadHelper {
 
     private const val TAG = "DownloadHelper"
 
-    fun save(context: Context, response: WebResponse) {
+    /** [onDone] runs on the main thread once the download has finished or failed. */
+    fun save(context: Context, response: WebResponse, onDone: () -> Unit = {}) {
         val body = response.body
         if (body == null) {
             Log.w(TAG, "External response with no body: ${response.uri}")
+            onDone()
             return
         }
+        val main = android.os.Handler(context.mainLooper)
 
         val fileName = fileNameFor(response)
         val mime = response.headers["Content-Type"]?.substringBefore(';')?.trim()
@@ -43,19 +46,22 @@ object DownloadHelper {
                     resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 if (target == null) {
                     Log.e(TAG, "MediaStore insert failed for $fileName")
+                    main.post(onDone)
                     return@thread
                 }
                 resolver.openOutputStream(target).use { out ->
                     body.use { input -> input.copyTo(out!!) }
                 }
                 Log.i(TAG, "Downloaded $fileName ($mime)")
-                android.os.Handler(context.mainLooper).post {
+                main.post {
                     Toast.makeText(context, "Downloaded $fileName", Toast.LENGTH_SHORT).show()
+                    onDone()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed: ${response.uri}", e)
-                android.os.Handler(context.mainLooper).post {
+                main.post {
                     Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+                    onDone()
                 }
             }
         }

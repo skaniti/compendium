@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
 import dev.skaniti.compendium.gecko.CollectorPermissionDelegate
 import dev.skaniti.compendium.gecko.CollectorPromptDelegate
 import dev.skaniti.compendium.gecko.DownloadHelper
@@ -35,13 +36,19 @@ import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.MediaSession
 import org.mozilla.geckoview.WebResponse
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener, ImagePicker {
 
     companion object {
         private const val TAG = "MainActivity"
         private const val INACTIVITY_CHECK_INTERVAL_MS = 60_000L
+        // Session-state pushes arrive on every navigation of every live tab; coalesce the
+        // whole-snapshot rewrite of tabs.json instead of writing on each one.
+        private const val TABS_SAVE_DELAY_MS = 1_000L
         // Start page for the launch tab, the close-last-tab fallback, and every new tab (dev-note N1).
         private const val DEFAULT_URL = "https://en.wikipedia.org/"
     }
@@ -71,6 +78,47 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 exportAndRestart()
             }
             handler.postDelayed(this, INACTIVITY_CHECK_INTERVAL_MS)
+        }
+    }
+
+    // tabs.json is a whole-snapshot rewrite that grows with the tab count: snapshot on the
+    // UI thread, encode and write on one background thread so writes stay in order.
+    private val tabsWriter = Executors.newSingleThreadExecutor()
+    private var tabsSavePending = false
+    private val saveTabs = Runnable { tabsSavePending = false; saveTabsNow() }
+
+    private fun saveTabsNow() {
+        if (tornDown) return
+        val snapshot = TabsStore.snapshotOf(tabManager)
+        tabsWriter.execute { TabsStore.write(this, snapshot) }
+    }
+
+    /**
+     * Coalesce session-state pushes: in the foreground at most one write per
+     * TABS_SAVE_DELAY_MS (the timer is not restarted, so a page that pushes constantly is
+     * still saved); in the background at once, since the process can be killed any time.
+     */
+    private fun scheduleTabsSave() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            handler.removeCallbacks(saveTabs)
+            tabsSavePending = false
+            saveTabsNow()
+            return
+        }
+        if (tabsSavePending) return
+        tabsSavePending = true
+        handler.postDelayed(saveTabs, TABS_SAVE_DELAY_MS)
+    }
+
+    /** Write the current snapshot now and wait (bounded) for the writer to drain. */
+    private fun flushTabs() {
+        handler.removeCallbacks(saveTabs)
+        tabsSavePending = false
+        saveTabsNow()
+        try {
+            tabsWriter.submit {}.get(2, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Tab save did not finish in time", e)
         }
     }
 
@@ -198,13 +246,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
             // page at its top (see PullRefreshGeckoView).
             setOnChildScrollUpCallback { _, _ -> !geckoView.canPullToRefresh() }
             setOnRefreshListener {
-                val tab = tabManager.activeTab()
-                if (tab != null) {
-                    activeMapper()?.markReload()
-                    tab.session.reload()
-                } else {
-                    isRefreshing = false
-                }
+                if (tabManager.activeTab() != null) reloadActiveTab() else isRefreshing = false
             }
         }
         webViewContainer.addView(
@@ -261,9 +303,17 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         createNewTab(url, isTyped = true)
     }
 
+    override fun onStart() {
+        super.onStart()
+        // The visible tab's content process may have been killed while in the background.
+        restoreActiveIfClosed()
+    }
+
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(inactivityChecker)
+        // A backgrounded process can be killed at any time.
+        flushTabs()
         exportSession()
     }
 
@@ -281,8 +331,11 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
     override fun onDestroy() {
         handler.removeCallbacks(inactivityChecker)
+        // Last write while the tab list is still whole; afterwards tornDown blocks all saves.
+        flushTabs()
         tornDown = true
         tabManager.closeAll()
+        tabsWriter.shutdown()
         super.onDestroy()
     }
 
@@ -361,6 +414,17 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         }
 
         s.promptDelegate = promptDelegate
+        // Playing media keeps a tab from being suspended (see suspendIdleTabs).
+        s.mediaSessionDelegate = object : MediaSession.Delegate {
+            override fun onActivated(session: GeckoSession, mediaSession: MediaSession) {
+                android.util.Log.i(TAG, "media active tab=${tab.id}")
+                tab.mediaActive = true
+            }
+
+            override fun onDeactivated(session: GeckoSession, mediaSession: MediaSession) {
+                tab.mediaActive = false
+            }
+        }
         s.permissionDelegate = permissionDelegate
 
         s.contentDelegate = object : GeckoSession.ContentDelegate {
@@ -376,8 +440,20 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 }
             }
 
+            override fun onKill(session: GeckoSession) {
+                android.util.Log.i(TAG, "onKill tab=${tab.id}")
+                onContentProcessGone(tab, restoreNow = true)
+            }
+
+            override fun onCrash(session: GeckoSession) {
+                android.util.Log.w(TAG, "onCrash tab=${tab.id}")
+                onContentProcessGone(tab, restoreNow = false)
+            }
+
             override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
-                DownloadHelper.save(this@MainActivity, response)
+                // A tab with a download streaming is not suspended (see suspendIdleTabs).
+                tab.downloadsInFlight++
+                DownloadHelper.save(this@MainActivity, response) { tab.downloadsInFlight-- }
             }
 
             override fun onContextMenu(
@@ -410,7 +486,12 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 // loads; background-tab pages get recorded via tab_switch.
                 if (tab.id != tabManager.activeTabId) return
                 val url = tab.url
-                if (url.isEmpty() || url == lastCommittedUrl) return
+                if (url.isEmpty() || url == lastCommittedUrl) {
+                    // Not a new visit (restore, reload, same page): drop the signals it left
+                    // so they cannot mislabel the next navigation.
+                    mapper.consume()
+                    return
+                }
 
                 lastCommittedUrl = url
                 val (transitionType, qualifiers) = mapper.consume()
@@ -428,8 +509,12 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 session: GeckoSession,
                 sessionState: GeckoSession.SessionState,
             ) {
+                // A suspended tab keeps the state it was suspended with; a late callback from
+                // the closing session must not overwrite it.
+                if (tab.pendingRestore) return
                 tab.stateString = sessionState.toString()
-                if (!tornDown) TabsStore.save(this@MainActivity, tabManager)
+                tab.stateUrl = sessionState.getOrNull(sessionState.currentIndex)?.uri
+                if (!tornDown) scheduleTabsSave()
             }
         }
     }
@@ -438,16 +523,70 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     private fun ensureSessionOpen(tab: TabManager.Tab) {
         if (tab.session.isOpen) return
         tab.session.open(GeckoEngine.runtime(this))
-        if (tab.pendingRestore && tab.stateString != null) {
-            try {
-                val state = GeckoSession.SessionState.fromString(tab.stateString)
-                if (state != null) tab.session.restoreState(state)
+        if (tab.pendingRestore) {
+            val state = try {
+                tab.stateString?.let { GeckoSession.SessionState.fromString(it) }
             } catch (e: Exception) {
-                // Corrupt state: fall back to a plain load of the last URL.
-                if (tab.url.isNotEmpty()) tab.session.loadUri(tab.url)
+                null
             }
+            // No or corrupt state: fall back to a plain load of the last URL.
+            if (state != null) tab.session.restoreState(state)
+            else if (tab.url.isNotEmpty()) tab.session.loadUri(tab.url)
             tab.pendingRestore = false
         }
+    }
+
+    /**
+     * Close the sessions of tabs beyond the live budget; each restores from its saved
+     * state when opened again. A tab with no saved state yet stays live.
+     */
+    private fun suspendIdleTabs() {
+        for (tab in tabManager.idleLiveTabs(TabManager.MAX_LIVE_TABS)) {
+            // Saved state that trails the page (a push still in flight) would restore the
+            // wrong page; playing media or a streaming download would be cut off.
+            if (tab.stateString == null || tab.stateUrl != tab.url) continue
+            if (tab.mediaActive || tab.downloadsInFlight > 0) continue
+            android.util.Log.i(TAG, "suspend tab=${tab.id}")
+            tab.pendingRestore = true
+            tab.session.close()
+        }
+    }
+
+    /**
+     * The tab's content process is gone and GeckoView has closed its session; its saved
+     * state is kept for a restore. After an OS kill the visible tab restores at once if the
+     * app is in the foreground (else on the next start); after a crash it waits for a reload
+     * or a switch, so a page that crashes on load cannot loop.
+     */
+    private fun onContentProcessGone(tab: TabManager.Tab, restoreNow: Boolean) {
+        if (tornDown) return
+        tab.pendingRestore = true
+        if (tab.id != tabManager.activeTabId) return
+        if (isPageFullScreen) {
+            isPageFullScreen = false
+            setFullScreenChrome(false)
+        }
+        if (restoreNow && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            handler.post { restoreActiveIfClosed() }
+        }
+    }
+
+    /** Reopen the visible tab if its session was closed underneath it (kill or crash). */
+    private fun restoreActiveIfClosed() {
+        if (tornDown) return
+        val tab = tabManager.activeTab() ?: return
+        if (!tab.session.isOpen) switchToTab(tab.id, recordSwitch = false)
+    }
+
+    /** Reload the visible tab, or restore it if its content process crashed. */
+    private fun reloadActiveTab() {
+        val tab = tabManager.activeTab() ?: return
+        if (!tab.session.isOpen) {
+            switchToTab(tab.id, recordSwitch = false)
+            return
+        }
+        activeMapper()?.markReload()
+        tab.session.reload()
     }
 
     // -------------------------------------------------------------------------
@@ -472,7 +611,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
             if (isTyped) mappers[tab.id]?.markTyped()
             session.loadUri(url)
         }
-        TabsStore.save(this, tabManager)
+        saveTabsNow()
     }
 
     fun switchToTab(tabId: Int) = switchToTab(tabId, recordSwitch = true)
@@ -484,6 +623,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
         geckoView.releaseSession()
         geckoView.setSession(tab.session)
+        suspendIdleTabs()
 
         urlBar.setText(tab.url)
         lastCommittedUrl = tab.url
@@ -491,7 +631,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         if (recordSwitch && previousTabId != -1 && previousTabId != tabId && tab.url.isNotEmpty()) {
             sessionManager.recordPage(tab.url, tab.title, "tab_switch", emptyList(), tabId = tab.id)
         }
-        TabsStore.save(this, tabManager)
+        saveTabsNow()
     }
 
     fun closeTab(tabId: Int) {
@@ -504,7 +644,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         } else {
             createNewTab(DEFAULT_URL, isTyped = true)
         }
-        TabsStore.save(this, tabManager)
+        saveTabsNow()
     }
 
     private fun showTabGrid() {
@@ -541,11 +681,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
             }
         }
 
-        findViewById<ImageButton>(R.id.btnReload).setOnClickListener {
-            val tab = tabManager.activeTab() ?: return@setOnClickListener
-            activeMapper()?.markReload()
-            tab.session.reload()
-        }
+        findViewById<ImageButton>(R.id.btnReload).setOnClickListener { reloadActiveTab() }
 
         findViewById<ImageButton>(R.id.btnNewTab).setOnClickListener { createNewTab(DEFAULT_URL, isTyped = true) }
         findViewById<ImageButton>(R.id.btnTabs).setOnClickListener { showTabGrid() }
