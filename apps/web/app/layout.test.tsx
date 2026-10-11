@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { cookies } from "next/headers";
 import RootLayout, { buildThemeBootstrapScript, generateMetadata } from "./layout";
@@ -250,15 +252,34 @@ describe("layout metadata", () => {
   afterEach(() => {
     if (original === undefined) delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     else process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = original;
+    vi.unstubAllEnvs();
   });
 
-  it("sets robots noindex on the hosted demo", async () => {
+  const icon = (url: string) => ({ icon: [{ url, type: "image/svg+xml" }] });
+
+  it("sets robots noindex and the comet icon on the hosted demo", async () => {
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
-    expect(await generateMetadata()).toEqual({ title: "Compendium", robots: { index: false, follow: false } });
+    expect(await generateMetadata()).toEqual({
+      title: "Compendium",
+      icons: icon("/icons/compendium-public.svg"),
+      robots: { index: false, follow: false },
+    });
   });
 
-  it("sets no robots rule elsewhere", async () => {
+  it("sets no robots rule and the owner icon elsewhere", async () => {
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-    expect(await generateMetadata()).toEqual({ title: "Compendium" });
+    expect(await generateMetadata()).toEqual({ title: "Compendium", icons: icon("/icons/compendium.svg") });
+  });
+
+  it("uses the dev icon under next dev, even with a Turnstile key set", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+    expect((await generateMetadata()).icons).toEqual(icon("/icons/compendium-dev.svg"));
+  });
+
+  it("ships every icon file it can pick", () => {
+    for (const name of ["compendium-public.svg", "compendium.svg", "compendium-dev.svg"]) {
+      expect(existsSync(join(__dirname, "../public/icons", name))).toBe(true);
+    }
   });
 });

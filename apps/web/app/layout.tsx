@@ -15,12 +15,21 @@ import "./styles/login.css";
 import "./styles/starry-selector.css";
 import "./styles/compendium-loader.css";
 
+// Tab icon per deployment: the local dev build, the hosted public demo, and
+// everything else (the owner web). Dev is checked first so a local run with a
+// Turnstile key set still shows the dev icon.
+function pageIcon(): string {
+  if (process.env.NODE_ENV === "development") return "/icons/compendium-dev.svg";
+  return demoEntryEnabled() ? "/icons/compendium-public.svg" : "/icons/compendium.svg";
+}
+
 export async function generateMetadata(): Promise<Metadata> {
+  const icons = { icon: [{ url: pageIcon(), type: "image/svg+xml" }] };
   // demo-one-click-entry: belt and braces with the X-Robots-Tag header in
   // next.config.ts and app/robots.ts.
   return demoEntryEnabled()
-    ? { title: "Compendium", robots: { index: false, follow: false } }
-    : { title: "Compendium" };
+    ? { title: "Compendium", icons, robots: { index: false, follow: false } }
+    : { title: "Compendium", icons };
 }
 
 // Same key ThemeProvider reads/writes -- keep in sync.
