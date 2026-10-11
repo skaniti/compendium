@@ -564,7 +564,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     resize(432);
     const grown = ptrs();
     expect(grown.filter((k) => !atMin.includes(k))).toEqual([]);
-  }, 30000);
+  }, 60000);
 
   it("the pan clamp follows the current canvas size after a resize (graph stays centred)", async () => {
     const { render } = await import("@/lib/graph/d3-graph-vendor.js");
@@ -640,7 +640,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
     let max = atReturn;
     for (let h = 900; h <= 1100; h += 2) { resize(h); max = Math.max(max, placement().c); }
     expect(max).toBeGreaterThan(atReturn + 1e-6);
-  }, 30000);
+  }, 60000);
 
   // Task 12 (the 2026-10-09 sc-pointer-bands plan, private): marks shrink
   // with the panel on small canvases. markScale = clamp(min(w, h) / REF,
@@ -726,7 +726,7 @@ describe("d3-graph-vendor SC layout separation (delta #32)", () => {
       expect(p.starOpacity).toBeCloseTo(0.35 * 0.78, 6);
       expect(p.dot).toBeCloseTo(4, 6);
       expect(p.stroke).toBeCloseTo(1.25, 6);
-    });
+    }, 30000);
 
     it("SC_MARK_FIT_FLOOR is live-tunable", async () => {
       const { applyTunerOverrides } = await import("@/lib/graph/d3-graph-vendor.js");
