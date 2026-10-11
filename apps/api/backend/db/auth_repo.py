@@ -12,11 +12,11 @@ from backend.db.connection import get_conn
 
 def set_password(
     user_id: int,
-    password_hash: str,
+    password_hash: str | None,
     audit_ctx: AuditCtx | None = None,
     via: str = "bootstrap",
 ) -> None:
-    """Set (or update) a user's password hash."""
+    """Set (or update, or with None clear) a user's password hash."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -151,7 +151,11 @@ def get_user_by_login(identifier: str) -> dict | None:
 
 
 def save_refresh_token(
-    user_id: int, token_hash: str, expires_at: datetime, remembered: bool = False
+    user_id: int,
+    token_hash: str,
+    expires_at: datetime,
+    remembered: bool = False,
+    break_glass: bool = False,
 ) -> int:
     """Store a hashed refresh token. Returns the token row ID.
 
@@ -162,16 +166,18 @@ def save_refresh_token(
     (login and each rotation), never carried forward from a stored token's
     own flag, so ``session_policy`` stays derived from the DB without
     re-trusting client input.
+
+    ``break_glass`` (migration 052) marks a session opened with a break-glass code; rotation keeps it plain.
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO refresh_tokens (user_id, token_hash, expires_at, remembered)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO refresh_tokens (user_id, token_hash, expires_at, remembered, break_glass)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (user_id, token_hash, expires_at, remembered),
+                (user_id, token_hash, expires_at, remembered, break_glass),
             )
             return cur.fetchone()[0]
 
@@ -182,7 +188,7 @@ def get_refresh_token(token_hash: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, remembered
+                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, remembered, break_glass
                 FROM refresh_tokens
                 WHERE token_hash = %s
                 """,
@@ -201,6 +207,7 @@ def get_refresh_token(token_hash: str) -> dict | None:
         "created_at": row[4],
         "revoked_at": row[5],
         "remembered": row[6],
+        "break_glass": row[7],
     }
 
 
