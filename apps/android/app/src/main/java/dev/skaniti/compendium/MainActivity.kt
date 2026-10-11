@@ -9,6 +9,7 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -180,6 +181,8 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 android.util.Log.i(TAG, "imeVisible=$visible")
                 imeVisible = visible
                 updateBottomBar()
+                // Keyboard dismissed without Go: let the next tap on the bar select all again.
+                if (!visible && urlBar.hasFocus()) geckoView.requestFocus()
             }
             insets
         }
@@ -211,6 +214,10 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             )
         )
+
+        // The page starts with focus; the URL bar, as the first focusable view, would
+        // otherwise take it and keep its address from following navigation.
+        geckoView.requestFocus()
 
         setupNavButtons()
         setupUrlBar()
@@ -320,7 +327,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                 if (url != null && url != "about:blank") {
                     tab.url = url
                     mapper.onLocationChanged()
-                    if (tab.id == tabManager.activeTabId) urlBar.setText(url)
+                    if (tab.id == tabManager.activeTabId && !urlBar.hasFocus()) urlBar.setText(url)
                 }
             }
 
@@ -642,11 +649,19 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     }
 
     private fun setupUrlBar() {
+        // Leaving the bar without Go puts the page's address back over any half-typed text.
+        urlBar.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) tabManager.activeTab()?.let { urlBar.setText(it.url) }
+        }
         urlBar.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_GO ||
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
             ) {
                 navigateToUrl(urlBar.text.toString())
+                // Move focus to the page so the next tap on the bar selects the whole address again.
+                geckoView.requestFocus()
+                getSystemService(InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(urlBar.windowToken, 0)
                 true
             } else {
                 false
