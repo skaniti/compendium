@@ -10,10 +10,12 @@ private (real data, secrets, hostnames, private operational detail). The
 predecessor app (Dash + FastAPI) lives in `~/dev/private/compendium-explorer`
 ("explorer", private forever); we are migrating surface-by-surface, batch by batch.
 
-`docs/project-plans/` is a gitignored symlink into the explorer repo (plans stay
-out of public history). Edits to plan docs land in the explorer's working tree —
-remind the user to commit them from an explorer session at milestones. Never
-`git add -f` anything under it.
+`docs/project-plans/` and `docs/runbooks/` are gitignored symlinks into the
+explorer repo (plans and runbooks stay out of public history). Edits there land
+in the explorer's working tree — commit them in explorer yourself
+(`git -C ~/dev/private/compendium-explorer`, explicit paths, only your own
+files, explorer's ledger) at each logical unit; never push. Never `git add -f`
+anything under them here.
 
 - Never push. Pushes are user-run only (`ALLOW_PUSH=1`); the guard stack enforces this.
 - Commit format per `docs/references/COMMIT-FORMAT.md`: parens-free
