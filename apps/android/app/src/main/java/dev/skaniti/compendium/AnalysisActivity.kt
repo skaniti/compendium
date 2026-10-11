@@ -29,6 +29,8 @@ import dev.skaniti.compendium.model.SessionData
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.text.SimpleDateFormat
+import java.time.YearMonth
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
@@ -342,15 +344,53 @@ class AnalysisActivity : AppCompatActivity(), ImagePicker {
     }
 
     private fun addExportLogEntries(container: LinearLayout) {
-        val log = SessionExporter.getExportLog(this).sortedByDescending { it.exportedAt }
+        val log = SessionExporter.getExportLog(this)
 
         if (log.isEmpty()) {
             container.addView(createSubtext("No exports recorded yet").apply { tag = "export_log_entry" })
-        } else {
-            for (entry in log) {
-                container.addView(createExportLogCard(entry).apply { tag = "export_log_entry" })
+            return
+        }
+        // One collapsible section per month; only the current month starts open.
+        val zone = ZoneId.systemDefault()
+        val current = YearMonth.now(zone)
+        for (group in groupExportsByMonth(log, zone, Locale.getDefault())) {
+            container.addView(createExportMonthSection(group, expanded = group.month == current)
+                .apply { tag = "export_log_entry" })
+        }
+    }
+
+    private fun createExportMonthSection(group: ExportMonth, expanded: Boolean): LinearLayout {
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = linearParams(matchWidth = true)
+        }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = linearParams(matchWidth = true)
+            visibility = if (expanded) View.VISIBLE else View.GONE
+        }
+        val exportsLabel = if (group.entries.size == 1) "1 export" else "${group.entries.size} exports"
+        val header = TextView(this).apply {
+            fun render() {
+                val chevron = if (body.visibility == View.VISIBLE) "▾" else "▸"
+                text = "$chevron  ${group.label}  ·  $exportsLabel, ${group.pageCount} pages"
+            }
+            render()
+            setTextColor(cOnSurface)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(10), 0, dp(10))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                render()
             }
         }
+        for (entry in group.entries) body.addView(createExportLogCard(entry))
+        section.addView(header)
+        section.addView(body)
+        return section
     }
 
     private fun refreshExportLog(container: LinearLayout) {
