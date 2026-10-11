@@ -6,9 +6,9 @@ the shared TAILNET_ASSERT_SECRET (header X-Compendium-Tailnet-Assert).
 tailnet-only deployment, and for any request that came through Cloudflare.
 A browser becomes trusted only inside a password or passkey sign-in (POST
 /api/auth/login via maybe_trust_browser(), or the passkey endpoints in
-passkey_auth.py via trust_browser()), which return the browser token. There is no standalone registration
-endpoint, so a trusted-browser
-session cannot register further browsers.
+passkey_auth.py via trust_browser()), which return the browser token. There
+is no standalone registration endpoint, so a trusted-browser session cannot
+register further browsers.
 """
 
 from __future__ import annotations

@@ -249,14 +249,16 @@ def test_a_garbage_sign_in_response_is_a_401(env, client, garbage):
     assert res.status_code == 401 and _reason("auth.login.failed") == "challenge"
 
 
-def test_a_tampered_signature_is_a_verify_failure(env, client):
+def test_a_tampered_signature_is_a_verify_failure(env, client, caplog):
     auth = SoftAuthenticator(RP, ORIGIN)
     _enroll(client, env["admin"]["id"], auth)
     opts = _post(client, "/login/options", {"tailnet_login": LOGIN}).json()["options"]
     response = auth.authenticate(opts)
     response["response"]["signature"] = response["response"]["signature"][::-1]
-    res = _post(client, "/login/verify", {"tailnet_login": LOGIN, "response": response})
+    with caplog.at_level("WARNING", logger="backend.services.passkeys"):
+        res = _post(client, "/login/verify", {"tailnet_login": LOGIN, "response": response})
     assert res.status_code == 401 and _reason("auth.login.failed") == "verify"
+    assert any("refused by verifier" in r.getMessage() for r in caplog.records)
 
 
 def test_cleanup_sweeps_expired_challenges(env, client):
@@ -277,3 +279,59 @@ def test_the_same_authenticator_through_a_new_link_is_refused(env, client):
     assert second.status_code == 401
     assert _reason("auth.passkey.register_failed") == "verify"
     assert passkey_repo.count_active(env["admin"]["id"]) == 1
+
+
+def test_a_counter_that_stops_counting_is_refused(env, client):
+    auth = SoftAuthenticator(RP, ORIGIN, sign_count_step=1)
+    _enroll(client, env["admin"]["id"], auth)
+    assert _sign_in(client, auth)[1].status_code == 200  # stored count 1
+    auth.sign_count_step = 0
+    auth.sign_count = 0
+    _, res = _sign_in(client, auth)
+    assert res.status_code == 401 and _reason("auth.login.failed") == "counter"
+
+
+def test_a_synced_passkey_with_zero_counters_signs_in_repeatedly(env, client):
+    auth = SoftAuthenticator(RP, ORIGIN)
+    _enroll(client, env["admin"]["id"], auth)
+    assert _sign_in(client, auth)[1].status_code == 200
+    assert _sign_in(client, auth)[1].status_code == 200
+
+
+def test_a_counting_passkey_keeps_signing_in(env, client):
+    auth = SoftAuthenticator(RP, ORIGIN, sign_count_step=1)
+    _enroll(client, env["admin"]["id"], auth)
+    assert _sign_in(client, auth)[1].status_code == 200
+    assert _sign_in(client, auth)[1].status_code == 200
+
+
+def test_another_accounts_challenge_is_refused(env, client):
+    mine, theirs = SoftAuthenticator(RP, ORIGIN), SoftAuthenticator(RP, ORIGIN)
+    _enroll(client, env["admin"]["id"], mine)
+    _enroll(client, env["other"]["id"], theirs, login=OTHER_LOGIN)
+    their_opts = _post(client, "/login/options", {"tailnet_login": OTHER_LOGIN}).json()["options"]
+    response = mine.authenticate(their_opts)
+    res = _post(client, "/login/verify", {"tailnet_login": LOGIN, "response": response})
+    assert res.status_code == 401 and _reason("auth.login.failed") == "challenge"
+
+
+def test_a_challenge_from_one_link_is_refused_on_another(env, client):
+    raw_a, _ = passkeys.new_enrollment(env["admin"]["id"], None)
+    raw_b, _ = passkeys.new_enrollment(env["admin"]["id"], None)
+    auth = SoftAuthenticator(RP, ORIGIN)
+    opts = _post(client, "/enroll/options", {"tailnet_login": LOGIN, "enrollment_token": raw_a}).json()["options"]
+    res = _post(
+        client,
+        "/enroll/verify",
+        {"tailnet_login": LOGIN, "enrollment_token": raw_b, "response": auth.register(opts)},
+    )
+    assert res.status_code == 401 and _reason("auth.passkey.register_failed") == "verify"
+    assert passkey_repo.count_active(env["admin"]["id"]) == 0
+
+
+def test_a_garbage_enroll_response_is_a_401_and_keeps_the_link(env, client):
+    raw, _ = passkeys.new_enrollment(env["admin"]["id"], None)
+    body = {"tailnet_login": LOGIN, "enrollment_token": raw}
+    res = _post(client, "/enroll/verify", {**body, "response": {}})
+    assert res.status_code == 401 and _reason("auth.passkey.register_failed") == "verify"
+    assert _post(client, "/enroll/options", body).status_code == 200

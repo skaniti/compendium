@@ -85,7 +85,7 @@ def enroll_verify(user: dict, raw_token: str, response: dict) -> tuple[int, str 
     try:
         cred = webauthn_adapter.verify_registration(response, challenge=challenge)
     except webauthn_adapter.WebAuthnError as exc:
-        logger.warning("passkey %s refused by verifier: %s", "registration", exc)
+        logger.warning("passkey %s refused by verifier: %s", "registration", str(exc)[:200])
         raise PasskeyFailure("verify") from None
     # Consumed only after a verified response, so a failed attempt can retry
     # with the same link; the atomic consume makes a second success a "used".
@@ -135,9 +135,11 @@ def login_verify(user: dict, response: dict) -> dict:
             response, challenge=challenge, public_key=cred["public_key"]
         )
     except webauthn_adapter.WebAuthnError as exc:
-        logger.warning("passkey %s refused by verifier: %s", "authentication", exc)
+        logger.warning("passkey %s refused by verifier: %s", "authentication", str(exc)[:200])
         raise PasskeyFailure("verify") from None
-    if cred["sign_count"] > 0 and 0 < result.new_sign_count <= cred["sign_count"]:
+    # WebAuthn's standard rule: when either counter is nonzero the new one must
+    # be larger. Synced passkeys that never count (both 0) still pass.
+    if (cred["sign_count"] > 0 or result.new_sign_count > 0) and result.new_sign_count <= cred["sign_count"]:
         raise PasskeyFailure("counter")
     passkey_repo.record_use(cred["id"], result.new_sign_count, result.backed_up)
     return cred

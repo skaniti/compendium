@@ -468,18 +468,23 @@ def cleanup_tokens_once() -> int:
     detection) and expired passkey challenges; never raises (housekeeping).
     Returns the refresh-token count."""
     try:
-        from backend.db import auth_repo, passkey_repo
+        from backend.db import auth_repo
 
         cleaned = auth_repo.cleanup_expired_only()
         if cleaned:
             logger.info(f"refresh token sweep: removed {cleaned} expired rows")
+    except Exception:
+        logger.exception("refresh token sweep failed")
+        cleaned = 0
+    try:
+        from backend.db import passkey_repo
+
         challenges = passkey_repo.delete_expired_challenges()
         if challenges:
             logger.info(f"passkey challenge sweep: removed {challenges} expired rows")
-        return cleaned
     except Exception:
-        logger.exception("refresh token sweep failed")
-        return 0
+        logger.exception("passkey challenge sweep failed")
+    return cleaned
 
 
 async def _token_cleanup_loop(interval_hours: int = 24, *, initial_delay_seconds: int = 300) -> None:
