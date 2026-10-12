@@ -9,11 +9,11 @@ supercluster grouping, and featured-singleton selection. It's the same
 corpus documented in `apps/web/demo/fixtures/ATTRIBUTION.md` (source list +
 licensing notes), captured post-pipeline instead of pre-pipeline.
 
-Loading it (`apps/api/scripts/demo/load_demo_seed.py`) turns the Docker
-Compose clone-and-run stack (see the repo root README's "Full-stack
-quickstart (Docker)") from an empty-but-logged-in demo account into a fully
-populated one — graph, diary, topic detail all have real data on first
-`docker compose up`, no LLM API keys or capture pipeline required.
+Loading it (`apps/api/scripts/demo/load_demo_seed.py`) populates the hosted
+demo's database (`apps/api/docker/docker-compose.demo.yml`, `SEED_DEMO=1`):
+graph, diary and topic detail all have real data on first boot, with no LLM
+API keys or capture pipeline required. The root `docker-compose.yml` no
+longer loads it; that stack starts empty for your own data.
 
 ## Provenance
 
@@ -42,8 +42,8 @@ attribution doc already covers.
 
 `captured_assets` rows (image/stylesheet metadata referenced by archived
 page HTML) ship in the seed, but their binary files are not part of this
-export. The compose stack gets them from the frontend-only demo instead:
-the root `docker-compose.yml` mounts
+export. The hosted demo stack gets them from the frontend-only demo instead:
+`apps/api/docker/docker-compose.demo.yml` mounts
 `apps/web/demo/fixtures/assets/captured-assets` read-only at the API's
 assets base dir (`/app/data/captures/assets`). Those files use the same
 `<aa>/<sha>.<ext>` layout as `captured_assets.file_path`, so
@@ -51,7 +51,7 @@ assets base dir (`/app/data/captures/assets`). Those files use the same
 check passes for the demo login because the loader remaps every row's
 `user_id` to the demo account.
 
-Verified 2026-10-05 against a freshly built compose stack, logged in as the
+Verified 2026-10-05 against a freshly built compose stack (the root stack, which loaded the seed at the time), logged in as the
 demo account: all 3,041 seeded rows return 200, and a different login gets
 404 on the same paths. All 157 pages with linked assets render a preview
 that resolves every asset it references.
@@ -68,7 +68,7 @@ YouTube page has no fixture preview). Where they came from:
   cdn-learn.adafruit.com lesson images and the GitHub release badge on the
   arduino/Arduino page (via its camo.githubusercontent.com URL).
 
-The fixture directory also holds 77 files with no seed row. The compose stack
+The fixture directory also holds 77 files with no seed row. The demo stack
 never requests them.
 
 ## Synthetic augment (temporary, D10 c-1)

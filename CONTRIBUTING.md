@@ -9,8 +9,9 @@ response cadence is best-effort.
 
 - Frontend only, zero setup: `npm ci && npm run demo` (see the README
   Quickstart). Everything runs against a static demo compendium.
-- Full stack: `docker compose up --build` (README,
-  "Full-stack quickstart (Docker)").
+- Full stack: fill in `.env` from `.env.example`, then
+  `docker compose up --build` (README, "Full-stack (Docker)"). It runs
+  with real sign-in and starts empty; `npm run demo` has the sample data.
 - Frontend against a backend you already run: `bash scripts/dev.sh`, which
   takes `BACKEND_URL` from the environment (default `http://localhost:8001`)
   and reads `BACKEND_DIR` from `apps/web/.env.local` (an exported
