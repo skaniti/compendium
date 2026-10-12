@@ -67,7 +67,7 @@ Single-quote any value that contains `$`, `#` or spaces. `docker compose` refuse
 docker compose up --build
 ```
 
-Postgres starts, `apps/api` runs its migrations and creates your login from `.env`, then `apps/web` builds and starts. The first run builds the backend's Python dependencies and downloads its models (a few minutes); after that, `docker compose up` is fast.
+Postgres starts, `apps/api` runs its migrations and creates your login from `.env`, then `apps/web` builds and starts. The first run builds the backend's Python dependencies and downloads its models (a few minutes); after that, `docker compose up` is fast. It runs in the foreground and shows the logs, so run step 4's command in a second terminal in the same folder.
 
 **3. Sign in** at **http://localhost:3000** with the email and password from `.env`. The compendium stays empty until the collectors send pages. Over plain `http://` the web UI works from this machine only: its sign-in cookies are secure-only, and browsers drop them there. To use it from other devices, see **Reaching it from other devices (Tailscale)** below.
 
