@@ -64,6 +64,12 @@ def _get_user_by_email(email: str) -> dict | None:
     return user_repo.get_user_by_id(row[0])
 
 
+def _hash_of(user_id: int) -> str | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+        return cur.fetchone()[0]
+
+
 def _rename_user(user_id: int, *, new_email: str, new_name: str) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -91,6 +97,16 @@ def _bootstrap_primary() -> None:
     existing_primary = _get_user_by_email(primary_email)
     legacy_user = _get_user_by_email(legacy_email)
 
+    # PRIMARY_ONLY: a changed password must also end the account's sessions.
+    end_sessions_id, why = None, ""
+    if _primary_only():
+        if existing_primary is not None:
+            old_hash = _hash_of(existing_primary["id"])
+            if old_hash is None or not verify_password(primary_password, old_hash):
+                end_sessions_id, why = existing_primary["id"], "its password changed"
+        elif legacy_user is not None:
+            end_sessions_id, why = legacy_user["id"], "the legacy account was renamed"
+
     if existing_primary is not None:
         auth_repo.set_password(existing_primary["id"], hash_password(primary_password))
         print(
@@ -112,6 +128,10 @@ def _bootstrap_primary() -> None:
             f"[primary] created fresh user {primary_email} (id={user['id']}, "
             f"{primary_name}); password set. NOTE: no existing data attached."
         )
+
+    if end_sessions_id is not None:
+        auth_repo.revoke_all_user_tokens(end_sessions_id)
+        print(f"[primary] sessions ended for {primary_email}: {why}")
 
     # Tag the primary as admin so the role-gated admin-only surfaces
     # (e.g. the tuner panel's copy-current-config-to-clipboard button)
@@ -229,7 +249,8 @@ def _clear_published_default_logins(primary_email: str) -> None:
     if cleared:
         print(
             "[primary] To keep an old account's data, set BOOTSTRAP_EMAIL to "
-            "that email; the next boot gives it the BOOTSTRAP_PASSWORD from .env."
+            "that email in .env and run `docker compose up -d` (a plain restart keeps "
+            "the old environment)."
         )
 
 

@@ -7,7 +7,12 @@ import pytest
 from backend.db import auth_repo, user_repo
 from backend.db.connection import get_conn
 from backend.scripts import bootstrap_user
-from backend.services.auth_service import hash_password, verify_password
+from backend.services.auth_service import (
+    _hash_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
 
 
 def _user_ids() -> set[int]:
@@ -101,6 +106,11 @@ def _hash_of(user_id: int):
         return cur.fetchone()[0]
 
 
+def _revoked(raw_token: str) -> bool:
+    row = auth_repo.get_refresh_token(_hash_token(raw_token))
+    return row is None or row["revoked_at"] is not None
+
+
 def _drop(*users: dict) -> None:
     _delete_users(*[u["email"] for u in users])
 
@@ -110,10 +120,12 @@ def test_clears_a_leftover_login_with_a_published_default(
     primary, capsys, default_pw
 ):
     old = _make_user(default_pw, role="admin" if default_pw != "demo" else "demo")
+    token = create_refresh_token(old["id"])
     try:
         bootstrap_user.bootstrap()
         out = capsys.readouterr().out
         assert _hash_of(old["id"]) is None
+        assert _revoked(token)
         assert old["email"] in out
         assert "BOOTSTRAP_EMAIL" in out  # how to keep that account's data
     finally:
@@ -198,3 +210,50 @@ def test_rerun_resyncs_password_and_changed_email_makes_a_new_account(
         assert _row(primary["email"]) == first  # old account untouched
     finally:
         _delete_users(new_email)
+
+
+def _owner(primary, password: str | None) -> dict:
+    owner = user_repo.create_user(primary["email"], name="owner")
+    if password is not None:
+        auth_repo.set_password(owner["id"], hash_password(password))
+    return owner
+
+
+def test_changed_password_ends_the_owners_sessions(primary, capsys):
+    owner = _owner(primary, "old-owner-password")
+    token = create_refresh_token(owner["id"])
+    bootstrap_user.bootstrap()  # BOOTSTRAP_PASSWORD is long-enough-pw
+    assert _revoked(token)
+    assert "sessions ended" in capsys.readouterr().out
+
+
+def test_unchanged_password_keeps_the_owners_sessions(primary):
+    owner = _owner(primary, "long-enough-pw")
+    token = create_refresh_token(owner["id"])
+    bootstrap_user.bootstrap()
+    assert not _revoked(token)
+
+
+def test_cleared_owner_password_ends_the_owners_sessions(primary):
+    owner = _owner(primary, None)  # NULL hash, as after `owner_auth password clear`
+    token = create_refresh_token(owner["id"])
+    bootstrap_user.bootstrap()
+    assert _hash_of(owner["id"]) is not None
+    assert _revoked(token)
+
+
+def test_renamed_legacy_account_ends_its_sessions(primary, monkeypatch):
+    legacy_email = f"legacy-{uuid.uuid4().hex[:8]}@test.local"
+    monkeypatch.setenv("BOOTSTRAP_LEGACY_EMAIL", legacy_email)
+    legacy = user_repo.create_user(legacy_email, name="legacy")
+    # Same password as the new one: still a rename, so sessions end.
+    auth_repo.set_password(legacy["id"], hash_password("long-enough-pw"))
+    token = create_refresh_token(legacy["id"])
+    bootstrap_user.bootstrap()
+    assert _row(primary["email"])[0] == legacy["id"]
+    assert _revoked(token)
+
+
+def test_fresh_primary_boot_has_nothing_to_revoke(primary, capsys):
+    bootstrap_user.bootstrap()
+    assert "sessions ended" not in capsys.readouterr().out
