@@ -197,6 +197,8 @@ function LoginForm({
       }
       const data = (await verifyRes.json().catch(() => ({}))) as { error?: string };
       setError(data.error || PASSKEY_FAILED_MESSAGE);
+    } catch {
+      setError(PASSKEY_FAILED_MESSAGE);
     } finally {
       setBusy(false);
     }

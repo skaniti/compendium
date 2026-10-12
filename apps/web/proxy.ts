@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-names";
+import { isPreAuthPath } from "@/lib/pre-auth-paths";
 import {
   TAILNET_LOGIN_ROUTE,
   TAILNET_PAUSED_COOKIE,
@@ -27,7 +28,7 @@ export function proxy(req: NextRequest): NextResponse {
 
   const { pathname } = req.nextUrl;
   if (
-    pathname === "/login" || pathname === "/passkey/enroll" || pathname.startsWith("/api/") ||
+    isPreAuthPath(pathname) || pathname.startsWith("/api/") ||
     pathname.startsWith("/captured-assets/")
   ) {
     return NextResponse.next();

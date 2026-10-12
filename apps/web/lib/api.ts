@@ -18,6 +18,7 @@ import type {
   TopicInterest,
   TopicMember,
 } from "./types";
+import { isPreAuthPath } from "./pre-auth-paths";
 import { STALE_API_MESSAGE } from "./overview";
 import { sessionMayResume } from "./session-policy-client";
 
@@ -119,7 +120,7 @@ export async function apiFetch(...args: Parameters<typeof fetch>): Promise<Respo
 // own /login check.
 export function redirectToLogin(): void {
   if (typeof window === "undefined") return;
-  if (window.location.pathname === "/login") return;
+  if (isPreAuthPath(window.location.pathname)) return;
   // Full reload (not router navigation) is deliberate: an expired/invalid
   // session must invalidate every client-side cache/context, same as the
   // explicit sign-out/login flows (components/Header.tsx, app/login/page.tsx).

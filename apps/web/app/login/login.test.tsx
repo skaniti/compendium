@@ -341,7 +341,15 @@ describe("passkey mode (owner-passkeys)", () => {
     fireEvent.click(screen.getByTestId("passkey-sign-in"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/passkey/login/options");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/passkey/login/verify");
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ response: { id: "x" }, trustBrowser: true });
+  });
+
+  it("shows the failed message when the request rejects", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new TypeError("network")));
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={passkey} />);
+    fireEvent.click(screen.getByTestId("passkey-sign-in"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Passkey sign-in didn't work.");
   });
 
   it("shows the server's message when options are refused", async () => {

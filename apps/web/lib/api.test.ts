@@ -98,6 +98,17 @@ describe("apiFetch", () => {
     expect(res.status).toBe(401);
   });
 
+  it("does not navigate to /login on a 401 while on the enrollment page", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", { ...window.location, pathname: "/passkey/enroll", assign: assignMock });
+
+    const res = await apiFetch("/api/foo");
+
+    expect(assignMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+  });
+
   it("on a 401 elsewhere, still navigates to /login exactly once", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
     const assignMock = vi.fn();

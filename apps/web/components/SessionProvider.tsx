@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import SessionKeeper from "@/components/SessionKeeper";
+import { isPreAuthPath } from "@/lib/pre-auth-paths";
 
 // D4 (batch 04 auth/session parity, spec.md D4): server-hydrated,
 // client-gated role context -- the Next equivalent of Dash's
@@ -205,7 +206,7 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
     // ("/login") -- an immediate reload loop on the page already showing.
     // proxy.ts treats "/login" as the same kind of exempt route for the
     // same class of reason (see its own redirect-loop comment).
-    if (window.location.pathname === "/login") return;
+    if (isPreAuthPath(window.location.pathname)) return;
     void refresh();
   }, [refresh]);
 

@@ -35,7 +35,9 @@ export default function EnrollClient({ ready }: { ready: boolean }) {
 
   useEffect(() => {
     const raw = window.location.hash.slice(1);
-    setToken(raw ? raw : null);
+    // Idempotent: Strict Mode runs this twice and the second read sees the
+    // already-cleared hash, so never overwrite a token that was read.
+    setToken((prev) => raw || (prev ?? null));
     // Drop the one-time token from the address bar and history.
     if (raw) window.history.replaceState(null, "", window.location.pathname);
   }, []);
@@ -74,6 +76,8 @@ export default function EnrollClient({ ready }: { ready: boolean }) {
       }
       const data = (await verifyRes.json().catch(() => ({}))) as { error?: string };
       setError(data.error || PASSKEY_SETUP_FAILED_MESSAGE);
+    } catch {
+      setError(PASSKEY_SETUP_FAILED_MESSAGE);
     } finally {
       setBusy(false);
     }

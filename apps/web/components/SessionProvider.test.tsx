@@ -98,6 +98,24 @@ describe("SessionProvider / useSession", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("does not call apiFetch on the enrollment page", async () => {
+    vi.stubGlobal("location", { ...window.location, pathname: "/passkey/enroll" });
+    const fetchMock = mockApiFetch({ error: "unauthorized" }, 401);
+
+    render(
+      <SessionProvider>
+        <Consumer />
+      </SessionProvider>
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("shows the pre-resolution placeholder (…) synchronously, before the /me fetch settles", () => {
     // Deliberately never resolves during this test -- isolates the
     // synchronous initial render from the async hydration path covered by

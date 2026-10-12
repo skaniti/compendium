@@ -160,7 +160,10 @@ describe("proxy enrollment page (owner-passkeys)", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("skips the enrollment page in the matcher", () => {
-    expect(config.matcher[0]).toContain("passkey/enroll");
+  // Behavioural check on proxy() itself (the matcher is a Next-evaluated
+  // string): only the exact enrollment path is exempt.
+  it.each(["/passkey", "/passkey/enroll/x"])("still redirects %s without a session", (path) => {
+    const res = proxy(new NextRequest(`https://app.test${path}`));
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
   });
 });
