@@ -41,6 +41,10 @@ response cadence is best-effort.
 - The `pre-push` hook refuses every push unless `ALLOW_PUSH=1` is set
   (`ALLOW_PUSH=1 git push`). Once `npm ci` has installed the hooks that
   applies to pushes to your own fork too; the friction is deliberate.
+- With `ALLOW_PUSH=1` the hook then runs `scripts/pre-push-scan.sh`, which
+  needs `gitleaks` and an identifier-terms file only the maintainer has.
+  Without them it refuses the push, so push to your fork with
+  `git push --no-verify`.
 - Branch from `main`. Keep pull requests reasonably scoped and put the
   reasoning in the description.
 - No CLA and no DCO: the MIT license already grants the rights.
