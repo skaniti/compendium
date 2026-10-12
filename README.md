@@ -69,7 +69,7 @@ docker compose up --build
 
 Postgres starts, `apps/api` runs its migrations and creates your login from `.env`, then `apps/web` builds and starts. The first run builds the backend's Python dependencies and downloads its models (a few minutes); after that, `docker compose up` is fast.
 
-**3. Sign in** at **http://localhost:3000** with the email and password from `.env`. The compendium stays empty until the collectors send pages. The web UI works from this machine only: its sign-in cookies are secure-only, and browsers drop them over plain `http://` from other devices.
+**3. Sign in** at **http://localhost:3000** with the email and password from `.env`. The compendium stays empty until the collectors send pages. Over plain `http://` the web UI works from this machine only: its sign-in cookies are secure-only, and browsers drop them there. To use it from other devices, see **Reaching it from other devices (Tailscale)** below.
 
 **4. Get the collectors' API key.**
 
@@ -85,6 +85,19 @@ It prints a new key once. Running it again issues a new key, and the old one sto
 - **Android app:** in its settings, set the backend URL to `http://<this computer's LAN address>:8001` and paste the key. The phone has to be on the same network, and the computer's firewall has to allow port 8001. Away from home, the app keeps captures and sends them once it can reach the API again.
 
 The key and your pages cross your network as plain HTTP. To keep the API on this machine only, set `API_BIND_ADDRESS=127.0.0.1` in `.env` and run `docker compose up -d` (`docker compose restart` keeps the old binding); the Android app then can't reach it.
+
+**Reaching it from other devices (Tailscale).** With [Tailscale](https://tailscale.com) on this computer and your other devices, the Android app and the web UI work from anywhere on your tailnet:
+
+- **Android app:** set the backend URL to `http://<this computer's tailnet address>:8001` (`tailscale ip -4` prints it). This needs the default `API_BIND_ADDRESS`.
+- **Web UI:** run the command below on this computer, then open `https://<this computer's name>.<your tailnet>.ts.net` on any device in your tailnet. Tailscale serves it over HTTPS with a real certificate, so sign-in works there too. No `.env` change is needed.
+
+If something else on this computer already serves port 443 through Tailscale, use another port in the `serve` and `off` commands below and add it to the address.
+
+```bash
+tailscale serve --bg --https=443 http://127.0.0.1:3000
+```
+
+If your tailnet doesn't have HTTPS certificates turned on yet, `tailscale serve` prints a link to enable them. The route stays across reboots until `tailscale serve --https=443 off` removes it.
 
 Ports: web on `127.0.0.1:3000`, API on `:8001` (`:8001/health` for a liveness check). Postgres is not published to the host; only `api` can reach it. Stop with `docker compose down`. **`docker compose down -v` deletes your compendium**: the Postgres and preview-asset volumes, along with the model cache.
 
