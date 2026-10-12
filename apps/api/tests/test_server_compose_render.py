@@ -226,3 +226,42 @@ def test_the_env_template_documents_the_one_click_entry_vars():
     template = (COMPOSE_DIR / "demo-stack.env.example").read_text()
     assert re.search(r"^DEMO_PUBLIC_ENTRY=", template, re.M)
     assert re.search(r"^DEMO_TURNSTILE_SECRET_KEY=", template, re.M)
+
+
+def _assert_no_root_bootstrap_flags(name: str):
+    # Bootstrap re-sets the primary password on every boot; only the root
+    # stack may turn it on, or an owner's passkey-only login gets undone.
+    text = (COMPOSE_DIR / name).read_text()
+    assert "BOOTSTRAP_USERS" not in text
+    assert "BOOTSTRAP_PRIMARY_ONLY" not in text
+
+
+def test_server_stack_never_sets_the_root_bootstrap_flags():
+    _assert_no_root_bootstrap_flags("docker-compose.server.yml")
+
+
+def test_demo_stack_never_sets_the_root_bootstrap_flags():
+    _assert_no_root_bootstrap_flags("docker-compose.demo.yml")
+
+
+def test_root_env_template_lists_every_required_root_var():
+    text = (REPO_ROOT / "docker-compose.yml").read_text()
+    required = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*):\?", text))
+    template = (REPO_ROOT / ".env.example").read_text()
+    assert required
+    for name in required:
+        assert re.search(rf"^{name}=", template, re.M), name
+
+
+def test_root_stack_runs_production_with_real_sign_in():
+    services = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text())["services"]
+    api_env = services["api"]["environment"]
+    assert api_env["ENVIRONMENT"] == "production"
+    assert api_env["BOOTSTRAP_USERS"] == "1"
+    assert api_env["BOOTSTRAP_PRIMARY_ONLY"] == "1"
+    assert api_env["DISABLE_REGISTRATION"] == "1"
+    assert "SEED_DEMO" not in api_env
+    web = services["web"]
+    assert web["environment"]["AUTH_REQUIRED"] == "1"
+    assert web["ports"]
+    assert all(str(p).startswith("127.0.0.1:") for p in web["ports"])
