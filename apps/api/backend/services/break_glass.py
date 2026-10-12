@@ -18,6 +18,8 @@ ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789"
 DEFAULT_MINUTES = 15
 MAX_MINUTES = 60
 _GROUPS, _GROUP_LEN = 4, 5
+# Spent when no live code can match, so timing does not reveal whether one is live.
+_DUMMY_HASH = auth_service.hash_password("break-glass-timing")
 
 
 def new_code() -> str:
@@ -27,7 +29,7 @@ def new_code() -> str:
 
 
 def normalize(code: str) -> str:
-    return "".join(ch for ch in code.upper() if ch.isalnum())
+    return "".join(ch for ch in code.upper() if ch in ALPHABET)
 
 
 def issue(user_id: int, minutes: int = DEFAULT_MINUTES) -> tuple[str, int]:
@@ -40,8 +42,14 @@ def issue(user_id: int, minutes: int = DEFAULT_MINUTES) -> tuple[str, int]:
 
 def use_code(user_id: int, presented: str) -> int | None:
     """The code row id when `presented` matches the live code and it is now
-    used up; None otherwise."""
-    row = break_glass_repo.live(user_id)
-    if row is None or not auth_service.verify_password(normalize(presented), row["code_hash"]):
+    used up; None otherwise. Malformed input never reaches bcrypt, and a
+    miss still costs one bcrypt check."""
+    candidate = normalize(presented)
+    well_formed = len(candidate) == _GROUPS * _GROUP_LEN and len(presented) <= 64
+    row = break_glass_repo.live(user_id) if well_formed else None
+    if row is None:
+        auth_service.verify_password(candidate if well_formed else "x", _DUMMY_HASH)
+        return None
+    if not auth_service.verify_password(candidate, row["code_hash"]):
         return None
     return row["id"] if break_glass_repo.use(row["id"]) else None

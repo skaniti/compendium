@@ -119,7 +119,31 @@ def test_the_demo_account_keeps_its_own_path(env, client):
 def test_rotation_keeps_a_break_glass_session_plain(env, client):
     code, _ = break_glass.issue(env["admin"]["id"])
     raw = _login(client, code).json()["refresh_token"]
-    access, new_raw, policy = auth_service.rotate_refresh_token(raw, ingress_trusted=True)
+    _, new_raw, policy = auth_service.rotate_refresh_token(raw, ingress_trusted=True)
     assert policy["remembered"] is False
     stored = auth_repo.get_refresh_token(auth_service._hash_token(new_raw))
+    assert stored["break_glass"] is True and stored["remembered"] is False
+
+
+def test_an_overlong_value_is_refused_and_the_real_code_still_works(env, client):
+    code, _ = break_glass.issue(env["admin"]["id"])
+    assert _login(client, "A" * 128).status_code == 401
+    detail = audit_repo.list_events(event="auth.login.failed")[0]["detail"]
+    assert detail == {"known_identifier": True, "method": "break_glass", "reason": "code"}
+    assert _login(client, code).status_code == 200
+
+
+def test_a_code_is_refused_once_passkeys_are_off(env, client, monkeypatch):
+    code, _ = break_glass.issue(env["admin"]["id"])
+    monkeypatch.setattr(settings, "webauthn_rp_id", "")
+    assert _login(client, code).status_code == 401
+
+
+def test_rotating_twice_keeps_a_break_glass_session_plain(env, client):
+    code, _ = break_glass.issue(env["admin"]["id"])
+    raw = _login(client, code).json()["refresh_token"]
+    _, once, _ = auth_service.rotate_refresh_token(raw, ingress_trusted=True)
+    _, twice, policy = auth_service.rotate_refresh_token(once, ingress_trusted=True)
+    assert policy["remembered"] is False
+    stored = auth_repo.get_refresh_token(auth_service._hash_token(twice))
     assert stored["break_glass"] is True and stored["remembered"] is False

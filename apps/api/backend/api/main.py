@@ -2945,12 +2945,6 @@ async def register(request: Request, body: RegisterRequest):
     }
 
 
-    # owner-passkeys: a break-glass session stays plain (never remembered)
-    # through every rotation, whatever the ingress says (spec 4.3).
-    pinned = bool(stored.get("break_glass"))
-    remembered = role != "demo" and ingress_trusted and not pinned
-
-
 def _break_glass_login(request: Request, user: dict, presented: str) -> dict:
     """owner-passkeys (spec 4.3): with passkeys on, a non-demo account signs
     in through /api/auth/login only with a live one-time break-glass code,
