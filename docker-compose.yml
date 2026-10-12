@@ -1,24 +1,25 @@
-# Compose-based clone-and-run stack (batch-07 Task 4 / spec.md D4).
+# Compendium on your own data, behind a real sign-in (README.md,
+# "Full-stack (Docker)").
 #
-#   git clone <this repo> && cd compendium
+#   cp .env.example .env     # fill in the required values first
 #   docker compose up --build
 #
-# Brings up postgres+pgvector -> apps/api (migrations on boot, then bootstraps
-# the demo login + loads the reviewed demo seed, then uvicorn) -> apps/web
-# (Next.js, proxying /api/* to apps/api). See README.md "Full-stack
-# quickstart (Docker)" for what you get and its current limits — short
-# version: a working, login-able demo account with a POPULATED compendium
-# (graph, diary, topic detail), no LLM API keys involved. Chat is the one
-# surface that still needs your own OPENAI_API_KEY (see README). A separate,
-# frontend-only zero-cost demo also exists via `npm run demo` (apps/web/demo)
-# — same corpus, no backend at all; useful when you don't want Docker/Postgres
-# in the loop.
+# Brings up postgres+pgvector -> apps/api (migrations on boot, then creates
+# or updates your login from BOOTSTRAP_EMAIL/BOOTSTRAP_PASSWORD, then
+# uvicorn) -> apps/web (Next.js, proxying /api/* to apps/api). The compendium
+# starts empty; the Firefox extension and the Android collector fill it. To
+# look around a populated app instead, use `npm run demo` (no Docker).
 #
-# Credentials below are the documented, intentionally-public local-dev
-# values (same convention as apps/api/docker/docker-compose.dev.yml and
-# apps/api/.env.example) — never used outside localhost, safe to publish.
-# Override anything via a sibling `.env` file (docker compose reads it
-# automatically) rather than editing this file.
+# Every required value comes from a sibling `.env` (docker compose reads it
+# automatically; see `.env.example`). A missing or empty one stops compose
+# with an error naming it. Nothing secret lives in this file. The Postgres
+# credentials below are internal to the compose network (db is never
+# published), not a login.
+#
+# Access: the web UI binds to 127.0.0.1 because its sign-in cookies are
+# Secure-only, which browsers accept over plain http on localhost only. The
+# API binds to API_BIND_ADDRESS (default 0.0.0.0) so the Android collector
+# can reach it on your network; set 127.0.0.1 to keep it on this machine.
 
 services:
   db:
@@ -36,9 +37,6 @@ services:
       timeout: 5s
       retries: 20
 
-  # (api service below caches its lazily-downloaded embedding/reranker
-  # model weights in a named volume so `down && up` doesn't re-fetch them.)
-
   api:
     build:
       context: ./apps/api
@@ -47,45 +45,40 @@ services:
       db:
         condition: service_healthy
     environment:
-      ENVIRONMENT: development
+      # Real deployment mode: no dev auth bypass, no /docs, and the API
+      # refuses to start on a default JWT secret, a CORS wildcard or the
+      # default session-ingress value (backend/config/settings.py).
+      ENVIRONMENT: production
       API_HOST: 0.0.0.0
       API_PORT: 8000
       DATABASE_URL: postgresql://tbd:tbd_local@db:5432/traversal_discovery
-      FRONTEND_URL: http://localhost:3000
-      # Dev-only wildcard — Settings hard-fails at startup if this is "*"
-      # AND environment != development, so ENVIRONMENT above must stay in
-      # lockstep with this.
-      CORS_ORIGINS: "*"
-      JWT_SECRET_KEY: local-dev-only-not-a-secret
-      # Fresh DB every time this stack is stood up from scratch: run
-      # migrations on boot, and create the primary + demo logins.
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env (see .env.example)}"
+      SESSION_INGRESS_TRUSTED_VALUE: "${SESSION_INGRESS_TRUSTED_VALUE:?set SESSION_INGRESS_TRUSTED_VALUE in .env (see .env.example)}"
       RUN_MIGRATIONS: "1"
-      SEED_DEMO: "${SEED_DEMO:-1}"
-      BOOTSTRAP_EMAIL: "${BOOTSTRAP_EMAIL:-you@example.com}"
-      BOOTSTRAP_PASSWORD: "${BOOTSTRAP_PASSWORD:-local-dev-only-not-a-secret}"
-      DEV_DEFAULT_USER_EMAIL: "${BOOTSTRAP_EMAIL:-you@example.com}"
-      BOOTSTRAP_DEMO_EMAIL: "${BOOTSTRAP_DEMO_EMAIL:-demo@traversal.local}"
-      BOOTSTRAP_DEMO_PASSWORD: "${BOOTSTRAP_DEMO_PASSWORD:-demo}"
-      # Optional — unset means the stack boots with a POPULATED demo
-      # compendium (loaded from the reviewed seed, see README) but chat
-      # answers "OpenAI API key not configured" instead of running the
-      # agent. Set OPENAI_API_KEY in a sibling .env to enable chat.
-      # ANTHROPIC_API_KEY is unused by the compose stack today; kept for
-      # parity with apps/api/.env.example and any by-hand pipeline scripts
-      # (apps/api/scripts/demo/) run manually against this stack.
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      # Create (or re-sync) your login from .env on every boot; no demo user.
+      BOOTSTRAP_USERS: "1"
+      BOOTSTRAP_PRIMARY_ONLY: "1"
+      BOOTSTRAP_EMAIL: "${BOOTSTRAP_EMAIL:?set BOOTSTRAP_EMAIL in .env (see .env.example)}"
+      BOOTSTRAP_PASSWORD: "${BOOTSTRAP_PASSWORD:?set BOOTSTRAP_PASSWORD in .env (see .env.example)}"
+      BOOTSTRAP_NAME: "${BOOTSTRAP_NAME:-user}"
+      # Auto-recluster and the pending sweep cluster the default user, so it
+      # has to be you (get_default_user_id in backend/api/main.py).
+      DEV_DEFAULT_USER_EMAIL: "${BOOTSTRAP_EMAIL:?set BOOTSTRAP_EMAIL in .env (see .env.example)}"
+      DISABLE_REGISTRATION: "1"
+      # Required: the capture pipeline's skip and learning gates, cluster
+      # naming and chat all call OpenAI. Without it no graph ever forms.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?set OPENAI_API_KEY in .env (see .env.example)}"
+      # Optional; unused by this stack today.
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:
+      # Archived page-preview images and stylesheets for your captures.
+      - compendium_assets:/app/data/captures/assets
+      # Lazily downloaded embedding/reranker weights, kept across `down`/`up`.
       - compendium_hf_cache:/root/.cache/huggingface
-      # Page-preview images + stylesheets for the seeded demo: the
-      # frontend-only demo already ships these files in the same
-      # <aa>/<sha>.<ext> layout as captured_assets.file_path, so
-      # GET /captured-assets/{rel} serves them straight off this mount.
-      # Read-only so the repo's fixtures can't be written to; the catch is
-      # that captures you send to this stack skip asset archival (logged).
-      - ./apps/web/demo/fixtures/assets/captured-assets:/app/data/captures/assets:ro
     ports:
-      - "8001:8000"
+      - "${API_BIND_ADDRESS:-0.0.0.0}:8001:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 5s
@@ -107,9 +100,12 @@ services:
         condition: service_healthy
     environment:
       BACKEND_URL: http://api:8000
+      # Redirect signed-out visitors to /login (apps/web/proxy.ts).
+      AUTH_REQUIRED: "1"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   compendium_pg_data:
   compendium_hf_cache:
+  compendium_assets:

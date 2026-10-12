@@ -27,8 +27,16 @@
 #   DEMO_SEED_ARGS     extra loader flags. The public demo stack
 #                       (docker-compose.demo.yml) sets "--replace", so every
 #                       boot swaps in a changed seed and no-ops otherwise.
-#                       Unset (root quickstart) keeps the load-once behaviour.
+#                       Unset keeps the load-once behaviour.
 #   BOOTSTRAP_DEMO_ONLY=1  bootstrap creates only the demo user (no admin).
+#   BOOTSTRAP_USERS=1  (root docker-compose.yml) run bootstrap_user only, no
+#                       seed. A failure exits 1: without a login nobody can
+#                       sign in. Ignored when SEED_DEMO=1 (that branch
+#                       bootstraps too). Never set on the server stack:
+#                       bootstrap re-sets the primary password from the
+#                       environment on every boot, which would undo a
+#                       passwordless (passkey-only) owner login.
+#   BOOTSTRAP_PRIMARY_ONLY=1  bootstrap creates only the primary user (no demo).
 set -euo pipefail
 
 echo "[entrypoint] waiting for database..."
@@ -65,6 +73,12 @@ if [ "${SEED_DEMO:-0}" = "1" ]; then
   python -m backend.scripts.bootstrap_user || echo "[entrypoint] bootstrap_user failed (non-fatal, continuing)"
   echo "[entrypoint] loading demo seed data into the demo account (idempotent)..."
   python scripts/demo/load_demo_seed.py ${DEMO_SEED_ARGS:-} || echo "[entrypoint] load_demo_seed failed (non-fatal, continuing — demo account may be empty or stale)"
+elif [ "${BOOTSTRAP_USERS:-0}" = "1" ]; then
+  echo "[entrypoint] BOOTSTRAP_USERS=1 — creating/updating the login from BOOTSTRAP_EMAIL (no demo seed)..."
+  if ! python -m backend.scripts.bootstrap_user; then
+    echo "[entrypoint] bootstrap_user failed; refusing to start without a usable login (check BOOTSTRAP_EMAIL and BOOTSTRAP_PASSWORD in .env)"
+    exit 1
+  fi
 else
   echo "[entrypoint] SEED_DEMO=0 — skipping user bootstrap + demo seed load"
 fi
