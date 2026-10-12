@@ -6,6 +6,12 @@ Idempotent: safe to run on every deploy. Behaviour:
      no primary/admin user is created, and BOOTSTRAP_EMAIL/PASSWORD are not
      required.
 
+  0b. ``BOOTSTRAP_PRIMARY_ONLY=1`` (the root docker-compose.yml stack): run
+      step 1 only -- no demo user. Refuses a BOOTSTRAP_PASSWORD under 8
+      characters, refuses to combine with BOOTSTRAP_DEMO_ONLY, and warns when
+      a demo-role user is already on the database (a volume from the older,
+      demo-seeded version of that stack).
+
   1. Primary user (driven by env vars ``BOOTSTRAP_EMAIL`` + ``BOOTSTRAP_PASSWORD``):
      - If a user with ``BOOTSTRAP_EMAIL`` already exists -> just refresh the
        password hash (so a redeploy with a rotated password takes effect).
@@ -173,11 +179,58 @@ def _ensure_demo_username(demo_id: int, username: str) -> None:
     print(f"[demo]    username -> {username}")
 
 
+_MIN_PASSWORD_LEN = 8  # matches POST /api/auth/register's minimum
+
+
+def _flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+
 def _demo_only() -> bool:
-    return os.environ.get("BOOTSTRAP_DEMO_ONLY", "").strip().lower() in {"1", "true", "yes"}
+    return _flag("BOOTSTRAP_DEMO_ONLY")
+
+
+def _primary_only() -> bool:
+    return _flag("BOOTSTRAP_PRIMARY_ONLY")
+
+
+def _warn_if_demo_users_exist() -> None:
+    """The root Docker stack used to create a demo login (demo/demo); a
+    volume carried over from that version still has it."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM users WHERE role = 'demo'")
+        count = cur.fetchone()[0]
+    if count:
+        print(
+            f"[primary] WARNING: {count} demo-role user(s) already exist on this "
+            "database, probably from an older version of this stack. Their "
+            "logins still work. Start fresh with `docker compose down -v` "
+            "(deletes all data) or remove them."
+        )
 
 
 def bootstrap() -> None:
+    if _demo_only() and _primary_only():
+        sys.exit(
+            "ERROR: BOOTSTRAP_DEMO_ONLY and BOOTSTRAP_PRIMARY_ONLY are mutually "
+            "exclusive; set at most one."
+        )
+
+    if _primary_only():
+        # Root Docker stack (docker-own-data-stack): only the owner's login,
+        # no demo user. A weak password is refused here because this stack's
+        # API listens on the network.
+        password = os.environ.get("BOOTSTRAP_PASSWORD") or ""
+        if password and len(password) < _MIN_PASSWORD_LEN:
+            sys.exit(
+                f"ERROR: BOOTSTRAP_PASSWORD must be at least {_MIN_PASSWORD_LEN} "
+                "characters."
+            )
+        _bootstrap_primary()
+        _warn_if_demo_users_exist()
+        print("[demo]    BOOTSTRAP_PRIMARY_ONLY set -- no demo user on this database")
+        return
+
     demo_email = os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local")
     demo_password = os.environ.get("BOOTSTRAP_DEMO_PASSWORD", "demo")
     demo_name = os.environ.get("BOOTSTRAP_DEMO_NAME", "demo")
