@@ -1,6 +1,6 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { onPasskeyHost, passkeysEnabled } from "@/lib/passkey-config";
-import { tailnetLoginFrom } from "@/lib/tailnet-login";
+import { TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
 import EnrollClient from "./EnrollClient";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 // which only the client can read.
 export default async function EnrollPage() {
   const requestHeaders = await headers();
-  const ready = passkeysEnabled() && onPasskeyHost(requestHeaders) && tailnetLoginFrom(requestHeaders) !== null;
-  return <EnrollClient ready={ready} />;
+  const login = tailnetLoginFrom(requestHeaders);
+  const ready = passkeysEnabled() && onPasskeyHost(requestHeaders) && login !== null;
+  // An already-trusted browser must not mint a second trusted-browser row.
+  const trusted = login !== null && !!(await cookies()).get(TRUSTED_BROWSER_COOKIE)?.value;
+  return <EnrollClient ready={ready} trusted={trusted} />;
 }

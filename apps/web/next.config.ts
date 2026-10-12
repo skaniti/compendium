@@ -33,9 +33,16 @@ const nextConfig: NextConfig = {
   // crawler reaches.
   async headers() {
     const demoHosted = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim().length > 0;
-    return demoHosted
-      ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
-      : [];
+    // owner-passkeys (final review): no other origin may frame the app (UI
+    // redress outside the cross-origin guard). 'self', not 'none': archived
+    // page previews are framed same-origin.
+    const rules = [
+      { source: "/(.*)", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }] },
+    ];
+    if (demoHosted) {
+      rules.push({ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] });
+    }
+    return rules;
   },
 };
 

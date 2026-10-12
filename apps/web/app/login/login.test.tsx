@@ -361,6 +361,27 @@ describe("passkey mode (owner-passkeys)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("No passkey is set up");
   });
 
+  it.each(["failed", "error"])("points the %s notice at the relying party on another host", (notice) => {
+    render(
+      <LoginPage
+        tailnetLogin="me@tailnet"
+        tailnetNotice={notice as "failed" | "error"}
+        passkey={{ onRpHost: false, rpId: "owner.example.com" }}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Automatic sign-in isn't available on this address. Sign in at https://owner.example.com, or use a break-glass code.",
+    );
+  });
+
+  it.each([
+    ["failed", "Automatic sign-in didn't work for this browser. Sign in with your passkey to trust it again."],
+    ["error", "Automatic sign-in is unavailable right now. Sign in with your passkey."],
+  ])("keeps the passkey %s notice on the relying-party host", (notice, text) => {
+    render(<LoginPage tailnetLogin="me@tailnet" tailnetNotice={notice as "failed" | "error"} passkey={passkey} />);
+    expect(screen.getByRole("status")).toHaveTextContent(text);
+  });
+
   it("links to the relying party from another host", () => {
     render(<LoginPage tailnetLogin="me@tailnet" passkey={{ onRpHost: false, rpId: "owner.example.com" }} />);
     const link = screen.getByTestId("passkey-elsewhere");

@@ -304,7 +304,9 @@ function LoginForm({
             )}
             {tailnetNotice && (
               <p role="status" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
-                {passkey
+                {passkey && !passkey.onRpHost
+                  ? `Automatic sign-in isn't available on this address. Sign in at https://${passkey.rpId}, or use a break-glass code.`
+                  : passkey
                   ? tailnetNotice === "failed"
                     ? "Automatic sign-in didn't work for this browser. Sign in with your passkey to trust it again."
                     : "Automatic sign-in is unavailable right now. Sign in with your passkey."

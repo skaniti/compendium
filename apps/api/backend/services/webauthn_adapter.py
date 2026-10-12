@@ -136,7 +136,8 @@ def verify_authentication(response: dict, *, challenge: bytes, public_key: bytes
             expected_origin=settings.webauthn_expected_origin,
             credential_public_key=public_key,
             # 0 switches off the library's own counter check; the service
-            # applies the spec's rule (refuse only when both counters are > 0).
+            # applies the WebAuthn rule (refuse when either counter is nonzero
+            # and the new one is not larger; see services/passkeys.py).
             credential_current_sign_count=0,
             require_user_verification=True,
         )

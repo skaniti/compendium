@@ -26,7 +26,7 @@ const buttonStyle: CSSProperties = {
 };
 const noteStyle: CSSProperties = { fontSize: "0.85rem", color: "var(--subtle, #777)" };
 
-export default function EnrollClient({ ready }: { ready: boolean }) {
+export default function EnrollClient({ ready, trusted = false }: { ready: boolean; trusted?: boolean }) {
   // undefined = fragment not read yet; null = no token in the link.
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [trust, setTrust] = useState(true);
@@ -67,7 +67,7 @@ export default function EnrollClient({ ready }: { ready: boolean }) {
       const verifyRes = await fetch("/api/auth/passkey/enroll/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, response, trustBrowser: trust }),
+        body: JSON.stringify({ token, response, trustBrowser: trusted ? false : trust }),
       });
       if (verifyRes.ok) {
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after login
@@ -95,10 +95,12 @@ export default function EnrollClient({ ready }: { ready: boolean }) {
     <div style={cardStyle}>
       <h1 style={{ fontFamily: "Georgia, serif", fontSize: "1.6rem", margin: "0 0 12px 0" }}>Set up a passkey</h1>
       <p style={noteStyle}>Save the passkey in your password manager when the browser asks.</p>
+      {!trusted && (
       <label htmlFor="enroll-trust" style={{ ...noteStyle, display: "flex", gap: 6, alignItems: "center", margin: "12px 0" }}>
         <input type="checkbox" id="enroll-trust" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
         Trust this browser for automatic sign-in
       </label>
+      )}
       <div role={error ? "alert" : undefined} style={{ color: "#c0392b", fontSize: "0.8rem", minHeight: 20, marginBottom: 12 }}>
         {error}
       </div>

@@ -78,7 +78,10 @@ export async function proxyToBackend(req: Request, upstreamPath: string): Promis
   // Pass the (possibly streaming SSE) response straight through.
   const outHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
-    if (!HOP_BY_HOP.has(k.toLowerCase())) outHeaders.set(k, v);
+    const name = k.toLowerCase();
+    // No cross-origin consumer uses this proxy (collectors call the API
+    // directly), so never relay the API's CORS grants to a browser.
+    if (!HOP_BY_HOP.has(name) && !name.startsWith("access-control-")) outHeaders.set(k, v);
   });
   // Never relay upstream's content-encoding/content-length: fetch may have
   // already decoded a gzip/br body (making the header wrong), and with

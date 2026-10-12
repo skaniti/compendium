@@ -47,6 +47,21 @@ describe("EnrollClient", () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ token: "tok", response: { id: "x" }, trustBrowser: true });
   });
 
+  it("hides the trust checkbox on an already-trusted browser and sends trustBrowser false", async () => {
+    window.history.replaceState(null, "", "/passkey/enroll#tok");
+    const { runPasskeyRegistration } = await import("@/lib/passkey-client");
+    vi.mocked(runPasskeyRegistration).mockResolvedValueOnce({ id: "x" } as never);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ options: { challenge: "c" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: {} }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<EnrollClient ready trusted />);
+    fireEvent.click(await screen.findByTestId("enroll-create"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByLabelText(/trust this browser/i)).toBeNull();
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ token: "tok", response: { id: "x" }, trustBrowser: false });
+  });
+
   it("shows the cancel message when the passkey prompt is dismissed", async () => {
     window.history.replaceState(null, "", "/passkey/enroll#tok");
     const { runPasskeyRegistration } = await import("@/lib/passkey-client");

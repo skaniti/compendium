@@ -139,6 +139,27 @@ describe("proxyToBackend", () => {
     expect(res.headers.get("content-type")).toBe("application/json");
   });
 
+  it("drops upstream Access-Control-* headers and keeps the rest", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar() as never);
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("{}", {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "r1",
+          "Access-Control-Allow-Origin": "https://evil.example",
+          "Access-Control-Allow-Credentials": "true",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await proxyToBackend(new Request("http://localhost/api/topics"), "/api/topics");
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    expect(res.headers.get("access-control-allow-credentials")).toBeNull();
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(res.headers.get("x-request-id")).toBe("r1");
+  });
+
   // batch-06 (deploy-flip fix wave): the API ignores cookies entirely (it
   // authenticates via the injected Bearer token), so forwarding the
   // browser's own Cookie header upstream too is unnecessary exposure of
