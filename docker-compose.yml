@@ -91,8 +91,8 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        # Baked into the /captured-assets/* rewrite at `next build` time —
-        # must match the runtime BACKEND_URL below (see apps/web/Dockerfile).
+        # Only gives `next build`'s prerender pass a value. The running app
+        # reads BACKEND_URL below at run time (see apps/web/Dockerfile).
         BACKEND_URL: http://api:8000
     restart: unless-stopped
     depends_on:

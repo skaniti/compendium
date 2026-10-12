@@ -244,7 +244,7 @@ def _clear_published_default_logins(primary_email: str) -> None:
         cleared += 1
         print(
             f"[primary] cleared the published default password of {email} "
-            "(it could no longer sign in)"
+            "(it can no longer sign in with that password)"
         )
     if cleared:
         print(
@@ -298,7 +298,7 @@ def bootstrap() -> None:
         primary_email = os.environ["BOOTSTRAP_EMAIL"]
         _clear_published_default_logins(primary_email)
         _warn_if_demo_users_exist(primary_email)
-        print("[demo]    BOOTSTRAP_PRIMARY_ONLY set -- no demo user on this database")
+        print("[demo]    BOOTSTRAP_PRIMARY_ONLY set -- no demo user created")
         return
 
     demo_email = os.environ.get("BOOTSTRAP_DEMO_EMAIL", "demo@traversal.local")
