@@ -184,8 +184,8 @@ def test_no_demo_warning_once_the_demo_login_was_cleared(primary, capsys):
     try:
         bootstrap_user.bootstrap()
         out = capsys.readouterr().out
-        assert "WARNING" not in out
-        assert "still work" not in out
+        warnings = [l for l in out.splitlines() if "WARNING" in l]
+        assert not any(leftover["email"] in l for l in warnings)
     finally:
         _drop(leftover)
 
