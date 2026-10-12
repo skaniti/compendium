@@ -244,7 +244,7 @@ def _clear_published_default_logins(primary_email: str) -> None:
         cleared += 1
         print(
             f"[primary] cleared the published default password of {email} "
-            "(it can no longer sign in with that password)"
+            "(it can no longer sign in)"
         )
     if cleared:
         print(

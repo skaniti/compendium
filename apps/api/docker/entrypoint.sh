@@ -4,8 +4,9 @@
 # demo/primary user bootstrap -> exec uvicorn.
 #
 # Env switches (compose files that set them: root docker-compose.yml for
-# BOOTSTRAP_USERS and BOOTSTRAP_PRIMARY_ONLY, apps/api/docker/docker-compose.demo.yml
-# and apps/api/docker/docker-compose.server.yml for the rest):
+# RUN_MIGRATIONS, BOOTSTRAP_USERS and BOOTSTRAP_PRIMARY_ONLY;
+# apps/api/docker/docker-compose.demo.yml and
+# apps/api/docker/docker-compose.server.yml for the rest):
 #   RUN_MIGRATIONS=1   (default) run `python -m backend.db.migrate --skip-backfill`
 #                       on every boot. Idempotent (schema_migrations tracks
 #                       what's applied) — safe to leave on for a throwaway
