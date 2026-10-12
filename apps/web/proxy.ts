@@ -27,7 +27,7 @@ export function proxy(req: NextRequest): NextResponse {
 
   const { pathname } = req.nextUrl;
   if (
-    pathname === "/login" || pathname.startsWith("/api/") ||
+    pathname === "/login" || pathname === "/passkey/enroll" || pathname.startsWith("/api/") ||
     pathname.startsWith("/captured-assets/")
   ) {
     return NextResponse.next();
@@ -67,5 +67,7 @@ export const config = {
   // an extensionless asset would otherwise be redirected to /login before
   // its signed URL reached the route handler. The route handler + API
   // enforce auth there (bearer or URL signature).
-  matcher: ["/((?!_next/|api/|captured-assets/|favicon\\.ico|login|.*\\..*).*)"],
+  // passkey/enroll is skipped too: the enrollment link is opened before any
+  // session exists (owner-passkeys).
+  matcher: ["/((?!_next/|api/|captured-assets/|passkey/enroll|favicon\\.ico|login|.*\\..*).*)"],
 };

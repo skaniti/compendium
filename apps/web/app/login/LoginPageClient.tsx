@@ -8,6 +8,8 @@ import { recoverSession } from "@/lib/api";
 import { TAILNET_LOGIN_ROUTE } from "@/lib/tailnet-login";
 import { sessionMayResume } from "@/lib/session-policy-client";
 import { turnstileSiteKey } from "@/lib/demo-entry";
+import { passkeyErrorMessage, runPasskeyAuthentication } from "@/lib/passkey-client";
+import { PASSKEY_FAILED_MESSAGE, PASSKEY_NEEDS_TAILNET_MESSAGE } from "@/lib/login-messages";
 import DemoEntryForm from "./DemoEntryForm";
 
 // Ported from explorer frontend/dash/app.py:_build_login_layout (app.py:2149-2309).
@@ -47,12 +49,59 @@ const labelStyle: CSSProperties = {
   color: "var(--subtle, #777)",
 };
 
+const primaryButtonStyle: CSSProperties = {
+  width: "100%",
+  padding: "11px 12px",
+  fontSize: "0.95rem",
+  fontWeight: 600,
+  color: "var(--text)",
+  background: "var(--bg)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  cursor: "pointer",
+};
+
+const errorStyle: CSSProperties = {
+  color: "#c0392b",
+  fontSize: "0.8rem",
+  minHeight: 20,
+  marginBottom: 14,
+};
+
+const linkButtonStyle: CSSProperties = {
+  display: "block",
+  textAlign: "center",
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "11px 12px",
+  marginBottom: 18,
+  fontSize: "0.95rem",
+  fontWeight: 600,
+  color: "var(--text)",
+  background: "var(--bg)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  textDecoration: "none",
+};
+
+const quietLinkStyle: CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  marginTop: 14,
+  color: "var(--subtle, #777)",
+  fontSize: "0.78rem",
+  textDecoration: "underline",
+  cursor: "pointer",
+};
+
 export interface LoginPageClientProps {
   tailnetLogin?: string | null;
   trustedBrowser?: boolean;
   paused?: boolean;
   tailnetNotice?: "failed" | "error" | null;
   demoEntry?: boolean;
+  passkey?: { onRpHost: boolean; rpId: string } | null;
 }
 
 function LoginForm({
@@ -61,12 +110,15 @@ function LoginForm({
   paused = false,
   tailnetNotice = null,
   demoEntry = false,
+  passkey = null,
 }: LoginPageClientProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const offerTrust = tailnetLogin !== null && !trustedBrowser;
   const [trustBrowser, setTrustBrowser] = useState(true);
+  const [breakGlassOpen, setBreakGlassOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // D4 (session-expiry-tuning): a remembered (or otherwise still-resumable)
   // visitor landing on /login -- e.g. a stale bookmark, or redirectToLogin
@@ -98,7 +150,7 @@ function LoginForm({
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, ...(offerTrust ? { trustBrowser } : {}) }),
+      body: JSON.stringify({ email, password, ...(offerTrust && !passkey ? { trustBrowser } : {}) }),
     });
     if (res.ok) {
       // Full reload (not router navigation) is deliberate: login must
@@ -111,6 +163,80 @@ function LoginForm({
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     setError(data.error || "Invalid credentials");
   }
+
+  async function handlePasskey() {
+    setError("");
+    setBusy(true);
+    try {
+      const optionsRes = await fetch("/api/auth/passkey/login/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const optionsData = (await optionsRes.json().catch(() => ({}))) as { options?: unknown; error?: string };
+      if (!optionsRes.ok || !optionsData.options) {
+        setError(optionsData.error || PASSKEY_FAILED_MESSAGE);
+        return;
+      }
+      let response: unknown;
+      try {
+        response = await runPasskeyAuthentication(optionsData.options as never);
+      } catch (err) {
+        setError(passkeyErrorMessage(err, "login"));
+        return;
+      }
+      const verifyRes = await fetch("/api/auth/passkey/login/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response, trustBrowser: offerTrust ? trustBrowser : false }),
+      });
+      if (verifyRes.ok) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload required after login
+        window.location.href = "/";
+        return;
+      }
+      const data = (await verifyRes.json().catch(() => ({}))) as { error?: string };
+      setError(data.error || PASSKEY_FAILED_MESSAGE);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Shared by the password form and the break-glass form.
+  const identifierField = (
+    <>
+      <label htmlFor="login-email" style={labelStyle}>
+        Email or username
+      </label>
+      {/* type="text" (not "email"): an email-typed input makes the
+          browser reject a bare username before submit. name="email"
+          stays -- the API route reads that field and resolves
+          email-or-username server-side (get_user_by_login). */}
+      <input
+        type="text"
+        name="email"
+        id="login-email"
+        placeholder="you@example.com or username"
+        required
+        autoFocus
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
+      />
+    </>
+  );
+
+  const trustCheckbox = (
+    <label htmlFor="login-trust" style={{ ...labelStyle, display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+      <input
+        type="checkbox"
+        id="login-trust"
+        checked={trustBrowser}
+        onChange={(e) => setTrustBrowser(e.target.checked)}
+      />
+      Trust this browser for automatic sign-in
+    </label>
+  );
 
   return (
     <div
@@ -176,104 +302,99 @@ function LoginForm({
             )}
             {tailnetNotice && (
               <p role="status" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
-                {tailnetNotice === "failed"
-                  ? "Automatic sign-in didn't work for this browser. Sign in with your password to trust it again."
-                  : "Automatic sign-in is unavailable right now. Sign in with your password."}
+                {passkey
+                  ? tailnetNotice === "failed"
+                    ? "Automatic sign-in didn't work for this browser. Sign in with your passkey to trust it again."
+                    : "Automatic sign-in is unavailable right now. Sign in with your passkey."
+                  : tailnetNotice === "failed"
+                    ? "Automatic sign-in didn't work for this browser. Sign in with your password to trust it again."
+                    : "Automatic sign-in is unavailable right now. Sign in with your password."}
               </p>
             )}
             {tailnetLogin && trustedBrowser && (paused || tailnetNotice) && (
               <a
                 data-testid="tailnet-continue"
                 href={`${TAILNET_LOGIN_ROUTE}?resume=1`}
-                style={{
-                  display: "block",
-                  textAlign: "center",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "11px 12px",
-                  marginBottom: 18,
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  color: "var(--text)",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  textDecoration: "none",
-                }}
+                style={linkButtonStyle}
               >
                 Continue as {tailnetLogin}
               </a>
             )}
-            <form onSubmit={handleSubmit}>
-              <label htmlFor="login-email" style={labelStyle}>
-                Email or username
-              </label>
-              {/* type="text" (not "email"): an email-typed input makes the
-                  browser reject a bare username before submit. name="email"
-                  stays -- the API route reads that field and resolves
-                  email-or-username server-side (get_user_by_login). */}
-              <input
-                type="text"
-                name="email"
-                id="login-email"
-                placeholder="you@example.com or username"
-                required
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
-              />
-              <label htmlFor="login-password" style={labelStyle}>
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                id="login-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
-              />
-              {offerTrust && (
-                <label htmlFor="login-trust" style={{ ...labelStyle, display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    id="login-trust"
-                    checked={trustBrowser}
-                    onChange={(e) => setTrustBrowser(e.target.checked)}
-                  />
-                  Trust this browser for automatic sign-in
+            {passkey ? (
+              <>
+                {passkey.onRpHost && tailnetLogin && (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="passkey-sign-in"
+                      onClick={() => void handlePasskey()}
+                      disabled={busy}
+                      style={{ ...primaryButtonStyle, marginBottom: 12 }}
+                    >
+                      Sign in with passkey
+                    </button>
+                    {offerTrust && trustCheckbox}
+                  </>
+                )}
+                {passkey.onRpHost && !tailnetLogin && (
+                  <p data-testid="passkey-needs-tailnet" style={{ ...labelStyle, margin: "0 0 12px 0" }}>
+                    {PASSKEY_NEEDS_TAILNET_MESSAGE}
+                  </p>
+                )}
+                {!passkey.onRpHost && (
+                  <a data-testid="passkey-elsewhere" href={`https://${passkey.rpId}/`} style={linkButtonStyle}>
+                    Sign in at https://{passkey.rpId}
+                  </a>
+                )}
+                <div role={error ? "alert" : undefined} style={errorStyle}>{error}</div>
+                {!breakGlassOpen ? (
+                  <button type="button" data-testid="break-glass-toggle" onClick={() => setBreakGlassOpen(true)} style={quietLinkStyle}>
+                    Use a break-glass code
+                  </button>
+                ) : (
+                  <form data-testid="break-glass-form" onSubmit={handleSubmit}>
+                    {identifierField}
+                    <label htmlFor="login-break-glass" style={labelStyle}>Break-glass code</label>
+                    <input
+                      type="text"
+                      name="password"
+                      id="login-break-glass"
+                      autoComplete="one-time-code"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{ ...fieldStyle, marginTop: 4, marginBottom: 14 }}
+                    />
+                    <button type="submit" style={primaryButtonStyle}>Sign in</button>
+                  </form>
+                )}
+              </>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                {identifierField}
+                <label htmlFor="login-password" style={labelStyle}>
+                  Password
                 </label>
-              )}
-              <div
-                role={error ? "alert" : undefined}
-                style={{
-                  color: "#c0392b",
-                  fontSize: "0.8rem",
-                  minHeight: 20,
-                  marginBottom: 14,
-                }}
-              >
-                {error}
-              </div>
-              <button
-                type="submit"
-                style={{
-                  width: "100%",
-                  padding: "11px 12px",
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  color: "var(--text)",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                }}
-              >
-                Sign in
-              </button>
-            </form>
+                <input
+                  type="password"
+                  name="password"
+                  id="login-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ ...fieldStyle, marginTop: 4, marginBottom: 8 }}
+                />
+                {offerTrust && trustCheckbox}
+                <div role={error ? "alert" : undefined} style={errorStyle}>
+                  {error}
+                </div>
+                <button type="submit" style={primaryButtonStyle}>
+                  Sign in
+                </button>
+              </form>
+            )}
           </>
         )}
       </div>

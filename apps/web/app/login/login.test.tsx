@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LoginPage from "./LoginPageClient";
 import { BACKEND_UNREACHABLE_MESSAGE } from "@/lib/login-messages";
+
+vi.mock("@/lib/passkey-client", () => ({
+  runPasskeyAuthentication: vi.fn(),
+  runPasskeyRegistration: vi.fn(),
+  passkeyErrorMessage: vi.fn(() => "msg"),
+}));
 
 // Targets the extracted client half (dev-login recovery fix moved the
 // credential form out of app/login/page.tsx, now a server component that
@@ -302,5 +308,83 @@ describe("login form: tailnet states", () => {
   it("offers 'Continue as' to a trusted browser shown a notice", () => {
     render(<LoginPage tailnetLogin="owner@example.com" trustedBrowser tailnetNotice="error" />);
     expect(screen.getByTestId("tailnet-continue")).toBeTruthy();
+  });
+});
+
+describe("passkey mode (owner-passkeys)", () => {
+  const passkey = { onRpHost: true, rpId: "owner.example.com" };
+
+  beforeEach(() => {
+    clearSessionCookies();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("offers the passkey button, the trust checkbox and no password form", () => {
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={passkey} />);
+    expect(screen.getByTestId("passkey-sign-in")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Trust this browser/)).toBeChecked();
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+  });
+
+  it("signs in with a passkey and sends the trust choice", async () => {
+    const { runPasskeyAuthentication } = await import("@/lib/passkey-client");
+    vi.mocked(runPasskeyAuthentication).mockResolvedValueOnce({ id: "x" } as never);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ options: { challenge: "c" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: {} }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={passkey} />);
+    fireEvent.click(screen.getByTestId("passkey-sign-in"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/passkey/login/options");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ response: { id: "x" }, trustBrowser: true });
+  });
+
+  it("shows the server's message when options are refused", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "No passkey is set up for this account yet. Run the enroll command on the server." }), { status: 409 }),
+    ));
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={passkey} />);
+    fireEvent.click(screen.getByTestId("passkey-sign-in"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No passkey is set up");
+  });
+
+  it("links to the relying party from another host", () => {
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={{ onRpHost: false, rpId: "owner.example.com" }} />);
+    const link = screen.getByTestId("passkey-elsewhere");
+    expect(link).toHaveAttribute("href", "https://owner.example.com/");
+    expect(link).toHaveTextContent("Sign in at https://owner.example.com");
+    expect(screen.queryByTestId("passkey-sign-in")).not.toBeInTheDocument();
+  });
+
+  it("explains that passkeys need a tailnet device", () => {
+    render(<LoginPage tailnetLogin={null} passkey={passkey} />);
+    expect(screen.getByTestId("passkey-needs-tailnet")).toHaveTextContent("Passkey sign-in works from your tailnet devices.");
+    expect(screen.queryByTestId("passkey-sign-in")).not.toBeInTheDocument();
+  });
+
+  it("opens a break-glass form without the trust checkbox", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ user: {} }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={passkey} />);
+    fireEvent.click(screen.getByTestId("break-glass-toggle"));
+    const form = screen.getByTestId("break-glass-form");
+    expect(within(form).queryByLabelText(/Trust this browser/)).not.toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText("Email or username"), { target: { value: "owner" } });
+    fireEvent.change(within(form).getByLabelText("Break-glass code"), { target: { value: "ABCDE-FGHJK-MNPQR-STVWX" } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/login");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ email: "owner", password: "ABCDE-FGHJK-MNPQR-STVWX" });
+  });
+
+  it("keeps today's password form when passkeys are off", () => {
+    render(<LoginPage tailnetLogin="me@tailnet" passkey={null} />);
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.queryByTestId("passkey-sign-in")).not.toBeInTheDocument();
   });
 });

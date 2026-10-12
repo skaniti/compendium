@@ -175,3 +175,45 @@ describe("LoginPage: tailnet props", () => {
     });
   });
 });
+
+describe("LoginPage passkey mode (owner-passkeys)", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_REQUIRED", "1");
+    vi.stubEnv("TAILNET_LOGIN", "1");
+    vi.stubEnv("TAILNET_ASSERT_SECRET", "s".repeat(40));
+    vi.stubEnv("WEBAUTHN_RP_ID", "owner.example.com");
+    mockFetch({ ok: false, status: 401, json: async () => ({}) });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.mocked(headers).mockImplementation(async () => new Headers());
+  });
+
+  function onHost(host: string) {
+    vi.mocked(headers).mockResolvedValue(new Headers({ host, "tailscale-user-login": "me@tailnet" }) as never);
+  }
+
+  it("shows the passkey button on the relying-party host", async () => {
+    onHost("owner.example.com");
+    render(await LoginPage());
+    expect(screen.getByTestId("passkey-sign-in")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+  });
+
+  it("links to the relying party from another host", async () => {
+    onHost("fallback.ts.example");
+    render(await LoginPage());
+    expect(screen.getByTestId("passkey-elsewhere")).toHaveAttribute("href", "https://owner.example.com/");
+  });
+
+  it("keeps the password form when passkeys are off", async () => {
+    vi.stubEnv("WEBAUTHN_RP_ID", "");
+    onHost("owner.example.com");
+    render(await LoginPage());
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.queryByTestId("passkey-sign-in")).not.toBeInTheDocument();
+  });
+});

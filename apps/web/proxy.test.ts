@@ -145,3 +145,22 @@ describe("proxy: automatic tailnet sign-in", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 });
+
+describe("proxy enrollment page (owner-passkeys)", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_REQUIRED", "1");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("lets the enrollment page through without a session", () => {
+    const res = proxy(new NextRequest("https://app.test/passkey/enroll"));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("skips the enrollment page in the matcher", () => {
+    expect(config.matcher[0]).toContain("passkey/enroll");
+  });
+});

@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { TAILNET_LOGIN_ROUTE, TAILNET_PAUSED_COOKIE, TRUSTED_BROWSER_COOKIE, tailnetLoginFrom } from "@/lib/tailnet-login";
 import { demoEntryEnabled } from "@/lib/demo-entry";
+import { onPasskeyHost, passkeyRpId, passkeysEnabled } from "@/lib/passkey-config";
 import LoginPageClient from "./LoginPageClient";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8001";
@@ -79,8 +80,15 @@ export default async function LoginPage({
   let trustedBrowser = false;
   let paused = false;
   let tailnetNotice: "failed" | "error" | null = null;
+  let passkey: { onRpHost: boolean; rpId: string } | null = null;
   if (!demoEntry) {
-    tailnetLogin = tailnetLoginFrom(await headers());
+    const requestHeaders = await headers();
+    tailnetLogin = tailnetLoginFrom(requestHeaders);
+    // owner-passkeys: the passkey button on the relying-party host, a link
+    // to it on any other name (the ts.net fallback).
+    if (passkeysEnabled()) {
+      passkey = { onRpHost: onPasskeyHost(requestHeaders), rpId: passkeyRpId() as string };
+    }
     const cookieStore = await cookies();
     trustedBrowser = tailnetLogin !== null && !!cookieStore.get(TRUSTED_BROWSER_COOKIE)?.value;
     paused = cookieStore.has(TAILNET_PAUSED_COOKIE);
@@ -102,6 +110,7 @@ export default async function LoginPage({
       paused={paused}
       tailnetNotice={tailnetNotice}
       demoEntry={demoEntry}
+      passkey={passkey}
     />
   );
 }
