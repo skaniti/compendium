@@ -100,6 +100,7 @@ def create_refresh_token(
     *,
     expires_in: timedelta | None = None,
     expires_at_cap: datetime | None = None,
+    break_glass: bool = False,
 ) -> str:
     """Create a refresh token, store its hash in the DB.
 
@@ -108,7 +109,8 @@ def create_refresh_token(
     (demo-one-click-entry: 24 hours). ``expires_at_cap`` never extends: the
     stored expiry is the earlier of the computed one and the cap (rotation
     of a demo token passes the revoked row's expiry so the session cannot
-    slide). Returns the raw token (to be sent to the client).
+    slide). ``break_glass`` marks a session opened with a break-glass code;
+    rotation keeps it plain. Returns the raw token (to be sent to the client).
     """
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_token(raw_token)
@@ -123,7 +125,9 @@ def create_refresh_token(
     if expires_at_cap is not None:
         cap = expires_at_cap if expires_at_cap.tzinfo else expires_at_cap.replace(tzinfo=timezone.utc)
         expires_at = min(expires_at, cap)
-    auth_repo.save_refresh_token(user_id, token_hash, expires_at, remembered=remembered)
+    auth_repo.save_refresh_token(
+        user_id, token_hash, expires_at, remembered=remembered, break_glass=break_glass
+    )
     return raw_token
 
 
@@ -172,7 +176,8 @@ def rotate_refresh_token(
     drops to the default policy at its next rotation; one that joins the
     tailnet upgrades at its next rotation. Replaying an already-rotated token
     revokes every session of the account, except for the shared ``demo`` role,
-    where only the replayed token is refused.
+    where only the replayed token is refused. A break-glass session (spec 4.3)
+    is never remembered.
     """
     token_hash = _hash_token(raw_token)
     stored = auth_repo.get_refresh_token(token_hash)
@@ -234,13 +239,18 @@ def rotate_refresh_token(
     # role, so a demoted-to-demo user kept a 90-day token with a policy that
     # claimed remembered: False.
     role = auth_repo.get_role(user["id"])
-    remembered = role != "demo" and ingress_trusted
+    # owner-passkeys: a break-glass session stays plain (never remembered)
+    # through every rotation, whatever the ingress says (spec 4.3).
+    pinned = bool(stored.get("break_glass"))
+    remembered = role != "demo" and ingress_trusted and not pinned
     access = create_access_token(user["id"], user["email"])
     # demo-one-click-entry: a demo session never slides. The new token
     # inherits the revoked row's horizon (24h for one-click entries), so
     # refreshing cannot extend it; other roles keep the sliding lifetime.
     cap = expires if role == "demo" else None
-    refresh = create_refresh_token(user["id"], remembered=remembered, expires_at_cap=cap)
+    refresh = create_refresh_token(
+        user["id"], remembered=remembered, expires_at_cap=cap, break_glass=pinned
+    )
     policy = session_policy(role, remembered)
     ctx = audit_ctx or CLI
     audit_repo.record(

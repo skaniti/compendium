@@ -66,7 +66,7 @@ def _capture_save_refresh_token(monkeypatch):
     without a real DB round trip."""
     calls = []
 
-    def _fake_save(user_id, token_hash, expires_at, remembered=False):
+    def _fake_save(user_id, token_hash, expires_at, remembered=False, break_glass=False):
         calls.append(
             {
                 "user_id": user_id,

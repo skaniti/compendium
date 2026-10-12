@@ -2945,6 +2945,51 @@ async def register(request: Request, body: RegisterRequest):
     }
 
 
+    # owner-passkeys: a break-glass session stays plain (never remembered)
+    # through every rotation, whatever the ingress says (spec 4.3).
+    pinned = bool(stored.get("break_glass"))
+    remembered = role != "demo" and ingress_trusted and not pinned
+
+
+def _break_glass_login(request: Request, user: dict, presented: str) -> dict:
+    """owner-passkeys (spec 4.3): with passkeys on, a non-demo account signs
+    in through /api/auth/login only with a live one-time break-glass code,
+    never users.password_hash, into a plain session that never trusts the
+    browser (a passkey is the only way to trust one)."""
+    from backend.db import auth_repo as ar
+    from backend.services import auth_service, break_glass
+
+    ctx = _audit_ctx.from_request(request)
+    code_id = break_glass.use_code(user["id"], presented)
+    if code_id is None:
+        audit_repo.record(
+            "auth.login.failed",
+            subject_user_id=user["id"],
+            origin_class=ctx.origin_class,
+            client_key=ctx.client_key,
+            detail={"known_identifier": True, "method": "break_glass", "reason": "code"},
+        )
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    role = ar.get_role(user["id"])
+    access_token = auth_service.create_access_token(user["id"], user["email"])
+    refresh_token = auth_service.create_refresh_token(user["id"], remembered=False, break_glass=True)
+    audit_repo.record(
+        "auth.login.ok",
+        actor_user_id=user["id"],
+        subject_user_id=user["id"],
+        origin_class=ctx.origin_class,
+        client_key=ctx.client_key,
+        detail={"role": role, "remembered": False, "method": "break_glass", "break_glass_id": code_id},
+    )
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {"id": user["id"], "email": user["email"], "name": user["name"]},
+        "session_policy": auth_service.session_policy(role, False),
+    }
+
+
 @app.post("/api/auth/login", tags=["Auth"])
 @limiter.limit("5/minute")
 async def login(request: Request, body: LoginRequest):
@@ -2963,6 +3008,10 @@ async def login(request: Request, body: LoginRequest):
 
     ctx = _audit_ctx.from_request(request)
     user = ar.get_user_by_login(body.email)
+    from backend.services import passkeys
+
+    if user and passkeys.enabled() and ar.get_role(user["id"]) != "demo":
+        return _break_glass_login(request, user, body.password)
     if not user or not user.get("password_hash") or not auth_service.verify_password(
         body.password, user["password_hash"]
     ):
