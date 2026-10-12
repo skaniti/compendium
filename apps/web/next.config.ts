@@ -35,9 +35,11 @@ const nextConfig: NextConfig = {
     const demoHosted = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim().length > 0;
     // owner-passkeys (final review): no other origin may frame the app (UI
     // redress outside the cross-origin guard). 'self', not 'none': archived
-    // page previews are framed same-origin.
+    // page previews are framed same-origin. /api/* and /captured-assets/* are
+    // excluded: Next skips a same-named header the route returns, so the rule
+    // would replace the API's own stricter CSP / X-Frame-Options there.
     const rules = [
-      { source: "/(.*)", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }] },
+      { source: "/((?!api/|captured-assets/).*)", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }] },
     ];
     if (demoHosted) {
       rules.push({ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] });
