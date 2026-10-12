@@ -1,0 +1,33 @@
+import { crossOriginRefusal } from "@/lib/cross-origin-guard";
+import {
+  finishPasskeySignIn,
+  needsTailnetResponse,
+  passkeyErrorResponse,
+  passkeyTailnetLogin,
+  postToPasskeyBackend,
+  readJson,
+} from "@/lib/passkey-backend";
+import { ENROLL_LINK_UNUSABLE_MESSAGE, PASSKEY_SETUP_FAILED_MESSAGE } from "@/lib/login-messages";
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request): Promise<Response> {
+  const refused = crossOriginRefusal(req);
+  if (refused) return refused;
+  const login = passkeyTailnetLogin(req);
+  if (!login) return needsTailnetResponse();
+  const body = await readJson(req);
+  const token = typeof body?.token === "string" ? body.token : "";
+  if (!token || token.length > 200) return Response.json({ error: ENROLL_LINK_UNUSABLE_MESSAGE }, { status: 410 });
+  if (typeof body?.response !== "object" || body.response === null) {
+    return Response.json({ error: PASSKEY_SETUP_FAILED_MESSAGE }, { status: 400 });
+  }
+  const result = await postToPasskeyBackend(req, "/api/auth/passkey/enroll/verify", {
+    tailnet_login: login,
+    enrollment_token: token,
+    response: body.response,
+    trust_browser: body.trustBrowser === true,
+  });
+  if (!result.ok) return passkeyErrorResponse(result.status, "enroll");
+  return finishPasskeySignIn(result.data);
+}

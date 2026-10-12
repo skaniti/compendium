@@ -39,6 +39,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "14.0.0",
     "d3-delaunay": "^6.0.4",
     "d3-force": "^3.0.0",
     "d3-polygon": "^3.0.1",
