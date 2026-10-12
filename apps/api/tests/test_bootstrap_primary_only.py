@@ -7,7 +7,7 @@ import pytest
 from backend.db import auth_repo, user_repo
 from backend.db.connection import get_conn
 from backend.scripts import bootstrap_user
-from backend.services.auth_service import verify_password
+from backend.services.auth_service import hash_password, verify_password
 
 
 def _user_ids() -> set[int]:
@@ -84,19 +84,98 @@ def test_short_password_still_allowed_without_the_flag(primary, monkeypatch):
     assert _row(primary["email"]) is not None
 
 
-def test_warns_when_a_demo_user_already_exists(primary, capsys):
-    leftover = user_repo.create_user(
-        f"leftover-demo-{uuid.uuid4().hex[:8]}@test.local", name="demo"
+def _make_user(password: str | None, role: str | None = None) -> dict:
+    user = user_repo.create_user(
+        f"old-stack-{uuid.uuid4().hex[:8]}@test.local", name="old"
     )
-    auth_repo.set_role(leftover["id"], "demo")
+    if password is not None:
+        auth_repo.set_password(user["id"], hash_password(password))
+    if role:
+        auth_repo.set_role(user["id"], role)
+    return user
+
+
+def _hash_of(user_id: int):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+        return cur.fetchone()[0]
+
+
+def _drop(*users: dict) -> None:
+    _delete_users(*[u["email"] for u in users])
+
+
+@pytest.mark.parametrize("default_pw", ["local-dev-only-not-a-secret", "demo"])
+def test_clears_a_leftover_login_with_a_published_default(
+    primary, capsys, default_pw
+):
+    old = _make_user(default_pw, role="admin" if default_pw != "demo" else "demo")
+    try:
+        bootstrap_user.bootstrap()
+        out = capsys.readouterr().out
+        assert _hash_of(old["id"]) is None
+        assert old["email"] in out
+        assert "BOOTSTRAP_EMAIL" in out  # how to keep that account's data
+    finally:
+        _drop(old)
+
+
+def test_leaves_other_accounts_with_their_own_password_untouched(primary):
+    other = _make_user("some-own-password")
+    try:
+        bootstrap_user.bootstrap()
+        assert verify_password("some-own-password", _hash_of(other["id"]))
+    finally:
+        _drop(other)
+
+
+def test_never_clears_the_primary(primary):
+    bootstrap_user.bootstrap()
+    user = auth_repo.get_user_by_login(primary["email"])
+    assert verify_password("long-enough-pw", user["password_hash"])
+
+
+def test_refuses_a_published_default_as_the_bootstrap_password(
+    primary, monkeypatch
+):
+    monkeypatch.setenv("BOOTSTRAP_PASSWORD", "local-dev-only-not-a-secret")
+    before = _user_ids()
+    with pytest.raises(SystemExit) as exc:
+        bootstrap_user.bootstrap()
+    assert "published default" in str(exc.value)
+    assert _user_ids() == before
+
+
+def test_refuses_demo_as_password_naming_it_a_published_default(
+    primary, monkeypatch
+):
+    monkeypatch.setenv("BOOTSTRAP_PASSWORD", "demo")
+    with pytest.raises(SystemExit) as exc:
+        bootstrap_user.bootstrap()
+    assert "published default" in str(exc.value)
+
+
+def test_warns_about_a_demo_user_that_still_has_its_own_password(primary, capsys):
+    leftover = _make_user("custom-demo-pw", role="demo")
     try:
         bootstrap_user.bootstrap()
         out = capsys.readouterr().out
         assert "[primary] WARNING" in out
-        assert "demo" in out
+        assert leftover["email"] in out
+        assert verify_password("custom-demo-pw", _hash_of(leftover["id"]))
     finally:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute("DELETE FROM users WHERE id = %s", (leftover["id"],))
+        _drop(leftover)
+
+
+def test_no_demo_warning_once_the_demo_login_was_cleared(primary, capsys):
+    leftover = _make_user("demo", role="demo")
+    try:
+        bootstrap_user.bootstrap()
+        out = capsys.readouterr().out
+        assert "WARNING" not in out
+        assert "still work" not in out
+    finally:
+        _drop(leftover)
 
 
 def test_rerun_resyncs_password_and_changed_email_makes_a_new_account(

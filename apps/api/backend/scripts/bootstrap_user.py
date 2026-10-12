@@ -8,9 +8,11 @@ Idempotent: safe to run on every deploy. Behaviour:
 
   0b. ``BOOTSTRAP_PRIMARY_ONLY=1`` (the root docker-compose.yml stack): run
       step 1 only -- no demo user. Refuses a BOOTSTRAP_PASSWORD under 8
-      characters, refuses to combine with BOOTSTRAP_DEMO_ONLY, and warns when
-      a demo-role user is already on the database (a volume from the older,
-      demo-seeded version of that stack).
+      characters or a published default, refuses to combine with
+      BOOTSTRAP_DEMO_ONLY, clears the password of any other account that
+      still has a published default password (a volume from the older
+      version of that stack), and warns about leftover demo-role accounts
+      that keep a password of their own.
 
   1. Primary user (driven by env vars ``BOOTSTRAP_EMAIL`` + ``BOOTSTRAP_PASSWORD``):
      - If a user with ``BOOTSTRAP_EMAIL`` already exists -> just refresh the
@@ -48,7 +50,7 @@ import sys
 
 from backend.db import auth_repo, user_repo
 from backend.db.connection import get_conn
-from backend.services.auth_service import hash_password
+from backend.services.auth_service import hash_password, verify_password
 
 
 def _get_user_by_email(email: str) -> dict | None:
@@ -194,18 +196,58 @@ def _primary_only() -> bool:
     return _flag("BOOTSTRAP_PRIMARY_ONLY")
 
 
-def _warn_if_demo_users_exist() -> None:
-    """The root Docker stack used to create a demo login (demo/demo); a
-    volume carried over from that version still has it."""
+# Passwords this repo has published. A database carried over from the older
+# root docker-compose.yml may still hold accounts using them.
+_PUBLISHED_DEFAULT_PASSWORDS = (
+    "local-dev-only-not-a-secret",  # old root docker-compose.yml BOOTSTRAP_PASSWORD default
+    "demo",  # BOOTSTRAP_DEMO_PASSWORD default (see bootstrap() below)
+)
+
+
+def _clear_published_default_logins(primary_email: str) -> None:
+    """Disable every account other than the primary whose password is a
+    published default (passwordless, like `owner_auth.py password clear`),
+    and end its sessions. The API listens on the network in this mode."""
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT count(*) FROM users WHERE role = 'demo'")
-        count = cur.fetchone()[0]
-    if count:
+        cur.execute(
+            "SELECT id, email, password_hash FROM users "
+            "WHERE email <> %s AND password_hash IS NOT NULL",
+            (primary_email,),
+        )
+        rows = cur.fetchall()
+    cleared = 0
+    for user_id, email, pw_hash in rows:
+        if not any(verify_password(p, pw_hash) for p in _PUBLISHED_DEFAULT_PASSWORDS):
+            continue
+        auth_repo.set_password(user_id, None, via="cleared")
+        auth_repo.revoke_all_user_tokens(user_id)
+        cleared += 1
         print(
-            f"[primary] WARNING: {count} demo-role user(s) already exist on this "
-            "database, probably from an older version of this stack. Their "
-            "logins still work. Start fresh with `docker compose down -v` "
-            "(deletes all data) or remove them."
+            f"[primary] cleared the published default password of {email} "
+            "(it could no longer sign in)"
+        )
+    if cleared:
+        print(
+            "[primary] To keep an old account's data, set BOOTSTRAP_EMAIL to "
+            "that email; the next boot gives it the BOOTSTRAP_PASSWORD from .env."
+        )
+
+
+def _warn_if_demo_users_exist(primary_email: str) -> None:
+    """Demo-role accounts from the older stack that still hold a password."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT email FROM users WHERE role = 'demo' "
+            "AND password_hash IS NOT NULL AND email <> %s",
+            (primary_email,),
+        )
+        emails = [r[0] for r in cur.fetchall()]
+    if emails:
+        print(
+            f"[primary] WARNING: demo-role account(s) still have a password: "
+            f"{', '.join(emails)}. They are probably from an older version of "
+            "this stack. Remove them, or start fresh with "
+            "`docker compose down -v` (deletes all data)."
         )
 
 
@@ -221,13 +263,20 @@ def bootstrap() -> None:
         # no demo user. A weak password is refused here because this stack's
         # API listens on the network.
         password = os.environ.get("BOOTSTRAP_PASSWORD") or ""
+        if password in _PUBLISHED_DEFAULT_PASSWORDS:
+            sys.exit(
+                "ERROR: BOOTSTRAP_PASSWORD is a published default password "
+                "(anyone can read it in this repo); choose your own."
+            )
         if password and len(password) < _MIN_PASSWORD_LEN:
             sys.exit(
                 f"ERROR: BOOTSTRAP_PASSWORD must be at least {_MIN_PASSWORD_LEN} "
                 "characters."
             )
         _bootstrap_primary()
-        _warn_if_demo_users_exist()
+        primary_email = os.environ["BOOTSTRAP_EMAIL"]
+        _clear_published_default_logins(primary_email)
+        _warn_if_demo_users_exist(primary_email)
         print("[demo]    BOOTSTRAP_PRIMARY_ONLY set -- no demo user on this database")
         return
 
