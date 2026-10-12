@@ -41,26 +41,54 @@ npm run demo
 
 ## Full-stack (Docker)
 
-The local quickstart is frontend-only and already populated. Docker Compose runs the full stack: Postgres, the FastAPI backend (`apps/api`), and the frontend. The two ways to populate your compendium currently are a browser extension for desktop/laptop (Firefox-only) and a browser app for Android (build from source). An option for uploading your own data, if you don't want to use the extra fixtures, is in progress.
+The local quickstart is frontend-only and already populated. Docker Compose runs the full stack: Postgres, the FastAPI backend (`apps/api`), and the frontend, with the compendium set up to populate with your own data. The two ways to populate your compendium currently are a browser extension for desktop/laptop (Firefox-only) and a browser app for Android (build from source). An option for uploading your own data, if you don't want to use the extra fixtures, is in progress.
+
+You need Docker and an OpenAI API key. Ingesting pages and chatting both spend OpenAI credit.
+
+**1. Fill in `.env`.**
 
 ```bash
 git clone https://github.com/skaniti/compendium.git
 cd compendium
+cp -n .env.example .env
+```
+
+(`-n` keeps an existing `.env`.) Open `.env` and set the five required values: your login (`BOOTSTRAP_EMAIL`, and `BOOTSTRAP_PASSWORD` with at least 8 characters), `OPENAI_API_KEY`, and two random secrets, `JWT_SECRET_KEY` and `SESSION_INGRESS_TRUSTED_VALUE`. Generate each secret with:
+
+```bash
+openssl rand -hex 32
+```
+
+Single-quote any value that contains `$`, `#` or spaces. `docker compose` refuses to start until all five are set, and names the one that's missing.
+
+**2. Start it.**
+
+```bash
 docker compose up --build
 ```
 
-Postgres starts, `apps/api` waits for it, runs its migration chain, and bootstraps two logins, then `apps/web` builds and starts pointed at it. First run downloads and builds the backend's Python dependencies (a few minutes); after that, `docker compose up` is fast. Once `api` shows as healthy in `docker compose ps` (or once the URL loads), open **http://localhost:3000** and log in as the demo account:
+Postgres starts, `apps/api` runs its migrations and creates your login from `.env`, then `apps/web` builds and starts. The first run builds the backend's Python dependencies and downloads its models (a few minutes); after that, `docker compose up` is fast.
 
-- **Email:** `demo@traversal.local`
-- **Password:** `demo`
+**3. Sign in** at **http://localhost:3000** with the email and password from `.env`. The compendium stays empty until the collectors send pages. The web UI works from this machine only: its sign-in cookies are secure-only, and browsers drop them over plain `http://` from other devices.
 
-(Both are local-dev defaults from `apps/api/backend/scripts/bootstrap_user.py`, not secrets. The stack also creates an admin account from `BOOTSTRAP_EMAIL`/`BOOTSTRAP_PASSWORD`. To change either login, set those or `BOOTSTRAP_DEMO_EMAIL`/`BOOTSTRAP_DEMO_PASSWORD` in a `.env` file next to `docker-compose.yml`.)
+**4. Get the collectors' API key.**
 
-The stack starts populated: graph, diary, and topic detail have data from the first `docker compose up`, with no LLM API keys or capture-pipeline run. `SEED_DEMO=1` (the default) loads the same demo corpus into the demo account, already processed (summaries, embeddings, clusters, superclusters). `apps/api/data/demo-seed/README.md` lists what the seed contains and where it came from. Running `up` again leaves the seeded data alone.
+```bash
+docker compose exec api sh -c 'ROTATE_EMAIL="$BOOTSTRAP_EMAIL" python -m backend.scripts.rotate_api_key'
+```
 
-**Chat needs your own key.** Everything else the demo login can reach reads from the database, but the chat agent calls an LLM live. Set `OPENAI_API_KEY` in a `.env` file next to `docker-compose.yml`, or export it before `docker compose up`. Without a key, chat responds with "OpenAI API key not configured." (streamed like a normal chat answer).
+It prints a new key once. Running it again issues a new key, and the old one stops working.
 
-Ports: web on `:3000`, API on `:8001` (`:8001/docs` for the OpenAPI UI, `:8001/health` for a liveness check). Postgres is not published to the host; only `api` can reach it. Stop with `docker compose down`; add `-v` to also drop the Postgres volume and the HuggingFace model cache.
+**5. Connect the collectors.**
+
+- **Firefox extension:** in its settings, the backend URL is already `http://localhost:8001`; paste the key.
+- **Android app:** in its settings, set the backend URL to `http://<this computer's LAN address>:8001` and paste the key. The phone has to be on the same network, and the computer's firewall has to allow port 8001. Away from home, the app keeps captures and sends them once it can reach the API again.
+
+The key and your pages cross your network as plain HTTP. To keep the API on this machine only, set `API_BIND_ADDRESS=127.0.0.1` in `.env` and run `docker compose up -d` (`docker compose restart` keeps the old binding); the Android app then can't reach it.
+
+Ports: web on `127.0.0.1:3000`, API on `:8001` (`:8001/health` for a liveness check). Postgres is not published to the host; only `api` can reach it. Stop with `docker compose down`. **`docker compose down -v` deletes your compendium**: the Postgres and preview-asset volumes, along with the model cache.
+
+Your login is re-applied from `.env` on every boot. To change your password, edit `BOOTSTRAP_PASSWORD` in `.env` and run `docker compose up -d`; `docker compose restart` keeps the old value. Changing `BOOTSTRAP_EMAIL` instead creates a new, empty account. If you ran an earlier version of this stack, its logins used published default passwords, and the first boot of this version disables them. To keep the data that version collected, set `BOOTSTRAP_EMAIL` to its account's email (`you@example.com` by default) and run `docker compose up -d`; the account then takes your `.env` password. Otherwise, start fresh with `docker compose down -v`.
 
 ## Tests
 
@@ -85,7 +113,7 @@ npm run test:extension
   - Pipeline: `/api/pipeline/summary`, `/api/pipeline/timeline`, `/api/pipeline/pages`
   - Clusters: `/api/clusters/summary`, `/api/clusters/{id}/pages`, `/api/clusters/unclustered`
   - Prompts: `/api/prompts/summary`, `/api/prompts/templates/{name}`, plus admin-only override and evaluation-history routes
-- **Roles:** the graph's debug overlay (the noise toggle and the view-demo/return-to-admin controls) appears only for an admin or an admin viewing as demo. The demo-account and view-as tooling exists for the hosted deployment and is off by default, behind `DEMO_ROLE_TOOLING` (stub) and `NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend); `scripts/dev.sh` turns both on. `npm run demo` signs in automatically and never shows `/login`. On the hosted demo, `/login` shows only the Enter demo button.
+- **Roles:** the graph's debug overlay (the noise toggle and the view-demo/return-to-admin controls) appears only for an admin or an admin viewing as demo. The demo-account and view-as tooling exists for the hosted deployment and is off by default, behind `DEMO_ROLE_TOOLING` (stub) and `NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend); `scripts/dev.sh` turns both on. `npm run demo` signs in automatically and never shows `/login`. On the hosted demo, `/login` shows only the Enter demo button; the Docker stack uses its password form.
 
 ## Status
 
@@ -96,6 +124,8 @@ Still to port: the remaining dev views (data browser, logs, traces, dqBot). Afte
 ## Known limitations
 
 The settled graph layout depends on how much noise is shown: toggling noise re-runs the full force simulation, and different node counts can settle into visibly different arrangements. A fix is tracked as follow-up work.
+
+In the Docker stack, a signed-in session lapses after 60 idle minutes. The longer "remembered" session needs a trusted ingress in front of the app, which this stack doesn't have.
 
 ## Conventions
 
