@@ -415,6 +415,36 @@ def content_fingerprint(page: dict) -> str | None:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+_NO_TEXT_STAMP = "no-content-text"
+"""Cache stamp for pages without any content text (they embed from the title /
+page summary, which the fingerprint does not cover); a page that later gains
+text gets a real fingerprint, so its stamp changes and it re-embeds."""
+
+
+def _cache_stamp(page: dict) -> str:
+    """Embedding-cache invalidation stamp for a page (see ``content_fingerprint``)."""
+    return content_fingerprint(page) or _NO_TEXT_STAMP
+
+
+def _fresh_cache_hits(
+    stored: dict[int, tuple[list[float], str | None]], pages: list[dict]
+) -> dict[int, list[float]]:
+    """Keep only cached vectors whose stored hash matches the page's current stamp.
+
+    ``stored`` is ``{content_id: (embedding, content_hash)}``. A stored NULL
+    hash (every row written before migration 055) is a deliberate MISS: legacy
+    rows re-embed once (~1,000 clusterable pages is ~$0.01 on
+    text-embedding-3-small, free on local SBERT) and are stamped from then on.
+    """
+    fresh: dict[int, list[float]] = {}
+    for page in pages:
+        cid = page.get("page_content_id")
+        entry = stored.get(cid) if cid is not None else None
+        if entry is not None and entry[1] is not None and entry[1] == _cache_stamp(page):
+            fresh[cid] = entry[0]
+    return fresh
+
+
 def _has_real_summary(page: dict) -> bool:
     """True for a non-empty summary that is not an ingest placeholder."""
     summary = (page.get("summary") or "").strip()
@@ -1418,7 +1448,12 @@ class ClusteringService:
         model_key = f"{model_name}@{contract}"
         content_ids = [p.get("page_content_id") for p in pages]
         valid_content_ids = [cid for cid in content_ids if cid is not None]
-        cached = embedding_repo.get_clustering_embeddings(valid_content_ids, model_key)
+        cached = _fresh_cache_hits(
+            embedding_repo.get_clustering_embeddings(
+                valid_content_ids, model_key, with_hashes=True
+            ),
+            pages,
+        )
 
         encode_indices: list[int] = [
             i
@@ -1529,7 +1564,7 @@ class ClusteringService:
             for j, idx in enumerate(encode_indices):
                 cid = content_ids[idx]
                 if cid is not None:
-                    bulk_rows.append((cid, new_vectors[j]))
+                    bulk_rows.append((cid, new_vectors[j], _cache_stamp(pages[idx])))
                     cached[cid] = new_vectors[j]
                     audit_rows.append((texts_to_encode[j], text_sources[j], cid))
             if bulk_rows:
@@ -1584,7 +1619,10 @@ class ClusteringService:
         # Batch-fetch cached embeddings for pages that have a page_content_id
         content_ids = [p.get("page_content_id") for p in pages]
         valid_content_ids = [cid for cid in content_ids if cid is not None]
-        cached = embedding_repo.get_embeddings_for_content_ids(valid_content_ids)
+        cached = _fresh_cache_hits(
+            embedding_repo.get_embeddings_for_content_ids(valid_content_ids, with_hashes=True),
+            pages,
+        )
 
         # Determine which pages need encoding
         texts_to_encode: list[str] = []
@@ -1613,7 +1651,7 @@ class ClusteringService:
                 cid = content_ids[idx]
                 if cid is not None:
                     emb_list = new_embeddings[j].tolist()
-                    bulk_rows.append((cid, emb_list))
+                    bulk_rows.append((cid, emb_list, _cache_stamp(pages[idx])))
                     cached[cid] = emb_list
 
             if bulk_rows:

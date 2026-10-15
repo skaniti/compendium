@@ -306,7 +306,7 @@ def candidate_env(monkeypatch):
     monkeypatch.setattr(settings, "clustering_embedding_model", "text-embedding-3-small")
     monkeypatch.setattr("openai.OpenAI", _FakeOpenAI)
 
-    def fake_get(content_ids, model_key):
+    def fake_get(content_ids, model_key, with_hashes=False):
         captured["cache_key"] = model_key
         return {}
 

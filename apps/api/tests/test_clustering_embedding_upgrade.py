@@ -345,7 +345,7 @@ def candidate_env(monkeypatch):
     monkeypatch.setattr(settings, "clustering_embedding_model", "text-embedding-3-small")
     monkeypatch.setattr("openai.OpenAI", _FakeOpenAI)
 
-    def fake_get(content_ids, model_key):
+    def fake_get(content_ids, model_key, with_hashes=False):
         captured["cache_key"] = model_key
         return {}
 
@@ -379,7 +379,7 @@ def test_candidate_path_versioned_key_matrix_and_cost(candidate_env):
 
     saved_rows, saved_key = candidate_env["saved"]
     assert saved_key == f"text-embedding-3-small@{EMBEDDING_TEXT_CONTRACT}"
-    assert [cid for cid, _ in saved_rows] == [11, 12]
+    assert [row[0] for row in saved_rows] == [11, 12]
 
     cost = candidate_env["cost"]
     assert cost["event_type"] == "clustering_embedding"
@@ -392,13 +392,18 @@ def test_candidate_path_versioned_key_matrix_and_cost(candidate_env):
 
 
 def test_candidate_path_cache_hit_skips_api(candidate_env, monkeypatch):
+    pages = [_page(content_id=11), _page(db_id=2, content_id=12)]
+    stamps = [clustering_service._cache_stamp(p) for p in pages]
     monkeypatch.setattr(
         embedding_repo,
         "get_clustering_embeddings",
-        lambda content_ids, model_key: {11: [1.0, 0.0, 0.0, 0.0], 12: [0.0, 1.0, 0.0, 0.0]},
+        lambda content_ids, model_key, with_hashes=False: {
+            11: ([1.0, 0.0, 0.0, 0.0], stamps[0]),
+            12: ([0.0, 1.0, 0.0, 0.0], stamps[1]),
+        },
     )
     svc = ClusteringService(user_id=1)
-    result = svc._compute_embeddings([_page(content_id=11), _page(db_id=2, content_id=12)])
+    result = svc._compute_embeddings(pages)
     assert result.shape == (2, 4)
     assert _FakeOpenAI.last_instance is None or _FakeOpenAI.last_instance.embeddings.calls == []
     assert candidate_env["saved"] is None  # nothing written
@@ -417,11 +422,16 @@ def test_default_model_routes_to_legacy_path(monkeypatch):
         raise AssertionError("candidate path must not run on default settings")
 
     monkeypatch.setattr(ClusteringService, "_compute_embeddings_openai", _boom)
+    pages = [_page(content_id=11), _page(db_id=2, content_id=12)]
+    stamps = [clustering_service._cache_stamp(p) for p in pages]
     monkeypatch.setattr(
         embedding_repo,
         "get_embeddings_for_content_ids",
-        lambda content_ids: {11: [0.5] * 384, 12: [0.25] * 384},
+        lambda content_ids, model_name="x", with_hashes=False: {
+            11: ([0.5] * 384, stamps[0]),
+            12: ([0.25] * 384, stamps[1]),
+        },
     )
     svc = ClusteringService(user_id=1)
-    result = svc._compute_embeddings([_page(content_id=11), _page(db_id=2, content_id=12)])
+    result = svc._compute_embeddings(pages)
     assert result.shape == (2, 384)

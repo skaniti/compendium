@@ -9,46 +9,62 @@ def save_embedding(
     page_content_id: int,
     embedding: list[float],
     model_name: str = DEFAULT_MODEL,
+    content_hash: str | None = None,
 ) -> None:
-    """Upsert an embedding for a page_content row."""
+    """Upsert an embedding for a page_content row.
+
+    ``content_hash`` is the cache-invalidation stamp (migration 055); omitting
+    it stores NULL, which the clustering cache treats as stale.
+    """
     vec_literal = "[" + ",".join(str(v) for v in embedding) + "]"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO page_embeddings (page_content_id, model_name, embedding)
-                VALUES (%s, %s, %s::vector)
+                INSERT INTO page_embeddings
+                    (page_content_id, model_name, embedding, content_hash)
+                VALUES (%s, %s, %s::vector, %s)
                 ON CONFLICT (page_content_id, model_name) DO UPDATE
                 SET embedding = EXCLUDED.embedding,
+                    content_hash = EXCLUDED.content_hash,
                     computed_at = NOW()
                 """,
-                (page_content_id, model_name, vec_literal),
+                (page_content_id, model_name, vec_literal, content_hash),
             )
 
 
+def _with_hash(row: tuple) -> tuple:
+    """Normalise a 2-tuple cache row to ``(content_id, embedding, None)``."""
+    return row if len(row) == 3 else (row[0], row[1], None)
+
+
 def save_embeddings_bulk(
-    rows: list[tuple[int, list[float]]],
+    rows: list[tuple],
     model_name: str = DEFAULT_MODEL,
 ) -> int:
-    """Bulk upsert embeddings. Each row is (page_content_id, embedding_list).
+    """Bulk upsert embeddings.
 
-    Returns count of rows upserted.
+    Each row is ``(page_content_id, embedding_list, content_hash)``; the legacy
+    2-tuple ``(page_content_id, embedding_list)`` is still accepted and stores a
+    NULL hash. Returns count of rows upserted.
     """
     if not rows:
         return 0
     with get_conn() as conn:
         with conn.cursor() as cur:
-            for content_id, emb in rows:
+            for content_id, emb, content_hash in (_with_hash(r) for r in rows):
                 vec_literal = "[" + ",".join(str(v) for v in emb) + "]"
                 cur.execute(
                     """
-                    INSERT INTO page_embeddings (page_content_id, model_name, embedding)
-                    VALUES (%s, %s, %s::vector)
+                    INSERT INTO page_embeddings
+                        (page_content_id, model_name, embedding, content_hash)
+                    VALUES (%s, %s, %s::vector, %s)
                     ON CONFLICT (page_content_id, model_name) DO UPDATE
                     SET embedding = EXCLUDED.embedding,
+                        content_hash = EXCLUDED.content_hash,
                         computed_at = NOW()
                     """,
-                    (content_id, model_name, vec_literal),
+                    (content_id, model_name, vec_literal, content_hash),
                 )
     return len(rows)
 
@@ -79,10 +95,13 @@ def get_embedding(
 def get_embeddings_for_content_ids(
     content_ids: list[int],
     model_name: str = DEFAULT_MODEL,
-) -> dict[int, list[float]]:
+    with_hashes: bool = False,
+) -> dict:
     """Batch-fetch embeddings for multiple content IDs.
 
-    Returns dict mapping content_id to embedding list.
+    Returns dict mapping content_id to embedding list; with
+    ``with_hashes=True`` the values are ``(embedding_list, content_hash)``
+    (hash is None for legacy rows).
     """
     if not content_ids:
         return {}
@@ -91,7 +110,8 @@ def get_embeddings_for_content_ids(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT page_content_id, embedding::text FROM page_embeddings
+                SELECT page_content_id, embedding::text, content_hash
+                FROM page_embeddings
                 WHERE page_content_id = ANY(%s) AND model_name = %s
                 """,
                 (content_ids, model_name),
@@ -99,8 +119,9 @@ def get_embeddings_for_content_ids(
             rows = cur.fetchall()
 
     result = {}
-    for content_id, emb_text in rows:
-        result[content_id] = [float(x) for x in emb_text.strip("[]").split(",")]
+    for content_id, emb_text, content_hash in rows:
+        emb = [float(x) for x in emb_text.strip("[]").split(",")]
+        result[content_id] = (emb, content_hash) if with_hashes else emb
     return result
 
 
@@ -401,10 +422,13 @@ def get_chunks_for_page(page_content_id: int) -> list[dict]:
 def get_clustering_embeddings(
     content_ids: list[int],
     model_key: str,
-) -> dict[int, list[float]]:
+    with_hashes: bool = False,
+) -> dict:
     """Batch-fetch clustering-cache embeddings for one model_key.
 
-    Returns {page_content_id: embedding_list} for the rows that exist.
+    Returns {page_content_id: embedding_list} for the rows that exist; with
+    ``with_hashes=True`` the values are ``(embedding_list, content_hash)``
+    (hash is None for legacy rows).
     """
     if not content_ids:
         return {}
@@ -412,44 +436,48 @@ def get_clustering_embeddings(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT page_content_id, embedding::text FROM clustering_embeddings
+                SELECT page_content_id, embedding::text, content_hash
+                FROM clustering_embeddings
                 WHERE page_content_id = ANY(%s) AND model_key = %s
                 """,
                 (content_ids, model_key),
             )
             rows = cur.fetchall()
-    return {
-        content_id: [float(x) for x in emb_text.strip("[]").split(",")]
-        for content_id, emb_text in rows
-    }
+    out = {}
+    for content_id, emb_text, content_hash in rows:
+        emb = [float(x) for x in emb_text.strip("[]").split(",")]
+        out[content_id] = (emb, content_hash) if with_hashes else emb
+    return out
 
 
 def save_clustering_embeddings_bulk(
-    rows: list[tuple[int, list[float]]],
+    rows: list[tuple],
     model_key: str,
 ) -> int:
     """Bulk upsert clustering-cache embeddings for one model_key.
 
-    Each row is (page_content_id, embedding_list). Dimension is recorded from
+    Each row is ``(page_content_id, embedding_list, content_hash)``; the legacy
+    2-tuple is still accepted and stores a NULL hash. Dimension is recorded from
     the vectors themselves. Returns count of rows upserted.
     """
     if not rows:
         return 0
     with get_conn() as conn:
         with conn.cursor() as cur:
-            for content_id, emb in rows:
+            for content_id, emb, content_hash in (_with_hash(r) for r in rows):
                 vec_literal = "[" + ",".join(str(v) for v in emb) + "]"
                 cur.execute(
                     """
                     INSERT INTO clustering_embeddings
-                        (page_content_id, model_key, dim, embedding)
-                    VALUES (%s, %s, %s, %s::vector)
+                        (page_content_id, model_key, dim, embedding, content_hash)
+                    VALUES (%s, %s, %s, %s::vector, %s)
                     ON CONFLICT (page_content_id, model_key) DO UPDATE
                     SET embedding = EXCLUDED.embedding,
                         dim = EXCLUDED.dim,
+                        content_hash = EXCLUDED.content_hash,
                         computed_at = NOW()
                     """,
-                    (content_id, model_key, len(emb), vec_literal),
+                    (content_id, model_key, len(emb), vec_literal, content_hash),
                 )
     return len(rows)
 
