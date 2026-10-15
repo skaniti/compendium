@@ -81,6 +81,26 @@ def apply(rec: dict, user_id: int) -> dict:
         return {"action": action_type, "applied": False, "error": str(e)}
 
 
+def _member_content_ids(user_id: int, stable_ids: list) -> list:
+    """page_content_ids of the clusters with these stable_ids in the latest
+    completed generation (captured so overrides can re-match by content)."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT p.page_content_id
+            FROM clusters c
+            JOIN page_clusters pc ON pc.cluster_id = c.id
+            JOIN pages p ON p.id = pc.page_id
+            WHERE c.user_id = %s AND c.stable_id = ANY(%s)
+              AND c.recluster_run = (SELECT max(id) FROM recluster_runs
+                                     WHERE user_id = %s AND status = 'completed')
+              AND p.page_content_id IS NOT NULL
+            """,
+            (user_id, stable_ids, user_id),
+        )
+        return [r[0] for r in cur.fetchall()]
+
+
 def _apply_relabel_cluster(rec: dict, user_id: int) -> dict:
     payload = rec.get("action_payload") or {}
     stable_id = payload.get("stable_id")
@@ -109,7 +129,10 @@ def _apply_relabel_cluster(rec: dict, user_id: int) -> dict:
     override = dq_overrides_repo.create_override(
         user_id=user_id,
         override_type="pin_label",
-        subject={"stable_id": stable_id},
+        subject={
+            "stable_id": stable_id,
+            "member_content_ids": _member_content_ids(user_id, [stable_id]),
+        },
         payload={"label": proposed_label},
         source_rec_id=rec.get("id"),
     )
@@ -136,6 +159,10 @@ def _apply_split_cluster(rec: dict, user_id: int) -> dict:
             "reason": "record-only: payload missing stable_id/remove_page_content_ids",
         }
 
+    # Capture membership BEFORE the removal: the override must describe the
+    # cluster as it was when the recommendation was made.
+    member_content_ids = _member_content_ids(user_id, [stable_id])
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -159,7 +186,10 @@ def _apply_split_cluster(rec: dict, user_id: int) -> dict:
     override = dq_overrides_repo.create_override(
         user_id=user_id,
         override_type="exclude_from_cluster",
-        subject={"stable_id": stable_id},
+        subject={
+            "stable_id": stable_id,
+            "member_content_ids": member_content_ids,
+        },
         payload={"page_content_ids": remove_page_content_ids},
         source_rec_id=rec.get("id"),
     )

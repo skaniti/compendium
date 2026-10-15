@@ -67,6 +67,9 @@ def test_dq_overrides_table_exists_with_expected_columns():
         "last_applied_run",
         "last_applied_at",
         "apply_count",
+        # added by migration 045
+        "unmatched_generations",
+        "retired_reason",
     }
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(

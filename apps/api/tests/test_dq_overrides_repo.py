@@ -209,3 +209,50 @@ def test_mark_applied_empty_list_is_noop(ctx):
 
 def test_mark_applied_nonexistent_ids_returns_zero(ctx):
     assert dq_overrides_repo.mark_applied([999999], run_id=1) == 0
+
+
+def _mk(ctx, sid):
+    return dq_overrides_repo.create_override(
+        user_id=ctx["user_id"], override_type="pin_label", subject={"stable_id": sid},
+    )
+
+
+def test_new_columns_default(ctx):
+    a = _mk(ctx, "1")
+    assert a["unmatched_generations"] == 0
+    assert a["retired_reason"] is None
+
+
+def test_record_unmatched_increments_and_empty_noop(ctx):
+    a = _mk(ctx, "1")
+    assert dq_overrides_repo.record_unmatched([], run_id=1) == 0
+    assert dq_overrides_repo.record_unmatched([a["id"]], run_id=1) == 1
+    dq_overrides_repo.record_unmatched([a["id"]], run_id=2)
+    rows = {o["id"]: o for o in dq_overrides_repo.list_active(ctx["user_id"])}
+    assert rows[a["id"]]["unmatched_generations"] == 2
+
+
+def test_mark_applied_resets_unmatched(ctx):
+    a = _mk(ctx, "1")
+    dq_overrides_repo.record_unmatched([a["id"]], run_id=1)
+    dq_overrides_repo.mark_applied([a["id"]], run_id=2)
+    rows = {o["id"]: o for o in dq_overrides_repo.list_active(ctx["user_id"])}
+    assert rows[a["id"]]["unmatched_generations"] == 0
+
+
+def test_auto_retire_unmatched_threshold(ctx):
+    old = _mk(ctx, "old")
+    fresh = _mk(ctx, "fresh")
+    for run in range(7):
+        dq_overrides_repo.record_unmatched([old["id"]], run_id=run)
+    for run in range(6):
+        dq_overrides_repo.record_unmatched([fresh["id"]], run_id=run)
+
+    retired = dq_overrides_repo.auto_retire_unmatched(ctx["user_id"], 7)
+    assert [r["id"] for r in retired] == [old["id"]]
+    assert retired[0]["status"] == "retired"
+    assert retired[0]["retired_reason"] == "auto-retired: unmatched for 7 generations"
+    active = [o["id"] for o in dq_overrides_repo.list_active(ctx["user_id"])]
+    assert active == [fresh["id"]]
+    # idempotent: already-retired rows are not retired again
+    assert dq_overrides_repo.auto_retire_unmatched(ctx["user_id"], 7) == []

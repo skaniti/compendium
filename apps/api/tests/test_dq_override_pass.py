@@ -518,3 +518,110 @@ def test_mixed_batch_stats_and_applied_ids_correctness():
     }
     assert result["cluster_names"][0] == "A Pinned"
     assert list(result["labels"]) == [0, -1, 0, 1, -1]
+
+
+# ── U4: content-keyed matching behind a gate ─────────────────────────────
+
+
+def _content_scenario(overrides):
+    """Cluster 0 holds content ids 1-5, cluster 1 holds 6-8; identity matches
+    carry unrelated stable ids so the overrides' stable_id never matches."""
+    labels = np.array([0, 0, 0, 0, 0, 1, 1, 1])
+    cluster_names = {0: "A", 1: "B"}
+    identity_matches = {0: {"stable_id": "new-0", "name": "A", "jaccard": 0.9}}
+    pages = _pages([1, 2, 3, 4, 5, 6, 7, 8])
+    return labels, cluster_names, identity_matches, pages, overrides
+
+
+def _pin(subject_members, sid="gone"):
+    return _override(
+        1, "pin_label",
+        {"stable_id": sid, "member_content_ids": subject_members},
+        {"label": "Pinned"},
+    )
+
+
+def test_content_match_gate_off_records_but_stays_dormant():
+    args = _content_scenario([_pin([1, 2, 3, 4, 5, 99])])  # J = 5/6
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=False)
+    assert result["applied_override_ids"] == []
+    assert result["cluster_names"] == {0: "A", 1: "B"}
+    assert result["stats"]["pin_label"] == {"applied": 0, "dormant": 1}
+    (rec,) = result["stats"]["content_match"]
+    assert rec["override_id"] == 1 and rec["cid"] == 0 and rec["applied"] is False
+    assert rec["jaccard"] == pytest.approx(5 / 6)
+
+
+def test_content_match_gate_default_reads_env(monkeypatch):
+    monkeypatch.delenv("DQ_OVERRIDE_CONTENT_MATCH", raising=False)
+    args = _content_scenario([_pin([1, 2, 3, 4, 5])])
+    result = apply_dq_overrides(*args[:4], None, args[4])
+    assert result["applied_override_ids"] == []
+    monkeypatch.setenv("DQ_OVERRIDE_CONTENT_MATCH", "1")
+    args = _content_scenario([_pin([1, 2, 3, 4, 5])])
+    result = apply_dq_overrides(*args[:4], None, args[4])
+    assert result["applied_override_ids"] == [1]
+
+
+def test_content_match_gate_on_pins_label():
+    args = _content_scenario([_pin([1, 2, 3, 4, 5, 99])])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["applied_override_ids"] == [1]
+    assert result["cluster_names"][0] == "Pinned"
+    assert result["stats"]["content_match"][0]["applied"] is True
+
+
+def test_content_match_gate_on_excludes_pages_on_matched_cluster():
+    ov = _override(
+        2, "exclude_from_cluster",
+        {"stable_id": "gone", "member_content_ids": [1, 2, 3, 4, 5]},
+        {"page_content_ids": [2, 6]},
+    )
+    args = _content_scenario([ov])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["applied_override_ids"] == [2]
+    # 2 leaves cluster 0; 6 is in a different cluster so stays
+    assert list(result["labels"]) == [0, -1, 0, 0, 0, 1, 1, 1]
+
+
+def test_content_match_missing_stable_id_still_matches():
+    ov = _override(
+        3, "pin_label", {"member_content_ids": [6, 7, 8]}, {"label": "Pinned"}
+    )
+    args = _content_scenario([ov])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["cluster_names"][1] == "Pinned"
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_content_match_below_threshold_is_dormant(enabled):
+    args = _content_scenario([_pin([1, 2, 3, 90, 91, 92, 93])])  # J = 3/9
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=enabled)
+    assert result["applied_override_ids"] == []
+    assert result["stats"]["pin_label"] == {"applied": 0, "dormant": 1}
+    assert "content_match" not in result["stats"]
+
+
+def test_content_match_threshold_env(monkeypatch):
+    monkeypatch.setenv("DQ_OVERRIDE_CONTENT_JACCARD", "0.3")
+    args = _content_scenario([_pin([1, 2, 3, 90, 91, 92, 93])])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["applied_override_ids"] == [1]
+
+
+def test_stable_id_match_takes_precedence_over_content_match():
+    # stable_id matches cluster 0; the content set points at cluster 1.
+    ov = _pin([6, 7, 8], sid="new-0")
+    args = _content_scenario([ov])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["cluster_names"][0] == "Pinned"
+    assert result["cluster_names"][1] == "B"
+    assert "content_match" not in result["stats"]
+
+
+def test_old_format_subject_unchanged_with_gate_on():
+    ov = _override(1, "pin_label", {"stable_id": "gone"}, {"label": "Pinned"})
+    args = _content_scenario([ov])
+    result = apply_dq_overrides(*args[:4], None, args[4], content_match_enabled=True)
+    assert result["applied_override_ids"] == []
+    assert result["stats"]["dormant"] == 1

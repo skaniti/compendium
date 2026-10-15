@@ -22,7 +22,8 @@ _VALID_OVERRIDE_TYPES = frozenset(
 
 _SELECT_COLUMNS = """
     id, user_id, override_type, subject, payload, status, source_rec_id,
-    created_at, last_applied_run, last_applied_at, apply_count
+    created_at, last_applied_run, last_applied_at, apply_count,
+    unmatched_generations, retired_reason
 """
 
 
@@ -39,6 +40,8 @@ def _row_to_dict(r) -> dict:
         "last_applied_run": r[8],
         "last_applied_at": r[9],
         "apply_count": r[10],
+        "unmatched_generations": r[11],
+        "retired_reason": r[12],
     }
 
 
@@ -151,9 +154,47 @@ def mark_applied(override_ids: list[int], run_id: int) -> int:
             UPDATE dq_overrides
             SET last_applied_run = %s,
                 last_applied_at = NOW(),
-                apply_count = apply_count + 1
+                apply_count = apply_count + 1,
+                unmatched_generations = 0
             WHERE id = ANY(%s)
             """,
             (run_id, override_ids),
         )
         return cur.rowcount
+
+
+def record_unmatched(override_ids: list[int], run_id: int) -> int:
+    """Increment unmatched_generations for overrides that were not applied in
+    recluster run ``run_id``. Returns rows updated; no-op on an empty list."""
+    if not override_ids:
+        return 0
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dq_overrides
+            SET unmatched_generations = unmatched_generations + 1
+            WHERE id = ANY(%s) AND status = 'active'
+            """,
+            (override_ids,),
+        )
+        return cur.rowcount
+
+
+def auto_retire_unmatched(user_id: int, threshold: int) -> list[dict]:
+    """Retire active overrides unmatched for >= ``threshold`` generations.
+    Returns the retired rows."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            UPDATE dq_overrides
+            SET status = 'retired',
+                retired_reason = 'auto-retired: unmatched for '
+                                 || unmatched_generations || ' generations'
+            WHERE user_id = %s AND status = 'active'
+              AND unmatched_generations >= %s
+            RETURNING {_SELECT_COLUMNS}
+            """,
+            (user_id, threshold),
+        )
+        return [_row_to_dict(r) for r in cur.fetchall()]

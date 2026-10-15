@@ -170,9 +170,30 @@ class TestRelabelCluster:
         overrides = dq_overrides_repo.list_active(uid)
         assert len(overrides) == 1
         assert overrides[0]["override_type"] == "pin_label"
-        assert overrides[0]["subject"] == {"stable_id": "sid-1"}
+        assert overrides[0]["subject"] == {"stable_id": "sid-1", "member_content_ids": []}
         assert overrides[0]["payload"] == {"label": "New Name"}
         assert overrides[0]["source_rec_id"] == rec["id"]
+
+    def test_captures_member_content_ids(self, uid):
+        cap = _make_capture(uid, "dqapply_relabel_members")
+        page_ids = [_insert_page(cap["id"], i) for i in (1, 2)]
+        content_ids = [_make_page_content(f"https://example{i}.com/") for i in (1, 2)]
+        with get_conn() as conn, conn.cursor() as cur:
+            for pid, cid in zip(page_ids, content_ids):
+                cur.execute("UPDATE pages SET page_content_id = %s WHERE id = %s", (cid, pid))
+        _, slugs = _seed_generation(
+            uid, [{"cluster_slug": "c", "cluster_name": "C", "stable_id": "sid-m"}]
+        )
+        cluster_repo.save_page_clusters([(pid, slugs["c"]) for pid in page_ids])
+        r_run_id, obs_id = _seed_run_and_obs(uid)
+        rec = _seed_rec(
+            uid, r_run_id, obs_id, action_type="relabel_cluster",
+            action_payload={"stable_id": "sid-m", "proposed_label": "New"},
+        )
+        dq_apply.apply(rec, uid)
+        (ov,) = dq_overrides_repo.list_active(uid)
+        assert ov["subject"]["stable_id"] == "sid-m"
+        assert sorted(ov["subject"]["member_content_ids"]) == sorted(content_ids)
 
     def test_dormant_stable_id_still_creates_override(self, uid):
         # Two generations: gen 1 has sid-1, gen 2 (current) does not carry it.
@@ -274,8 +295,10 @@ class TestSplitCluster:
         overrides = dq_overrides_repo.list_active(uid)
         assert len(overrides) == 1
         assert overrides[0]["override_type"] == "exclude_from_cluster"
-        assert overrides[0]["subject"] == {"stable_id": "sid-split"}
+        assert overrides[0]["subject"]["stable_id"] == "sid-split"
         assert overrides[0]["payload"] == {"page_content_ids": [content_id]}
+        # membership is captured before the removal, so it still lists the page
+        assert overrides[0]["subject"]["member_content_ids"] == [content_id]
 
     def test_dormant_stable_id_still_creates_override(self, uid):
         cap = _make_capture(uid)

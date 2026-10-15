@@ -158,6 +158,7 @@ def apply_dq_overrides(
     pages: list[dict],
     probabilities: np.ndarray | None,
     overrides: list[dict],
+    content_match_enabled: bool | None = None,
 ) -> dict:
     """Apply durable dq_overrides (dqBot Tier 1, spec S6) to this run's
     in-memory cluster state, before it's written to DB.
@@ -212,7 +213,23 @@ def apply_dq_overrides(
             entry -- including any pin_label already applied to it, since
             pin_label writes by cid via identity_matches and is unaffected
             by this merge); absorbed cids are dropped from cluster_names.
+
+    Content-keyed matching (U4): a pin_label / exclude_from_cluster override
+    whose stable_id is missing or unmatched, but whose subject carries
+    ``member_content_ids``, is matched to the current cluster with the best
+    Jaccard >= DQ_OVERRIDE_CONTENT_JACCARD (default 0.6). It is APPLIED only
+    when ``content_match_enabled`` (None -> env DQ_OVERRIDE_CONTENT_MATCH == "1",
+    read now); otherwise the override stays dormant and the would-be match is
+    only recorded in ``stats["content_match"]``. The merge_clusters rider keeps
+    its own >=50%-of-cluster overlap rule (not Jaccard; switching would change
+    existing results).
     """
+    if content_match_enabled is None:
+        content_match_enabled = os.environ.get("DQ_OVERRIDE_CONTENT_MATCH") == "1"
+    try:
+        jaccard_threshold = float(os.environ.get("DQ_OVERRIDE_CONTENT_JACCARD", "0.6"))
+    except ValueError:
+        jaccard_threshold = 0.6
     stats: dict = {
         "pin_label": {"applied": 0, "dormant": 0},
         "exclude_from_cluster": {"applied": 0, "dormant": 0},
@@ -220,7 +237,11 @@ def apply_dq_overrides(
         "merge_clusters": {"applied": 0, "dormant": 0},
         "dormant": 0,
     }
+    content_match_records: list[dict] = []
     applied_override_ids: list = []
+
+    # stats["content_match"] is attached lazily (only when a content match was
+    # found) so the stats dict is unchanged for runs with nothing to record.
 
     def _result() -> dict:
         return {
@@ -252,6 +273,33 @@ def apply_dq_overrides(
         stats[override_type]["dormant"] += 1
         stats["dormant"] += 1
 
+    def _content_match(ov_id, subject) -> int | None:
+        """Best Jaccard cluster for subject.member_content_ids, recorded in
+        stats["content_match"]; returns its cid only when the gate is on."""
+        member_ids = subject.get("member_content_ids")
+        if not member_ids:
+            return None
+        subject_set = set(member_ids)
+        members: dict[int, set] = {}
+        for i, p in enumerate(pages):
+            c = int(labels[i])
+            if c != -1 and p.get("page_content_id") is not None:
+                members.setdefault(c, set()).add(p["page_content_id"])
+        best: tuple[float, int] | None = None
+        for c in sorted(members):
+            union = len(subject_set | members[c])
+            j = len(subject_set & members[c]) / union if union else 0.0
+            if best is None or j > best[0]:
+                best = (j, c)
+        if best is None or best[0] < jaccard_threshold:
+            return None
+        stats["content_match"] = content_match_records
+        content_match_records.append(
+            {"override_id": ov_id, "cid": best[1], "jaccard": best[0],
+             "applied": bool(content_match_enabled)}
+        )
+        return best[1] if content_match_enabled else None
+
     def _applied(override_type: str, override_id) -> None:
         stats[override_type]["applied"] += 1
         applied_override_ids.append(override_id)
@@ -268,6 +316,8 @@ def apply_dq_overrides(
             if ov_type == "pin_label":
                 cid = stable_to_cid.get(subject.get("stable_id"))
                 if cid is None:
+                    cid = _content_match(ov_id, subject)
+                if cid is None:
                     _dormant(ov_type)
                     continue
                 cluster_names[cid] = payload["label"]
@@ -275,6 +325,8 @@ def apply_dq_overrides(
 
             elif ov_type == "exclude_from_cluster":
                 cid = stable_to_cid.get(subject.get("stable_id"))
+                if cid is None:
+                    cid = _content_match(ov_id, subject)
                 if cid is None:
                     _dormant(ov_type)
                     continue
@@ -618,6 +670,7 @@ class ClusteringService:
             # ``_maybe_enqueue_dq`` -- a DB hiccup here must not break
             # reclustering.
             applied_override_ids: list[int] = []
+            active_override_ids: list[int] = []
             if os.environ.get("DQ_OVERRIDES_DISABLED") == "1":
                 logger.info(
                     "dq_overrides pass skipped for user %s (DQ_OVERRIDES_DISABLED=1)",
@@ -642,6 +695,7 @@ class ClusteringService:
                         user_id,
                     )
                     overrides = []
+                active_override_ids = [o["id"] for o in overrides if o.get("id") is not None]
                 if overrides:
                     override_result = apply_dq_overrides(
                         labels,
@@ -692,6 +746,33 @@ class ClusteringService:
                         "dq_overrides mark_applied failed for user %s run %s "
                         "(overrides were still applied to this run's clusters; "
                         "only the apply_count/last_applied bookkeeping failed)",
+                        user_id,
+                        run_id,
+                    )
+
+            # U4: count a generation as "unmatched" for every active override
+            # not applied this run; auto-retire those unmatched too long and
+            # log each at WARNING ([dq-alert] is the notify hook). Best-effort.
+            if active_override_ids:
+                try:
+                    from backend.db import dq_overrides_repo
+
+                    applied_set = set(applied_override_ids)
+                    unmatched_ids = [i for i in active_override_ids if i not in applied_set]
+                    dq_overrides_repo.record_unmatched(unmatched_ids, run_id)
+                    try:
+                        retire_after = int(os.environ.get("DQ_OVERRIDE_RETIRE_AFTER", "7"))
+                    except ValueError:
+                        retire_after = 7
+                    for r in dq_overrides_repo.auto_retire_unmatched(user_id, retire_after):
+                        logger.warning(
+                            "[dq-alert] dq override %s (%s) %s",
+                            r.get("id"), r.get("override_type"), r.get("retired_reason"),
+                        )
+                except Exception:
+                    logger.exception(
+                        "dq_overrides unmatched bookkeeping failed for user %s run %s "
+                        "(recluster itself unaffected)",
                         user_id,
                         run_id,
                     )
