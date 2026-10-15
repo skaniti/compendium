@@ -533,10 +533,10 @@ def get_pages_for_capture(capture_db_id: int) -> list[dict]:
                        transition_type, transition_qualifiers, is_tracked_domain,
                        extracted_text, status, archive_reason, skip_reasoning,
                        processing_depth, processing_metadata, content_summary,
-                       page_content_id, created_at
+                       page_content_id, created_at, normalized_url
                 FROM pages
                 WHERE capture_id = %s
-                ORDER BY visited_at ASC NULLS LAST
+                ORDER BY visited_at ASC NULLS LAST, id ASC
                 """,
                 (capture_db_id,),
             )
@@ -1324,6 +1324,8 @@ def _row_to_dict(row: tuple) -> dict:
         "content_summary": row[15],
         "page_content_id": row[16],
         "created_at": row[17],
+        # Only some SELECTs append normalized_url; absent -> callers normalize url.
+        **({"normalized_url": row[18]} if len(row) > 18 else {}),
     }
 
 

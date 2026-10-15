@@ -27,6 +27,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 # Suppress noisy HTTP/API loggers so tqdm output stays clean
+logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("wikipediaapi").setLevel(logging.WARNING)
 logging.getLogger("backend.services.rag_pipeline").setLevel(logging.WARNING)
@@ -166,17 +167,83 @@ def _print_capture_report(response, elapsed_ms: float) -> None:
     tqdm.write("")
 
 
+def _identity_key(url: str | None) -> str:
+    """Page identity used to pair DB rows with pipeline results."""
+    from backend.utils.url_normalize import normalize_url
+
+    return normalize_url(url or "")
+
+
+def _pair_rows_with_results(pages: list[dict], results: list) -> tuple[list, list, list]:
+    """Pair DB page rows with pipeline results by normalized URL.
+
+    ``insert_pages`` collapses consecutive duplicate visits, so the DB can hold
+    fewer rows than the request had pages (and ``visited_at`` ordering can
+    differ from request order). Pairing by position then shifts every later
+    page onto its neighbour's content. Within one URL key, rows (visited_at
+    order) and results (request order) are paired in order; surplus rows reuse
+    the group's last result (same URL, same fetched content).
+
+    Returns ``(pairs, unmatched_rows, unmatched_results)``.
+    """
+    by_key: dict[str, list] = {}
+    for r in results:
+        by_key.setdefault(_identity_key(getattr(r, "url", None)), []).append(r)
+
+    pairs: list[tuple[dict, object]] = []
+    unmatched_rows: list[dict] = []
+    used: dict[str, int] = {}
+    for row in pages:
+        key = row.get("normalized_url") or _identity_key(row.get("url"))
+        group = by_key.get(key)
+        if not group:
+            unmatched_rows.append(row)
+            continue
+        i = used.get(key, 0)
+        used[key] = i + 1
+        pairs.append((row, group[min(i, len(group) - 1)]))
+
+    unmatched_results = []
+    for key, group in by_key.items():
+        unmatched_results.extend(group[used.get(key, 0) :])
+    return pairs, unmatched_rows, unmatched_results
+
+
 def update_pages_from_response(cap_db_id: int, response) -> int:
     """Update page statuses and content in DB from pipeline response.
 
-    Processes each page independently so a single failure (e.g. URL too
-    long for the page_content index) doesn't kill the entire capture.
+    Rows are matched to results by page identity (normalized URL), never by
+    position: the DB may hold fewer rows than the request had pages because
+    of ``_collapse_consecutive_duplicates``. Processes each page independently
+    so a single failure (e.g. URL too long for the page_content index)
+    doesn't kill the entire capture.
+
+    Rows with no matching result are left untouched (still ``pending`` so the
+    pending sweep retries them) and counted as errors. Results with no row
+    are logged and skipped.
     Returns the number of pages that failed to persist.
     """
     pages = page_repo.get_pages_for_capture(cap_db_id)
     page_errors = 0
 
-    for page_row, result in zip(pages, response.results):
+    pairs, unmatched_rows, unmatched_results = _pair_rows_with_results(pages, response.results)
+
+    for r in unmatched_results:
+        logger.info(
+            "capture %s: no page row for result url=%s (collapsed duplicate?); skipped",
+            response.capture_id,
+            (getattr(r, "url", "") or "")[:100],
+        )
+    for row in unmatched_rows:
+        logger.warning(
+            "capture %s: page id=%s has no matching result; left untouched url=%s",
+            response.capture_id,
+            row.get("id"),
+            (row.get("url") or "")[:100],
+        )
+        page_errors += 1
+
+    for page_row, result in pairs:
         try:
             _persist_single_page(page_row, result, response)
         except Exception:
