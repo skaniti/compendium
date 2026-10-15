@@ -549,6 +549,9 @@ def list_overrides(user_id: int = Depends(verify_api_key)):
         never_cocluster subjects key on page_content_ids, not stable_id,
         so "resolved" is omitted (null) for them; the frontend renders the
         content-id pair directly from `subject`.
+      - applied_this_generation: last_applied_run == the user's latest
+        completed recluster_run id (plus the raw unmatched_generations /
+        retired_reason columns pass through from the row).
       - source_headline: the originating recommendation's headline, via a
         null-safe lookup (source_rec_id is nullable / ON DELETE SET NULL
         per migration 042, so a retired rec's override still resolves).
@@ -571,6 +574,11 @@ def list_overrides(user_id: int = Depends(verify_api_key)):
     name_by_stable_id: dict[str, str] = {}
     headline_by_rec_id: dict[int, str] = {}
     with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT max(id) FROM recluster_runs WHERE user_id = %s AND status = 'completed'",
+            (user_id,),
+        )
+        latest_run_id = cur.fetchone()[0]
         if stable_ids:
             cur.execute(
                 """
@@ -613,6 +621,9 @@ def list_overrides(user_id: int = Depends(verify_api_key)):
             ov["resolved"] = None
 
         src_id = ov.get("source_rec_id")
+        ov["applied_this_generation"] = (
+            latest_run_id is not None and ov.get("last_applied_run") == latest_run_id
+        )
         ov["source_headline"] = headline_by_rec_id.get(src_id) if src_id is not None else None
         enriched.append(ov)
 

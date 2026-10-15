@@ -1281,6 +1281,30 @@ class TestOverridesEndpoints:
         # rec_id here is the fixture's seeded rec, headline "Test headline"
         assert entry["source_headline"] == "Test headline"
 
+    def test_applied_this_generation_flag_and_new_fields(self, client_and_ctx):
+        from backend.db import dq_overrides_repo
+
+        client, user_id, *_ = client_and_ctx
+        run_id, _ = _seed_current_gen_cluster(user_id, "ov-gen", "Gen", stable_id="ov-gen-sid")
+        applied = dq_overrides_repo.create_override(
+            user_id=user_id, override_type="pin_label",
+            subject={"stable_id": "ov-gen-sid"}, payload={"label": "Gen"},
+        )
+        stale = dq_overrides_repo.create_override(
+            user_id=user_id, override_type="pin_label",
+            subject={"stable_id": "ov-gen-old"}, payload={"label": "Old"},
+        )
+        dq_overrides_repo.mark_applied([applied["id"]], run_id)
+        dq_overrides_repo.mark_applied([stale["id"]], run_id - 1)
+        dq_overrides_repo.record_unmatched([stale["id"]], run_id)
+
+        by_id = {o["id"]: o for o in client.get("/api/dq/overrides").json()["overrides"]}
+        assert by_id[applied["id"]]["applied_this_generation"] is True
+        assert by_id[applied["id"]]["unmatched_generations"] == 0
+        assert by_id[stale["id"]]["applied_this_generation"] is False
+        assert by_id[stale["id"]]["unmatched_generations"] == 1
+        assert by_id[stale["id"]]["retired_reason"] is None
+
     def test_exclude_from_cluster_dormant_when_stable_id_unmatched(self, client_and_ctx):
         from backend.db import dq_overrides_repo
 
