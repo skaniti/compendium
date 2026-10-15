@@ -775,7 +775,17 @@ class ClusteringService:
         fetched_content, capture_text_id.
         """
         rows = page_repo.get_active_pages(user_id)
+        return self._pages_from_rows(rows)
 
+    @staticmethod
+    def _pages_from_rows(rows: list[dict]) -> list[dict]:
+        """Convert ``get_active_pages`` rows into the page dicts the pipeline uses.
+
+        Split out of ``_load_all_pages`` so the offline eval harness
+        (``evaluation/clustering``) can feed rows read from a table export
+        through the exact conversion production uses, instead of a replica
+        that drifts.
+        """
         pages: list[dict] = []
         for r in rows:
             if not r.get("url") or not r.get("title"):
