@@ -92,6 +92,12 @@ _BOILERPLATE_SUMMARY_RE = re.compile(r"^Page browsed outside API tool scope for 
 MIN_CONTENT_CHARS = 200
 """Filter G: a page needs at least this many characters of content text, or a
 real (non-placeholder) summary, to be clusterable."""
+EXCLUDED_CONTENT_KINDS = frozenset(
+    {"auth_login", "app_dashboard_ui", "search_results", "error_or_empty"}
+)
+"""Filter F: ``page_content.content_kind`` labels that are utility pages (login
+walls, app dashboards, search result pages, empty/error pages), not reading
+material. NULL / unknown kinds are never excluded."""
 _REDACTED_SUMMARY = "[redacted: sensitive-skip retention carve-out]"
 """Marker ``process_captures`` writes into ``pages.content_summary`` for
 sensitive skips; it is a placeholder, not a summary."""
@@ -869,6 +875,7 @@ class ClusteringService:
                     "is_learning": r.get("is_learning"),
                     "content_extracted_text": r.get("content_extracted_text"),
                     "content_level_summary": r.get("content_level_summary"),
+                    "content_kind": r.get("content_kind"),
                     "normalized_url": r.get("normalized_url") or normalize_url(r["url"]),
                 }
             )
@@ -883,13 +890,15 @@ class ClusteringService:
     ) -> tuple[list[dict], dict]:
         """Remove low-quality pages before clustering.
 
-        Applies sequential filters (A-C, G, D', E):
+        Applies sequential filters (A-C, F, G, D', E):
         A. Boilerplate exclusion — pages whose summary is the ingest
            pipeline's "Page browsed outside API tool scope" placeholder.
         B. URL-path-only exclusion — pages where ``_build_sbert_text``
            falls back to URL path tokens (no fetched content, no summary).
         C. Cross-capture URL dedup — collapses duplicate visits to the
            same canonical URL (same ``page_content_id``).
+        F. Content kind — ``page_content.content_kind`` in
+           ``EXCLUDED_CONTENT_KINDS`` (NULL is kept).
         G. Minimum content — >= ``MIN_CONTENT_CHARS`` of text or a real summary.
         D'. Content dedup — same content fingerprint (or same normalized URL
            when there is no text); never by title.
@@ -934,12 +943,22 @@ class ClusteringService:
             else:
                 excluded_duplicate += 1
 
+        # Filter F: content kind (utility pages). Runs before the dedup filter
+        # so an excluded page cannot shadow a legitimate duplicate.
+        after_kind = []
+        excluded_content_kind = 0
+        for page in after_dedup:
+            if page.get("content_kind") in EXCLUDED_CONTENT_KINDS:
+                excluded_content_kind += 1
+            else:
+                after_kind.append(page)
+
         # Filter G: minimum content. Thin pages (a few lines of text and no
         # real summary) embed as noise. Runs before dedup so a thin page
         # cannot shadow a substantive duplicate.
         after_min_content = []
         excluded_min_content = 0
-        for page in after_dedup:
+        for page in after_kind:
             if len(_page_content_text(page)) >= MIN_CONTENT_CHARS or _has_real_summary(page):
                 after_min_content.append(page)
             else:
@@ -985,6 +1004,7 @@ class ClusteringService:
             "excluded_url_fallback": excluded_url_fallback,
             "excluded_duplicate": excluded_duplicate,
             "excluded_title_dedup": 0,  # retired: title is no longer a dedup key
+            "excluded_content_kind": excluded_content_kind,
             "excluded_min_content": excluded_min_content,
             "excluded_content_dedup": excluded_content_dedup,
             "excluded_not_learning": excluded_not_learning,
@@ -995,6 +1015,7 @@ class ClusteringService:
             f"(boilerplate={excluded_boilerplate}, "
             f"url_fallback={excluded_url_fallback}, "
             f"duplicate={excluded_duplicate}, "
+            f"content_kind={excluded_content_kind}, "
             f"min_content={excluded_min_content}, "
             f"content_dedup={excluded_content_dedup}, "
             f"not_learning={excluded_not_learning})"

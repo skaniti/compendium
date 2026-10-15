@@ -93,3 +93,30 @@ def test_fingerprint_normalises_and_handles_missing_text():
     assert content_fingerprint(_page(3, text="")) is None
     c = _page(4, text="", content_level_summary="Some summary")
     assert content_fingerprint(c) is not None
+
+
+def test_excluded_content_kinds_dropped_unknown_and_null_kept():
+    from backend.services.clustering_service import EXCLUDED_CONTENT_KINDS
+
+    assert EXCLUDED_CONTENT_KINDS == {
+        "auth_login",
+        "app_dashboard_ui",
+        "search_results",
+        "error_or_empty",
+    }
+    texts = [LONG_A, LONG_B] + [f"{k} distinct text. " * 20 for k in range(5)]
+    pages = [
+        _page(i, texts[i], content_kind=k) for i, k in enumerate(sorted(EXCLUDED_CONTENT_KINDS))
+    ]
+    keep_unknown = _page(10, "unknown kind text. " * 20, content_kind="article")
+    keep_null = _page(11, "null kind text. " * 20, content_kind=None)
+    out, stats = _filter([*pages, keep_unknown, keep_null])
+    assert [p["db_id"] for p in out] == [10, 11]
+    assert stats["excluded_content_kind"] == 4
+
+
+def test_excluded_kind_page_does_not_shadow_duplicate():
+    dup = _page(1, LONG_A, content_kind="search_results")
+    real = _page(2, LONG_A, content_kind=None)
+    out, _ = _filter([dup, real])
+    assert [p["db_id"] for p in out] == [2]
