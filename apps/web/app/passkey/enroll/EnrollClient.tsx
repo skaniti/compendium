@@ -37,6 +37,7 @@ export default function EnrollClient({ ready, trusted = false }: { ready: boolea
     const raw = window.location.hash.slice(1);
     // Idempotent: Strict Mode runs this twice and the second read sees the
     // already-cleared hash, so never overwrite a token that was read.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the URL fragment, which the server never sees, so it cannot be derived during render
     setToken((prev) => raw || (prev ?? null));
     // Drop the one-time token from the address bar and history.
     if (raw) window.history.replaceState(null, "", window.location.pathname);
