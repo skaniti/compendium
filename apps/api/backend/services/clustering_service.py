@@ -21,6 +21,7 @@ Note: Embeddings are cached in pgvector (page_embeddings table).
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -35,6 +36,7 @@ from sklearn.metrics.pairwise import cosine_distances
 from backend.config.settings import settings
 from backend.db import cluster_repo, page_repo, recluster_repo
 from backend.services.llm_service import LLMService
+from backend.utils.url_normalize import normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,13 @@ OPENAI_EMBED_PRICE_PER_MTOK = {
 }
 OPENAI_EMBED_BATCH_SIZE = 512
 _BOILERPLATE_SUMMARY_RE = re.compile(r"^Page browsed outside API tool scope for \d+ seconds$")
+MIN_CONTENT_CHARS = 200
+"""Filter G: a page needs at least this many characters of content text, or a
+real (non-placeholder) summary, to be clusterable."""
+_REDACTED_SUMMARY = "[redacted: sensitive-skip retention carve-out]"
+"""Marker ``process_captures`` writes into ``pages.content_summary`` for
+sensitive skips; it is a placeholder, not a summary."""
+_WS_RE = re.compile(r"\s+")
 _PROBABILITIES_MISSING_WARNED = False
 """Set on first observation that the installed sklearn's HDBSCAN lacks
 ``probabilities_`` (migration 038's mean_membership_probability source) --
@@ -359,6 +368,53 @@ def apply_dq_overrides(
             _dormant(ov_type)
 
     return _result()
+
+
+def _page_content_text(page: dict) -> str:
+    """Content text of a page dict, best source first (may be empty).
+
+    Order: the content-level ``content_extracted_text``; the fetcher-owned
+    primary text from ``full_content`` (a title-only fallback does not count as
+    content); the content-level summary.
+    """
+    text = page.get("content_extracted_text")
+    if isinstance(text, str) and text.strip():
+        return text
+    fc = page.get("full_content")
+    if fc:
+        from backend.services.content_fetcher import get_primary_text_from_dict
+
+        text, source = get_primary_text_from_dict(
+            page.get("tool_selected"), fc, for_clustering=True
+        )
+        if text and source not in ("empty", "fallback:title_only"):
+            return text
+    summary = page.get("content_level_summary")
+    if isinstance(summary, str) and summary.strip():
+        return summary
+    return ""
+
+
+def content_fingerprint(page: dict) -> str | None:
+    """sha256 hex of the page's whitespace-normalised, lowercased content text.
+
+    Shared by the dedup filter (identical text under any URL collapses) and the
+    embedding caches (a stored hash that differs from the current one means the
+    content was re-fetched and the cached vector is stale). Deterministic and
+    cheap; ``None`` when the page has no text at all.
+    """
+    text = _WS_RE.sub(" ", _page_content_text(page)).strip().lower()
+    if not text:
+        return None
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _has_real_summary(page: dict) -> bool:
+    """True for a non-empty summary that is not an ingest placeholder."""
+    summary = (page.get("summary") or "").strip()
+    if not summary or summary == _REDACTED_SUMMARY:
+        return False
+    return not _BOILERPLATE_SUMMARY_RE.match(summary)
 
 
 class ClusteringService:
@@ -811,6 +867,9 @@ class ClusteringService:
                     "page_content_id": r.get("page_content_id"),
                     "tool_selected": r.get("tool_selected"),
                     "is_learning": r.get("is_learning"),
+                    "content_extracted_text": r.get("content_extracted_text"),
+                    "content_level_summary": r.get("content_level_summary"),
+                    "normalized_url": r.get("normalized_url") or normalize_url(r["url"]),
                 }
             )
 
@@ -824,13 +883,17 @@ class ClusteringService:
     ) -> tuple[list[dict], dict]:
         """Remove low-quality pages before clustering.
 
-        Applies three sequential filters:
+        Applies sequential filters (A-C, G, D', E):
         A. Boilerplate exclusion — pages whose summary is the ingest
            pipeline's "Page browsed outside API tool scope" placeholder.
         B. URL-path-only exclusion — pages where ``_build_sbert_text``
            falls back to URL path tokens (no fetched content, no summary).
         C. Cross-capture URL dedup — collapses duplicate visits to the
            same canonical URL (same ``page_content_id``).
+        G. Minimum content — >= ``MIN_CONTENT_CHARS`` of text or a real summary.
+        D'. Content dedup — same content fingerprint (or same normalized URL
+           when there is no text); never by title.
+        E. ``is_learning == False`` exclusion.
 
         Returns ``(filtered_pages, stats_dict)``.
         """
@@ -871,18 +934,38 @@ class ClusteringService:
             else:
                 excluded_duplicate += 1
 
-        # Filter D: title+domain dedup (catches pagination — same thread
-        # title across /page/2, /page/3, etc.)
-        seen_title_domain: set[tuple[str, str]] = set()
-        after_title_dedup = []
-        excluded_title_dedup = 0
+        # Filter G: minimum content. Thin pages (a few lines of text and no
+        # real summary) embed as noise. Runs before dedup so a thin page
+        # cannot shadow a substantive duplicate.
+        after_min_content = []
+        excluded_min_content = 0
         for page in after_dedup:
-            key = (page.get("title", ""), page.get("domain", ""))
-            if key in seen_title_domain:
-                excluded_title_dedup += 1
+            if len(_page_content_text(page)) >= MIN_CONTENT_CHARS or _has_real_summary(page):
+                after_min_content.append(page)
             else:
-                seen_title_domain.add(key)
-                after_title_dedup.append(page)
+                excluded_min_content += 1
+
+        # Filter D': content dedup. A page duplicates an earlier kept page
+        # when their content fingerprints match (identical text under any
+        # URL), or -- when it has no text -- when the normalized URL matches.
+        # Title is deliberately NOT a key: distinct chats or documents often
+        # share one title, and revisions of one URL have different text.
+        seen_fingerprints: set[str] = set()
+        seen_norm_urls: set[str] = set()
+        after_content_dedup = []
+        excluded_content_dedup = 0
+        for page in after_min_content:
+            fp = content_fingerprint(page)
+            if fp is not None:
+                key_seen, key = seen_fingerprints, fp
+            else:
+                key = page.get("normalized_url") or normalize_url(page["url"])
+                key_seen = seen_norm_urls
+            if key in key_seen:
+                excluded_content_dedup += 1
+            else:
+                key_seen.add(key)
+                after_content_dedup.append(page)
 
         # Filter E: learning classification gate (Plan 07)
         # is_learning == FALSE → exclude
@@ -890,7 +973,7 @@ class ClusteringService:
         # is_learning == TRUE → include
         after_learning = []
         excluded_not_learning = 0
-        for page in after_title_dedup:
+        for page in after_content_dedup:
             if page.get("is_learning") is False:
                 excluded_not_learning += 1
             else:
@@ -901,7 +984,9 @@ class ClusteringService:
             "excluded_boilerplate": excluded_boilerplate,
             "excluded_url_fallback": excluded_url_fallback,
             "excluded_duplicate": excluded_duplicate,
-            "excluded_title_dedup": excluded_title_dedup,
+            "excluded_title_dedup": 0,  # retired: title is no longer a dedup key
+            "excluded_min_content": excluded_min_content,
+            "excluded_content_dedup": excluded_content_dedup,
             "excluded_not_learning": excluded_not_learning,
             "total_output": len(after_learning),
         }
@@ -910,7 +995,8 @@ class ClusteringService:
             f"(boilerplate={excluded_boilerplate}, "
             f"url_fallback={excluded_url_fallback}, "
             f"duplicate={excluded_duplicate}, "
-            f"title_dedup={excluded_title_dedup}, "
+            f"min_content={excluded_min_content}, "
+            f"content_dedup={excluded_content_dedup}, "
             f"not_learning={excluded_not_learning})"
         )
         return after_learning, stats

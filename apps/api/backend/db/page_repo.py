@@ -556,7 +556,7 @@ def get_active_pages(user_id: int) -> list[dict]:
                        pc.fetched_content, pc.content_summary AS content_level_summary,
                        pc.tool_selected,
                        c.capture_id AS capture_text_id,
-                       pc.is_learning
+                       pc.is_learning, p.normalized_url
                 FROM pages p
                 JOIN captures c ON p.capture_id = c.id
                 LEFT JOIN page_content pc ON p.page_content_id = pc.id
@@ -587,6 +587,7 @@ def get_active_pages(user_id: int) -> list[dict]:
             "tool_selected": r[14],
             "capture_text_id": r[15],
             "is_learning": r[16],
+            "normalized_url": r[17],
         }
         for r in rows
     ]
