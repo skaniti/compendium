@@ -21,6 +21,31 @@ LABELLER = "backend.services.page_labeller"
 SHELF = "backend.services.shelf_service"
 
 
+def _install_shelf(monkeypatch, module):
+    """Make ``from backend.services import shelf_service`` resolve to ``module``.
+
+    ``from package import submodule`` reads the attribute on the package before
+    ``sys.modules``, so once the real module has been imported anywhere in the
+    process a ``sys.modules`` patch alone is ignored. Patch both. ``None``
+    makes the import fail, as if the module were absent.
+    """
+    import backend.services as services_pkg
+
+    monkeypatch.setitem(sys.modules, SHELF, module)
+    if module is None:
+        monkeypatch.delattr(services_pkg, "shelf_service", raising=False)
+    else:
+        monkeypatch.setattr(services_pkg, "shelf_service", module, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_shelf_service(monkeypatch):
+    """Default: a no-op shelf service, so no test reaches the real one (and its DB)."""
+    stub = ModuleType(SHELF)
+    stub.assign_new_labels = lambda user_id, ids: {}
+    _install_shelf(monkeypatch, stub)
+
+
 def _result(url, content_id=None, **kw):
     r = PageProcessingResult(url=url, status="success", content_summary=f"summary of {url}", **kw)
     r._cid = content_id
@@ -62,7 +87,7 @@ def test_flag_off_never_imports_or_calls_labeller(monkeypatch):
     monkeypatch.setattr(settings, "label_first_enabled", False)
     # Any import of these raises (ImportError) -- a flag-off run must not try.
     monkeypatch.setitem(sys.modules, LABELLER, None)
-    monkeypatch.setitem(sys.modules, SHELF, None)
+    _install_shelf(monkeypatch, None)
     results = [_result(u, content_id=100 + i) for i, u in enumerate(URLS[:3])]
     rows = [_row(10 + i, u) for i, u in enumerate(URLS[:3])]
     assert _run(results, rows, monkeypatch) == 0
@@ -93,7 +118,7 @@ def _fake_labeller(calls, raises=None):
 
 def test_flag_on_labels_deduped_persisted_content_only(monkeypatch):
     monkeypatch.setattr(settings, "label_first_enabled", True)
-    monkeypatch.setitem(sys.modules, SHELF, None)  # shelf branch absent: tolerated
+    _install_shelf(monkeypatch, None)  # shelf branch absent: tolerated
     calls = []
     monkeypatch.setattr(
         "backend.services.page_labeller.label_content_ids", _fake_labeller(calls).label_content_ids
@@ -148,7 +173,7 @@ def test_flag_on_calls_shelf_service_when_present(monkeypatch):
     seen = []
     shelf = ModuleType(SHELF)
     shelf.assign_new_labels = lambda user_id, ids: seen.append((user_id, ids)) or {}
-    monkeypatch.setitem(sys.modules, SHELF, shelf)
+    _install_shelf(monkeypatch, shelf)
     _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch)
     assert seen == [(7, [100])]
 
