@@ -659,3 +659,21 @@ class TestNamingVariantSmoke:
             sibling_labels_block="(none yet -- infer distinctiveness only from the other GROUPS above)",
         )
         assert "(none yet" in result
+
+
+class TestShelfPrompts:
+    """Label-first shelf prompts: registered, renderable, short yes/no or name prompts."""
+
+    def test_shelf_prompts_registered_and_render(self):
+        same = get_prompt_raw(
+            "shelf_same_v1", shelf_name="S", category="home", titles="- t", subtopic="x"
+        )
+        assert "Shelf: S" in same and "yes or no" in same
+        merge = get_prompt_raw(
+            "shelf_merge_v1",
+            name_a="A", category_a="c", titles_a="- a",
+            name_b="B", category_b="c", titles_b="- b",
+        )  # fmt: skip
+        assert "Shelf A: A" in merge and "Shelf B: B" in merge
+        split = get_prompt_raw("shelf_split_name_v1", shelf_name="N", category="c", subtopics="- s")
+        assert "'N'" in split and "ONLY the name" in split

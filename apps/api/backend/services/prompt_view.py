@@ -23,6 +23,9 @@ TASK_ORDER = [
     "supercluster_label",
     "agent_system",
     "page_annotation",
+    "shelf_same",
+    "shelf_merge",
+    "shelf_split_name",
     "page_summary",
     "journey_narrative",
 ]
@@ -33,6 +36,9 @@ TASK_LABELS = {
     "supercluster_label": "Supercluster labels",
     "agent_system": "Chat agent",
     "page_annotation": "Page labelling",
+    "shelf_same": "Shelf match check",
+    "shelf_merge": "Shelf merge check",
+    "shelf_split_name": "Shelf split naming",
     "page_summary": "Page summary",
     "journey_narrative": "Journey narrative",
 }
@@ -109,6 +115,12 @@ def live_prompts() -> dict[str, dict]:
         "page_annotation": {
             "name": _registered(settings.label_prompt_key),
             "selector": "settings.label_prompt_key",
+        },
+        "shelf_same": {"name": _registered("shelf_same_v1"), "selector": "shelf_service (fixed v1)"},
+        "shelf_merge": {"name": _registered("shelf_merge_v1"), "selector": "shelf_service (fixed v1)"},
+        "shelf_split_name": {
+            "name": _registered("shelf_split_name_v1"),
+            "selector": "shelf_service (fixed v1)",
         },
     }
 

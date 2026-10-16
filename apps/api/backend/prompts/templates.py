@@ -876,6 +876,59 @@ Fields:
             "with the labeller model in labeller_version)."
         ),
     },
+    # =========================================================================
+    # Label-first shelves (backend/services/shelf_service.py)
+    # =========================================================================
+    "shelf_same_v1": {
+        "template": (
+            "A reader's pages are grouped into topic shelves. Decide whether a new "
+            "subtopic label belongs on an existing shelf.\n\n"
+            "Shelf: {shelf_name} (category: {category})\n"
+            "Example pages on the shelf:\n{titles}\n\n"
+            "New subtopic: {subtopic}\n\n"
+            "Would a reader looking for the shelf expect to find this subtopic on "
+            "it, i.e. is it the same topic rather than a neighbouring one? "
+            "Answer with exactly one word: yes or no."
+        ),
+        "techniques": ["instruction"],
+        "description": (
+            "Yes/no check used by shelf_service.ask_same_shelf when a subtopic's "
+            "embedding is near an existing shelf but below the auto-attach "
+            "threshold. Fail-open: any error or unclear answer means 'no' (create "
+            "a new shelf)."
+        ),
+    },
+    "shelf_merge_v1": {
+        "template": (
+            "Two topic shelves in a reader's library have very similar embeddings. "
+            "Decide whether they are the same topic and should be merged.\n\n"
+            "Shelf A: {name_a} (category: {category_a})\n"
+            "Example pages:\n{titles_a}\n\n"
+            "Shelf B: {name_b} (category: {category_b})\n"
+            "Example pages:\n{titles_b}\n\n"
+            "Merge only if one shelf would be a natural duplicate of the other. "
+            "Answer with exactly one word: yes or no."
+        ),
+        "techniques": ["instruction"],
+        "description": (
+            "Yes/no confirmation for the weekly shelf merge pass "
+            "(shelf_service.weekly_maintenance). Fail-open: errors mean no merge."
+        ),
+    },
+    "shelf_split_name_v1": {
+        "template": (
+            "A topic shelf called '{shelf_name}' (category: {category}) grew too large "
+            "and was split in two. The new, smaller shelf holds pages with these "
+            "subtopics:\n{subtopics}\n\n"
+            "Name the new shelf with the topic that distinguishes it from "
+            "'{shelf_name}'. 2-5 words. Output ONLY the name, nothing else."
+        ),
+        "techniques": ["instruction"],
+        "description": (
+            "Names the smaller half of a shelf split in the weekly maintenance "
+            "pass. Fail-open: on error the caller uses '<name> (part 2)'."
+        ),
+    },
 }
 
 
