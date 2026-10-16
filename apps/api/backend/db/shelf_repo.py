@@ -245,3 +245,13 @@ def get_example_titles(shelf_id: int, n: int = 3) -> list[str]:
             (shelf_id, n),
         )
         return [r[0] for r in cur.fetchall()]
+
+
+def has_page_method(shelf_id: int, method: str) -> bool:
+    """True when any member of the shelf was placed with ``method`` (e.g. 'split')."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM shelf_pages WHERE shelf_id = %s AND method = %s LIMIT 1",
+            (shelf_id, method),
+        )
+        return cur.fetchone() is not None

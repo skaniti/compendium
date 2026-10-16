@@ -188,6 +188,7 @@ class ShelfStore(Protocol):
         self, from_id: int, to_id: int, method: str, content_ids: list[int] | None = None
     ) -> None: ...
     def repoint_strings(self, from_id: int, to_id: int) -> None: ...
+    def has_page_method(self, shelf_id: int, method: str) -> bool: ...
 
 
 class MemoryShelfStore:
@@ -264,6 +265,9 @@ class MemoryShelfStore:
             if v == from_id:
                 self.strings[k] = to_id
 
+    def has_page_method(self, shelf_id, method) -> bool:
+        return any(p["shelf_id"] == shelf_id and p["method"] == method for p in self.pages.values())
+
 
 class DbShelfStore:
     """:mod:`backend.db.shelf_repo`-backed store bound to one user."""
@@ -333,6 +337,11 @@ class DbShelfStore:
         from backend.db import shelf_repo
 
         shelf_repo.repoint_shelf_strings(from_id, to_id)
+
+    def has_page_method(self, shelf_id, method) -> bool:
+        from backend.db import shelf_repo
+
+        return shelf_repo.has_page_method(shelf_id, method)
 
 
 # ── canonicaliser ────────────────────────────────────────────────────────
@@ -639,3 +648,193 @@ def assign_all_unshelved(user_id: int) -> dict:
         "created": sum(1 for r in res.values() if r.created),
         "asked": canon.asked,
     }
+
+
+# ── weekly maintenance: merge near-duplicate shelves, split oversized ones ─
+
+
+def _default_page_vectors(content_ids: list[int]) -> dict[int, np.ndarray]:
+    """Page vectors from the clustering embedding cache (same key as the recluster uses)."""
+    from backend.db import embedding_repo
+
+    model = settings.clustering_embedding_model
+    if model.startswith("text-embedding-"):
+        raw = embedding_repo.get_clustering_embeddings(
+            content_ids, f"{model}@{settings.clustering_text_contract}"
+        )
+    else:
+        raw = embedding_repo.get_embeddings_for_content_ids(content_ids)
+    return {int(k): np.asarray(v, dtype=np.float64) for k, v in raw.items()}
+
+
+def _default_embed(texts: list[str]) -> np.ndarray:
+    from backend.services import text_embedder
+
+    return text_embedder.embed_texts(texts)
+
+
+def _with_examples(store: ShelfStore, shelf: dict) -> dict:
+    return {
+        "name": shelf["name"],
+        "category": shelf["category"],
+        "example_titles": store.get_example_titles(shelf["id"], EXAMPLE_TITLES),
+    }
+
+
+def _subtopic_centroid(
+    subs: list[str], embed: EmbedFn | None, cache: dict[str, np.ndarray]
+) -> np.ndarray | None:
+    """Mean of the members' subtopic vectors, or None when they cannot be embedded."""
+    if embed is None or not subs:
+        return None
+    norms = [normalize_subtopic(s) for s in subs]
+    missing = sorted({n for n in norms if n and n not in cache})
+    if missing:
+        try:
+            mat = np.asarray(embed(missing), dtype=np.float64)
+        except Exception:
+            logger.warning("shelf split: subtopic embedding failed", exc_info=True)
+            return None
+        for n, row in zip(missing, mat):
+            cache[n] = _unit(row)
+    vecs = [cache[n] for n in norms if n in cache]
+    if not vecs:
+        return None
+    return _unit(np.mean(vecs, axis=0))
+
+
+def _merge_pass(
+    store: ShelfStore, config: ShelfConfig, ask_merge: Callable[[dict, dict], bool], stats: dict
+) -> None:
+    shelves = [s for s in store.list_shelves() if s.get("centroid") is not None]
+    if len(shelves) < 2:
+        return
+    mat = np.vstack([_unit(s["centroid"]) for s in shelves])
+    dist = 1.0 - mat @ mat.T
+    ii, jj = np.where(np.triu(dist <= config.merge_distance, k=1))
+    pairs = sorted(zip(ii.tolist(), jj.tolist()), key=lambda p: (dist[p[0], p[1]], p))
+    gone: set[int] = set()
+    absorbed: dict[int, list[int]] = {}  # winner id -> shelves folded into it this pass
+    for i, j in pairs:
+        a, b = shelves[i], shelves[j]
+        if a["id"] in gone or b["id"] in gone:
+            continue
+        # Two halves of an earlier split must not flip-flop back together.
+        if store.has_page_method(a["id"], "split") and store.has_page_method(b["id"], "split"):
+            continue
+        keep, lose = (a, b) if (a["n_pages"], -a["id"]) >= (b["n_pages"], -b["id"]) else (b, a)
+        stats["asked"] += 1
+        try:
+            ok = bool(ask_merge(_with_examples(store, keep), _with_examples(store, lose)))
+        except Exception:
+            logger.warning("shelf merge ask failed (fail-open: no merge)", exc_info=True)
+            ok = False
+        if not ok:
+            continue
+        n_keep, n_lose = int(keep["n_pages"]), int(lose["n_pages"])
+        centroid = _unit(
+            _unit(keep["centroid"]) * max(n_keep, 1) + _unit(lose["centroid"]) * max(n_lose, 1)
+        )
+        store.move_pages(lose["id"], keep["id"], "merge")
+        store.repoint_strings(lose["id"], keep["id"])
+        store.update_shelf(lose["id"], status="merged", merged_into=keep["id"])
+        store.update_shelf(keep["id"], centroid=centroid, n_pages=n_keep + n_lose)
+        keep["n_pages"], keep["centroid"] = n_keep + n_lose, centroid
+        for earlier in absorbed.pop(lose["id"], []):  # no merged_into chains
+            store.update_shelf(earlier, merged_into=keep["id"])
+            absorbed.setdefault(keep["id"], []).append(earlier)
+        absorbed.setdefault(keep["id"], []).append(lose["id"])
+        gone.add(lose["id"])
+        stats["merged"] += 1
+
+
+def _split_pass(
+    store: ShelfStore,
+    config: ShelfConfig,
+    page_vectors: Callable[[list[int]], dict[int, np.ndarray]],
+    ask_split_name: Callable[[dict, list[str]], str | None],
+    embed: EmbedFn | None,
+    stats: dict,
+) -> None:
+    from sklearn.cluster import KMeans
+
+    cache: dict[str, np.ndarray] = {}
+    for shelf in store.list_shelves():
+        members = store.pages_for_shelf(shelf["id"])
+        if len(members) <= config.soft_cap:
+            continue
+        vecs = page_vectors(members) or {}
+        have = [c for c in members if c in vecs]
+        if len(have) < 2:
+            continue
+        km = KMeans(n_clusters=2, n_init=10, random_state=0).fit(
+            np.vstack([np.asarray(vecs[c], dtype=np.float64) for c in have])
+        )
+        halves = {0: [], 1: []}
+        for c, lab in zip(have, km.labels_):
+            halves[int(lab)].append(c)
+        small = 1 if len(halves[0]) >= len(halves[1]) else 0
+        moving = halves[small]
+        if not moving:
+            continue
+        subs = store.page_subtopics(shelf["id"])
+        keep_ids = [c for c in members if c not in set(moving)]
+        try:
+            name = ask_split_name(shelf, [subs[c] for c in moving if c in subs][:8])
+        except Exception:
+            logger.warning("shelf split naming failed (fail-open)", exc_info=True)
+            name = None
+        name = name or f"{shelf['name']} (part 2)"
+        c_keep = _subtopic_centroid([subs[c] for c in keep_ids if c in subs], embed, cache)
+        c_new = _subtopic_centroid([subs[c] for c in moving if c in subs], embed, cache)
+        parent_c = shelf.get("centroid")
+        new = store.create_shelf(
+            name, shelf["category"], c_new if c_new is not None else parent_c, len(moving)
+        )
+        store.move_pages(shelf["id"], new["id"], "split", moving)
+        store.move_pages(shelf["id"], shelf["id"], "split")
+        fields = {"n_pages": len(keep_ids)}
+        if c_keep is not None:
+            fields["centroid"] = c_keep
+        store.update_shelf(shelf["id"], **fields)
+        stats["split"] += 1
+
+
+def weekly_maintenance(
+    user_id: int,
+    page_vectors: Callable[[list[int]], dict[int, np.ndarray]] | None = None,
+    *,
+    config: ShelfConfig | None = None,
+    store: ShelfStore | None = None,
+    embed: EmbedFn | None = None,
+    ask_merge: Callable[[dict, dict], bool] | None = None,
+    ask_split_name: Callable[[dict, list[str]], str | None] | None = None,
+) -> dict:
+    """Merge near-duplicate shelves, then split oversized ones. ``{}`` when flag off.
+
+    Merge: centroid cosine distance <= ``merge_distance`` AND the model confirms
+    (fail-open: no merge); pairs by ascending distance, the smaller shelf folds
+    into the larger. Split: shelves above ``soft_cap`` are 2-means'd on their
+    members' page vectors; the smaller half becomes a new, model-named shelf.
+    A second call over unchanged data does nothing (merged shelves are no longer
+    active; a split shelf is back under the cap). Returns
+    ``{"merged", "split", "asked", "cost_usd"}``.
+    """
+    if not _enabled():
+        return {}
+    config = config or ShelfConfig.from_settings()
+    store = store or DbShelfStore(user_id)
+    embed = embed or _default_embed
+    merge_asker = ask_merge or MergeAsker()
+    namer = ask_split_name or SplitNamer()
+    stats = {"merged": 0, "split": 0, "asked": 0}
+    _merge_pass(store, config, merge_asker, stats)
+    _split_pass(store, config, page_vectors or _default_page_vectors, namer, embed, stats)
+    if isinstance(store, DbShelfStore):
+        from backend.db import shelf_repo
+
+        shelf_repo.recount_shelves(user_id)
+    stats["cost_usd"] = float(
+        getattr(merge_asker, "cost_usd", 0.0) + getattr(namer, "cost_usd", 0.0)
+    )
+    return stats

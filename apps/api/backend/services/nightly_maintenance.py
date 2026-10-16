@@ -22,8 +22,11 @@ maintenance steps still run so nothing strands until the next night.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import datetime
 
+from backend.config.settings import settings
 from backend.db import page_repo
 from backend.db.connection import get_conn
 from backend.services import scheduler
@@ -49,32 +52,51 @@ def _pages_added_since(user_id: int, cutoff) -> int:
         # No prior run — any active pages qualify. Use a cheap count.
         return len(page_repo.get_active_pages(user_id))
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT COUNT(*) FROM pages WHERE user_id = %s AND created_at > %s",
-                (user_id, cutoff),
-            )
-            row = cur.fetchone()
-            return int(row[0]) if row else 0
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM pages WHERE user_id = %s AND created_at > %s",
+            (user_id, cutoff),
+        )
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
 
 
 def _last_successful_recluster_at(user_id: int):
     """Return ``completed_at`` of the most recent ``completed`` recluster run, or None."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT completed_at
                   FROM recluster_runs
                  WHERE user_id = %s AND status = 'completed'
               ORDER BY completed_at DESC
                  LIMIT 1
                 """,
-                (user_id,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else None
+            (user_id,),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+async def _maybe_weekly_shelf_maintenance(user_id: int) -> dict:
+    """Run shelf merge/split once a week, only when ``label_first_enabled`` is on.
+
+    Fail-open: a shelf-maintenance error is logged and reported in the notes; it
+    must never fail the nightly run. Returns ``{}`` when nothing ran.
+    """
+    if not getattr(settings, "label_first_enabled", False):
+        return {}
+    weekday = int(getattr(settings, "shelf_maintenance_weekday", 6))
+    if datetime.now().weekday() != weekday:
+        return {}
+    try:
+        from backend.services import shelf_service
+
+        # sync + blocking LLM/embedding calls: keep them off the event loop
+        return await asyncio.to_thread(shelf_service.weekly_maintenance, user_id)
+    except Exception as exc:
+        logger.exception("weekly shelf maintenance failed")
+        return {"error": str(exc)[:200]}
 
 
 async def run_nightly_maintenance() -> dict:
@@ -84,7 +106,7 @@ async def run_nightly_maintenance() -> dict:
     Returns notes for scheduled_runs (cost_usd + counts + skip reasons).
     Any exception propagates so the scheduler records a failed run.
     """
-    from backend.db import recluster_repo, dq_runs_repo, trends_repo, page_repo
+    from backend.db import dq_runs_repo, page_repo, recluster_repo, trends_repo
 
     user_id = _default_user_id()
     notes: dict = {}
@@ -122,6 +144,12 @@ async def run_nightly_maintenance() -> dict:
     notes["chunked_pages"] = catchup["chunked_pages"]
     notes["classified_done"] = catchup["classified_done"]
     cost += float(catchup.get("cost_usd") or 0.0)
+
+    # 4b. Label-first shelves: weekly merge/split (flag-gated; default off = no-op).
+    notes_shelf = await _maybe_weekly_shelf_maintenance(user_id)
+    if notes_shelf:
+        notes["shelf_maintenance"] = notes_shelf
+        cost += float(notes_shelf.get("cost_usd") or 0.0)
 
     # 5. Status snapshot (always — records current state for the Trends view).
     counts = page_repo.get_page_status_counts(user_id)

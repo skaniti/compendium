@@ -87,6 +87,9 @@ def test_pages_strings_move_and_recount():
     shelf_repo.recount_shelves(uid)
     assert shelf_repo.get_shelf(b["id"])["n_pages"] == 3
     assert shelf_repo.get_shelf(a["id"])["n_pages"] == 0
+    assert shelf_repo.has_page_method(b["id"], "merge")
+    assert shelf_repo.has_page_method(b["id"], "split")  # c[0] was moved as a split
+    assert not shelf_repo.has_page_method(a["id"], "split")
     assert set(shelf_repo.get_page_subtopics(b["id"]).values()) == {"sub a", "sub b"}
 
 
@@ -121,3 +124,34 @@ def test_example_titles_and_cascade():
         shelf_repo.upsert_shelf_page(s["id"], cid, uid, "x", "create", 1.0)
     assert shelf_repo.get_example_titles(s["id"], 3) == ["Synthetic page 1", "Synthetic page 0"]
     assert len(shelf_repo.get_example_titles(s["id"], 1)) == 1
+
+
+def test_weekly_maintenance_on_db_store_merges(monkeypatch):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from backend.services import shelf_service as ss
+
+    monkeypatch.setattr(ss, "settings", SimpleNamespace(label_first_enabled=True))
+    uid = _user()
+    c = _content(3)
+    a = shelf_repo.create_shelf(uid, "Synthetic bins", "home", [1.0, 0.0], "m", 2)
+    b = shelf_repo.create_shelf(uid, "Synthetic boxes", "home", [0.99, 0.1], "m", 1)
+    for cid, s in ((c[0], a), (c[1], a), (c[2], b)):
+        shelf_repo.upsert_shelf_page(s["id"], cid, uid, f"sub {cid}", "create", 1.0)
+    shelf_repo.set_shelf_string(uid, "sub boxes", b["id"])
+    res = ss.weekly_maintenance(
+        uid, ask_merge=lambda x, y: True, ask_split_name=lambda s, subs: None, embed=None
+    )
+    assert (res["merged"], res["split"]) == (1, 0)
+    assert [s["id"] for s in shelf_repo.get_shelves(uid)] == [a["id"]]
+    merged = shelf_repo.get_shelf(b["id"])
+    assert merged["status"] == "merged" and merged["merged_into"] == a["id"]
+    assert shelf_repo.get_shelf(a["id"])["n_pages"] == 3
+    assert shelf_repo.get_shelf_string(uid, "sub boxes") == a["id"]
+    want = np.array([1.0, 0.0]) * 2 + np.array([0.99, 0.1]) / np.linalg.norm([0.99, 0.1])
+    assert shelf_repo.get_shelf(a["id"])["centroid"] == pytest.approx(
+        (want / np.linalg.norm(want)).tolist()
+    )
+    assert ss.weekly_maintenance(uid, ask_merge=lambda x, y: True, embed=None)["merged"] == 0
