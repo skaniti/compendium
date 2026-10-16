@@ -612,12 +612,14 @@ def assign_new_labels(user_id: int, content_ids: list[int]) -> dict[int, AssignR
     return _build_canonicaliser(user_id).assign_many(items)
 
 
-def assign_all_unshelved(user_id: int) -> dict:
+def assign_all_unshelved(user_id: int, *, force: bool = False) -> dict:
     """Catch-up: shelve every labelled, non-excluded content id of the user with no shelf row.
 
     Returns ``{"assigned": n, "created": n, "asked": n}`` (``{}`` when flag off).
+    ``force`` skips the flag check; only operator tools (the audit-sample script) pass it,
+    so shelves can be built and audited before the flag is turned on.
     """
-    if not _enabled():
+    if not force and not _enabled():
         return {}
     from backend.db import shelf_repo
     from backend.db.connection import get_conn
@@ -626,7 +628,8 @@ def assign_all_unshelved(user_id: int) -> dict:
         cur.execute(
             """
                 SELECT DISTINCT p.page_content_id FROM pages p
-                 WHERE p.user_id = %s AND p.status = 'active' AND p.page_content_id IS NOT NULL
+                 WHERE p.user_id = %s AND COALESCE(p.human_status, p.status) = 'active'
+                   AND p.page_content_id IS NOT NULL
                 """,
             (user_id,),
         )
@@ -812,6 +815,7 @@ def weekly_maintenance(
     embed: EmbedFn | None = _UNSET,
     ask_merge: Callable[[dict, dict], bool] | None = None,
     ask_split_name: Callable[[dict, list[str]], str | None] | None = None,
+    force: bool = False,
 ) -> dict:
     """Merge near-duplicate shelves, then split oversized ones. ``{}`` when flag off.
 
@@ -821,9 +825,10 @@ def weekly_maintenance(
     members' page vectors; the smaller half becomes a new, model-named shelf.
     A second call over unchanged data does nothing (merged shelves are no longer
     active; a split shelf is back under the cap). Returns
-    ``{"merged", "split", "asked", "cost_usd"}``.
+    ``{"merged", "split", "asked", "cost_usd"}``. ``force`` skips the flag check (operator
+    tools only, as for :func:`assign_all_unshelved`).
     """
-    if not _enabled():
+    if not force and not _enabled():
         return {}
     config = config or ShelfConfig.from_settings()
     store = store or DbShelfStore(user_id)
