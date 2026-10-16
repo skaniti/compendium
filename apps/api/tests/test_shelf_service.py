@@ -308,3 +308,102 @@ def test_shelf_model_call_has_a_timeout(monkeypatch):
     monkeypatch.setattr(ss, "LLM_TIMEOUT_S", 0.05)
     asker = ss.SameShelfAsker()
     assert asker("a subtopic", {"name": "S", "category": "c", "example_titles": []}) is False
+
+
+# ── cost of the model asks is recorded as a cost event ────────────────────
+
+
+def _completion(text, cost, tin, tout):
+    out = ss._Completion((text, cost))
+    out.input_tokens, out.output_tokens = tin, tout
+    return out
+
+
+def _ask_world(monkeypatch):
+    """Flag on; two stored labels, the second lands in the ask band; events captured."""
+    monkeypatch.setattr(
+        ss, "settings", SimpleNamespace(label_first_enabled=True, label_model="m-x")
+    )
+    labels = {1: lab("storage bins"), 2: lab("garage shelving")}
+    monkeypatch.setattr(ss, "_get_labels", lambda ids: {i: labels[i] for i in ids if i in labels})
+    monkeypatch.setattr("backend.db.shelf_repo.get_shelf_pages", lambda uid: {})
+    monkeypatch.setattr(ss, "_complete_blocking", lambda p: _completion("yes", 0.002, 120, 3))
+    canon = ShelfCanonicaliser(
+        ShelfIndex(), embed, ss.SameShelfAsker(), ShelfConfig(), MemoryShelfStore(1)
+    )
+    monkeypatch.setattr(ss, "_build_canonicaliser", lambda uid: canon)
+    events = []
+    monkeypatch.setattr("backend.db.trends_repo.insert_cost_event", lambda **kw: events.append(kw))
+    return events
+
+
+def test_assign_new_labels_records_the_same_shelf_cost(monkeypatch):
+    events = _ask_world(monkeypatch)
+    res = ss.assign_new_labels(7, [1, 2])
+    assert res[2].method == "ask"
+    assert len(events) == 1
+    ev = events[0]
+    assert ev["user_id"] == 7 and ev["event_type"] == "shelf_same_check" and ev["model"] == "m-x"
+    assert (ev["input_tokens"], ev["output_tokens"]) == (120, 3)
+    assert ev["cost_usd"] == pytest.approx(0.002) and ev["metadata"] == {"calls": 1}
+
+
+def test_no_ask_means_no_cost_event(monkeypatch):
+    events = _ask_world(monkeypatch)
+    ss.assign_new_labels(7, [1])
+    assert events == []
+
+
+def test_cost_event_failure_does_not_break_assignment(monkeypatch):
+    _ask_world(monkeypatch)
+
+    def boom(**kw):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("backend.db.trends_repo.insert_cost_event", boom)
+    assert ss.assign_new_labels(7, [1, 2])[2].method == "ask"
+
+
+def test_assign_all_unshelved_records_the_cost(monkeypatch):
+    events = _ask_world(monkeypatch)
+
+    class Cur:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return self
+
+        def execute(self, *a):
+            pass
+
+        def fetchall(self):
+            return [(1,), (2,)]
+
+    monkeypatch.setattr("backend.db.connection.get_conn", lambda: Cur())
+    out = ss.assign_all_unshelved(7)
+    assert out["assigned"] == 2 and out["asked"] == 1
+    assert [e["event_type"] for e in events] == ["shelf_same_check"]
+
+
+def test_weekly_maintenance_records_merge_and_split_name_cost(monkeypatch):
+    events = []
+    monkeypatch.setattr("backend.db.trends_repo.insert_cost_event", lambda **kw: events.append(kw))
+    monkeypatch.setattr(
+        ss, "settings", SimpleNamespace(label_first_enabled=True, label_model="m-x")
+    )
+    monkeypatch.setattr(ss, "_complete_blocking", lambda p: _completion("yes", 0.003, 50, 2))
+    store = MemoryShelfStore(1)
+    a = store.create_shelf("A", "home", [1.0, 0.0], 1)
+    b = store.create_shelf("B", "home", [0.99, 0.01], 1)
+    for sid, cid in ((a["id"], 1), (b["id"], 2)):
+        store.upsert_shelf_page(sid, cid, f"s{cid}", "create", 1.0)
+    res = ss.weekly_maintenance(
+        1, store=store, embed=None, page_vectors=lambda ids: {}, config=ShelfConfig()
+    )
+    assert res["merged"] == 1
+    assert [e["event_type"] for e in events] == ["shelf_merge_check"]
+    assert events[0]["cost_usd"] == pytest.approx(0.003) and events[0]["user_id"] == 1

@@ -469,6 +469,13 @@ class ShelfCanonicaliser:
 # ── LLM callables (fail-open) ────────────────────────────────────────────
 
 
+class _Completion(tuple):
+    """``(text, cost_usd)`` that also carries the call's token counts."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 def _complete_blocking(prompt: str) -> tuple[str, float]:
     """One short model call from sync code; returns (text, cost_usd)."""
     from backend.services.clustering_service import _run_coro_blocking
@@ -481,7 +488,10 @@ def _complete_blocking(prompt: str) -> tuple[str, float]:
             timeout=LLM_TIMEOUT_S,
         )
     )
-    return (resp.content or "").strip(), float(getattr(resp, "cost_usd", 0.0) or 0.0)
+    out = _Completion(((resp.content or "").strip(), float(getattr(resp, "cost_usd", 0.0) or 0.0)))
+    out.input_tokens = int(getattr(resp, "input_tokens", 0) or 0)
+    out.output_tokens = int(getattr(resp, "output_tokens", 0) or 0)
+    return out
 
 
 def _titles_block(titles: list[str]) -> str:
@@ -493,11 +503,18 @@ class _Asker:
 
     def __init__(self):
         self.cost_usd = 0.0
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.calls = 0
 
     def _call(self, prompt: str) -> str | None:
         try:
-            text, cost = _complete_blocking(prompt)
+            res = _complete_blocking(prompt)
+            text, cost = res[0], res[1]
             self.cost_usd += cost
+            self.input_tokens += getattr(res, "input_tokens", 0)
+            self.output_tokens += getattr(res, "output_tokens", 0)
+            self.calls += 1
             return text
         except Exception:
             logger.warning("shelf LLM call failed (fail-open)", exc_info=True)
@@ -567,6 +584,26 @@ class SplitNamer(_Asker):
 # ── DB-backed entry points ───────────────────────────────────────────────
 
 
+def _record_ask_cost(user_id: int, event_type: str, asker) -> None:
+    """Record the model spend of one asker as a cost event (like the labeller's). Best effort."""
+    if not getattr(asker, "calls", 0):
+        return
+    try:
+        from backend.db import trends_repo
+
+        trends_repo.insert_cost_event(
+            user_id=user_id,
+            event_type=event_type,
+            model=getattr(settings, "label_model", "claude-haiku-5-5"),
+            input_tokens=asker.input_tokens,
+            output_tokens=asker.output_tokens,
+            cost_usd=asker.cost_usd,
+            metadata={"calls": asker.calls},
+        )
+    except Exception:
+        logger.exception("%s cost event failed", event_type)
+
+
 def _excluded(label: dict) -> bool:
     from backend.services.clustering_service import EXCLUDED_CONTENT_KINDS
 
@@ -615,7 +652,11 @@ def assign_new_labels(user_id: int, content_ids: list[int]) -> dict[int, AssignR
     ]
     if not items:
         return {}
-    return _build_canonicaliser(user_id).assign_many(items)
+    canon = _build_canonicaliser(user_id)
+    try:
+        return canon.assign_many(items)
+    finally:
+        _record_ask_cost(user_id, "shelf_same_check", canon.ask)
 
 
 def assign_all_unshelved(user_id: int, *, force: bool = False) -> dict:
@@ -651,7 +692,10 @@ def assign_all_unshelved(user_id: int, *, force: bool = False) -> dict:
     if not items:
         return {"assigned": 0, "created": 0, "asked": 0}
     canon = _build_canonicaliser(user_id)
-    res = canon.assign_many(items)
+    try:
+        res = canon.assign_many(items)
+    finally:
+        _record_ask_cost(user_id, "shelf_same_check", canon.ask)
     return {
         "assigned": len(res),
         "created": sum(1 for r in res.values() if r.created),
@@ -851,6 +895,8 @@ def weekly_maintenance(
         from backend.db import shelf_repo
 
         shelf_repo.recount_shelves(user_id)
+    _record_ask_cost(user_id, "shelf_merge_check", merge_asker)
+    _record_ask_cost(user_id, "shelf_split_name", namer)
     stats["cost_usd"] = float(
         getattr(merge_asker, "cost_usd", 0.0) + getattr(namer, "cost_usd", 0.0)
     )
