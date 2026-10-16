@@ -504,7 +504,7 @@ async def label_content_ids(content_ids: list[int], *, user_id: int) -> LabelRun
         todo = [c for c in ids if c not in done]
         if not todo:
             return run
-        pages = page_label_repo.get_label_inputs(todo)
+        pages = page_label_repo.get_label_inputs(todo, user_id=user_id)
         run = await label_pages(pages, user_id=user_id)
 
         rows = [

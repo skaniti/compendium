@@ -163,7 +163,7 @@ def count_labels(user_id: int | None, labeller_version: str) -> int:
         return cur.fetchone()[0]
 
 
-def get_label_inputs(content_ids: list[int]) -> list[dict]:
+def get_label_inputs(content_ids: list[int], user_id: int | None = None) -> list[dict]:
     """One representative page per content row, shaped for the labeller.
 
     The representative is the most recent ``pages`` row (by ``visited_at``) that
@@ -171,7 +171,10 @@ def get_label_inputs(content_ids: list[int]) -> list[dict]:
     content id; ``content_summary`` prefers the page's own capture-time summary
     then the content row's;
     ``extracted_text`` prefers the content row's. ``visited_at`` is an ISO
-    string. Content ids with no page are omitted.
+    string. Content ids with no page are omitted. With ``user_id`` the
+    representative is chosen among that user's pages only (a content row can be
+    shared across users; another user's visit must not stand in for it); None
+    considers every user.
     """
     if not content_ids:
         return []
@@ -186,10 +189,10 @@ def get_label_inputs(content_ids: list[int]) -> list[dict]:
                    COALESCE(NULLIF(pc.extracted_text, ''), p.extracted_text) AS extracted_text
             FROM pages p
             JOIN page_content pc ON pc.id = p.page_content_id
-            WHERE p.page_content_id = ANY(%s)
+            WHERE p.page_content_id = ANY(%s) AND (%s::int IS NULL OR p.user_id = %s)
             ORDER BY p.page_content_id, p.visited_at DESC NULLS LAST, p.id DESC
             """,
-            (list(content_ids),),
+            (list(content_ids), user_id, user_id),
         )
         names = [d[0] for d in cur.description]
         out = []

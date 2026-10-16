@@ -156,3 +156,38 @@ def test_get_label_inputs_picks_latest_page_per_content(world):
     assert by[world["b"]]["extracted_text"] == "body text"
     assert by[world["b"]]["content_summary"] == "summary of b"
     assert repo.get_label_inputs([]) == []
+
+
+def test_get_label_inputs_is_scoped_to_the_user(world):
+    from datetime import datetime, timezone
+
+    from backend.db import page_repo
+
+    other_user = fx.make_user("sharer")
+    cap = fx.make_capture(other_user, "cap_sharer")
+    pid = page_repo.insert_pages(
+        cap["id"],
+        [
+            {
+                "url": "https://a.example.test/page",
+                "title": "Another user's later visit",
+                "domain": "a.example.test",
+                "visited_at": datetime(2026, 3, 25, tzinfo=timezone.utc),
+                "dwell_time_seconds": 5,
+            }
+        ],
+    )[0]
+    fx.sql(
+        "UPDATE pages SET page_content_id=%s, user_id=%s WHERE id=%s",
+        (world["a"], other_user["id"], pid),
+    )
+    mine = {
+        r["page_content_id"]: r for r in repo.get_label_inputs([world["a"]], user_id=world["user"])
+    }
+    assert (
+        mine[world["a"]]["id"] != pid and mine[world["a"]]["title"] != "Another user's later visit"
+    )
+    theirs = repo.get_label_inputs([world["a"]], user_id=other_user["id"])
+    assert [r["id"] for r in theirs] == [pid]
+    assert repo.get_label_inputs([world["a"]], user_id=987654) == []
+    assert repo.get_label_inputs([world["a"]])[0]["id"] == pid  # unscoped keeps the old rule
