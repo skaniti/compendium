@@ -228,6 +228,40 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Clustering Configuration
     # ==========================================================================
+    # --------------------------------------------------------------------------
+    # Label-first grouping (phase B). One flag gates everything: with it off
+    # nothing is labelled at ingest, no shelf work runs, and the recluster and
+    # endpoints behave as before.
+    # --------------------------------------------------------------------------
+    label_first_enabled: bool = False
+    """Master switch for label-first grouping (env ``LABEL_FIRST_ENABLED``):
+    ingest-time page labelling, shelf assignment and the weekly shelf
+    maintenance. Off by default; every new code path checks it at its entry."""
+    label_model: str = "claude-haiku-5-5"
+    """Pinned model of the page labeller. Part of ``labeller_version``
+    (``<model>@<prompt key>``), so changing it starts a fresh label set."""
+    label_prompt_key: str = "page_annotation_v2"
+    """Prompt-registry key of the labeller's system prompt (also part of
+    ``labeller_version``)."""
+    label_batch_size: int = 8
+    """Pages per labelling request (the size the cost measurements used)."""
+    shelf_attach_threshold: float = 0.80
+    """Cosine similarity at or above which a subtopic string attaches to the
+    nearest existing shelf without asking the model."""
+    shelf_ask_threshold: float = 0.65
+    """Cosine in [ask, attach) is ambiguous: the model is asked whether the
+    string belongs to the nearest shelf. Below it a new shelf is created."""
+    shelf_merge_distance: float = 0.15
+    """Weekly maintenance proposes merging two shelves whose centroids are
+    within this cosine distance (the model must confirm)."""
+    shelf_soft_cap: int = 40
+    """Weekly maintenance splits shelves holding more pages than this."""
+    shelf_min_cluster_size: int = 3
+    """Shelves with fewer non-excluded pages are not clusters."""
+    shelf_maintenance_weekday: int = 6
+    """Weekday (Monday=0 .. Sunday=6) on which the nightly maintenance runs
+    the weekly shelf merge/split pass (when ``label_first_enabled``)."""
+
     clustering_embedding_model: str = "all-MiniLM-L6-v2"
     """Embedding model for the CLUSTERING pipeline only (RAG chunk embeddings
     are unaffected). Default keeps the legacy local SBERT path byte-identical.

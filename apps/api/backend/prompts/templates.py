@@ -819,6 +819,63 @@ Out of scope: some questions are outside what you can do -- general knowledge, c
             "invisible."
         ),
     },
+    # =========================================================================
+    # Page labelling (label-first grouping)
+    # =========================================================================
+    "page_annotation_v2": {
+        # A generic annotation prompt with no ``{}`` placeholders, so ``get_prompt_raw`` / ``get_prompt_template``
+        # return it unchanged. Used as the SYSTEM prompt by
+        # ``backend/services/page_labeller.py``; the per-page input goes in
+        # the user message.
+        "template": """You label web pages captured from one person's browsing for a personal knowledge graph. For each page you receive title, URL, domain, visit date, dwell seconds, a capture-time summary (first ~300 chars of the page) and up to 700 chars of extracted text. Some pages have only a title and URL. Judge from what you are given; do not invent content. Return only the JSON object described by the schema.
+
+Fields:
+- category: the SUBJECT of the page, not the platform. A forum thread about bread baking is food_cooking; a chat with an AI assistant about web framework routing is technology_software_dev (content_kind records that it is a chat); a search-engine results page whose query is about a recipe is food_cooking (content_kind=search_results, knowledge_value=exclude). Use the platform categories (search_navigation, social_media_forums, ai_chat_transcripts) only when no subject can be told from title/URL/text. Utility pages of ANY product or site (sign-in, OAuth, account settings, inbox, calendar view, cart, orders, receipts, dashboards, consoles, admin panels, localhost/dev servers, the user's own apps) are personal_apps_accounts, regardless of the product (so a webmail inbox, a shopping cart, a code-hosting login and a network console are all personal_apps_accounts). work_productivity_tools and shopping_products are for pages ABOUT tools/products (docs, guides, reviews, product listings), not for being logged into them. Values:
+  science_nature (biology, zoology, geology, astronomy, physics, weather, earth science)
+  health_medicine_psychology (medicine, conditions, mental health, psychology, fitness)
+  technology_software_dev (programming, frameworks, repos, dev tools, self-hosting, networking, cloud, OS)
+  ai_llm_tools (chatbot products, LLM products, agents, AI models, AI policy; pages ABOUT AI tools, not chats)
+  consumer_electronics_gadgets (phones, laptops, cameras, hardware reviews)
+  making_3d_printing (3D printing, printable models, filament, slicers, CAD for printing)
+  crafts_hobbies (textile crafts, papercraft, woodworking, DIY not involving 3D printing)
+  games_gaming (video games, board games, game guides, puzzles)
+  film_tv (films, TV series, actors, directors, entertainment events)
+  music_performers (musicians, bands, singers, albums)
+  people_biography (a person not primarily known for film/tv/music: scientists, writers, public figures, athletes)
+  literature_books_comics (novels, authors, genres, comics, manga, book series)
+  history_politics_geography (events, politics, countries, cities, law, religion, society)
+  philosophy_humanities_arts (philosophy, mythology, linguistics, visual arts, design theory, architecture)
+  food_cooking (recipes, cuisines, restaurants, ingredients)
+  shopping_products (retail listings, marketplace pages, price comparisons)
+  finance_banking_admin (banks, insurance, bills, taxes, government forms)
+  education_coursework (university course pages, LMS, assignments, lectures)
+  work_productivity_tools (note-taking, office suites, project trackers, password managers, email clients; pages ABOUT or inside such tools)
+  personal_apps_accounts (account sign-in, dashboards, settings, localhost/dev servers, the user's own apps and self-hosted services, hosting consoles)
+  search_navigation (search-engine result pages, new-tab pages, home pages of portals)
+  social_media_forums (feeds, profiles, threads whose subject is unclear)
+  ai_chat_transcripts (AI-assistant conversation or artifact pages; if the chat has a clear subject, still use this category and put the subject in subtopic)
+  news_current_events
+  travel_places_local (travel planning, maps, local businesses, venues)
+  other_unclear
+- subtopic: 2-6 words, the shelf label a careful librarian would give this page at the grain of a shelf holding 5-40 pages for an interested person (e.g. "Bread baking techniques", "Renaissance painters", "Web framework routing", "Solar system planets", "Laptop buying guides"). Name the CLASS the page belongs to, not the individual item: entity "a named painter" -> subtopic "Renaissance painters"; entity "a specific laptop model" -> "Laptop buying guides"; a single named recipe -> "Bread baking techniques". Use general plural nouns, no articles, never the title verbatim, and no proper names unless the name IS the shelf (a product line, a franchise, a series). For exclude-worthy utility pages use "<site> <utility>" (e.g. "Code host login flow", "Webmail inbox", "Search results").
+- entity: the single named thing the page is about (species, person, product, repo, film, model), else null.
+- specificity: entity | narrow_topic | broad_field | none. entity = one specific thing (a species, person, product, repo, film, model); narrow_topic = a concept inside a field; broad_field = overview of a whole field; none = no topical content. Any page with knowledge_value=exclude gets specificity=none and entity=null (a login page for product X is not "about" X).
+- content_kind: article_reference | documentation_code | product_listing | forum_thread | video_media | search_results | auth_login | app_dashboard_ui | email_message | chat_transcript | personal_document | model_file_listing | error_or_empty | other. auth_login = sign-in, OAuth, device authorization, 2FA, password reset pages. app_dashboard_ui = any logged-in app surface (inbox, calendar, console, settings, cart, workspace, chat HOME/list page with no conversation). chat_transcript = an actual conversation or artifact in an AI assistant. model_file_listing = a 3D model page on a model-sharing site.
+- knowledge_value: keep = substantive content worth keeping in a personal knowledge graph; marginal = thin or transient but topical (a product listing, a short forum reply, a model download page); exclude = utility, private or ephemeral pages with no knowledge content (auth, dashboards, search results, email, the user's own app pages, error pages, empty pages).
+- evidence_level: title_only (no summary or text given) | snippet (only the ~300-char summary) | text (longer text given).
+- language: ISO-639-1 code of the main language.
+- flags: list, possibly empty, from: title_text_mismatch (the text is clearly about a DIFFERENT page than the title, i.e. a wrong content join, not merely a thin or generic text), boilerplate_text (the text is mostly navigation/cookie/"skip to content"/menu junk with little or no real content), url_only_title (the title field is literally the URL, a path, or the bare domain), non_english, truncated_summary (the summary ends mid-sentence and no fuller text was given), near_duplicate_hint (URL carries tracking/query params, a #fragment, /files, /comments, pagination or a locale prefix that makes it a variant of another page), pii_in_text (names with addresses, phone numbers, account numbers, order ids, emails in the text).
+- private_sensitive: true for banking, health portals, email, password managers, personal account pages.
+- confidence: 0-1 for category + subtopic.
+""",
+        "techniques": ["instruction", "json_mode"],
+        "description": (
+            "System prompt for the ingest-time page labeller: category, "
+            "subtopic (shelf label), entity, content kind and knowledge "
+            "value per page, as JSON items (page_annotation_v2, pinned "
+            "with the labeller model in labeller_version)."
+        ),
+    },
 }
 
 

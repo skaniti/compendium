@@ -51,6 +51,9 @@ MODEL_PROVIDERS = {
     "claude-sonnet-4-5-20250514": LLMProvider.ANTHROPIC,  # Claude Sonnet 4.5
     "claude-haiku-4-5-20251001": LLMProvider.ANTHROPIC,  # Claude 4.5 Haiku
     "claude-3-5-sonnet-20241022": LLMProvider.ANTHROPIC,  # Legacy - may be deprecated
+    # Page labeller (label-first grouping) pinned models
+    "claude-haiku-5-5": LLMProvider.ANTHROPIC,
+    "claude-sonnet-5-5": LLMProvider.ANTHROPIC,
     # HuggingFace models (via Inference API) - using openly available models
     "mistralai/Mistral-7B-Instruct-v0.3": LLMProvider.HUGGINGFACE,
     "mistralai/Mixtral-8x7B-Instruct-v0.1": LLMProvider.HUGGINGFACE,
@@ -81,6 +84,9 @@ MODEL_PRICING = {
     "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
     "claude-sonnet-4-5-20250514": {"input": 0.003, "output": 0.015},
     "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},
+    # List prices $1/$5 and $3/$15 per million tokens
+    "claude-haiku-5-5": {"input": 0.001, "output": 0.005},
+    "claude-sonnet-5-5": {"input": 0.003, "output": 0.015},
     # HuggingFace Inference API - free tier
     "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0},
     "mistralai/Mixtral-8x7B-Instruct-v0.1": {"input": 0.0, "output": 0.0},
@@ -206,6 +212,7 @@ class LLMService:
         system_prompt: Optional[str] = None,
         seed: Optional[int] = None,
         response_format: Optional[str] = None,
+        extra_kwargs: Optional[dict] = None,
     ) -> LLMResponse:
         """
         Generate a completion from the specified model.
@@ -223,6 +230,9 @@ class LLMService:
                 4c: parse failures stop being a failure mode for JSON-shaped
                 calls). Ignored with a warning for non-OpenAI providers. The
                 prompt must still mention JSON (OpenAI API requirement).
+            extra_kwargs: Anthropic only: merged into ``messages.create`` (e.g.
+                ``output_config`` for a JSON schema, ``thinking``). Ignored for
+                other providers. ``None`` leaves the request unchanged.
 
         Returns:
             Standardized LLM response with metrics
@@ -247,7 +257,7 @@ class LLMService:
             )
         elif provider == LLMProvider.ANTHROPIC:
             response = await self._complete_anthropic(
-                prompt, model, temperature, max_tokens, system_prompt
+                prompt, model, temperature, max_tokens, system_prompt, extra_kwargs=extra_kwargs
             )
         elif provider == LLMProvider.HUGGINGFACE:
             response = await self._complete_huggingface(
@@ -380,6 +390,7 @@ class LLMService:
         temperature: float,
         max_tokens: int,
         system_prompt: Optional[str],
+        extra_kwargs: Optional[dict] = None,
     ) -> LLMResponse:
         """Generate completion via Anthropic API."""
         if not self._anthropic_client:
@@ -393,6 +404,8 @@ class LLMService:
         }
         if system_prompt:
             kwargs["system"] = system_prompt
+        if extra_kwargs:
+            kwargs.update(extra_kwargs)
 
         response = await self._anthropic_client.messages.create(**kwargs)
 

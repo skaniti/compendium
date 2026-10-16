@@ -22,6 +22,7 @@ TASK_ORDER = [
     "cluster_naming",
     "supercluster_label",
     "agent_system",
+    "page_annotation",
     "page_summary",
     "journey_narrative",
 ]
@@ -31,6 +32,7 @@ TASK_LABELS = {
     "cluster_naming": "Cluster naming",
     "supercluster_label": "Supercluster labels",
     "agent_system": "Chat agent",
+    "page_annotation": "Page labelling",
     "page_summary": "Page summary",
     "journey_narrative": "Journey narrative",
 }
@@ -103,6 +105,10 @@ def live_prompts() -> dict[str, dict]:
         "agent_system": {
             "name": _registered(agent._system_prompt_name()),
             "selector": "settings.agent_system_prompt_version",
+        },
+        "page_annotation": {
+            "name": _registered(settings.label_prompt_key),
+            "selector": "settings.label_prompt_key",
         },
     }
 

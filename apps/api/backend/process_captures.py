@@ -243,9 +243,11 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
         )
         page_errors += 1
 
+    persisted_results = []
     for page_row, result in pairs:
         try:
             _persist_single_page(page_row, result, response)
+            persisted_results.append(result)
         except Exception:
             page_errors += 1
             _log_page_error(response.capture_id, page_row, result)
@@ -257,7 +259,71 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
         mini_summary=response.mini_summary,
     )
 
+    from backend.config.settings import settings
+
+    if settings.label_first_enabled:
+        _label_persisted_pages(response, persisted_results)
+
     return page_errors
+
+
+_LABEL_HOOK_TIMEOUT_S = 180
+
+
+def _label_persisted_pages(response, persisted_results: list) -> None:
+    """Label (and shelve) the content rows persisted by this call. Fail-open.
+
+    Only runs with ``settings.label_first_enabled`` (the caller checks, and the
+    labeller is imported here so a flag-off ingest never loads it). Content
+    ids are deduplicated; pages with no content row (redacted) and pages the
+    skip gate or placeholder rule archived are not labelled -- they carry no
+    content worth a model call. Any exception is logged and swallowed: the
+    capture result must not depend on labelling.
+    """
+    try:
+        content_ids: list[int] = []
+        for result in persisted_results:
+            cid = getattr(result, "page_content_id", None)
+            if cid is None or result.processing_depth == "skipped":
+                continue
+            if result.content_summary and _BOILERPLATE_SUMMARY_RE.match(result.content_summary):
+                continue
+            content_ids.append(cid)
+        content_ids = list(dict.fromkeys(content_ids))
+        if not content_ids:
+            return
+        cap = capture_repo.get_capture(response.capture_id)
+        user_id = cap["user_id"] if cap else None
+        if user_id is None:
+            logger.warning("capture %s: no user for labelling; skipped", response.capture_id)
+            return
+
+        from backend.services import page_labeller
+
+        async def _run():
+            run = await asyncio.wait_for(
+                page_labeller.label_content_ids(content_ids, user_id=user_id),
+                timeout=_LABEL_HOOK_TIMEOUT_S,
+            )
+            return run
+
+        # ``run_coro_blocking`` is the clustering service's pattern: this
+        # function is sync but its callers in api/main.py run inside a loop.
+        page_labeller.run_coro_blocking(_run())
+
+        try:
+            from backend.services import shelf_service
+        except ImportError:
+            shelf_service = None
+        if shelf_service is not None:
+            out = shelf_service.assign_new_labels(user_id, content_ids)
+            if asyncio.iscoroutine(out):
+                page_labeller.run_coro_blocking(out)
+    except Exception:
+        logger.exception(
+            "capture %s: page labelling failed (capture result unaffected)",
+            getattr(response, "capture_id", "?"),
+        )
 
 
 def _persist_single_page(page_row: dict, result, response) -> None:
