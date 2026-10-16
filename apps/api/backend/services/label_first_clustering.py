@@ -81,7 +81,38 @@ class Partition:
     identity_matches: dict[int, dict]
     cluster_category: dict[int, str]
     cluster_shelf_id: dict[int, int]
+    cluster_slugs: dict[int, str] = field(default_factory=dict)
+    """Cluster id -> slug, only for clusters whose name-derived slug is shared or empty."""
     stats: dict = field(default_factory=dict)
+
+
+def unique_slugs(cluster_names: dict[int, str], cluster_shelf_id: dict[int, int]) -> dict[int, str]:
+    """Slug overrides that keep every cluster distinct.
+
+    The cluster writer keys clusters by ``_slugify(name)`` and merges equal slugs,
+    which would fuse two shelves named alike ("Storage bins", "storage-bins") and
+    drop one stable id, and gives every non-Latin name the empty slug. Every
+    cluster in a colliding (or empty) slug group gets ``<slug>_<shelf id>`` (or
+    ``shelf_<shelf id>``); unique, non-empty slugs are left to the writer.
+    """
+    from backend.services.clustering_service import _slugify
+
+    base = {cid: _slugify(name) for cid, name in cluster_names.items()}
+    counts: dict[str, int] = {}
+    for slug in base.values():
+        counts[slug] = counts.get(slug, 0) + 1
+    out: dict[int, str] = {}
+    taken = {slug for slug, n in counts.items() if n == 1 and slug}
+    for cid in sorted(base):
+        if base[cid] and counts[base[cid]] == 1:
+            continue
+        shelf = cluster_shelf_id[cid]
+        slug = f"{base[cid]}_{shelf}" if base[cid] else f"shelf_{shelf}"
+        while slug in taken:
+            slug += "_x"
+        taken.add(slug)
+        out[cid] = slug
+    return out
 
 
 def build_partition(
@@ -155,6 +186,7 @@ def build_partition(
         cluster_shelf_id[next_id] = shelf_id
         next_id += 1
 
+    cluster_slugs = unique_slugs(cluster_names, cluster_shelf_id)
     stats["clusters"] = next_id
     stats["clustered_pages"] = int((labels != -1).sum())
     stats["noise"] = int((labels == -1).sum())
@@ -164,6 +196,7 @@ def build_partition(
         identity_matches=identity_matches,
         cluster_category=cluster_category,
         cluster_shelf_id=cluster_shelf_id,
+        cluster_slugs=cluster_slugs,
         stats=dict(stats),
     )
 
@@ -198,6 +231,7 @@ def assign_category_superclusters(
     cluster_category: dict[int, str],
     pages: list[dict],
     slug_to_db_id: dict[str, int],
+    slug_overrides: dict[int, str] | None = None,
 ) -> dict:
     """Persist one supercluster group per category and attach its clusters.
 
@@ -248,7 +282,8 @@ def assign_category_superclusters(
     for g, member_cids in members_by_index.items():
         db_group = index_to_db.get(g)
         for cid in member_cids:
-            db_cluster = slug_to_db_id.get(_slugify(cluster_names[cid]))
+            slug = (slug_overrides or {}).get(cid) or _slugify(cluster_names[cid])
+            db_cluster = slug_to_db_id.get(slug)
             if db_cluster is None:
                 continue
             group_assignments[db_cluster] = db_group
@@ -350,6 +385,7 @@ async def recluster_label_first(svc, user_id: int, run_id: int, t0: float) -> di
             embeddings,
             probabilities=None,
             identity_matches=partition.identity_matches,
+            slug_overrides=partition.cluster_slugs,
         )
         slug_to_db_id = write_result["slug_to_db_id"]
         written_stable_ids = write_result["stable_ids"]
@@ -365,6 +401,7 @@ async def recluster_label_first(svc, user_id: int, run_id: int, t0: float) -> di
             partition.cluster_category,
             pages,
             slug_to_db_id,
+            slug_overrides=partition.cluster_slugs,
         )
 
         elapsed = time.perf_counter() - t0

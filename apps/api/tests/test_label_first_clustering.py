@@ -232,7 +232,17 @@ def fake_world(monkeypatch):
     emb /= np.linalg.norm(emb, axis=1, keepdims=True)
     monkeypatch.setattr(svc, "_compute_embeddings", lambda ps: emb)
 
-    def write(uid, run_id, lbls, names, ps, e, probabilities=None, identity_matches=None):
+    def write(
+        uid,
+        run_id,
+        lbls,
+        names,
+        ps,
+        e,
+        probabilities=None,
+        identity_matches=None,
+        slug_overrides=None,
+    ):
         calls["write"] = {"labels": lbls.copy(), "names": names, "identity": identity_matches}
         return {
             "slug_to_db_id": {"synthetic_sharks": 1, "synthetic_routers": 2},
@@ -369,3 +379,84 @@ def test_no_new_api_routes_with_flag_off_or_on(monkeypatch):
     monkeypatch.setattr(settings, "label_first_enabled", True, raising=False)
     assert sorted(getattr(r, "path", "") for r in app.routes) == routes
     assert not any("shelf" in p or "label" in p for p in routes)
+
+
+# ── slug collisions ──────────────────────────────────────────────────────
+
+
+def test_unique_slugs_separates_equal_and_empty_slugs():
+    names = {
+        0: "Storage bins",
+        1: "storage-bins",
+        2: "Whales",
+        3: "\u9ce5\u985e",
+        4: "\u9b5a\u985e",
+    }
+    shelf = {0: 10, 1: 11, 2: 12, 3: 13, 4: 14}
+    out = lf.unique_slugs(names, shelf)
+    assert out == {0: "storage_bins_10", 1: "storage_bins_11", 3: "shelf_13", 4: "shelf_14"}
+    assert 2 not in out  # unique, non-empty: left to the writer
+    assert len(set(out.values())) == len(out)
+
+
+def test_unique_slugs_never_collides_with_a_plain_slug():
+    names = {0: "Bins", 1: "bins", 2: "Bins 1"}  # "bins_1" would equal cluster 2's own slug
+    out = lf.unique_slugs(names, {0: 1, 1: 2, 2: 3})
+    plain = {2: "bins_1"}
+    assert len({*out.values(), *plain.values()}) == 3
+
+
+def test_unique_slugs_empty_when_no_collision():
+    assert lf.unique_slugs({0: "A", 1: "B"}, {0: 1, 1: 2}) == {}
+
+
+def test_build_partition_keeps_name_alike_shelves_as_separate_clusters():
+    shelves = {
+        1: {"name": "Storage bins", "stable_id": "sid-1", "category": "home"},
+        2: {"name": "storage-bins", "stable_id": "sid-2", "category": "home"},
+    }
+    pages, labels, shelf_of = [], {}, {}
+    for n in range(6):
+        cid = 100 + n
+        pages.append(_page(n, cid))
+        labels[cid] = {"knowledge_value": "keep", "content_kind": None, "category": "home"}
+        shelf_of[cid] = 1 if n < 3 else 2
+    part = lf.build_partition(pages, labels, shelf_of, shelves, 3)
+    assert part.stats["clusters"] == 2
+    assert {m["stable_id"] for m in part.identity_matches.values()} == {"sid-1", "sid-2"}
+    assert len(set(part.cluster_slugs.values())) == 2
+
+
+def test_writer_keeps_distinct_clusters_with_slug_overrides(monkeypatch):
+    """_write_clusters_to_db: equal names merge without overrides, stay apart with them."""
+    from backend.services import clustering_service as cs
+
+    def run(overrides):
+        saved = {}
+        monkeypatch.setattr(
+            cs.cluster_repo,
+            "save_clusters",
+            lambda uid, rid, dicts: (
+                saved.setdefault("c", dicts)
+                and {d["cluster_slug"]: i + 1 for i, d in enumerate(dicts)}
+            ),
+        )
+        monkeypatch.setattr(
+            cs.cluster_repo, "save_page_clusters", lambda pairs: saved.setdefault("p", pairs)
+        )
+        monkeypatch.setattr(cs.cluster_repo, "save_edges", lambda *a, **k: None, raising=False)
+        pages = [_page(i, 100 + i) for i in range(4)]
+        labels = np.array([0, 0, 1, 1])
+        emb = np.eye(4)
+        svc = ClusteringService(user_id=7)
+        svc._write_clusters_to_db(
+            7, 42, labels, {0: "Same name", 1: "same-name"}, pages, emb, slug_overrides=overrides
+        )
+        return saved, labels
+
+    merged, labels = run(None)
+    assert len(merged["c"]) == 1 and set(labels.tolist()) == {0}
+    saved, labels = run({0: "same_name_10", 1: "same_name_11"})
+    assert [d["cluster_slug"] for d in saved["c"]] == ["same_name_10", "same_name_11"]
+    assert set(labels.tolist()) == {0, 1}
+    assert sorted(db for _, db in saved["p"]) == [1, 1, 2, 2]

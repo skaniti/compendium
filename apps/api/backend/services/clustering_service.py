@@ -2301,8 +2301,14 @@ class ClusteringService:
         embeddings: np.ndarray,
         probabilities: np.ndarray | None = None,
         identity_matches: dict[int, dict] | None = None,
+        slug_overrides: dict[int, str] | None = None,
     ) -> dict:
         """Write clusters, page_clusters, and cluster_edges to PostgreSQL.
+
+        ``slug_overrides`` (cluster id -> slug) replaces the name-derived slug for
+        those clusters; label-first grouping uses it so shelves whose names slugify
+        identically (or to nothing, e.g. non-Latin names) stay separate clusters.
+        None (every other caller) keeps the name-derived slugs unchanged.
 
         When ``identity_matches`` is provided (cluster_identity_enabled),
         matched clusters keep their carried stable_id (name_carried=TRUE) and
@@ -2328,6 +2334,9 @@ class ClusteringService:
         cluster's stable_id is None then). NOTE: mutates ``labels`` in
         place when slug-identical clusters merge.
         """
+        def slug_of(cid) -> str:
+            return (slug_overrides or {}).get(int(cid)) or _slugify(cluster_names[cid])
+
         cluster_ids = sorted(set(labels[labels != -1]))
         identity_on = settings.cluster_identity_enabled
 
@@ -2341,7 +2350,7 @@ class ClusteringService:
         seen_slugs: dict[str, int] = {}
         cluster_dicts = []
         for cid in cluster_ids:
-            slug = _slugify(cluster_names[cid])
+            slug = slug_of(cid)
             if slug in seen_slugs:
                 # Merge: reassign this cluster's label to the first occurrence
                 labels[labels == cid] = seen_slugs[slug]
@@ -2383,7 +2392,7 @@ class ClusteringService:
             label = int(labels[i])
             if label == -1:
                 continue
-            slug = _slugify(cluster_names[label])
+            slug = slug_of(label)
             db_cluster_id = slug_to_db_id.get(slug)
             if db_cluster_id:
                 page_cluster_pairs.append((page["db_id"], db_cluster_id))
@@ -2404,8 +2413,8 @@ class ClusteringService:
             for i, cid_a in enumerate(valid_ids):
                 for cid_b in valid_ids[i + 1 :]:
                     sim = 1 - cosine_distances([centroids[cid_a]], [centroids[cid_b]])[0][0]
-                    source_slug = _slugify(cluster_names[cid_a])
-                    target_slug = _slugify(cluster_names[cid_b])
+                    source_slug = slug_of(cid_a)
+                    target_slug = slug_of(cid_b)
                     source_db_id = slug_to_db_id.get(source_slug)
                     target_db_id = slug_to_db_id.get(target_slug)
                     if source_db_id and target_db_id and sim >= SIMILARITY_THRESHOLD:
