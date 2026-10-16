@@ -99,6 +99,46 @@ async def _maybe_weekly_shelf_maintenance(user_id: int) -> dict:
         return {"error": str(exc)[:200]}
 
 
+async def _maybe_label_catchup(user_id: int) -> dict:
+    """Label up to ``label_catchup_limit`` active pages that have no label yet.
+
+    Ingest-time labelling is fail-open, so a failed call leaves a page
+    unlabelled for good; this retries a small batch each night. Only with
+    ``label_first_enabled`` (default off = no-op, nothing imported); 0 turns it
+    off. Spend is recorded as ``page_labelling`` cost events by the labeller
+    itself, and also summed into the returned notes. Fail-open: an error is
+    returned in the notes, never raised.
+    """
+    if not getattr(settings, "label_first_enabled", False):
+        return {}
+    limit = int(getattr(settings, "label_catchup_limit", 0) or 0)
+    if limit <= 0:
+        return {}
+    try:
+        from backend.db import page_label_repo
+        from backend.services import page_labeller
+
+        ids = page_label_repo.get_unlabelled_content_ids(
+            page_labeller.labeller_version(), user_id=user_id, limit=limit
+        )
+        if not ids:
+            return {}
+        out = {"requested": len(ids), "labelled": 0, "failed_requests": 0, "cost_usd": 0.0}
+        step = max(1, int(settings.label_batch_size)) * 10
+        for i in range(0, len(ids), step):
+            run = await page_labeller.label_content_ids(ids[i : i + step], user_id=user_id)
+            out["labelled"] += len(run.labels)
+            out["failed_requests"] += run.failed_requests
+            out["cost_usd"] += run.cost_usd
+            if run.error:
+                out["error"] = run.error
+                break
+        return out
+    except Exception as exc:
+        logger.exception("label catch-up failed")
+        return {"error": f"{type(exc).__name__}: {exc}"[:300]}
+
+
 async def run_nightly_maintenance() -> dict:
     """Nightly maintenance orchestrator. Always: reap stale runs, sweep
     stranded pending captures, run catch-up backfills, write a status
@@ -117,17 +157,26 @@ async def run_nightly_maintenance() -> dict:
 
     # 2. Pending-capture safety sweep (drains stranded pages -> new active pages).
     from backend.api.main import sweep_pending_once  # lazy: break import cycle
+
     sweep = await sweep_pending_once(user_id)
     notes["pending_swept"] = sweep["processed"]
     notes["pending_failed"] = sweep["failed"]
 
     cost = 0.0
 
+    # 2b. Label-first: label a few pages whose ingest-time labelling failed
+    # (flag-gated; default off = no-op), so the recluster below sees them.
+    notes_label = await _maybe_label_catchup(user_id)
+    if notes_label:
+        notes["label_catchup"] = notes_label
+        cost += float(notes_label.get("cost_usd") or 0.0)
+
     # 3. Recluster only if new pages (after the sweep may have produced some).
     last_at = _last_successful_recluster_at(user_id)
     new_pages = _pages_added_since(user_id, last_at)
     if last_at is None or new_pages > 0:
         from backend.services.clustering_service import ClusteringService
+
         result = await ClusteringService(user_id=user_id).recluster_all(batch_mode=True)
         cost += float(result.get("naming_cost") or 0.0)
         notes["cluster_count"] = int(result.get("cluster_count") or 0)
@@ -140,6 +189,7 @@ async def run_nightly_maintenance() -> dict:
 
     # 4. Catch-up backfills (chunk unindexed active pages; classify NULL is_learning).
     from backend.services.catchup import run_catchup_backfills
+
     catchup = await run_catchup_backfills(user_id)
     notes["chunked_pages"] = catchup["chunked_pages"]
     notes["classified_done"] = catchup["classified_done"]

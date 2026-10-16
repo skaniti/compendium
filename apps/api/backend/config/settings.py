@@ -247,6 +247,10 @@ class Settings(BaseSettings):
     registry prompt)."""
     label_batch_size: int = 8
     """Pages per labelling request (the size the cost measurements used)."""
+    label_catchup_limit: int = 100
+    """Nightly maintenance labels up to this many active pages that have no label
+    at the current version (ingest-time labelling is fail-open; this is the
+    retry). 0 disables it. Env ``LABEL_CATCHUP_LIMIT``; only with the flag on."""
     shelf_attach_threshold: float = 0.80
     """Cosine similarity at or above which a subtopic string attaches to the
     nearest existing shelf without asking the model."""
