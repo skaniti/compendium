@@ -563,6 +563,15 @@ class ClusteringService:
 
         t0 = time.perf_counter()
 
+        # Label-first grouping (proposal #3): clusters = shelves built from
+        # ingest-time labels, superclusters = taxonomy categories. Gated by
+        # one flag that defaults off; with it off the module is never
+        # imported and the HDBSCAN path below runs unchanged.
+        if settings.label_first_enabled:
+            from backend.services.label_first_clustering import recluster_label_first
+
+            return await recluster_label_first(self, user_id, run_id, t0)
+
         # Step 1: Load all active pages from DB
         all_pages = self._load_all_pages(user_id)
         logger.info(f"Loaded {len(all_pages)} active pages for user {user_id}")
