@@ -22,7 +22,7 @@ import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -800,13 +800,16 @@ def _split_pass(
         stats["split"] += 1
 
 
+_UNSET: Any = object()
+
+
 def weekly_maintenance(
     user_id: int,
     page_vectors: Callable[[list[int]], dict[int, np.ndarray]] | None = None,
     *,
     config: ShelfConfig | None = None,
     store: ShelfStore | None = None,
-    embed: EmbedFn | None = None,
+    embed: EmbedFn | None = _UNSET,
     ask_merge: Callable[[dict, dict], bool] | None = None,
     ask_split_name: Callable[[dict, list[str]], str | None] | None = None,
 ) -> dict:
@@ -824,7 +827,10 @@ def weekly_maintenance(
         return {}
     config = config or ShelfConfig.from_settings()
     store = store or DbShelfStore(user_id)
-    embed = embed or _default_embed
+    # Omitted -> the real embedder; an explicit None -> no embedder (a split
+    # shelf then keeps the parent centroid instead of calling the embeddings API).
+    if embed is _UNSET:
+        embed = _default_embed
     merge_asker = ask_merge or MergeAsker()
     namer = ask_split_name or SplitNamer()
     stats = {"merged": 0, "split": 0, "asked": 0}

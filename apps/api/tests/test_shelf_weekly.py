@@ -206,3 +206,40 @@ def test_default_page_vectors_key_selection(monkeypatch):
     )
     assert list(ss._default_page_vectors([2])) == [2]
     assert calls == [("c", "text-embedding-3-small@ctv2"), ("e", None)]
+
+
+def test_explicit_no_embedder_never_reaches_the_default_embedder(monkeypatch):
+    """embed=None means "no embedder"; only omitting it selects the real one."""
+    calls = []
+    monkeypatch.setattr(ss, "_default_embed", lambda texts: calls.append(texts) or np.zeros((1, 2)))
+    store = MemoryShelfStore(1)
+    members = [(i, f"left {i}") for i in range(1, 4)] + [(i, f"right {i}") for i in range(4, 7)]
+    seed(store, "Synthetic shelf", 45, members)
+    vecs = {i: unit(0) for i in range(1, 4)} | {i: unit(90) for i in range(4, 7)}
+    res = run(store, config=ShelfConfig(soft_cap=4), page_vectors=lambda ids: vecs, embed=None)
+    assert res["split"] == 1
+    assert calls == []
+
+
+def test_omitted_embedder_selects_the_default(monkeypatch):
+    calls = []
+
+    def fake(texts):
+        calls.append(list(texts))
+        return np.array([unit(0) if t.startswith("left") else unit(90) for t in texts])
+
+    monkeypatch.setattr(ss, "_default_embed", fake)
+    store = MemoryShelfStore(1)
+    members = [(i, f"left {i}") for i in range(1, 4)] + [(i, f"right {i}") for i in range(4, 7)]
+    seed(store, "Synthetic shelf", 45, members)
+    vecs = {i: unit(0) for i in range(1, 4)} | {i: unit(90) for i in range(4, 7)}
+    res = ss.weekly_maintenance(
+        1,
+        config=ShelfConfig(soft_cap=4),
+        store=store,
+        ask_merge=lambda a, b: True,
+        ask_split_name=lambda s, subs: None,
+        page_vectors=lambda ids: vecs,
+    )
+    assert res["split"] == 1
+    assert calls
