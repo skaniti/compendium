@@ -460,3 +460,16 @@ def test_writer_keeps_distinct_clusters_with_slug_overrides(monkeypatch):
     assert [d["cluster_slug"] for d in saved["c"]] == ["same_name_10", "same_name_11"]
     assert set(labels.tolist()) == {0, 1}
     assert sorted(db for _, db in saved["p"]) == [1, 1, 2, 2]
+
+
+@pytest.mark.asyncio
+async def test_shelf_catchup_runs_off_the_event_loop_thread(fake_world):
+    import threading
+
+    svc, calls = fake_world
+    seen = []
+    sys.modules["backend.services.shelf_service"].assign_all_unshelved = lambda uid: (
+        seen.append(threading.get_ident()) or {}
+    )
+    await lf.recluster_label_first(svc, 7, 42, 0.0)
+    assert seen and seen[0] != threading.get_ident()

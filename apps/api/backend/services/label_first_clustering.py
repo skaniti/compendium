@@ -30,6 +30,7 @@ same logic on an export without a database.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections import Counter, defaultdict
@@ -325,7 +326,8 @@ async def recluster_label_first(svc, user_id: int, run_id: int, t0: float) -> di
 
         # Catch up: labelled pages that never reached a shelf (ingest-time failure, backfill).
         try:
-            catchup = shelf_service.assign_all_unshelved(user_id)
+            # sync (embedding + model calls): keep it off the event loop
+            catchup = await asyncio.to_thread(shelf_service.assign_all_unshelved, user_id)
             if catchup:
                 logger.info("label-first: shelved %d pending page(s)", len(catchup))
         except Exception:
