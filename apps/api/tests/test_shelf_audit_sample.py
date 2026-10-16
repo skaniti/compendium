@@ -168,15 +168,34 @@ def test_order_is_randomised_and_key_matches_columns():
     assert 25 < shelf_in_a < 75  # not systematically one side
     for row in sheet:
         k = by_item[row[0]]
-        shelf, cluster = k[3], k[6]
+        shelf, cluster = sa.display_name(k[3]), sa.display_name(k[6])
         assert (row[3], row[4]) == ((shelf, cluster) if k[2] == "shelf" else (cluster, shelf))
         assert k[7] == "dry-run"
 
 
-def test_pages_outside_clusters_get_a_placeholder():
+def test_pages_outside_clusters_get_the_neutral_placeholder():
     sheet, key = sa.draw_sample([shelved(1, "Only shelf", cluster=None)], n=5)
     assert len(sheet) == 1
-    assert sa.NO_CLUSTER in (sheet[0][3], sheet[0][4]) and key[0][6] == sa.NO_CLUSTER
+    assert sa.NO_GROUP in (sheet[0][3], sheet[0][4]) and key[0][6] == ""
+    assert "cluster" not in (sheet[0][3] + sheet[0][4]).lower()  # wording names neither side
+
+
+def test_display_name_is_one_rule_for_both_columns():
+    assert sa.display_name("whales and  cetaceans") == "Whales And Cetaceans"
+    assert sa.display_name("Whales And Cetaceans") == "Whales And Cetaceans"
+    assert sa.display_name("iPhone cases") == "IPhone Cases"
+    assert sa.display_name(None) == sa.display_name("") == sa.display_name("   ") == sa.NO_GROUP
+
+
+def test_casing_does_not_reveal_the_side():
+    """Same words in different raw casing look identical in the sheet; the key keeps raw."""
+    pool = [
+        sa.Shelved(cand(i, "x", cluster="whales and cetaceans"), "Whales And Cetaceans", "c", 3)
+        for i in range(60)
+    ]
+    sheet, key = sa.draw_sample(pool, n=60, seed=5)
+    assert {(r[3], r[4]) for r in sheet} == {("Whales And Cetaceans", "Whales And Cetaceans")}
+    assert {k[6] for k in key} == {"whales and cetaceans"}
 
 
 def test_small_pool_returns_everything():

@@ -43,7 +43,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 SAMPLE_SIZE = 100
 ACCEPT_RIGHT_RATE = 0.80
 ACCEPT_LIFT = 0.20
-NO_CLUSTER = "(not in any cluster)"
+NO_GROUP = "(no group)"
+"""Shown when a page has no group on a side; one wording for both columns."""
 MARKS = ("right", "wrong")
 SHEET_HEADER = ["item", "title", "url", "grouping_a", "grouping_b", "a_mark", "b_mark"]
 KEY_HEADER = [
@@ -214,11 +215,25 @@ def persisted_shelves(user_id: int, candidates: list[Candidate]) -> list[Shelved
 # -- sample -----------------------------------------------------------------
 
 
+def display_name(name: str | None) -> str:
+    """How a group name appears in either column: same placeholder, same casing rule.
+
+    Shelf names are minted with each word capitalised while cluster names keep the
+    naming model's casing; applying one rule to both stops the casing from giving
+    the side away. The key keeps the raw names.
+    """
+    words = " ".join((name or "").split()).split(" ")
+    text = " ".join(w[:1].upper() + w[1:] for w in words if w)
+    return text or NO_GROUP
+
+
 def draw_sample(pool: list[Shelved], n: int = SAMPLE_SIZE, seed: int = 0, mode: str = "dry-run"):
     """``(sheet_rows, key_rows)``: ``n`` random keep pages with randomised A/B order.
 
     Only pages labelled ``knowledge_value == "keep"`` are drawn. The same pool and
-    seed always give the same sample and the same A/B order.
+    seed always give the same sample and the same A/B order. Blindness limit: a page
+    with no current cluster shows ``NO_GROUP`` on its cluster side, so on those rows
+    (counted in the run summary) the side can be guessed.
     """
     keep = sorted(
         (s for s in pool if s.candidate.label.get("knowledge_value") == "keep"),
@@ -228,9 +243,10 @@ def draw_sample(pool: list[Shelved], n: int = SAMPLE_SIZE, seed: int = 0, mode: 
     picked = rng.sample(keep, min(n, len(keep)))
     sheet, key = [], []
     for i, s in enumerate(picked, start=1):
-        cluster = s.candidate.cluster_name or NO_CLUSTER
+        cluster = s.candidate.cluster_name or ""
         a_is_shelf = rng.random() < 0.5
-        a, b = (s.shelf_name, cluster) if a_is_shelf else (cluster, s.shelf_name)
+        shown_shelf, shown_cluster = display_name(s.shelf_name), display_name(cluster)
+        a, b = (shown_shelf, shown_cluster) if a_is_shelf else (shown_cluster, shown_shelf)
         sheet.append([i, s.candidate.title, s.candidate.url, a, b, "", ""])
         key.append(
             [
@@ -427,7 +443,7 @@ def run_sample(args) -> int:
     sheet, key = draw_sample(pool, args.n, args.seed, mode)
     write_table(out, SHEET_HEADER, sheet, marks_cols=(5, 6))
     write_table(key_out, KEY_HEADER, key)
-    in_cluster = sum(1 for k in key if k[6] != NO_CLUSTER)
+    in_cluster = sum(1 for k in key if k[6])
     print(
         f"Sample                : {len(sheet)} pages ({in_cluster} in a current cluster, {len(sheet) - in_cluster} not)"
     )
