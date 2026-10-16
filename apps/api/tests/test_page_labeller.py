@@ -317,6 +317,21 @@ def test_label_pages_failed_requests_do_not_affect_others():
     assert set(run.labels) == {1000 + i for i in range(17, 25)}
 
 
+def test_label_pages_request_timeout_fails_only_that_request(monkeypatch):
+    monkeypatch.setattr(pl, "REQUEST_TIMEOUT_S", 0.05)
+    pages = [_page(i) for i in range(1, 17)]  # 2 requests
+
+    class SlowFirst(FakeLLM):
+        async def complete(self, prompt, **kwargs):
+            if "### page_id: 1\n" in prompt:
+                await asyncio.sleep(5)
+            return await super().complete(prompt, **kwargs)
+
+    run = asyncio.run(pl.label_pages(pages, user_id=1, llm=SlowFirst()))
+    assert run.requests == 2 and run.failed_requests == 1
+    assert set(run.labels) == {1000 + i for i in range(9, 17)}
+
+
 def test_label_pages_empty_and_all_invalid():
     assert asyncio.run(pl.label_pages([], user_id=1, llm=FakeLLM())).requests == 0
     llm = FakeLLM(lambda i, p: json.dumps({"items": [item(1, category="zzz")]}))
@@ -426,9 +441,7 @@ class TestLabelContentIds:
             "SELECT page_content_id, labeller_version, user_id, source FROM page_labels"
         )
         assert sorted(r[0] for r in rows) == sorted(self.cids)
-        assert {(r[1], r[2], r[3]) for r in rows} == {
-            (pl.labeller_version(), self.user, "model")
-        }
+        assert {(r[1], r[2], r[3]) for r in rows} == {(pl.labeller_version(), self.user, "model")}
         kinds = dict(self.fx.sql("SELECT id, content_kind FROM page_content"))
         assert sorted(kinds.values()) == ["article_reference", "article_reference", "auth_login"]
         ev = self.fx.sql(

@@ -292,3 +292,19 @@ def test_merge_asker_and_split_namer_fail_open(monkeypatch):
     monkeypatch.setattr(ss, "_complete_blocking", boom)
     assert ss.MergeAsker()(a, a) is False
     assert ss.SplitNamer()(a, ["x"]) is None
+
+
+def test_shelf_model_call_has_a_timeout(monkeypatch):
+    """A hung model call must end in the asker's fail-open path, not hang the hook."""
+    import asyncio
+
+    from backend.services import llm_service
+
+    class Hung:
+        async def complete(self, *a, **k):
+            await asyncio.sleep(10)
+
+    monkeypatch.setattr(llm_service, "LLMService", Hung)
+    monkeypatch.setattr(ss, "LLM_TIMEOUT_S", 0.05)
+    asker = ss.SameShelfAsker()
+    assert asker("a subtopic", {"name": "S", "category": "c", "example_titles": []}) is False

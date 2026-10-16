@@ -148,20 +148,53 @@ def test_flag_on_is_fail_open(monkeypatch, caplog):
     assert errors == 0 and calls == [1]
 
 
-def test_flag_on_inside_running_loop(monkeypatch):
-    """The hook is sync but main.py calls it from async code."""
+def test_flag_on_inside_running_loop_runs_off_the_loop_thread(monkeypatch):
+    """The hook is sync but main.py calls it from async code: it must not block that loop."""
     import asyncio
+    import threading
 
+    monkeypatch.setattr(settings, "label_first_enabled", True)
+    seen = {}
+    release = threading.Event()
+
+    async def label(content_ids, *, user_id):
+        seen["label_thread"] = threading.get_ident()
+        seen["label_started"] = True
+        release.wait(5)  # a slow model call: the caller must not be waiting for it
+        seen["calls"] = (list(content_ids), user_id)
+        return SimpleNamespace()
+
+    monkeypatch.setattr("backend.services.page_labeller.label_content_ids", label)
+    shelf = ModuleType(SHELF)
+
+    def assign(user_id, ids):
+        seen["shelf_thread"] = threading.get_ident()
+        return {}
+
+    shelf.assign_new_labels = assign
+    _install_shelf(monkeypatch, shelf)
+
+    async def go():
+        loop_thread = threading.get_ident()
+        errors = _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch)
+        returned_before_labelling_finished = "calls" not in seen
+        release.set()
+        await process_captures.drain_label_hooks()
+        return loop_thread, errors, returned_before_labelling_finished
+
+    loop_thread, errors, returned_early = asyncio.run(go())
+    assert errors == 0 and returned_early
+    assert seen["calls"] == ([100], 7)
+    assert seen["label_thread"] != loop_thread and seen["shelf_thread"] != loop_thread
+
+
+def test_flag_on_without_a_loop_runs_inline(monkeypatch):
     monkeypatch.setattr(settings, "label_first_enabled", True)
     calls = []
     monkeypatch.setattr(
         "backend.services.page_labeller.label_content_ids", _fake_labeller(calls).label_content_ids
     )
-
-    async def go():
-        return _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch)
-
-    assert asyncio.run(go()) == 0
+    assert _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch) == 0
     assert calls == [([100], 7)]
 
 

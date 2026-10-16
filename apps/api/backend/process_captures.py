@@ -59,7 +59,7 @@ def load_content_cache_from_db() -> dict[str, dict]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT url, fetched_content FROM page_content " "WHERE fetched_content IS NOT NULL"
+                "SELECT url, fetched_content FROM page_content WHERE fetched_content IS NOT NULL"
             )
             for row in cur.fetchall():
                 url = row[0]
@@ -262,12 +262,45 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
     from backend.config.settings import settings
 
     if settings.label_first_enabled:
-        _label_persisted_pages(response, persisted_results)
+        _dispatch_labelling(response, persisted_results)
 
     return page_errors
 
 
 _LABEL_HOOK_TIMEOUT_S = 180
+_label_executor = None
+_label_futures: set = set()
+
+
+def _dispatch_labelling(response, persisted_results: list) -> None:
+    """Run the labelling hook without blocking the caller's event loop.
+
+    ``update_pages_from_response`` is called from async tasks in api/main.py;
+    labelling (model calls) plus shelving (embeddings, "same shelf?" calls)
+    can take minutes, so with a loop running the hook goes to a single
+    dedicated worker thread and the capture does not wait for it (fail-open
+    either way). One worker keeps bursts from piling up threads. With no
+    running loop (the CLI) it runs inline.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _label_persisted_pages(response, persisted_results)
+        return
+    global _label_executor
+    if _label_executor is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        _label_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="label-hook")
+    fut = loop.run_in_executor(_label_executor, _label_persisted_pages, response, persisted_results)
+    _label_futures.add(fut)
+    fut.add_done_callback(_label_futures.discard)
+
+
+async def drain_label_hooks() -> None:
+    """Wait for labelling hooks started from this loop (tests, orderly shutdown)."""
+    while _label_futures:
+        await asyncio.gather(*list(_label_futures), return_exceptions=True)
 
 
 def _label_persisted_pages(response, persisted_results: list) -> None:
@@ -307,8 +340,7 @@ def _label_persisted_pages(response, persisted_results: list) -> None:
             )
             return run
 
-        # ``run_coro_blocking`` is the clustering service's pattern: this
-        # function is sync but its callers in api/main.py run inside a loop.
+        # Runs on the hook's worker thread (no loop), or inline from the CLI.
         page_labeller.run_coro_blocking(_run())
 
         try:
@@ -451,9 +483,7 @@ def _persist_single_page(page_row: dict, result, response) -> None:
         if result.cost_usd
         else None,
         content_summary=(
-            "[redacted: sensitive-skip retention carve-out]"
-            if redact
-            else result.content_summary
+            "[redacted: sensitive-skip retention carve-out]" if redact else result.content_summary
         ),
         page_content_id=content_id,
     )
@@ -475,7 +505,7 @@ def _log_page_error(capture_id: str, page_row: dict, result) -> None:
     try:
         with open(log_path, "a") as f:
             f.write(
-                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] " f"capture={capture_id} url={url}\n{tb}\n"
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] capture={capture_id} url={url}\n{tb}\n"
             )
     except OSError:
         pass

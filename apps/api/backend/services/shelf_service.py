@@ -17,6 +17,7 @@ entry points at the bottom are all gated by ``settings.label_first_enabled``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
@@ -34,6 +35,8 @@ _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 _WS_RE = re.compile(r"\s+")
 _ARTICLES = {"the", "a", "an"}
 EXAMPLE_TITLES = 3
+LLM_TIMEOUT_S = 30.0
+"""Seconds one short model call (same shelf?, merge, split name) may take; fail-open."""
 
 EmbedFn = Callable[[list[str]], np.ndarray]
 AskFn = Callable[[str, dict], bool]
@@ -473,7 +476,10 @@ def _complete_blocking(prompt: str) -> tuple[str, float]:
 
     model = getattr(settings, "label_model", "claude-haiku-5-5")
     resp = _run_coro_blocking(
-        LLMService().complete(prompt, model=model, temperature=0, max_tokens=40)
+        asyncio.wait_for(
+            LLMService().complete(prompt, model=model, temperature=0, max_tokens=40),
+            timeout=LLM_TIMEOUT_S,
+        )
     )
     return (resp.content or "").strip(), float(getattr(resp, "cost_usd", 0.0) or 0.0)
 

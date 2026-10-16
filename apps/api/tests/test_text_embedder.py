@@ -62,3 +62,15 @@ def test_empty_input_makes_no_call(monkeypatch):
     with patch("backend.services.sbert_loader.get_sbert_model") as m:
         assert text_embedder.embed_texts([]).shape[0] == 0
     m.assert_not_called()
+
+
+def test_openai_client_has_a_timeout(monkeypatch):
+    monkeypatch.setattr(
+        text_embedder.settings, "clustering_embedding_model", "text-embedding-3-small"
+    )
+    client = MagicMock()
+    client.embeddings.create.return_value = _resp([[1.0, 0.0]], 1)
+    with patch("openai.OpenAI", return_value=client) as ctor:
+        text_embedder.embed_texts(["a"])
+    assert ctor.call_args.kwargs["timeout"] == text_embedder.OPENAI_TIMEOUT_S
+    assert ctor.call_args.kwargs["max_retries"] == 1

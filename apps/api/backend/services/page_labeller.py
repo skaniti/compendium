@@ -154,6 +154,8 @@ class LabelRun:
 
 
 PROMPT_FINGERPRINT_LEN = 8
+REQUEST_TIMEOUT_S = 90.0
+"""Seconds one labelling request may take; a timeout fails that request only."""
 
 
 def prompt_fingerprint() -> str:
@@ -416,13 +418,16 @@ async def label_pages(pages: list[dict], *, user_id: int, llm=None) -> LabelRun:
         keys = [_request_key(p) for p in chunk]
         system, user = build_request(chunk)
         async with sem:
-            resp = await llm.complete(
-                user,
-                model=model,
-                system_prompt=system,
-                temperature=0,
-                max_tokens=220 * len(chunk) + 400,
-                extra_kwargs=_extra_kwargs(model),
+            resp = await asyncio.wait_for(
+                llm.complete(
+                    user,
+                    model=model,
+                    system_prompt=system,
+                    temperature=0,
+                    max_tokens=220 * len(chunk) + 400,
+                    extra_kwargs=_extra_kwargs(model),
+                ),
+                timeout=REQUEST_TIMEOUT_S,
             )
         return resp, parse_labels(resp.content, keys)
 

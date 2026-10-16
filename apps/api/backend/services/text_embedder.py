@@ -17,6 +17,7 @@ from backend.config.settings import settings
 logger = logging.getLogger(__name__)
 
 OPENAI_EMBED_BATCH_SIZE = 512
+OPENAI_TIMEOUT_S = 30.0
 OPENAI_EMBED_PRICE_PER_MTOK = {
     "text-embedding-3-small": 0.02,
     "text-embedding-3-large": 0.13,
@@ -38,7 +39,7 @@ def _normalise(mat: np.ndarray) -> np.ndarray:
 def _embed_openai(texts: list[str], model: str, user_id: int | None) -> np.ndarray:
     from openai import OpenAI
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key, timeout=OPENAI_TIMEOUT_S, max_retries=1)
     vectors: list[list[float]] = []
     total_tokens = 0
     for start in range(0, len(texts), OPENAI_EMBED_BATCH_SIZE):
