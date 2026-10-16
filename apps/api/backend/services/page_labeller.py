@@ -151,11 +151,42 @@ class LabelRun:
     cost_usd: float = 0.0
     requests: int = 0
     failed_requests: int = 0
+    error: str | None = None
+    """Set when the call aborted (prompt unloadable, database failure): callers surface it."""
 
 
 PROMPT_FINGERPRINT_LEN = 8
 REQUEST_TIMEOUT_S = 90.0
 """Seconds one labelling request may take; a timeout fails that request only."""
+
+
+class LabellerPromptError(RuntimeError):
+    """The labelling prompt cannot be loaded; labelling must not run on a guess."""
+
+
+def labeller_prompt_text() -> str:
+    """The system prompt as plain text: override file entry, else the registry template.
+
+    Never passed through ``str.format``: it carries no placeholders, and a
+    hand-edited override containing a single brace would make ``get_prompt_raw``
+    raise on every request. A missing key or an override that is not a string
+    raises :class:`LabellerPromptError` (logged) instead of labelling with
+    something else.
+    """
+    from backend.prompts import templates
+
+    key = settings.label_prompt_key
+    entry = templates.PROMPTS.get(key)
+    if entry is None:
+        msg = f"labelling prompt {key!r} is not in the prompt registry"
+        logger.error(msg)
+        raise LabellerPromptError(msg)
+    override = templates._load_overrides().get(key)
+    if override is not None and not isinstance(override, str):
+        msg = f"override for {key!r} is not a string; fix the PROMPT_OVERRIDES_PATH file"
+        logger.error(msg)
+        raise LabellerPromptError(msg)
+    return override or entry["template"]
 
 
 def prompt_fingerprint() -> str:
@@ -166,9 +197,7 @@ def prompt_fingerprint() -> str:
     generic registry prompt and a privately overridden one therefore stamp
     different versions, and so does any edit made in the Prompts dev view.
     """
-    from backend.prompts.templates import get_prompt_raw
-
-    text = get_prompt_raw(settings.label_prompt_key)
+    text = labeller_prompt_text()
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:PROMPT_FINGERPRINT_LEN]
 
 
@@ -237,11 +266,10 @@ def _request_key(page: dict) -> int:
     return int(key if key is not None else page["page_content_id"])
 
 
-def build_request(pages: list[dict]) -> tuple[str, str]:
+def build_request(pages: list[dict], system: str | None = None) -> tuple[str, str]:
     """``(system prompt, user text)`` for one request over ``pages``."""
-    from backend.prompts.templates import get_prompt_raw
-
-    system = get_prompt_raw(settings.label_prompt_key)
+    if system is None:
+        system = labeller_prompt_text()
     body = "\n\n".join(f"### page_id: {_request_key(p)}\n{build_page_input(p)}" for p in pages)
     user = (
         f"Label each of the {len(pages)} pages below. Return items in the same order, "
@@ -409,6 +437,7 @@ async def label_pages(pages: list[dict], *, user_id: int, llm=None) -> LabelRun:
 
         llm = LLMService()
 
+    system_prompt = labeller_prompt_text()  # fails loudly before any request is made
     size = max(1, int(settings.label_batch_size))
     chunks = [unique[i : i + size] for i in range(0, len(unique), size)]
     model = settings.label_model
@@ -416,13 +445,13 @@ async def label_pages(pages: list[dict], *, user_id: int, llm=None) -> LabelRun:
 
     async def one(chunk: list[dict]):
         keys = [_request_key(p) for p in chunk]
-        system, user = build_request(chunk)
+        _, user = build_request(chunk, system=system_prompt)
         async with sem:
             resp = await asyncio.wait_for(
                 llm.complete(
                     user,
                     model=model,
-                    system_prompt=system,
+                    system_prompt=system_prompt,
                     temperature=0,
                     max_tokens=220 * len(chunk) + 400,
                     extra_kwargs=_extra_kwargs(model),
@@ -503,8 +532,9 @@ async def label_content_ids(content_ids: list[int], *, user_id: int) -> LabelRun
                 )
             except Exception:
                 logger.exception("page_labelling cost event failed")
-    except Exception:
+    except Exception as exc:
         logger.exception("label_content_ids failed for %d content rows", len(content_ids))
+        run.error = f"{type(exc).__name__}: {exc}"[:300]
     return run
 
 

@@ -93,6 +93,9 @@ async def _apply(version: str, user_ids: list[int], limit: int | None, only_acti
             total["labelled"] += len(run.labels)
             total["requests"] += run.requests
             total["failed_requests"] += run.failed_requests
+            if run.error:
+                total["errors"] = total.get("errors", 0) + 1
+                print(f"user {uid}: chunk aborted: {run.error}", file=sys.stderr, flush=True)
             total["cost_usd"] += run.cost_usd
             print(
                 f"user {uid}: {min(i + chunk_size, len(ids))}/{len(ids)} processed, "
@@ -117,7 +120,11 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     only_active = not args.all_statuses
-    version = page_labeller.labeller_version()
+    try:
+        version = page_labeller.labeller_version()
+    except page_labeller.LabellerPromptError as exc:
+        print(f"Cannot load the labelling prompt: {exc}", file=sys.stderr)
+        return 2
 
     ids = page_label_repo.get_unlabelled_content_ids(
         version, user_id=args.user_id, limit=args.limit, only_active=only_active
@@ -145,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         f"({total['failed_requests']} failed). Actual spend: ${total['cost_usd']:.4f}. "
         "Re-run to retry anything unlabelled."
     )
-    return 0 if total["failed_requests"] == 0 else 3
+    return 0 if total["failed_requests"] == 0 and not total.get("errors") else 3
 
 
 if __name__ == "__main__":

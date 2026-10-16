@@ -155,3 +155,10 @@ def test_format_estimate_uses_measured_rates():
 
     text = bf.format_estimate(estimate_cost(8), VERSION)
     assert "6,114" in text and "1,005" in text and "$0.0001/page" in text
+
+
+def test_unloadable_prompt_stops_with_a_clear_message(world, llm, capsys, monkeypatch):
+    monkeypatch.setattr(settings, "label_prompt_key", "page_annotation_missing")
+    assert bf.main([]) == 2
+    err = capsys.readouterr().err
+    assert "Cannot load the labelling prompt" in err and llm.calls == []

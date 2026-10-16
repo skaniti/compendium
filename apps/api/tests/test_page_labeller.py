@@ -512,3 +512,41 @@ class TestLabelContentIds:
         run = asyncio.run(pl.label_content_ids(self.cids, user_id=self.user))
         assert len(run.labels) == 3
         assert self.fx.sql("SELECT COUNT(*) FROM page_labels")[0][0] == 3
+
+
+# --- prompt loading fails loudly, never through format() -------------------
+
+
+def test_override_with_single_braces_is_used_as_plain_text(monkeypatch, tmp_path):
+    text = 'Return {"items": [...]} for each page, not {this}.'
+    _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": text})
+    assert pl.labeller_prompt_text() == text
+    system, _ = pl.build_request([_page(1)])
+    assert system == text
+    llm = FakeLLM()
+    run = asyncio.run(pl.label_pages([_page(1)], user_id=1, llm=llm))
+    assert llm.calls[0]["system_prompt"] == text and run.failed_requests == 0
+    assert pl.labeller_version().endswith(pl.prompt_fingerprint())
+
+
+def test_unknown_prompt_key_raises_before_any_request(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "label_prompt_key", "page_annotation_missing")
+    llm = FakeLLM()
+    with caplog.at_level(logging.ERROR), pytest.raises(pl.LabellerPromptError, match="registry"):
+        asyncio.run(pl.label_pages([_page(1)], user_id=1, llm=llm))
+    assert llm.calls == [] and "registry" in caplog.text
+    with pytest.raises(pl.LabellerPromptError):
+        pl.labeller_version()
+
+
+def test_non_string_override_is_an_error_not_a_silent_fallback(monkeypatch, tmp_path):
+    _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": ["not", "text"]})
+    with pytest.raises(pl.LabellerPromptError, match="not a string"):
+        pl.labeller_prompt_text()
+
+
+def test_label_content_ids_reports_the_prompt_error(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "label_prompt_key", "page_annotation_missing")
+    with caplog.at_level(logging.ERROR):
+        run = asyncio.run(pl.label_content_ids([1, 2], user_id=1))
+    assert run.labels == {} and run.error and "LabellerPromptError" in run.error
