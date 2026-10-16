@@ -160,10 +160,38 @@ def test_build_request_shape():
     assert "\n\n### page_id: 9\n" in user
 
 
+def _use_overrides(monkeypatch, tmp_path, mapping):
+    path = tmp_path / "overrides.json"
+    path.write_text(json.dumps(mapping), encoding="utf-8")
+    monkeypatch.setattr(settings, "prompt_overrides_path", str(path))
+
+
 def test_labeller_version_follows_settings(monkeypatch):
-    assert pl.labeller_version() == "claude-haiku-5-5@page_annotation_v2"
+    fp = pl.prompt_fingerprint()
+    assert pl.labeller_version() == f"claude-haiku-5-5@page_annotation_v2+{fp}"
     monkeypatch.setattr(settings, "label_model", "claude-sonnet-5-5")
-    assert pl.labeller_version() == "claude-sonnet-5-5@page_annotation_v2"
+    assert pl.labeller_version() == f"claude-sonnet-5-5@page_annotation_v2+{fp}"
+
+
+def test_prompt_fingerprint_is_short_stable_hex():
+    fp = pl.prompt_fingerprint()
+    assert len(fp) == pl.PROMPT_FINGERPRINT_LEN and int(fp, 16) >= 0
+    assert fp == pl.prompt_fingerprint()
+
+
+def test_prompt_override_changes_labeller_version(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "prompt_overrides_path", "")
+    generic = pl.labeller_version()
+    _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": "A synthetic private prompt."})
+    private = pl.labeller_version()
+    assert private != generic
+    assert private.startswith("claude-haiku-5-5@page_annotation_v2+")
+    system, _ = pl.build_request([_page(7)])
+    assert system == "A synthetic private prompt."
+    _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": "A second synthetic prompt."})
+    assert pl.labeller_version() not in (generic, private)
+    _use_overrides(monkeypatch, tmp_path, {"something_else": "x"})
+    assert pl.labeller_version() == generic  # override for another prompt: no effect
 
 
 # --- parse_labels ----------------------------------------------------------
@@ -399,7 +427,7 @@ class TestLabelContentIds:
         )
         assert sorted(r[0] for r in rows) == sorted(self.cids)
         assert {(r[1], r[2], r[3]) for r in rows} == {
-            ("claude-haiku-5-5@page_annotation_v2", self.user, "model")
+            (pl.labeller_version(), self.user, "model")
         }
         kinds = dict(self.fx.sql("SELECT id, content_kind FROM page_content"))
         assert sorted(kinds.values()) == ["article_reference", "article_reference", "auth_login"]
@@ -420,7 +448,7 @@ class TestLabelContentIds:
         assert meta == {
             "pages": 3,
             "requests": 1,
-            "labeller_version": "claude-haiku-5-5@page_annotation_v2",
+            "labeller_version": pl.labeller_version(),
         }
 
     def test_second_call_skips_already_labelled(self, monkeypatch):

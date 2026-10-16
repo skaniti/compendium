@@ -12,6 +12,7 @@ the ``label_first_enabled`` flag is checked by the callers (the ingest hook).
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -152,9 +153,26 @@ class LabelRun:
     failed_requests: int = 0
 
 
+PROMPT_FINGERPRINT_LEN = 8
+
+
+def prompt_fingerprint() -> str:
+    """Short hash of the system prompt text that will actually run.
+
+    Hashes the effective text: the registry template, or the override from
+    ``PROMPT_OVERRIDES_PATH`` when one is set for ``label_prompt_key``. The
+    generic registry prompt and a privately overridden one therefore stamp
+    different versions, and so does any edit made in the Prompts dev view.
+    """
+    from backend.prompts.templates import get_prompt_raw
+
+    text = get_prompt_raw(settings.label_prompt_key)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:PROMPT_FINGERPRINT_LEN]
+
+
 def labeller_version() -> str:
-    """``<model>@<prompt key>``: the version stamped on every label row."""
-    return f"{settings.label_model}@{settings.label_prompt_key}"
+    """``<model>@<prompt key>+<prompt hash>``: the version stamped on every label row."""
+    return f"{settings.label_model}@{settings.label_prompt_key}+{prompt_fingerprint()}"
 
 
 def run_coro_blocking(coro):

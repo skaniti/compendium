@@ -239,10 +239,12 @@ class Settings(BaseSettings):
     maintenance. Off by default; every new code path checks it at its entry."""
     label_model: str = "claude-haiku-5-5"
     """Pinned model of the page labeller. Part of ``labeller_version``
-    (``<model>@<prompt key>``), so changing it starts a fresh label set."""
+    (``<model>@<prompt key>+<prompt hash>``), so changing it starts a fresh label set."""
     label_prompt_key: str = "page_annotation_v2"
     """Prompt-registry key of the labeller's system prompt (also part of
-    ``labeller_version``)."""
+    ``labeller_version``, together with a short hash of the prompt text that
+    runs, so a ``PROMPT_OVERRIDES_PATH`` override is told apart from the
+    registry prompt)."""
     label_batch_size: int = 8
     """Pages per labelling request (the size the cost measurements used)."""
     shelf_attach_threshold: float = 0.80

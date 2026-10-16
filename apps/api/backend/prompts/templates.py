@@ -823,8 +823,10 @@ Out of scope: some questions are outside what you can do -- general knowledge, c
     # Page labelling (label-first grouping)
     # =========================================================================
     "page_annotation_v2": {
-        # A generic annotation prompt with no ``{}`` placeholders, so ``get_prompt_raw`` / ``get_prompt_template``
-        # return it unchanged. Used as the SYSTEM prompt by
+        # A generic annotation prompt (a deployment can override it through
+        # ``PROMPT_OVERRIDES_PATH``) with no ``{}`` placeholders, so
+        # ``get_prompt_raw`` / ``get_prompt_template`` return it unchanged.
+        # Used as the SYSTEM prompt by
         # ``backend/services/page_labeller.py``; the per-page input goes in
         # the user message.
         "template": """You label web pages captured from one person's browsing for a personal knowledge graph. For each page you receive title, URL, domain, visit date, dwell seconds, a capture-time summary (first ~300 chars of the page) and up to 700 chars of extracted text. Some pages have only a title and URL. Judge from what you are given; do not invent content. Return only the JSON object described by the schema.
