@@ -267,7 +267,6 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
     return page_errors
 
 
-_LABEL_HOOK_TIMEOUT_S = 180
 _label_executor = None
 _label_futures: set = set()
 
@@ -281,6 +280,12 @@ def _dispatch_labelling(response, persisted_results: list) -> None:
     dedicated worker thread and the capture does not wait for it (fail-open
     either way). One worker keeps bursts from piling up threads. With no
     running loop (the CLI) it runs inline.
+
+    Limits: the labelling phase has a timeout per model request, the shelving
+    phase only per-call timeouts (embeddings, "same shelf?"), and the
+    single-worker queue is unbounded, so a long stall delays the hooks behind
+    it. Pages whose hook is lost (restart) or fails are picked up by the
+    nightly catch-up (``LABEL_CATCHUP_LIMIT``).
     """
     try:
         loop = asyncio.get_running_loop()
@@ -333,15 +338,13 @@ def _label_persisted_pages(response, persisted_results: list) -> None:
 
         from backend.services import page_labeller
 
-        async def _run():
-            run = await asyncio.wait_for(
-                page_labeller.label_content_ids(content_ids, user_id=user_id),
-                timeout=_LABEL_HOOK_TIMEOUT_S,
-            )
-            return run
-
+        # No whole-hook timeout: cancelling ``label_content_ids`` after some
+        # requests have finished would drop their labels and cost. Each model
+        # request has its own timeout (``page_labeller.REQUEST_TIMEOUT_S``).
         # Runs on the hook's worker thread (no loop), or inline from the CLI.
-        page_labeller.run_coro_blocking(_run())
+        page_labeller.run_coro_blocking(
+            page_labeller.label_content_ids(content_ids, user_id=user_id)
+        )
 
         try:
             from backend.services import shelf_service

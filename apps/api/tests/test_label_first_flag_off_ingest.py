@@ -214,3 +214,21 @@ def test_flag_on_calls_shelf_service_when_present(monkeypatch):
 def test_no_labeller_attribute_on_process_captures():
     """Lazy import: process_captures holds no module-level reference to the labeller."""
     assert not hasattr(process_captures, "page_labeller")
+
+
+def test_hook_has_no_whole_hook_timeout(monkeypatch):
+    """A slow labelling call is not cancelled (that would drop finished requests' labels)."""
+    import asyncio
+
+    assert not hasattr(process_captures, "_LABEL_HOOK_TIMEOUT_S")
+    monkeypatch.setattr(settings, "label_first_enabled", True)
+    done = []
+
+    async def label(content_ids, *, user_id):
+        await asyncio.sleep(0.2)
+        done.append(list(content_ids))
+        return SimpleNamespace()
+
+    monkeypatch.setattr("backend.services.page_labeller.label_content_ids", label)
+    assert _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch) == 0
+    assert done == [[100]]
