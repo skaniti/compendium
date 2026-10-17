@@ -407,3 +407,84 @@ def test_weekly_maintenance_records_merge_and_split_name_cost(monkeypatch):
     assert res["merged"] == 1
     assert [e["event_type"] for e in events] == ["shelf_merge_check"]
     assert events[0]["cost_usd"] == pytest.approx(0.003) and events[0]["user_id"] == 1
+
+
+# ── shelving is serialised ────────────────────────────────────────────────
+
+
+def test_concurrent_shelving_calls_never_overlap(monkeypatch):
+    """Ingest worker, recluster catch-up and weekly pass must not shelve at the same time."""
+    import threading
+    import time
+
+    monkeypatch.setattr(ss, "settings", SimpleNamespace(label_first_enabled=True, label_model="m"))
+    labels = {1: lab("storage bins"), 2: lab("storage bins")}
+    monkeypatch.setattr(ss, "_get_labels", lambda ids: {i: labels[i] for i in ids if i in labels})
+    monkeypatch.setattr("backend.db.shelf_repo.get_shelf_pages", lambda uid: {})
+    monkeypatch.setattr("backend.db.shelf_repo.recount_shelves", lambda uid: None)
+
+    state = {"inside": 0, "max": 0, "calls": 0}
+    guard = threading.Lock()
+
+    class Canon:
+        ask = None
+
+        def assign_many(self, items):
+            with guard:
+                state["inside"] += 1
+                state["max"] = max(state["max"], state["inside"])
+                state["calls"] += 1
+            time.sleep(0.05)
+            with guard:
+                state["inside"] -= 1
+            return {}
+
+    monkeypatch.setattr(ss, "_build_canonicaliser", lambda uid: Canon())
+
+    class Cur:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return self
+
+        def execute(self, *a):
+            pass
+
+        def fetchall(self):
+            return [(1,), (2,)]
+
+    monkeypatch.setattr("backend.db.connection.get_conn", lambda: Cur())
+    threads = [
+        threading.Thread(target=ss.assign_new_labels, args=(7, [1, 2])),
+        threading.Thread(target=ss.assign_all_unshelved, args=(7,)),
+        threading.Thread(target=ss.assign_new_labels, args=(7, [1, 2])),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert state["calls"] == 3 and state["max"] == 1
+
+
+def test_weekly_maintenance_waits_for_shelving(monkeypatch):
+    import threading
+
+    monkeypatch.setattr(ss, "settings", SimpleNamespace(label_first_enabled=True))
+    done = []
+    with ss._SHELVING_LOCK:
+        t = threading.Thread(
+            target=lambda: done.append(
+                ss.weekly_maintenance(
+                    1, store=MemoryShelfStore(1), embed=None, page_vectors=lambda i: {}
+                )
+            )
+        )
+        t.start()
+        t.join(0.2)
+        assert t.is_alive() and not done  # blocked behind the shelving lock
+    t.join(5)
+    assert done

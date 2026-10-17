@@ -94,3 +94,59 @@ def test_unexpected_exception_is_contained(monkeypatch):
     monkeypatch.setattr(page_labeller, "labeller_version", lambda: "v")
     notes = _run_nightly(_cfg(), 0)
     assert "RuntimeError" in notes["label_catchup"]["error"] and "cost_usd" in notes
+
+
+def test_catchup_waits_for_ingest_hooks_queued_by_the_sweep(monkeypatch):
+    """The sweep's hooks label the same pages; the catch-up must not race them."""
+    import asyncio
+    import threading
+
+    from backend import process_captures
+    from backend.services import nightly_maintenance as nm
+
+    order = []
+    release = threading.Event()
+    monkeypatch.setattr(nm, "settings", _cfg())
+
+    def unlabelled(version, user_id=None, limit=None, only_active=True):
+        order.append("catchup_query")
+        return []
+
+    monkeypatch.setattr("backend.db.page_label_repo.get_unlabelled_content_ids", unlabelled)
+    monkeypatch.setattr(page_labeller, "labeller_version", lambda: "v")
+
+    async def go():
+        loop = asyncio.get_running_loop()
+
+        def hook():
+            release.wait(5)
+            order.append("hook_done")
+
+        fut = loop.run_in_executor(None, hook)
+        process_captures._label_futures.add(fut)
+        fut.add_done_callback(process_captures._label_futures.discard)
+        task = asyncio.create_task(nm._maybe_label_catchup(152))
+        await asyncio.sleep(0.1)
+        assert order == []  # still waiting on the hook
+        release.set()
+        await task
+
+    asyncio.run(go())
+    assert order == ["hook_done", "catchup_query"]
+
+
+def test_catchup_drain_is_bounded(monkeypatch):
+    import asyncio
+
+    from backend.services import nightly_maintenance as nm
+
+    monkeypatch.setattr(nm, "settings", _cfg())
+    monkeypatch.setattr(nm, "LABEL_HOOK_DRAIN_TIMEOUT_S", 0.05)
+
+    async def stuck():
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr("backend.process_captures.drain_label_hooks", stuck)
+    seen = _patch_labeller(monkeypatch, [], [])
+    assert asyncio.run(nm._maybe_label_catchup(152)) == {}
+    assert seen["unlabelled_args"] is not None  # continued after the timeout

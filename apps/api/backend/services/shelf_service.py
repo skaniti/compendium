@@ -18,8 +18,10 @@ entry points at the bottom are all gated by ``settings.label_first_enabled``.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import re
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -64,6 +66,26 @@ class ShelfConfig:
             soft_cap=int(g("shelf_soft_cap", 40)),
             min_cluster_size=int(g("shelf_min_cluster_size", 3)),
         )
+
+
+_SHELVING_LOCK = threading.RLock()
+"""Serialises everything that creates, attaches, merges or splits shelves.
+
+The ingest hook (worker thread), the label-first recluster's catch-up (another
+thread), the weekly pass and the audit script can overlap; two of them shelving
+the same new subtopic would each create a shelf for it (no name uniqueness, and
+``shelf_strings`` is last-writer-wins). The lock is held across the model and
+embedding calls inside, whose only bound is their per-call timeout, so a stall
+there delays the next shelving call, not the API."""
+
+
+def _serialised(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _SHELVING_LOCK:
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _enabled() -> bool:
@@ -637,6 +659,7 @@ def _build_canonicaliser(user_id: int) -> ShelfCanonicaliser:
     )
 
 
+@_serialised
 def assign_new_labels(user_id: int, content_ids: list[int]) -> dict[int, AssignResult]:
     """Shelve the labelled, non-excluded, not-yet-shelved content ids. ``{}`` when flag off."""
     if not _enabled() or not content_ids:
@@ -659,6 +682,7 @@ def assign_new_labels(user_id: int, content_ids: list[int]) -> dict[int, AssignR
         _record_ask_cost(user_id, "shelf_same_check", canon.ask)
 
 
+@_serialised
 def assign_all_unshelved(user_id: int, *, force: bool = False) -> dict:
     """Catch-up: shelve every labelled, non-excluded content id of the user with no shelf row.
 
@@ -856,6 +880,7 @@ def _split_pass(
 _UNSET: Any = object()
 
 
+@_serialised
 def weekly_maintenance(
     user_id: int,
     page_vectors: Callable[[list[int]], dict[int, np.ndarray]] | None = None,

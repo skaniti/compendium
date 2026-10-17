@@ -99,14 +99,20 @@ async def _maybe_weekly_shelf_maintenance(user_id: int) -> dict:
         return {"error": str(exc)[:200]}
 
 
+LABEL_HOOK_DRAIN_TIMEOUT_S = 900.0
+"""Longest the nightly catch-up waits for ingest labelling hooks queued by the sweep."""
+
+
 async def _maybe_label_catchup(user_id: int) -> dict:
     """Label up to ``label_catchup_limit`` active pages that have no label yet.
 
     Ingest-time labelling is fail-open, so a failed call leaves a page
     unlabelled for good; this retries a small batch each night. Only with
     ``label_first_enabled`` (default off = no-op, nothing imported); 0 turns it
-    off. Spend is recorded as ``page_labelling`` cost events by the labeller
-    itself, and also summed into the returned notes. Fail-open: an error is
+    off. Retries lowest content ids first, so content that can never be labelled
+    holds the head of the queue (no failure counter yet). Spend is recorded as
+    ``page_labelling`` cost events by the labeller itself, and also summed into the
+    returned notes. Fail-open: an error is
     returned in the notes, never raised.
     """
     if not getattr(settings, "label_first_enabled", False):
@@ -116,7 +122,15 @@ async def _maybe_label_catchup(user_id: int) -> dict:
         return {}
     try:
         from backend.db import page_label_repo
+        from backend.process_captures import drain_label_hooks
         from backend.services import page_labeller
+
+        # The sweep above queues ingest hooks that label these same pages; wait
+        # for them (bounded) so the catch-up does not pay for them twice.
+        try:
+            await asyncio.wait_for(drain_label_hooks(), timeout=LABEL_HOOK_DRAIN_TIMEOUT_S)
+        except TimeoutError:
+            logger.warning("label catch-up: ingest hooks still running; continuing anyway")
 
         ids = page_label_repo.get_unlabelled_content_ids(
             page_labeller.labeller_version(), user_id=user_id, limit=limit
