@@ -171,7 +171,8 @@ def labeller_prompt_text() -> str:
     hand-edited override containing a single brace would make ``get_prompt_raw``
     raise on every request. A missing key or an override that is not a string
     raises :class:`LabellerPromptError` (logged) instead of labelling with
-    something else.
+    something else. So does an override file that exists but does not parse, and an
+    empty override for the labeller key: neither falls back to the public prompt.
     """
     from backend.prompts import templates
 
@@ -181,12 +182,39 @@ def labeller_prompt_text() -> str:
         msg = f"labelling prompt {key!r} is not in the prompt registry"
         logger.error(msg)
         raise LabellerPromptError(msg)
-    override = templates._load_overrides().get(key)
-    if override is not None and not isinstance(override, str):
-        msg = f"override for {key!r} is not a string; fix the PROMPT_OVERRIDES_PATH file"
+    overrides = _read_overrides_strict(templates._overrides_path())
+    if key in overrides:
+        override = overrides[key]
+        if not isinstance(override, str) or not override.strip():
+            msg = (
+                f"override for {key!r} is not a non-empty string; fix or remove it in the "
+                "PROMPT_OVERRIDES_PATH file"
+            )
+            logger.error(msg)
+            raise LabellerPromptError(msg)
+        return override
+    return entry["template"]
+
+
+def _read_overrides_strict(path) -> dict:
+    """The override file as a dict; a file that exists but cannot be read raises.
+
+    ``templates._load_overrides`` returns ``{}`` for an unparsable file, which
+    would silently put the public prompt in place of the owner's.
+    """
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        msg = f"prompt override file {path} cannot be read ({type(exc).__name__}); fix it"
+        logger.error(msg)
+        raise LabellerPromptError(msg) from exc
+    if not isinstance(data, dict):
+        msg = f"prompt override file {path} is not a JSON object; fix it"
         logger.error(msg)
         raise LabellerPromptError(msg)
-    return override or entry["template"]
+    return data
 
 
 def prompt_fingerprint() -> str:

@@ -541,7 +541,7 @@ def test_unknown_prompt_key_raises_before_any_request(monkeypatch, caplog):
 
 def test_non_string_override_is_an_error_not_a_silent_fallback(monkeypatch, tmp_path):
     _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": ["not", "text"]})
-    with pytest.raises(pl.LabellerPromptError, match="not a string"):
+    with pytest.raises(pl.LabellerPromptError, match="non-empty string"):
         pl.labeller_prompt_text()
 
 
@@ -550,3 +550,36 @@ def test_label_content_ids_reports_the_prompt_error(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR):
         run = asyncio.run(pl.label_content_ids([1, 2], user_id=1))
     assert run.labels == {} and run.error and "LabellerPromptError" in run.error
+
+
+def test_unparsable_override_file_stops_labelling(monkeypatch, tmp_path, caplog):
+    path = tmp_path / "overrides.json"
+    path.write_text('{"page_annotation_v2": "half a prom', encoding="utf-8")
+    monkeypatch.setattr(settings, "prompt_overrides_path", str(path))
+    with (
+        caplog.at_level(logging.ERROR),
+        pytest.raises(pl.LabellerPromptError, match="cannot be read"),
+    ):
+        pl.labeller_prompt_text()
+    assert "cannot be read" in caplog.text
+    with pytest.raises(pl.LabellerPromptError):
+        pl.labeller_version()
+    path.write_text('["not", "an", "object"]', encoding="utf-8")
+    with pytest.raises(pl.LabellerPromptError, match="not a JSON object"):
+        pl.labeller_prompt_text()
+    run = asyncio.run(pl.label_content_ids([1], user_id=1))
+    assert run.error and "LabellerPromptError" in run.error
+
+
+@pytest.mark.parametrize("value", ["", "   \n"])
+def test_empty_override_is_an_error_not_the_public_prompt(monkeypatch, tmp_path, value):
+    _use_overrides(monkeypatch, tmp_path, {"page_annotation_v2": value})
+    with pytest.raises(pl.LabellerPromptError, match="non-empty"):
+        pl.labeller_prompt_text()
+
+
+def test_missing_override_file_or_other_keys_use_the_registry(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "prompt_overrides_path", str(tmp_path / "absent.json"))
+    assert pl.labeller_prompt_text() == PROMPTS["page_annotation_v2"]["template"]
+    _use_overrides(monkeypatch, tmp_path, {"other_prompt": ""})
+    assert pl.labeller_prompt_text() == PROMPTS["page_annotation_v2"]["template"]
