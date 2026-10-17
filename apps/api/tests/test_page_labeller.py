@@ -66,8 +66,47 @@ def test_prompt_listing_metadata_shape():
 def test_models_registered_with_list_prices():
     assert MODEL_PROVIDERS["claude-haiku-5-5"] == LLMProvider.ANTHROPIC
     assert MODEL_PROVIDERS["claude-sonnet-5-5"] == LLMProvider.ANTHROPIC
-    assert MODEL_PRICING["claude-haiku-5-5"] == {"input": 0.001, "output": 0.005}
-    assert MODEL_PRICING["claude-sonnet-5-5"] == {"input": 0.003, "output": 0.015}
+    assert MODEL_PRICING["claude-haiku-5-5"] == {"input": 0.0001, "output": 0.0005}
+    assert MODEL_PRICING["claude-sonnet-5-5"] == {"input": 0.002, "output": 0.01}
+
+
+@pytest.mark.parametrize("model", ["claude-haiku-5-5", "claude-sonnet-5-5"])
+def test_labeller_request_matches_the_installed_sdk(model):
+    """The kwargs the labeller sends must bind to the real SDK's create().
+
+    Other tests use a fake client, which accepts anything; this one binds the
+    request against the installed anthropic signature, so a parameter the SDK
+    does not have (e.g. ``temperature`` on anthropic 1.x) fails here.
+    """
+    import inspect
+
+    import anthropic
+
+    real = inspect.signature(anthropic.AsyncAnthropic(api_key="test").messages.create)
+    sent = {}
+
+    async def create(**kwargs):
+        real.bind(**kwargs)  # TypeError on an unknown parameter
+        sent.update(kwargs)
+        return SimpleNamespace(
+            content=[SimpleNamespace(text='{"items": []}')],
+            usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+        )
+
+    svc = LLMService()
+    svc._anthropic_client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    asyncio.run(
+        svc._complete_anthropic(
+            "user text",
+            model,
+            0,
+            100,
+            "system text",
+            extra_kwargs=pl._extra_kwargs(model),
+        )
+    )
+    assert "temperature" not in sent
+    assert sent["output_config"]["format"]["type"] == "json_schema"
 
 
 def _anthropic_service(captured):
@@ -86,7 +125,7 @@ def _anthropic_service(captured):
     return svc
 
 
-def test_anthropic_default_request_is_unchanged():
+def test_anthropic_default_request_has_no_sampling_params():
     captured = []
     svc = _anthropic_service(captured)
     resp = asyncio.run(
@@ -96,7 +135,6 @@ def test_anthropic_default_request_is_unchanged():
         {
             "model": "claude-haiku-4-5-20251001",
             "max_tokens": 50,
-            "temperature": 0.7,
             "messages": [{"role": "user", "content": "hi"}],
             "system": "sys",
         }
@@ -112,7 +150,7 @@ def test_anthropic_extra_kwargs_are_merged():
     assert captured[0]["thinking"] == {"type": "disabled"}
     assert captured[0]["output_config"] == {"format": {"type": "x"}}
     assert captured[0]["model"] == "claude-haiku-5-5"
-    assert resp.cost_usd == pytest.approx((1000 * 0.001 + 200 * 0.005) / 1000)
+    assert resp.cost_usd == pytest.approx((1000 * 0.0001 + 200 * 0.0005) / 1000)
 
 
 # --- request building ------------------------------------------------------
@@ -360,7 +398,7 @@ def test_estimate_cost_scales_measured_rates():
     est = pl.estimate_cost(8)
     assert est["pages"] == 8 and est["requests"] == 1
     assert est["input_tokens"] == 6114 and est["output_tokens"] == 1005
-    assert est["usd_list"] == pytest.approx((6114 * 0.001 + 1005 * 0.005) / 1000)
+    assert est["usd_list"] == pytest.approx((6114 * 0.0001 + 1005 * 0.0005) / 1000)
     assert est["usd_measured"] == pytest.approx(0.0008)
     big = pl.estimate_cost(800)
     assert big["requests"] == 100 and big["input_tokens"] == 611400

@@ -84,9 +84,9 @@ MODEL_PRICING = {
     "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
     "claude-sonnet-4-5-20250514": {"input": 0.003, "output": 0.015},
     "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},
-    # List prices $1/$5 and $3/$15 per million tokens
-    "claude-haiku-5-5": {"input": 0.001, "output": 0.005},
-    "claude-sonnet-5-5": {"input": 0.003, "output": 0.015},
+    # List prices $0.10/$0.50 and $2/$10 per million tokens
+    "claude-haiku-5-5": {"input": 0.0001, "output": 0.0005},
+    "claude-sonnet-5-5": {"input": 0.002, "output": 0.01},
     # HuggingFace Inference API - free tier
     "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0},
     "mistralai/Mixtral-8x7B-Instruct-v0.1": {"input": 0.0, "output": 0.0},
@@ -396,10 +396,12 @@ class LLMService:
         if not self._anthropic_client:
             raise RuntimeError("Anthropic client not initialized. Set ANTHROPIC_API_KEY.")
 
+        # No ``temperature``: the anthropic SDK 1.x ``messages.create`` has no
+        # sampling parameters, and current Claude models reject non-default
+        # values, so ``temperature`` is accepted by ``complete`` but unused here.
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system_prompt:
@@ -593,7 +595,6 @@ class LLMService:
         api_kwargs = {
             "model": model,
             "max_tokens": kwargs.get("max_tokens", 200),
-            "temperature": kwargs.get("temperature", 0.0),
             "messages": [{"role": "user", "content": prompt}],
             "tools": anthropic_tools,
         }
@@ -752,7 +753,6 @@ class LLMService:
         api_kwargs = {
             "model": model,
             "max_tokens": kwargs.get("max_tokens", 1000),
-            "temperature": kwargs.get("temperature", 0.7),
             "messages": [{"role": "user", "content": prompt}],
             "tools": anthropic_tools,
         }
@@ -813,7 +813,6 @@ class LLMService:
         second_api_kwargs = {
             "model": model,
             "max_tokens": kwargs.get("max_tokens", 1000),
-            "temperature": kwargs.get("temperature", 0.7),
             "messages": messages,
             "tools": anthropic_tools,
         }
