@@ -362,6 +362,32 @@ async def require_admin_not_viewing(
     return user_id
 
 
+SHUTDOWN_LABEL_DRAIN_TIMEOUT_S = 30.0
+"""How long shutdown waits for in-flight label-first ingest hooks before closing the pool."""
+
+
+async def _drain_label_hooks_on_shutdown() -> None:
+    """Let queued labelling hooks finish (bounded) so they do not hit a closed pool.
+
+    Nothing to do unless the ingest module was loaded and hooks were queued
+    (label-first flag on). Never raises.
+    """
+    import sys
+
+    mod = sys.modules.get("backend.process_captures")
+    if mod is None or not getattr(mod, "_label_futures", None):
+        return
+    try:
+        await asyncio.wait_for(mod.drain_label_hooks(), timeout=SHUTDOWN_LABEL_DRAIN_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning(
+            "shutdown: label hooks still running after %.0fs; closing anyway",
+            SHUTDOWN_LABEL_DRAIN_TIMEOUT_S,
+        )
+    except Exception:
+        logger.exception("shutdown: draining label hooks failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
@@ -439,6 +465,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Compendium API...")
+    await _drain_label_hooks_on_shutdown()
     _log_ring_buffer.stop_db_writer(timeout=5.0)
     close_pool()
 
