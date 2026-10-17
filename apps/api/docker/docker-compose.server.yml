@@ -140,6 +140,12 @@ services:
       HDBSCAN_SELECTION_METHOD: "${HDBSCAN_SELECTION_METHOD:-eom}"
       CLUSTER_IDENTITY_ENABLED: "${CLUSTER_IDENTITY_ENABLED:-false}"
       SUPERCLUSTER_MODE: "${SUPERCLUSTER_MODE:-keywords}"
+      # Label-first grouping: off until the owner's blind audit passes.
+      LABEL_FIRST_ENABLED: "${LABEL_FIRST_ENABLED:-false}"
+      # Prompt override file (the Prompts view editor and the labeller read
+      # it). Empty = editing off. Point it inside the prompts volume below,
+      # e.g. /var/lib/compendium-prompts/overrides.json.
+      PROMPT_OVERRIDES_PATH: "${PROMPT_OVERRIDES_PATH:-}"
       # Fresh-DB switches -- see the big comment block above for why these
       # are literals, not `${VAR}` passthroughs.
       RUN_MIGRATIONS: "1"
@@ -161,6 +167,8 @@ services:
       # clone-and-run stack's (compendium_hf_cache) so the two never collide
       # if ever run on the same host.
       - compendium_hf_cache_server:/root/.cache/huggingface
+      # Writable home for PROMPT_OVERRIDES_PATH, kept across recreates.
+      - compendium_prompts_server:/var/lib/compendium-prompts
       # JSON file log; host dir owned by section-22 (<user>:adm 2750).
       - /var/log/compendium-ops/api:/var/log/compendium-api
     healthcheck:
@@ -216,6 +224,7 @@ networks:
 
 volumes:
   compendium_hf_cache_server:
+  compendium_prompts_server:
 
 # ── dq-worker: NOT defined here, deliberately ────────────────────────────
 # apps/api's image has no Node/Claude CLI (see apps/api/Dockerfile's header
