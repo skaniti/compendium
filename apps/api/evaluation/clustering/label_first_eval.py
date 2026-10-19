@@ -292,8 +292,8 @@ def run_label_first(
     mode: str = "topic_map",
     min_cluster_size: int = 3,
     soft_cap: int = 40,
-    attach: float = 0.80,
-    ask: float = 0.65,
+    attach: float = 0.50,
+    ask: float = 0.35,
     as_of: str | None = None,
     model_key: str | None = None,
 ) -> dict:
@@ -411,8 +411,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mode", choices=("topic_map", "canonicaliser"), default="topic_map")
     ap.add_argument("--min-cluster-size", type=int, default=3)
     ap.add_argument("--soft-cap", type=int, default=40)
-    ap.add_argument("--attach", type=float, default=0.80)
-    ap.add_argument("--ask", type=float, default=0.65)
+    ap.add_argument("--attach", type=float, default=0.50)
+    ap.add_argument("--ask", type=float, default=0.35)
     ap.add_argument("--model-key", default=None, help="embedding cache key (default from settings)")
     ap.add_argument("--baseline-run", type=int, help="stored run to score on the same page set")
     ap.add_argument(

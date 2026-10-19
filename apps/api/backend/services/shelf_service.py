@@ -49,8 +49,8 @@ AskFn = Callable[[str, dict], bool]
 
 @dataclass
 class ShelfConfig:
-    attach: float = 0.80
-    ask: float = 0.65
+    attach: float = 0.50
+    ask: float = 0.35
     merge_distance: float = 0.15
     soft_cap: int = 40
     min_cluster_size: int = 3
@@ -60,8 +60,8 @@ class ShelfConfig:
         """The single place settings are read (defaults keep this branch standalone)."""
         g = lambda name, default: getattr(settings, name, default)
         return cls(
-            attach=float(g("shelf_attach_threshold", 0.80)),
-            ask=float(g("shelf_ask_threshold", 0.65)),
+            attach=float(g("shelf_attach_threshold", 0.50)),
+            ask=float(g("shelf_ask_threshold", 0.35)),
             merge_distance=float(g("shelf_merge_distance", 0.15)),
             soft_cap=int(g("shelf_soft_cap", 40)),
             min_cluster_size=int(g("shelf_min_cluster_size", 3)),

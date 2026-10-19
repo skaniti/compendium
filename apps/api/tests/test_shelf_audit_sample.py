@@ -13,6 +13,7 @@ import pytest
 
 from backend.config.settings import settings
 from backend.scripts import shelf_audit_sample as sa
+from backend.services.shelf_service import ShelfConfig
 
 
 def _vec(deg):
@@ -101,7 +102,9 @@ def test_in_memory_build_attach_create_and_ask_band_counted():
         cand(4, "Mid Topic"),  # cos 0.70 to alpha -> ask band, declined in dry run -> own shelf
         cand(5, "Alpha Shelf"),  # same string -> memo
     ]
-    pool, stats = sa.build_shelves_in_memory(cands, fake_embed)
+    pool, stats = sa.build_shelves_in_memory(
+        cands, fake_embed, ShelfConfig(attach=0.80, ask=0.65)
+    )
     names = {s.candidate.content_id: s.shelf_name for s in pool}
     assert names[1] == names[2] == names[5] == "Alpha Shelf"
     assert names[3] == "Beta Shelf" and names[4] == "Mid Topic"

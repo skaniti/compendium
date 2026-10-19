@@ -251,10 +251,10 @@ class Settings(BaseSettings):
     """Nightly maintenance labels up to this many active pages that have no label
     at the current version (ingest-time labelling is fail-open; this is the
     retry). 0 disables it. Env ``LABEL_CATCHUP_LIMIT``; only with the flag on."""
-    shelf_attach_threshold: float = 0.80
+    shelf_attach_threshold: float = 0.50
     """Cosine similarity at or above which a subtopic string attaches to the
     nearest existing shelf without asking the model."""
-    shelf_ask_threshold: float = 0.65
+    shelf_ask_threshold: float = 0.35
     """Cosine in [ask, attach) is ambiguous: the model is asked whether the
     string belongs to the nearest shelf. Below it a new shelf is created."""
     shelf_merge_distance: float = 0.15

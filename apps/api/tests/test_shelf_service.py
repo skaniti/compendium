@@ -185,7 +185,7 @@ def test_memory_store_mints_unique_uuid_strings():
 
 def test_config_from_settings_defaults_and_overrides(monkeypatch):
     cfg = ShelfConfig.from_settings()
-    assert (cfg.attach, cfg.ask, cfg.soft_cap) == (0.80, 0.65, 40)
+    assert (cfg.attach, cfg.ask, cfg.soft_cap) == (0.50, 0.35, 40)
     monkeypatch.setattr(ss, "settings", SimpleNamespace(shelf_soft_cap=12))
     assert ShelfConfig.from_settings().soft_cap == 12
 
@@ -329,7 +329,7 @@ def _ask_world(monkeypatch):
     monkeypatch.setattr("backend.db.shelf_repo.get_shelf_pages", lambda uid: {})
     monkeypatch.setattr(ss, "_complete_blocking", lambda p: _completion("yes", 0.002, 120, 3))
     canon = ShelfCanonicaliser(
-        ShelfIndex(), embed, ss.SameShelfAsker(), ShelfConfig(), MemoryShelfStore(1)
+        ShelfIndex(), embed, ss.SameShelfAsker(), ShelfConfig(attach=0.80, ask=0.65), MemoryShelfStore(1)
     )
     monkeypatch.setattr(ss, "_build_canonicaliser", lambda uid: canon)
     events = []
