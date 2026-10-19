@@ -71,16 +71,14 @@ def settings_overrides(overrides: dict[str, object]) -> Iterator[None]:
 def config_snapshot(n_pages: int) -> dict:
     """The clustering settings that determine a partition, as recorded in a run."""
     from backend.config.settings import settings
-    from backend.services.clustering_service import MIN_CLUSTER_SIZE_DIVISOR
+    from backend.services.clustering_service import min_cluster_size_for
 
     return {
         "embedding_model": settings.clustering_embedding_model,
         "text_contract": settings.clustering_text_contract,
         "model_key": model_key_for(settings),
         "min_cluster_size_floor": settings.hdbscan_min_cluster_size,
-        "effective_min_cluster_size": max(
-            settings.hdbscan_min_cluster_size, n_pages // MIN_CLUSTER_SIZE_DIVISOR
-        ),
+        "effective_min_cluster_size": min_cluster_size_for(n_pages),
         "min_samples": settings.hdbscan_min_samples,
         "selection_method": settings.hdbscan_selection_method,
         "selection_epsilon": settings.hdbscan_selection_epsilon,

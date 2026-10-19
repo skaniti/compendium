@@ -78,7 +78,7 @@ def supercluster_geometry(labels: np.ndarray, emb: np.ndarray, group_threshold: 
 
 
 def run_hdbscan_prod(ids: list[int], emb: np.ndarray) -> dict:
-    from backend.services.clustering_service import MIN_CLUSTER_SIZE_DIVISOR, ClusteringService
+    from backend.services.clustering_service import ClusteringService, min_cluster_size_for
     from evaluation.clustering.harness import settings_overrides
 
     emb = np.asarray(emb, dtype=np.float32)
@@ -96,6 +96,7 @@ def run_hdbscan_prod(ids: list[int], emb: np.ndarray) -> dict:
     with settings_overrides(PROD_KNOBS):
         from backend.config.settings import settings
         floor = settings.hdbscan_min_cluster_size
+        eff_min_size = min_cluster_size_for(n)
         ClusteringService._reduce_embeddings = staticmethod(timed)
         t0 = time.perf_counter()
         try:
@@ -112,7 +113,7 @@ def run_hdbscan_prod(ids: list[int], emb: np.ndarray) -> dict:
         "assign": assign,
         "super": super_,
         "meta": {
-            "min_cluster_size": max(floor, n // MIN_CLUSTER_SIZE_DIVISOR),
+            "min_cluster_size": eff_min_size,
             "min_cluster_size_floor": floor,
             "n_clusters": int(len(set(labels.tolist()) - {-1})),
             "n_noise": int((labels == -1).sum()),

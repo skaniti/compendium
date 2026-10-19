@@ -349,6 +349,13 @@ class Settings(BaseSettings):
     (private), plan.md Finding 3, for the gate-permissiveness x
     cluster-size coupling rationale."""
 
+    hdbscan_min_cluster_size_cap: int = 25
+    """Upper bound on the corpus-scaled HDBSCAN min cluster size (0 = no cap).
+    Without it the ``n_pages // 150`` term grows linearly and merges whole
+    topics into a few giant groups on large corpora. The floor
+    (``hdbscan_min_cluster_size``) still wins if it is larger than the cap.
+    Env var ``HDBSCAN_MIN_CLUSTER_SIZE_CAP``."""
+
     cluster_identity_enabled: bool = False
     """Batch B (4a): match each recluster run's clusters to the previous run
     by member page_content_id Jaccard, carry stable_id + name forward, and

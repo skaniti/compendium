@@ -59,7 +59,22 @@ NAMING_SAMPLE_SIZE = 10
 MAX_EDGES_PER_CLUSTER = 3
 """Similarity edges kept per cluster, strongest first."""
 MIN_CLUSTER_SIZE_DIVISOR = 150
-"""HDBSCAN's min cluster size scales as max(setting, n_pages // this)."""
+"""HDBSCAN's min cluster size scales as
+max(setting, min(n_pages // this, settings.hdbscan_min_cluster_size_cap))."""
+
+
+def min_cluster_size_for(n_pages: int) -> int:
+    """HDBSCAN ``min_cluster_size`` for a corpus of ``n_pages`` clusterable pages.
+
+    ``n_pages // MIN_CLUSTER_SIZE_DIVISOR``, bounded above by
+    ``settings.hdbscan_min_cluster_size_cap`` (0 = no cap) and below by the
+    ``settings.hdbscan_min_cluster_size`` floor.
+    """
+    scaled = n_pages // MIN_CLUSTER_SIZE_DIVISOR
+    cap = settings.hdbscan_min_cluster_size_cap
+    if cap > 0:
+        scaled = min(scaled, cap)
+    return max(settings.hdbscan_min_cluster_size, scaled)
 FEATURED_SINGLETONS_DENSITY_PCT = 0.20
 """Fraction of real cluster count to surface as featured singletons (the
 "starfield" of representative HDBSCAN-noise pages). At 20% with N=65 real
@@ -1821,15 +1836,16 @@ class ClusteringService:
         """
         n_pages = len(embeddings)
         # Read tunable floor from settings; runtime scales up with corpus
-        # size via n_pages // MIN_CLUSTER_SIZE_DIVISOR (so very large compendiums get tighter
-        # clusters automatically). Override via HDBSCAN_MIN_CLUSTER_SIZE env
+        # size via n_pages // MIN_CLUSTER_SIZE_DIVISOR, capped by hdbscan_min_cluster_size_cap
+        # (see min_cluster_size_for). Override via HDBSCAN_MIN_CLUSTER_SIZE env
         # var. See backend/config/settings.py::Settings.hdbscan_min_cluster_size
         # for the gate-permissiveness x cluster-size coupling rationale.
-        min_size = max(settings.hdbscan_min_cluster_size, n_pages // MIN_CLUSTER_SIZE_DIVISOR)
+        min_size = min_cluster_size_for(n_pages)
         umap_dims = settings.clustering_umap_dims
         logger.info(
             f"HDBSCAN: min_cluster_size={min_size} (settings floor "
-            f"{settings.hdbscan_min_cluster_size} vs scaled {n_pages // MIN_CLUSTER_SIZE_DIVISOR}), "
+            f"{settings.hdbscan_min_cluster_size} vs scaled {n_pages // MIN_CLUSTER_SIZE_DIVISOR}, "
+            f"cap {settings.hdbscan_min_cluster_size_cap or 'off'}), "
             f"min_samples={settings.hdbscan_min_samples}, "
             f"selection={settings.hdbscan_selection_method}, "
             f"epsilon={settings.hdbscan_selection_epsilon}, "

@@ -59,11 +59,11 @@ def edge_summary(weights: list[float]) -> dict:
 
 
 def effective_min_cluster_size(considered: int | None) -> int | None:
-    from backend.services.clustering_service import MIN_CLUSTER_SIZE_DIVISOR
+    from backend.services.clustering_service import min_cluster_size_for
 
     if considered is None:
         return None
-    return max(settings.hdbscan_min_cluster_size, considered // MIN_CLUSTER_SIZE_DIVISOR)
+    return min_cluster_size_for(considered)
 
 
 def build_config(considered: int | None, *, admin: bool = False) -> dict:
