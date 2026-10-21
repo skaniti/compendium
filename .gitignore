@@ -79,6 +79,8 @@ apps/api/data/backups/
 apps/api/data/logs/
 # agent_trace_recorder's on-disk archive of live chat traces (real queries).
 apps/api/data/agent-traces/
+# processed-capture dumps (backend/api/main.py CAPTURES_DIR): real browsing data.
+apps/api/data/captures/
 apps/api/tests/test_summary.txt
 # clustering eval harness run records (evaluation/clustering): page ids and
 # metrics by default, member titles with --with-titles -- never product.
