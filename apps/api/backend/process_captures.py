@@ -361,14 +361,27 @@ def _label_persisted_pages(response, persisted_results: list) -> None:
         )
 
 
+def _skip_archive_reason(content_summary: str | None) -> str:
+    """Archive reason for a result the pipeline skipped.
+
+    Stage-0 pre-filters (``main.process_capture``) mark their skips with a summary
+    that starts "Domain skipped" or "URL pattern skipped"; those never saw the LLM
+    gate. Any other skip is a gate decision.
+    """
+    summary = content_summary or ""
+    if "Domain skipped" in summary:
+        return "domain_skip"
+    if summary.startswith("URL pattern skipped"):
+        return "url_skip"
+    return "skip_gate"
+
+
 def _persist_single_page(page_row: dict, result, response) -> None:
     """Persist a single page's processing results to the database."""
     # Determine status
     if result.processing_depth == "skipped":
         status = "archived"
-        archive_reason = (
-            "domain_skip" if "Domain skipped" in (result.content_summary or "") else "skip_gate"
-        )
+        archive_reason = _skip_archive_reason(result.content_summary)
     elif result.content_summary and _BOILERPLATE_SUMMARY_RE.match(result.content_summary):
         # Untracked-domain catchall pages with no usable text persist as the
         # generic "Page browsed outside API tool scope for N seconds" stub

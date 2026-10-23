@@ -60,10 +60,11 @@ PLAN = (
 )
 
 # Flow-path rows (pipeline flow redesign): (kind, archive_reason, count, depth, human_status).
-# kind "url_pattern" rows are rule-filter skips recognised by content_summary;
-# the rest exercise before-gate manual archives and processed-then-archived pages.
+# kind "url_pattern" rows are Stage-0 URL-pattern skips (archive_reason 'url_skip', summary
+# "URL pattern skipped: ..."); the rest exercise before-gate manual archives and
+# processed-then-archived pages.
 FLOW_PLAN = (
-    ("url_pattern", "skip_gate", 8, "skipped", None),
+    ("url_pattern", "url_skip", 8, "skipped", None),
     ("manual_early", None, 6, None, "archived"),
     ("processed_manual", None, 3, "processed", "archived"),
     ("processed_duplicate", "dedupe_fold", 2, "processed", None),

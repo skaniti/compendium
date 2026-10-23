@@ -760,7 +760,7 @@ def get_skip_reasoning_counts(user_id: int, limit: int = 15) -> list[tuple[str, 
 
 
 def get_skip_method_counts(user_id: int) -> dict[str, int]:
-    """Count archived pages by skip method (domain_skip vs skip_gate)."""
+    """Count archived pages by skip method (skip_gate, domain_skip, url_skip, ...)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -892,6 +892,7 @@ def get_archive_health_summary(
 DEFAULT_VALIDATION_CONFIG = {
     "skip_gate": 10,
     "domain_skip": 5,
+    "url_skip": 5,
     "dedup": 5,
     "trivial_capture": 3,
     "manual_exclusion": 2,

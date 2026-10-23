@@ -29,7 +29,8 @@ def test_distribution_and_depths():
     rows = build_augment_rows(d["pages"], d["captures"])
     by_reason = Counter(r["archive_reason"] for r in rows)
     assert by_reason == {
-        "skip_gate": 40 + 8,
+        "skip_gate": 40,
+        "url_skip": 8,
         "domain_skip": 20,
         "placeholder_no_content": 10,
         "dedup": 6,
@@ -116,7 +117,7 @@ def test_flow_path_rows():
     url_pat = [r for r in rows if (r["content_summary"] or "").startswith("URL pattern skipped")]
     assert len(url_pat) == 8
     for r in url_pat:
-        assert r["status"] == "archived" and r["archive_reason"] == "skip_gate"
+        assert r["status"] == "archived" and r["archive_reason"] == "url_skip"
         assert r["processing_depth"] == "skipped"
         assert r["skip_reasoning"] is None and r["skip_category"] is None
         assert r["content_summary"].startswith(f"URL pattern skipped: {r['domain']} (")

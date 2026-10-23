@@ -31,7 +31,12 @@ TOP_DOMAINS = 3
 
 # Flow classification (spec §13.2) — the ONLY definition; summary, timeline and pages all use it.
 _EFFECTIVE_STATUS = "COALESCE(p.human_status, p.status)"
-_URL_PATTERN = "p.content_summary LIKE 'URL pattern skipped%%'"
+# Stage-0 URL-pattern skips are archive_reason 'url_skip' (migration 062). TRANSITIONAL: rows stored
+# before it are 'skip_gate' (or NULL, if restored since) until backend/scripts/backfill_url_skip_reason.py
+# has run on the database; the summary text keeps recognising them so the flow stays right in between.
+# Delete _LEGACY_URL_PATTERN once that script's output shows no such rows left.
+_LEGACY_URL_PATTERN = "p.content_summary LIKE 'URL pattern skipped%%'"
+_URL_PATTERN = f"(p.archive_reason = 'url_skip' OR {_LEGACY_URL_PATTERN})"
 OUTCOME_SQL = f"""(CASE
   WHEN p.status = 'pending' THEN 'pending'
   WHEN p.processing_depth = 'skipped' AND (p.archive_reason = 'domain_skip' OR {_URL_PATTERN}) THEN 'rule_filter'

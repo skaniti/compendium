@@ -462,6 +462,27 @@ class TestValidationBatch:
         assert reasons.count("dedup") == 3  # all available
         assert reasons.count("manual_exclusion") == 1  # all available
 
+    def test_url_skip_pages_have_their_own_stratum(self):
+        user = _make_user()
+        cap = _make_capture(user["id"])
+        pages = [
+            {
+                "url": f"https://example.org/u{i}",
+                "title": f"u{i}",
+                "domain": "example.org",
+                "visited_at": datetime(2026, 3, 15, 10, i, tzinfo=timezone.utc),
+            }
+            for i in range(8)
+        ]
+        ids = page_repo.insert_pages(cap["id"], pages)
+        for i, pid in enumerate(ids):
+            page_repo.archive_page(pid, "url_skip" if i < 7 else "skip_gate")
+
+        reasons = [r["archive_reason"] for r in page_repo.generate_validation_batch(user["id"])]
+        # URL-pattern skips are Stage-0 rule decisions: sampled apart from the LLM gate's.
+        assert reasons.count("url_skip") == 5
+        assert reasons.count("skip_gate") == 1
+
     def test_excludes_previously_reviewed(self):
         from backend.db import annotation_repo
 

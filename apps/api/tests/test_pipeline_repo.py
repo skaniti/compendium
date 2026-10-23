@@ -281,9 +281,14 @@ def _url_skip(ts, domain="example.org"):
         "domain": domain,
         "status": "archived",
         "depth": "skipped",
-        "reason": "skip_gate",
+        "reason": "url_skip",
         "content_summary": _URL_PATTERN_SUMMARY,
     }
+
+
+def _legacy_url_skip(ts, domain="example.org"):
+    """A URL-pattern skip stored before migration 062 (until the backfill runs)."""
+    return {**_url_skip(ts, domain), "reason": "skip_gate"}
 
 
 def test_classification_paths(uid):
@@ -303,9 +308,10 @@ def test_classification_paths(uid):
                 "visited_at": t,
                 "status": "archived",
                 "depth": "skipped",
-                "reason": "skip_gate",
+                "reason": "url_skip",
                 "content_summary": "URL pattern skipped: b (4s)",
             },
+            _legacy_url_skip(t),
             {
                 "visited_at": t,
                 "status": "archived",
@@ -340,7 +346,7 @@ def test_classification_paths(uid):
     assert _details(f) == {
         ("pending", "waiting"): 1,
         ("rule_filter", "domain"): 1,
-        ("rule_filter", "url_pattern"): 1,
+        ("rule_filter", "url_pattern"): 2,
         ("gate", "login_wall"): 1,
         ("gate", "uncategorized"): 1,
         ("processed", "active"): 2,
@@ -367,6 +373,13 @@ def test_flow_reconciles_all_ranges(uid):
         {"status": "archived", "depth": "skipped", "reason": "domain_skip"},
         {"status": "archived", "depth": "skipped", "reason": "skip_gate", "category": "web_app"},
         {"status": "archived", "depth": "skipped", "reason": "skip_gate"},
+        {
+            "status": "archived",
+            "depth": "skipped",
+            "reason": "url_skip",
+            "content_summary": _URL_PATTERN_SUMMARY,
+        },
+        {"status": "archived", "depth": "skipped", "reason": "url_skip"},
         {
             "status": "archived",
             "depth": "skipped",
@@ -404,9 +417,10 @@ def test_flow_reconciles_all_ranges(uid):
     assert _flow(uid, "all")["total"] == 30
 
 
-def test_url_pattern_skip_is_rule_filter_everywhere(uid):
+@pytest.mark.parametrize("make_url_skip", [_url_skip, _legacy_url_skip], ids=["url_skip", "legacy"])
+def test_url_pattern_skip_is_rule_filter_everywhere(uid, make_url_skip):
     ts = NOW - timedelta(hours=2)
-    _add(uid, [_url_skip(ts), _skip(ts, "login_wall")])
+    _add(uid, [make_url_skip(ts), _skip(ts, "login_wall")])
     f = _flow(uid, "7d")
     assert _details(f) == {("rule_filter", "url_pattern"): 1, ("gate", "login_wall"): 1}
     last = pipeline_repo.get_timeline(uid, "7d", "UTC", now=NOW)["buckets"][-1]
@@ -417,6 +431,26 @@ def test_url_pattern_skip_is_rule_filter_everywhere(uid):
     by = {r["detail"]: r for r in rows}
     assert by["url_pattern"]["outcome"] == "rule_filter"
     assert by["login_wall"]["outcome"] == "gate"
+
+
+def test_url_skip_reason_classifies_without_the_summary_text(uid):
+    ts = NOW - timedelta(hours=2)
+    _add(uid, [{**_url_skip(ts), "content_summary": None}, _skip(ts)])
+    f = _flow(uid, "7d")
+    assert _details(f) == {("rule_filter", "url_pattern"): 1, ("gate", "uncategorized"): 1}
+
+
+def test_restored_legacy_url_skip_stays_rule_filter(uid):
+    # restore_page nulls archive_reason; the summary text still marks the row (transitional).
+    ts = NOW - timedelta(hours=2)
+    _add(uid, [{**_url_skip(ts), "reason": None, "status": "active"}])
+    assert _details(_flow(uid, "7d")) == {("rule_filter", "url_pattern"): 1}
+
+
+def test_gate_skip_with_unrelated_summary_is_not_a_url_pattern_skip(uid):
+    ts = NOW - timedelta(hours=2)
+    _add(uid, [{**_skip(ts, "login_wall"), "content_summary": "A page about URL patterns"}])
+    assert _details(_flow(uid, "7d")) == {("gate", "login_wall"): 1}
 
 
 def test_human_override_fate(uid):

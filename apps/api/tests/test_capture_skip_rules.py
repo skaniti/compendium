@@ -152,3 +152,40 @@ def test_stage0_domain_skip_still_archives_with_domain_skip_reason():
     kwargs = upd.call_args.kwargs
     assert upd.call_args.args[1] == "archived"
     assert kwargs["archive_reason"] == "domain_skip"
+
+
+# ── _persist_single_page: Stage-0 URL-pattern skips get their own reason ─────
+
+
+def test_stage0_url_pattern_skip_archives_with_url_skip_reason():
+    result = _result("catchall", "skipped", "URL pattern skipped: github.com (5s)")
+    upd, redact, goc = _run_persist(result)
+    kwargs = upd.call_args.kwargs
+    assert upd.call_args.args[1] == "archived"
+    assert kwargs["archive_reason"] == "url_skip"
+    assert kwargs["processing_depth"] == "skipped"
+
+
+def test_llm_gate_skip_keeps_skip_gate_reason():
+    result = _result("skipped", "skipped", "A forum thread", reasoning="search results page")
+    upd, redact, goc = _run_persist(result)
+    assert upd.call_args.kwargs["archive_reason"] == "skip_gate"
+
+
+def test_gate_skip_mentioning_url_pattern_mid_text_stays_skip_gate():
+    # Only the Stage-0 prefix counts, not any summary that happens to contain the phrase.
+    result = _result(
+        "skipped", "skipped", "Notes on a URL pattern skipped by the crawler", reasoning="stub"
+    )
+    upd, redact, goc = _run_persist(result)
+    assert upd.call_args.kwargs["archive_reason"] == "skip_gate"
+
+
+def test_stage0_summary_texts_match_what_stage0_emits():
+    # The persist mapping reads the Stage-0 summaries main.process_capture writes; if
+    # either side's wording changes, URL/domain skips would fall back to skip_gate.
+    import inspect
+
+    src = inspect.getsource(main.process_capture)
+    assert 'content_summary=f"Domain skipped' in src
+    assert 'content_summary=f"URL pattern skipped:' in src
