@@ -125,7 +125,7 @@ npm run test:extension
 - **Android collector:** `apps/android`, a GeckoView-based browser that captures sessions and POSTs them to `apps/api`, same as the extension. Builds via the Gradle wrapper (`./gradlew assembleRelease`, producing unsigned per-ABI APKs for arm64-v8a and x86_64); release signing is done separately.
 - **Dev views:** at `/dev/<view>`, opened from the header's Dev button. Ported so far:
   - Overview: `/api/overview/summary`, `/api/overview/timeline`
-  - Pipeline: `/api/pipeline/summary`, `/api/pipeline/timeline`, `/api/pipeline/pages`
+  - Pipeline: `/api/pipeline/summary`, `/api/pipeline/timeline`, `/api/pipeline/pages`, `/api/pipeline/content-join-check` (the latest nightly page/content join check)
   - Clusters: `/api/clusters/summary`, `/api/clusters/{id}/pages`, `/api/clusters/unclustered`
   - Prompts: `/api/prompts/summary`, `/api/prompts/templates/{name}`, plus admin-only override and evaluation-history routes
 - **Roles:** the graph's debug overlay (the noise toggle and the view-demo/return-to-admin controls) appears only for an admin or an admin viewing as demo. The demo-account and view-as tooling exists for the hosted deployment and is off by default, behind `DEMO_ROLE_TOOLING` (stub) and `NEXT_PUBLIC_DEMO_ROLE_TOOLING` (frontend); `scripts/dev.sh` turns both on. `npm run demo` signs in automatically and never shows `/login`. On the hosted demo, `/login` shows only the Enter demo button; the Docker stack uses its password form.

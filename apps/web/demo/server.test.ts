@@ -1776,6 +1776,15 @@ describe("pipeline routes (flow contract, computed from the recorded pages)", ()
     });
   });
 
+  it("content-join-check: a clean result stamped with the demo clock, no tz or range needed", async () => {
+    await withNow(NOW_EOD, async (g) => {
+      const res = await g("/api/pipeline/content-join-check");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ state: "clean", checked_at: "2026-10-01T23:59:59.000Z", count: 0, page_ids: [] });
+      expect((await g("/api/pipeline/content-join-check?range=7d&tz=UTC")).status).toBe(200);
+    });
+  });
+
   it("the retired skip-trends and archive-health routes are gone", async () => {
     expect((await get("/api/pipeline/skip-trends")).status).toBe(404);
     expect((await get("/api/analytics/archive-health")).status).toBe(404);

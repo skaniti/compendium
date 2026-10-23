@@ -1002,6 +1002,16 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       },
     },
 
+    // Nightly page/content join check: the demo corpus has no mis-joined pages, so the
+    // stub always reports a clean check, stamped with the demo clock. Not range-scoped.
+    {
+      method: "GET",
+      pattern: /^\/api\/pipeline\/content-join-check$/,
+      handler: (req, res) => {
+        sendJson(res, 200, { state: "clean", checked_at: getNow().toISOString(), count: 0, page_ids: [] });
+      },
+    },
+
     // Overview dev view: demo-visitable reads, computed like the pipeline routes.
     {
       method: "GET",
