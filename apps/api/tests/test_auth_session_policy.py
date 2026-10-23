@@ -558,6 +558,29 @@ class TestRefreshReuseGraceWindow:
         assert rec["revoke_all"] == []
         assert dict(rec["audit"])["auth.refresh.reuse_detected"]["grace_window"] is True
 
+    def test_losing_the_claim_to_a_logout_is_a_plain_refusal_not_a_theft_alarm(self, monkeypatch):
+        """The request read the token while it was LIVE, then a logout or
+        revoke-all revoked it before the rotation claim. That is not a replay:
+        refuse the request (normal refresh failure) without revoking every
+        session and trusted browser, and without minting."""
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=None, revoked_by_rotation=False)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+        live = dict(rec["stored"], revoked_at=None)
+        reads = iter([live, rec["stored"]])
+        monkeypatch.setattr(
+            "backend.db.auth_repo.get_refresh_token", lambda token_hash: next(reads)
+        )
+        monkeypatch.setattr(
+            "backend.db.auth_repo.mark_refresh_token_rotated", lambda token_hash: False
+        )
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == []
+        assert rec["browsers"] == []
+        assert rec["audit"] == []
+        assert save_calls == []
+
     def test_first_use_marks_the_token_rotated_not_just_revoked(self, monkeypatch):
         _stub_rotation(monkeypatch, remembered=False, role="user")
         _capture_save_refresh_token(monkeypatch)

@@ -236,6 +236,11 @@ def rotate_refresh_token(
             stored = auth_repo.get_refresh_token(token_hash)
             if stored is None or stored["revoked_at"] is None:
                 return None
+            if stored.get("rotated_at") is None:
+                # Not a rotation: a logout or revoke-all revoked it after we
+                # read it live. This request is not a replay, so refuse it
+                # like any dead token without the theft response.
+                return None
 
     grace_age: float | None = None
     if not claimed:

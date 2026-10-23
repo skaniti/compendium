@@ -248,12 +248,14 @@ def mark_refresh_token_rotated(token_hash: str) -> bool:
 
 def session_revoked_since_rotation(user_id: int, rotated_at: datetime) -> bool:
     """True if any refresh token of the account was revoked WITHOUT a rotation
-    (logout, revoke-all, expiry) at or after ``rotated_at``.
+    (logout, revoke-all) at or after ``rotated_at``.
 
-    The reuse grace window uses this so a deliberate sign-out cannot be undone
-    by replaying an older token inside the window. Account-wide on purpose: an
-    unrelated sign-out in the same few seconds makes the replay fall back to
-    the full-revocation path (fail safe)."""
+    Only tokens that were still live when revoked count (``expires_at >
+    revoked_at``): presenting an expired token revokes it too, but that is
+    housekeeping, not a sign-out. The reuse grace window uses this so a
+    deliberate sign-out cannot be undone by replaying an older token inside
+    the window. Account-wide on purpose: an unrelated sign-out in the same few
+    seconds makes the replay fall back to the full-revocation path (fail safe)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -261,6 +263,7 @@ def session_revoked_since_rotation(user_id: int, rotated_at: datetime) -> bool:
                 SELECT EXISTS (
                     SELECT 1 FROM refresh_tokens
                     WHERE user_id = %s AND rotated_at IS NULL AND revoked_at >= %s
+                      AND expires_at > revoked_at
                 )
                 """,
                 (user_id, rotated_at),

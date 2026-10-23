@@ -134,6 +134,12 @@ export async function POST(req: Request): Promise<Response> {
   // flight for the same reason -- it's inert ({}) until BACKEND_PROXY_SECRET
   // is configured, and once configured, concurrent callers on the same
   // refresh_token are the same browser/session.
+  //
+  // Trade-off of retaining a settled success (default 10 s): a replay served
+  // from it never reaches the backend, so it leaves no audit row and no
+  // client IP, and it can hand back a pair that has since rotated again (the
+  // caller then fails on its next refresh and signs in again). Backend
+  // replays inside REFRESH_REUSE_GRACE_SECONDS are audited; these are not.
   const resultPromise = refreshFlights.run(refreshToken, () =>
     performBackendRefresh(refreshToken, {
       ...ingressHeaders(req),

@@ -283,6 +283,66 @@ def test_unrelated_older_signout_does_not_block_grace(env, client):
     assert _refresh(client, tok).status_code == 200
 
 
+def test_expired_token_revocation_does_not_block_grace(env, client):
+    """Presenting an EXPIRED token revokes it without a rotation. That is not
+    a sign-out, so it must not make a racing replay of a just-rotated token
+    fall back to full revocation."""
+    aid = env["admin"]["id"]
+    expired = auth_service.create_refresh_token(aid)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE refresh_tokens SET expires_at = NOW() - INTERVAL '1 hour' WHERE token_hash = %s",
+            (auth_service._hash_token(expired),),
+        )
+    tok = _login(client, headers=INGRESS).json()["refresh_token"]
+    assert _refresh(client, tok).status_code == 200
+    assert _refresh(client, expired).status_code == 401  # revokes the expired row, no rotation
+    assert _refresh(client, tok).status_code == 200  # still a benign race
+    assert _last("auth.refresh.reuse_detected")["detail"]["grace_window"] is True
+
+
+def test_logout_of_a_live_token_still_blocks_grace_even_with_an_expired_one_around(env, client):
+    aid = env["admin"]["id"]
+    expired = auth_service.create_refresh_token(aid)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE refresh_tokens SET expires_at = NOW() - INTERVAL '1 hour' WHERE token_hash = %s",
+            (auth_service._hash_token(expired),),
+        )
+    tok = _login(client, headers=INGRESS).json()["refresh_token"]
+    new = _refresh(client, tok).json()["refresh_token"]
+    # revoke-all also stamps the expired-but-unrevoked row; the live `new` row
+    # is what makes this a deliberate sign-out
+    auth_repo.revoke_all_user_tokens(aid)
+    assert _refresh(client, tok).status_code == 401
+    assert _last("auth.refresh.reuse_detected")["detail"]["grace_denied"] == "session_revoked"
+    assert _refresh(client, new).status_code == 401
+
+
+def test_losing_the_rotation_claim_to_a_logout_is_a_plain_refusal(env, client, monkeypatch):
+    """Real DB: a logout lands between the refresh's read and its rotation
+    claim. The refresh fails like any dead token; it does not wipe the account."""
+    from backend.db import trusted_browser_repo
+
+    aid = env["admin"]["id"]
+    trusted_browser_repo.create(aid, "l" * 64, "Firefox")
+    other = _login(client, headers=INGRESS).json()["refresh_token"]
+    tok = _login(client, headers=INGRESS).json()["refresh_token"]
+    real_claim = auth_repo.mark_refresh_token_rotated
+
+    def logout_first(token_hash):
+        auth_repo.revoke_refresh_token(token_hash)
+        return real_claim(token_hash)
+
+    monkeypatch.setattr(auth_repo, "mark_refresh_token_rotated", logout_first)
+    assert _refresh(client, tok).status_code == 401
+    monkeypatch.undo()
+
+    assert audit_repo.list_events(event="auth.refresh.reuse_detected") == []
+    assert trusted_browser_repo.get_active("l" * 64) is not None
+    assert _refresh(client, other).status_code == 200
+
+
 def test_rotation_stamps_rotated_at_and_other_revocations_do_not(env, client):
     aid = env["admin"]["id"]
     rotated = _login(client, headers=INGRESS).json()["refresh_token"]
