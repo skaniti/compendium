@@ -2397,3 +2397,200 @@ class TestClusterOnlyAnswerHasNoSources:
         assert "https://x.com/a" in resp.answer
         assert resp.sources == []
         assert resp.sources_detail == []
+
+
+# =============================================================================
+# Backlog #67: the complete event's cluster_ids must only name clusters the
+# answer cites, so a zero-source answer never frames the graph.
+# =============================================================================
+
+
+class TestClustersForAnswer:
+    """_clusters_for_answer: filter the clusters the tools touched down to those
+    holding a page the answer actually cites (a source, or a link in the text)."""
+
+    CLUSTER_URLS = {
+        "black_holes": {"https://x.com/bh1", "https://x.com/bh2"},
+        "exoplanets": {"https://x.com/ex1"},
+        "image_synthesis": {"https://x.com/img1"},
+    }
+
+    def _state(self, *slugs):
+        state = AgentState()
+        state.clusters_cited = list(slugs)
+        return state
+
+    def test_no_cited_pages_means_no_clusters(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("image_synthesis")
+        assert _clusters_for_answer(state, "Nothing about that here.", [], self.CLUSTER_URLS) == []
+
+    def test_cited_source_keeps_its_cluster_only(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("black_holes", "exoplanets")
+        out = _clusters_for_answer(state, "See it.", ["https://x.com/bh1"], self.CLUSTER_URLS)
+        assert out == ["black_holes"]
+
+    def test_link_in_answer_text_keeps_its_cluster(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("exoplanets")
+        answer = "Your cluster has [Kepler](https://x.com/ex1)."
+        assert _clusters_for_answer(state, answer, [], self.CLUSTER_URLS) == ["exoplanets"]
+
+    def test_first_seen_order_and_dedup(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("exoplanets", "black_holes", "exoplanets", "black_holes")
+        sources = ["https://x.com/bh1", "https://x.com/ex1"]
+        out = _clusters_for_answer(state, "", sources, self.CLUSTER_URLS)
+        assert out == ["exoplanets", "black_holes"]
+
+    def test_unknown_cluster_slug_is_dropped(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("not_in_map")
+        assert _clusters_for_answer(state, "", ["https://x.com/bh1"], self.CLUSTER_URLS) == []
+
+    def test_none_answer_text_is_tolerated(self):
+        from backend.services.agent import _clusters_for_answer
+
+        state = self._state("black_holes")
+        assert _clusters_for_answer(state, None, [], self.CLUSTER_URLS) == []
+
+
+class TestCompleteEventClusterIds:
+    """query_stream end to end (mocked planner/DB): which cluster_ids reach the
+    complete event the web hook frames the graph from."""
+
+    @staticmethod
+    def _agent() -> CompendiumAgent:
+        agent = _mock_agent()
+        agent._clusters_cache = [
+            {
+                "id": 1,
+                "cluster_slug": "black_holes",
+                "cluster_name": "Black Holes",
+                "super_cluster": "astronomy",
+                "page_ids": [101],
+            },
+            {
+                "id": 2,
+                "cluster_slug": "exoplanets",
+                "cluster_name": "Exoplanets",
+                "super_cluster": "astronomy",
+                "page_ids": [102],
+            },
+            {
+                "id": 3,
+                "cluster_slug": "image_synthesis",
+                "cluster_name": "Image Synthesis",
+                "super_cluster": "diffusion",
+                "page_ids": [103],
+            },
+        ]
+        agent._pages_cache = [
+            {"id": 101, "url": "https://x.com/bh", "title": "Black hole"},
+            {"id": 102, "url": "https://x.com/ex", "title": "Exoplanet"},
+            {"id": 103, "url": "https://x.com/img", "title": "Image synthesis"},
+        ]
+        return agent
+
+    @staticmethod
+    async def _complete(agent: CompendiumAgent, planner_msgs: list, answer: str) -> dict:
+        async def answer_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock(delta=MagicMock(content=answer))]
+            yield chunk
+
+        agent._openai_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                *[_FakeResponse(m) for m in planner_msgs],
+                _FakeResponse(_final_answer_message("final")),
+                answer_stream(),
+            ]
+        )
+        with patch("backend.services.agent.flush_trace_to_db", new=AsyncMock()), patch(
+            "backend.db.trends_repo.insert_cost_event"
+        ), patch("backend.db.auth_repo.get_role", return_value="user"):
+            events = [e async for e in agent.query_stream("tell me something about the ocean")]
+        return next(e for e in events if e["type"] == "complete")
+
+    @pytest.mark.asyncio
+    async def test_ignored_cluster_lookup_frames_nothing(self):
+        """The reported bug: a (false-positive) cluster lookup records the cluster,
+        the answer says it found nothing -> no sources and no cluster_ids."""
+        agent = self._agent()
+        complete = await self._complete(
+            agent,
+            [_tool_call_message("get_cluster_info", '{"cluster_name": "image synthesis"}')],
+            "Your compendium does not contain specific pages about that.",
+        )
+        assert complete["sources"] == []
+        assert complete["cluster_ids"] == []
+
+    @pytest.mark.asyncio
+    async def test_taxonomy_match_via_search_that_the_answer_ignores_frames_nothing(self):
+        agent = self._agent()
+        agent._encoder = MagicMock()
+        agent._encoder.encode.return_value.tolist.return_value = [0.1] * 384
+        with patch("backend.db.embedding_repo.find_similar_chunks", return_value=[]), patch(
+            "backend.services.reranker.rerank", return_value=[]
+        ):
+            complete = await self._complete(
+                agent,
+                [_tool_call_message("search_compendium", '{"query": "image synthesis"}')],
+                "I found nothing relevant in your compendium.",
+            )
+        assert complete["sources"] == []
+        assert complete["cluster_ids"] == []
+
+    @pytest.mark.asyncio
+    async def test_cluster_listing_answer_that_links_a_member_page_still_frames(self):
+        """Cluster listings record no sources (d0921a8) but the answer links the
+        pages it uses; that answer cites the cluster, so it keeps its framing."""
+        agent = self._agent()
+        complete = await self._complete(
+            agent,
+            [_tool_call_message("get_cluster_info", '{"cluster_name": "black holes"}')],
+            "Your Black Holes cluster has [Black hole](https://x.com/bh).",
+        )
+        assert complete["sources"] == []
+        assert complete["cluster_ids"] == ["black_holes"]
+
+    @pytest.mark.asyncio
+    async def test_only_clusters_of_cited_sources_are_framed(self):
+        """A supercluster lookup touches two clusters; the search hit the answer
+        cites lives in one of them -> only that cluster is framed."""
+        agent = self._agent()
+        agent._encoder = MagicMock()
+        agent._encoder.encode.return_value.tolist.return_value = [0.1] * 384
+        hit = {
+            "page_chunk_id": 1,
+            "url": "https://x.com/bh",
+            "similarity": 0.5,
+            "chunk_text": "content",
+            "content_summary": "content",
+            "page_content_id": 1,
+        }
+        agent._pages_cache[0]["page_content_id"] = 1
+        with patch("backend.db.embedding_repo.find_similar_chunks", return_value=[hit]), patch(
+            "backend.services.reranker.rerank",
+            side_effect=lambda query, chunks, top_k: [{**c, "rerank_score": 0.9} for c in chunks][
+                :top_k
+            ],
+        ):
+            complete = await self._complete(
+                agent,
+                [
+                    _tool_call_message("get_cluster_info", '{"cluster_name": "astronomy"}', "c1"),
+                    _tool_call_message(
+                        "search_compendium", '{"query": "black hole facts"}', "c2"
+                    ),
+                ],
+                "Black holes: [Black hole](https://x.com/bh).",
+            )
+        assert complete["sources"] == ["https://x.com/bh"]
+        assert complete["cluster_ids"] == ["black_holes"]

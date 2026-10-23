@@ -334,6 +334,32 @@ def _sources_for_answer(state: "AgentState", answer_text: str | None) -> list[st
     return cited or retrieved
 
 
+def _clusters_for_answer(
+    state: "AgentState",
+    answer_text: str | None,
+    answer_sources: list[str],
+    cluster_urls: dict[str, set[str]],
+) -> list[str]:
+    """Cluster slugs to report on the complete event (what the web graph frames).
+
+    ``state.clusters_cited`` records every cluster a tool touched, including
+    structural lookups (``get_cluster_info``, the search cascade's taxonomy
+    stage) that record no sources, so an answer that ignores such a lookup
+    ("your compendium has no pages about that") still had a cluster listed and
+    the graph zoomed onto nodes the answer never cited. Keep a cluster only
+    when the answer cites at least one of its pages: a reported source or a URL
+    linked in the answer text (a cluster-listing answer links the member pages
+    it uses but records no sources). ``cluster_urls`` maps cluster slug -> the
+    URLs of its pages. First-seen order, deduped.
+    """
+    cited = set(answer_sources) | set(_urls_in_text(answer_text or ""))
+    out: list[str] = []
+    for slug in state.clusters_cited:
+        if slug not in out and cited & cluster_urls.get(slug, set()):
+            out.append(slug)
+    return out
+
+
 def _build_sources_detail(state: "AgentState", urls: list[str] | None = None) -> list[dict]:
     """De-duped, first-seen-order {"url", "page_id", "node_id"} list from
     AgentState (or, when ``urls`` is given, exactly those URLs in that order).
@@ -746,6 +772,17 @@ class CompendiumAgent:
 
             self._clusters_cache = cluster_repo.get_clusters_for_user(self.user_id)
         return self._clusters_cache
+
+    def _cluster_urls_by_slug(self) -> dict[str, set[str]]:
+        """cluster slug -> URLs of its pages, from the cached clusters and pages
+        (the same join ``_format_search_results`` uses for url -> cluster)."""
+        pid_to_url = {p["id"]: p.get("url", "") for p in self._get_pages_cached()}
+        return {
+            c["cluster_slug"]: {
+                pid_to_url[pid] for pid in c.get("page_ids", []) if pid_to_url.get(pid)
+            }
+            for c in self._get_clusters_cached()
+        }
 
     def _is_admin(self) -> bool:
         """P5 (optional): role check backing the streaming complete event's
@@ -1192,11 +1229,21 @@ class CompendiumAgent:
             trace.images_cited = state.images_cited
             trace.clusters_cited = list(set(state.clusters_cited))
 
+            try:
+                answer_clusters = _clusters_for_answer(
+                    state, trace.final_answer, answer_sources, self._cluster_urls_by_slug()
+                )
+            except Exception:
+                # No framing is the safe failure: a graph left where it was
+                # beats a zoom onto nodes the answer may not cite.
+                logger.warning("cluster_ids for the complete event failed", exc_info=True)
+                answer_clusters = []
+
             complete_event = {
                 "type": "complete",
                 "sources": answer_sources,
                 "sources_detail": _build_sources_detail(state, answer_sources),
-                "cluster_ids": list(set(state.clusters_cited)),
+                "cluster_ids": answer_clusters,
                 "images": state.images_cited,
                 "tool_calls_made": state.tool_calls_log,
                 "total_cost_usd": state.total_cost_usd,
