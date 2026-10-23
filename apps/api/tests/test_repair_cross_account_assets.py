@@ -353,6 +353,41 @@ def test_links_to_reused_rows_with_other_source_url_are_counted(world):
     assert p.pairs[(world["owner"], world["user"])].lost_url == 2
 
 
+def _page_urls(pc_id):
+    return _q("SELECT page_url FROM page_content_assets WHERE page_content_id = %s", (pc_id,))
+
+
+def test_moved_links_keep_the_url_their_page_used(world):
+    """A link moved onto a reused row with another source_url gets the replaced
+    row's source_url as page_url, so the preview renderer still matches it."""
+    from backend.services.preview_renderer import _load_asset_map
+
+    b = build(world, user_has_copy=True, copy_url="https://img.test/other.png")
+    pc1, pc2, pc3 = b["pcs"]
+    _q("UPDATE page_content_assets SET page_url = %s WHERE page_content_id = %s",
+       ("https://img.test/already-set.png", pc2))
+    run(world, do_apply=True)
+    assert _page_urls(pc1) == [("https://img.test/a.png",)]
+    assert _page_urls(pc2) == [("https://img.test/already-set.png",)]  # never overwritten
+    assert _page_urls(pc3) == [(None,)]  # the owner's own link is not touched
+    amap = _load_asset_map(pc1, lambda path: "signed:" + path)
+    assert amap["https://img.test/a.png"] == amap["https://img.test/other.png"] \
+        == f"signed:{_q('SELECT file_path FROM captured_assets WHERE id = %s', (b['own'],))[0][0]}"
+
+
+def test_plan_output_says_page_url_keeps_the_original_url(world, capsys):
+    build(world, user_has_copy=True, copy_url="https://img.test/other.png")
+    conn = psycopg2.connect(DSN)
+    try:
+        with conn.cursor() as cur:
+            rca._print_plan(rca.plan(cur, world["dir"], only_users={world["owner"], world["user"]}))
+    finally:
+        conn.close()
+    out = capsys.readouterr().out
+    assert "links_to_reused_rows_with_other_source_url=2" in out
+    assert "page_url" in out and "load from their original URL" not in out
+
+
 def test_same_source_url_reuse_counts_no_lost_urls(world):
     build(world, user_has_copy=True)
     assert run(world, do_apply=False).pairs[(world["owner"], world["user"])].lost_url == 0

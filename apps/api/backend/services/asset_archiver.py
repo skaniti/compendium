@@ -199,7 +199,7 @@ async def archive_assets_for_page(
 
     sem = asyncio.Semaphore(_MAX_CONCURRENCY)
 
-    async def _run_host(host: str, host_urls: list[str]) -> list[int]:
+    async def _run_host(host: str, host_urls: list[str]) -> list[tuple[int, str]]:
         # follow_redirects=False -- _ensure_asset follows redirects manually
         # so every hop can be guarded and pinned, same as the page fetcher.
         # max_keepalive_connections=0 -- each hop connects by PINNED ADDRESS
@@ -216,36 +216,38 @@ async def archive_assets_for_page(
             follow_redirects=False,
             limits=httpx.Limits(max_keepalive_connections=0),
         ) as client:
-            asset_ids: list[int] = []
+            # (asset_id, URL the page used). A deduped asset keeps the first
+            # archive's source_url, so the link records the page's own URL.
+            host_links: list[tuple[int, str]] = []
             for i, u in enumerate(host_urls):
                 async with sem:
                     aid = await _ensure_asset(client, u, user_id)
                 if aid is not None:
-                    asset_ids.append(aid)
+                    host_links.append((aid, u))
                 if i < len(host_urls) - 1:
                     await asyncio.sleep(_HOST_RATE_LIMIT_SECS)
-            return asset_ids
+            return host_links
 
     per_host_results = await asyncio.gather(
         *[_run_host(h, u) for h, u in by_host.items()],
         return_exceptions=True,
     )
-    asset_ids: list[int] = []
+    links: list[tuple[int, str]] = []
     for res in per_host_results:
         if isinstance(res, BaseException):
             logger.warning("asset host batch raised: %s", res)
             continue
-        asset_ids.extend(res)
+        links.extend(res)
 
-    if asset_ids:
-        _link_assets_to_page(page_content_id, asset_ids)
+    if links:
+        _link_assets_to_page(page_content_id, links)
     logger.info(
         "assets archived for pid=%d: %d linked (of %d refs)",
         page_content_id,
-        len(asset_ids),
+        len(links),
         len(urls),
     )
-    return len(asset_ids)
+    return len(links)
 
 
 async def _ensure_asset(client: httpx.AsyncClient, url: str, user_id: int) -> int | None:
@@ -390,17 +392,24 @@ def _insert_asset(
     return row[0]
 
 
-def _link_assets_to_page(page_content_id: int, asset_ids: list[int]) -> None:
-    if not asset_ids:
+def _link_assets_to_page(page_content_id: int, links: list[tuple[int, str]]) -> None:
+    """Link assets to a page, recording the URL the page used for each.
+
+    ``links`` is ``[(asset_id, page_url)]``. Re-linking fills a NULL ``page_url``
+    (rows linked before migration 060) but never overwrites one, so the first
+    URL recorded for a link stands.
+    """
+    if not links:
         return
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.executemany(
                 """
-                INSERT INTO page_content_assets (page_content_id, asset_id)
-                VALUES (%s, %s)
-                ON CONFLICT DO NOTHING
+                INSERT INTO page_content_assets (page_content_id, asset_id, page_url)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (page_content_id, asset_id) DO UPDATE
+                    SET page_url = COALESCE(page_content_assets.page_url, EXCLUDED.page_url)
                 """,
-                [(page_content_id, aid) for aid in asset_ids],
+                [(page_content_id, aid, url) for aid, url in links],
             )
             conn.commit()

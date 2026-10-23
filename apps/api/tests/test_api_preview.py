@@ -340,3 +340,74 @@ class TestPreviewAssetUrlsAreSigned:
             q = {k: v[0] for k, v in parse_qs(query).items()}
             rel = path[len("/captured-assets/"):]
             assert verify_asset_signature(rel, q.get("u"), q.get("exp"), q.get("sig")) == user["id"]
+
+
+class TestPreviewAssetPageUrl:
+    """An archived row is unique per (user, sha256), so its ``source_url`` is the
+    URL of whichever capture archived the bytes first. ``page_content_assets.page_url``
+    (migration 060) records the URL THIS page used; the renderer must match on it
+    as well, or a deduped image falls back to the original site."""
+
+    URL = "https://en.wikipedia.org/wiki/Page_url_render"
+    URL_ROW = "https://upload.wikimedia.org/first/pic.png"   # the row's source_url
+    URL_PAGE = "https://upload.wikimedia.org/second/pic.png"  # what this page uses
+
+    def _setup(self, srcs, *, page_url):
+        user = _make_user(email="page-url-render@example.com")
+        content = content_repo.get_or_create_content(self.URL)
+        imgs = "".join(f'<img src="{s}"/>' for s in srcs).encode()
+        body = b"<html><body><article><p>text</p>" + imgs + b"</article></body></html>"
+        content_repo.update_content(
+            content["id"], raw_html=gzip.compress(body), raw_html_usable=True
+        )
+        import hashlib
+
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO captured_assets
+                    (sha256, source_url, content_type, byte_size, file_path, user_id)
+                VALUES (%s, %s, 'image/png', 0, %s, %s) RETURNING id
+                """,
+                (hashlib.sha256(b"pic").hexdigest(), self.URL_ROW,
+                 f"user_{user['id']}/aa/pic.png", user["id"]),
+            )
+            aid = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO page_content_assets (page_content_id, asset_id, page_url) "
+                "VALUES (%s, %s, %s)",
+                (content["id"], aid, page_url),
+            )
+        return user, content
+
+    def _render(self, user, content):
+        from backend.services.preview_renderer import render_archived_preview
+
+        html, status = render_archived_preview(content["id"], user["id"])
+        assert status == 200
+        return html
+
+    def test_page_url_that_differs_from_source_url_renders_local(self):
+        user, content = self._setup([self.URL_PAGE], page_url=self.URL_PAGE)
+        html = self._render(user, content)
+        assert f"/captured-assets/user_{user['id']}/aa/pic.png" in html
+        assert self.URL_PAGE not in html
+
+    def test_null_page_url_still_matches_source_url(self):
+        user, content = self._setup([self.URL_ROW], page_url=None)
+        html = self._render(user, content)
+        assert f"/captured-assets/user_{user['id']}/aa/pic.png" in html
+        assert self.URL_ROW not in html
+
+    def test_source_url_still_matches_when_page_url_is_set(self):
+        user, content = self._setup([self.URL_ROW, self.URL_PAGE], page_url=self.URL_PAGE)
+        html = self._render(user, content)
+        assert html.count(f"/captured-assets/user_{user['id']}/aa/pic.png") == 2
+        assert self.URL_ROW not in html and self.URL_PAGE not in html
+
+    def test_unrelated_image_still_falls_back_to_its_original_url(self):
+        other = "https://upload.wikimedia.org/third/other.png"
+        user, content = self._setup([self.URL_PAGE, other], page_url=self.URL_PAGE)
+        html = self._render(user, content)
+        assert html.count(f"/captured-assets/user_{user['id']}/aa/pic.png") == 1
+        assert other in html

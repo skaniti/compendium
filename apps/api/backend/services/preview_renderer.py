@@ -270,12 +270,19 @@ def _load_page_content_row(page_content_id: int) -> dict | None:
 
 
 def _load_asset_map(page_content_id: int, sign: Callable[[str], str]) -> dict[str, str]:
-    """Return {source_url: signed /captured-assets/<rel> URL} for linked assets."""
+    """Return {url: signed /captured-assets/<rel> URL} for linked assets.
+
+    A row is unique per (user, sha256), so ``captured_assets.source_url`` is only
+    the URL the bytes were FIRST archived from; ``page_content_assets.page_url``
+    (migration 060) is the URL this page used when that differs. Both are keys,
+    ``page_url`` last so it wins a clash within this page. NULL ``page_url`` rows
+    (every link made before 060) match on ``source_url`` alone, as before.
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT ca.source_url, ca.file_path
+                SELECT ca.source_url, ca.file_path, pca.page_url
                 FROM page_content_assets pca
                 JOIN captured_assets ca ON ca.id = pca.asset_id
                 WHERE pca.page_content_id = %s
@@ -283,7 +290,11 @@ def _load_asset_map(page_content_id: int, sign: Callable[[str], str]) -> dict[st
                 (page_content_id,),
             )
             rows = cur.fetchall()
-    return {source_url: sign(file_path) for source_url, file_path in rows}
+    asset_map = {source_url: sign(file_path) for source_url, file_path, _ in rows}
+    for _, file_path, page_url in rows:
+        if page_url:
+            asset_map[page_url] = sign(file_path)
+    return asset_map
 
 
 def _load_local_stylesheet_urls(page_content_id: int, sign: Callable[[str], str]) -> list[str]:

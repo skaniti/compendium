@@ -22,6 +22,12 @@ repointed at U's row. O's rows, O's files and every other link are untouched.
 A page_content used by several accounts, none owning the asset, is skipped and
 counted: the script never guesses an owner.
 
+When ``page_content_assets.page_url`` exists (migration 060), each moved link
+keeps its own ``page_url``; a NULL one is filled with the replaced row's
+``source_url``, the URL that row was archived from. A reused row of U's keeps its
+own ``source_url``, so without this the preview renderer could no longer match the
+page's ``<img src>`` to it.
+
 Deliberately stdlib + psycopg2 only (no ``backend`` imports); connects via
 ``DATABASE_URL``. Dry run by default.
 
@@ -62,9 +68,10 @@ class PairStats:
     created: int = 0
     copies: int = 0
     # Links moved onto a reused row whose source_url differs from the original
-    # row's. The preview renderer maps {source_url: file} per page, so those
-    # images fall back to their original URL. Cannot be fixed here
-    # (UNIQUE (user_id, sha256)); reported only.
+    # row's. The row's source_url cannot change (UNIQUE (user_id, sha256)); with
+    # page_content_assets.page_url (migration 060) the moved link records the
+    # original URL and the preview renderer still matches it. Without that column
+    # those images fall back to their original URL. Reported either way.
     lost_url: int = 0
 
 
@@ -90,6 +97,7 @@ class Plan:
     shared_links: int = 0  # links from page_content used by the asset owner AND another account
     orphan_links: int = 0  # links from page_content with no pages / only NULL-user pages
     roles: dict[int, str | None] = field(default_factory=dict)  # account id -> users.role
+    page_url_column: bool = False  # page_content_assets.page_url exists (migration 060)
     warnings: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
@@ -184,6 +192,7 @@ def plan(cur, assets_dir: Path, only_users: set[int] | None = None,
          page_account: int | None = None) -> Plan:
     """Compute and pre-check the repair. Writes nothing."""
     result = _plan(cur, assets_dir, only_users, page_account)
+    result.page_url_column = "page_url" in _columns(cur, "page_content_assets")
     ids = sorted({i for pair in result.pairs for i in pair})
     if ids:
         cur.execute("SELECT id, role FROM users WHERE id = ANY(%s)", (ids,))
@@ -342,9 +351,15 @@ def apply(cur, the_plan: Plan, assets_dir: Path) -> dict[str, int]:
         created += 1
 
     moved = 0
+    # page_url: keep the link's own, else the URL of the row being replaced.
+    page_url_from_old_row = sql.SQL(
+        "COALESCE(page_url, (SELECT source_url FROM captured_assets "
+        "WHERE id = page_content_assets.asset_id))"
+    )
     link_select = sql.SQL(", ").join(
         [sql.Identifier("page_content_id"), sql.Placeholder()]
-        + [sql.Identifier(c) for c in extra_link_cols]
+        + [page_url_from_old_row if c == "page_url" else sql.Identifier(c)
+           for c in extra_link_cols]
     )
     link_insert_cols = sql.SQL(", ").join(
         map(sql.Identifier, ["page_content_id", "asset_id"] + extra_link_cols)
@@ -376,7 +391,9 @@ def _print_plan(p: Plan) -> None:
             f"files to copy={s.copies} links_to_reused_rows_with_other_source_url={s.lost_url}"
         )
         if s.lost_url:
-            line += " (these images will load from their original URL in previews)"
+            line += (" (page_url keeps the original URL, previews still use the archive)"
+                     if p.page_url_column
+                     else " (these images will load from their original URL in previews)")
         print(line)
     for msg in p.warnings:
         print(f"{TAG} WARNING: {msg}")
