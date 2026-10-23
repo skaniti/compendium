@@ -34,6 +34,9 @@
 # no input, or an unusable template (nothing written).
 
 set -u
+# A write that exceeds a file-size limit (quota, ulimit -f) should come back as
+# an ordinary write error that is reported, not kill the script mid-write.
+trap '' XFSZ
 
 PROG=setup-env
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -112,6 +115,41 @@ gen_secret() {
   printf '%s' "$s"
 }
 
+# IPv4 dotted quad, or IPv6 with or without [brackets]. Docker compose puts
+# this in a ports entry, which takes an IP address, not a hostname.
+valid_ipv4() {
+  local octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+  [[ $1 =~ ^$octet\.$octet\.$octet\.$octet$ ]]
+}
+
+valid_ipv6() {
+  local v=$1 g count=0 parts
+  [[ $v =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+  case $v in
+    *:::*|*::*::*) return 1 ;;
+    :[!:]*|*[!:]:) return 1 ;;
+  esac
+  IFS=: read -r -a parts <<< "$v"
+  for g in "${parts[@]}"; do
+    [ -z "$g" ] && continue
+    [ ${#g} -le 4 ] || return 1
+    count=$((count + 1))
+  done
+  case $v in
+    *::*) [ $count -le 7 ] ;;
+    *)    [ $count -eq 8 ] ;;
+  esac
+}
+
+valid_bind() {
+  local v=$1
+  case $v in
+    \[*\]) v=${v#\[}; v=${v%\]}; valid_ipv6 "$v" ;;
+    *:*)    valid_ipv6 "$v" ;;
+    *)      valid_ipv4 "$v" ;;
+  esac
+}
+
 # Prints the reason and returns 1 when $2 is not a usable value for key $1.
 # Never prints the value itself.
 validate() {
@@ -141,9 +179,10 @@ validate() {
         *[[:space:]]*) echo "must not contain whitespace"; return 1 ;;
       esac ;;
     API_BIND_ADDRESS)
-      case $v in
-        *[[:space:]]*) echo "must not contain whitespace"; return 1 ;;
-      esac ;;
+      if ! valid_bind "$v"; then
+        echo "must be an IPv4 or IPv6 address such as 0.0.0.0 or 127.0.0.1 (docker compose does not accept a hostname)"
+        return 1
+      fi ;;
   esac
   return 0
 }
@@ -309,13 +348,25 @@ for ((i = 0; i < n; i++)); do
   content+="$line"$'\n'
 done
 
+# Write to a private temp file beside the target, then hard-link it into
+# place: ln fails if anything (a file, a dangling symlink) is already there,
+# so a half-written or racing write can never replace or truncate a .env.
 umask 077
-if ! ( set -C; printf '%s' "$content" > "$OUT" ) 2>/dev/null; then
+trap 'if [ -n "${tmp:-}" ]; then rm -f -- "$tmp"; fi' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+tmp=$(mktemp "$out_dir/.env.XXXXXX") || die "could not create a temporary file in $out_dir"
+if ! printf '%s' "$content" > "$tmp"; then
+  die "could not write $OUT (see the error above; nothing was left behind)"
+fi
+if ! link_err=$(ln -- "$tmp" "$OUT" 2>&1); then
   if [ -e "$OUT" ] || [ -L "$OUT" ]; then
     refuse
   fi
-  die "could not write $OUT"
+  die "could not write $OUT: $link_err"
 fi
+rm -f -- "$tmp"
+tmp=
 chmod 600 "$OUT" 2>/dev/null || true
 
 printf '%s: wrote %s (readable by you only). Values are not shown.\n' "$PROG" "$out_abs"

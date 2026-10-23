@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync,
-  statSync, symlinkSync, copyFileSync, lstatSync,
+  statSync, symlinkSync, copyFileSync, lstatSync, readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -265,37 +265,45 @@ test("a template with no required keys, or a missing template, is an error", () 
   assert.match(r2.stderr, /absent/);
 });
 
-test("awkward passwords are quoted so docker compose reads them back exactly", () => {
-  const passwords = [
-    "pa$$ word#1",
-    "it's $x # \"q\" \\b",
-    "ends-with-backslash\\",
-    "${HOME}/x",
-    "`backtick` & (parens) !bang; *star",
-    "  padded  ",
-    "a=b=c=d=e",
-    "ünïcödé-pass",
-  ];
-  const composeOk = spawnSync("docker", ["compose", "version"], { encoding: "utf8" }).status === 0;
-  for (const pw of passwords) {
+const AWKWARD = [
+  "pa$$ word#1",
+  "it's $x # \"q\" \\b",
+  "ends-with-backslash\\",
+  "${HOME}/x",
+  "`backtick` & (parens) !bang; *star",
+  "  padded  ",
+  "a=b=c=d=e",
+  "ünïcödé-pass",
+];
+const composeOk = spawnSync("docker", ["compose", "version"], { encoding: "utf8" }).status === 0;
+
+test("awkward passwords are accepted and written", () => {
+  for (const pw of AWKWARD) {
     const sb = sandbox();
     const r = run(sb, { env: { ...ENV_ALL, BOOTSTRAP_PASSWORD: pw } });
     assert.equal(r.status, 0, r.stderr);
     assert.ok(parse(read(sb)).BOOTSTRAP_PASSWORD.length > 0);
-    if (!composeOk) continue;
-    // `docker compose config` interpolates the .env without needing a daemon.
-    writeFileSync(join(sb.dir, "docker-compose.yml"),
-      'services:\n  a:\n    image: x\n    environment:\n      V: "${BOOTSTRAP_PASSWORD}"\n');
-    const c = spawnSync("docker", ["compose", "config", "--format", "json"], {
-      cwd: sb.dir, encoding: "utf8", env: baseEnv(),
-    });
-    assert.equal(c.status, 0, c.stderr);
-    // config re-escapes every literal $ as $$ in its rendered output.
-    const got = JSON.parse(c.stdout).services.a.environment.V.replaceAll("$$", "$");
-    assert.equal(got, pw);
   }
-  if (!composeOk) assert.ok(true, "docker compose unavailable: round trip skipped");
 });
+
+test("awkward passwords are quoted so docker compose reads them back exactly",
+  { skip: !composeOk && "docker compose unavailable" }, () => {
+    for (const pw of AWKWARD) {
+      const sb = sandbox();
+      const r = run(sb, { env: { ...ENV_ALL, BOOTSTRAP_PASSWORD: pw } });
+      assert.equal(r.status, 0, r.stderr);
+      // `docker compose config` interpolates the .env without needing a daemon.
+      writeFileSync(join(sb.dir, "docker-compose.yml"),
+        'services:\n  a:\n    image: x\n    environment:\n      V: "${BOOTSTRAP_PASSWORD}"\n');
+      const c = spawnSync("docker", ["compose", "config", "--format", "json"], {
+        cwd: sb.dir, encoding: "utf8", env: baseEnv(),
+      });
+      assert.equal(c.status, 0, c.stderr);
+      // config re-escapes every literal $ as $$ in its rendered output.
+      const got = JSON.parse(c.stdout).services.a.environment.V.replaceAll("$$", "$");
+      assert.equal(got, pw);
+    }
+  });
 
 test("quoting shape: plain stays bare, $ # space single-quoted, apostrophe double-quoted", () => {
   const cases = [
@@ -316,7 +324,7 @@ test("falls back to /dev/urandom when openssl is not on PATH", () => {
   const bin = join(sb.dir, "bin");
   mkdirSync(bin);
   // Only the tools the script is allowed to need; deliberately no openssl.
-  for (const tool of ["head", "od", "tr", "sed", "chmod", "dirname", "basename", "cat"]) {
+  for (const tool of ["head", "od", "tr", "sed", "chmod", "dirname", "basename", "cat", "mktemp", "ln", "rm"]) {
     const p = spawnSync("bash", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
     if (p) symlinkSync(p, join(bin, tool));
   }
@@ -365,4 +373,43 @@ test("--help exits 0 with usage; an unknown flag exits 2", () => {
   const u = spawnSync(BASH, [script, "--bogus"], { encoding: "utf8", env: baseEnv() });
   assert.equal(u.status, 2);
   assert.match(u.stderr, /--bogus/);
+});
+
+test("API bind: IPv4 and IPv6 addresses are accepted", () => {
+  for (const addr of ["0.0.0.0", "127.0.0.1", "203.0.113.7", "255.255.255.255", "::1", "::", "[::1]", "fe80::1", "1:2:3:4:5:6:7:8"]) {
+    const sb = sandbox();
+    const r = run(sb, { env: { ...ENV_ALL, API_BIND_ADDRESS: addr } });
+    assert.equal(r.status, 0, `${addr}: ${r.stderr}`);
+    assert.ok(read(sb).split("\n").some((l) => l === `API_BIND_ADDRESS=${addr}` || l === `API_BIND_ADDRESS='${addr}'`), addr);
+  }
+});
+
+test("API bind: hostnames and malformed addresses are rejected and nothing is written", () => {
+  // localhost is refused on purpose: compose's ports entry needs an IP ("invalid IP address: localhost").
+  for (const addr of ["localhost", "example.com", "999.1.1.1", "1.2.3", "01.2.3.4", "1:2:3", "::1::2", ":1:2", "12345::1", "with space"]) {
+    const sb = sandbox();
+    const r = run(sb, { env: { ...ENV_ALL, API_BIND_ADDRESS: addr } });
+    assert.equal(r.status, 2, addr);
+    assert.match(r.stderr, /API_BIND_ADDRESS/);
+    assert.ok(!existsSync(sb.out), addr);
+  }
+});
+
+test("a write that fails after the file starts leaves no .env and no temp file, and says so", () => {
+  const sb = sandbox();
+  // ulimit -f 1 (1 KiB) is below the size of the finished file; stdout/stderr are pipes, so only the .env write is limited.
+  const r = spawnSync(BASH, ["-c", 'ulimit -f 1; exec "$@"', "x", BASH, script, "--example", sb.example, "--output", sb.out], {
+    input: ALL, encoding: "utf8", env: baseEnv(),
+  });
+  assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /could not write/);
+  assert.doesNotMatch(r.stderr, /REFUSED/);
+  assert.deepEqual(readdirSync(sb.dir).sort(), ["env.example"]);
+});
+
+test("a successful run leaves no temp file behind", () => {
+  const sb = sandbox();
+  const r = run(sb, { input: ALL });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(readdirSync(sb.dir).sort(), [".env", "env.example"]);
 });
