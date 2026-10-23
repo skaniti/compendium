@@ -2,11 +2,17 @@ package dev.skaniti.compendium.gecko
 
 import dev.skaniti.compendium.gecko.NotesStore.Note
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class NotesStoreTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     private fun note(id: String, text: String = "t", type: String = "issue") =
         Note(id = id, createdAtMs = 1000L, text = text, type = type)
@@ -72,5 +78,31 @@ class NotesStoreTest {
         assertEquals("a", decoded.single().id)
         assertEquals("open", decoded.single().status)   // default
         assertTrue(decoded.single().screenshot == null)
+    }
+
+    // ---- discardWorkingShot: dialog cancel/dismiss/empty-save cleanup ----
+
+    @Test
+    fun discardWorkingShotDeletesTheShotOfANewNote() {
+        val shot = tmp.newFile("note-1.png")
+        NotesStore.discardWorkingShot(existing = null, shotFile = shot)
+        assertFalse(shot.exists())
+    }
+
+    @Test
+    fun discardWorkingShotKeepsTheShotOfAnExistingNote() {
+        // Save with an empty body on an existing note must not delete its real screenshot.
+        val shot = tmp.newFile("note-2.png")
+        NotesStore.discardWorkingShot(existing = note("note-2").copy(screenshot = "note-2.png"), shotFile = shot)
+        assertTrue(shot.exists())
+    }
+
+    @Test
+    fun discardWorkingShotToleratesAMissingFile() {
+        // Cancel button and the cancel listener can both run; the second delete is a no-op.
+        val shot = java.io.File(tmp.root, "never-created.png")
+        NotesStore.discardWorkingShot(existing = null, shotFile = shot)
+        NotesStore.discardWorkingShot(existing = null, shotFile = shot)
+        assertFalse(shot.exists())
     }
 }

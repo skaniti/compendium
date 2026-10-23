@@ -89,7 +89,7 @@ object NoteDialog {
             .setView(view)
             .setPositiveButton("Save") { _, _ ->
                 val body = text.text.toString().trim()
-                if (body.isEmpty()) { shotFile.delete(); return@setPositiveButton }
+                if (body.isEmpty()) { NotesStore.discardWorkingShot(existing, shotFile); return@setPositiveButton }
                 val type = if (toggle.checkedButtonId == R.id.typeImprovement)
                     NotesStore.TYPE_IMPROVEMENT else NotesStore.TYPE_ISSUE
                 val shotName = if (hasShot && shotFile.exists()) "$id.png" else null
@@ -111,8 +111,11 @@ object NoteDialog {
             }
             .setNegativeButton("Cancel") { _, _ ->
                 // discard a freshly-copied auto-shot for a never-saved new note
-                if (existing == null) shotFile.delete()
+                NotesStore.discardWorkingShot(existing, shotFile)
             }
+            // Back / tap outside cancels the dialog without calling the Cancel button
+            // handler; mirror it so the auto-shot is not orphaned in dev-notes/.
+            .setOnCancelListener { NotesStore.discardWorkingShot(existing, shotFile) }
             .show()
     }
 

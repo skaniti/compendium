@@ -108,6 +108,16 @@ object NotesStore {
             }
         }
 
+    /**
+     * Cleanup for a note dialog that closes without saving a note (Cancel button,
+     * Back / outside-tap cancel, or Save with an empty body). Only a NEW note owns
+     * its working screenshot (the auto-captured copy at `<id>.png`); an existing
+     * note's screenshot is its saved attachment and must survive. Idempotent.
+     */
+    fun discardWorkingShot(existing: Note?, shotFile: File) {
+        if (existing == null) shotFile.delete()
+    }
+
     // ---- Context-bound shell (verified on-device) ----
 
     fun dir(context: Context): File =
