@@ -32,9 +32,16 @@ TOP_DOMAINS = 3
 # Flow classification (spec §13.2) — the ONLY definition; summary, timeline and pages all use it.
 _EFFECTIVE_STATUS = "COALESCE(p.human_status, p.status)"
 # Stage-0 URL-pattern skips are archive_reason 'url_skip' (migration 062). TRANSITIONAL: rows stored
-# before it are 'skip_gate' (or NULL, if restored since) until backend/scripts/backfill_url_skip_reason.py
-# has run on the database; the summary text keeps recognising them so the flow stays right in between.
-# Delete _LEGACY_URL_PATTERN once that script's output shows no such rows left.
+# before it are 'skip_gate' until backend/scripts/backfill_url_skip_reason.py has run on the
+# database; the summary text keeps recognising them so the flow stays right in between.
+# The text match may need to stay for good, though: page_repo.restore_page (page_repo.py:338) sets
+# archive_reason to NULL, so a restored URL skip never carries 'url_skip' (the backfill leaves
+# NULL-reason rows alone) and relies on this text fallback to stay rule_filter / url_pattern, so
+# "no such rows left" may never be true. Deleting _LEGACY_URL_PATTERN breaks
+# test_restored_legacy_url_skip_stays_rule_filter and the `legacy` case of
+# test_url_pattern_skip_is_rule_filter_everywhere, and restored URL skips would then show as
+# gate / uncategorized, the way restored domain_skip rows already do. Decide that deliberately;
+# the backfill's "not touched" output line counts the NULL-reason rows.
 _LEGACY_URL_PATTERN = "p.content_summary LIKE 'URL pattern skipped%%'"
 _URL_PATTERN = f"(p.archive_reason = 'url_skip' OR {_LEGACY_URL_PATTERN})"
 OUTCOME_SQL = f"""(CASE
