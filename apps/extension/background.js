@@ -15,9 +15,10 @@
  * to off finalizes (exports) whatever the current passive capture already
  * holds, rather than silently dropping it, and clears the timeout alarm.
  *
- * Missing site access (Firefox leaves the host permission ungranted; Chrome
- * lets users withhold it): modules/site-access.js keeps a toolbar badge in
- * step with it, and the popup / cache page show a banner with a Grant button.
+ * Missing site access (a user can withhold or revoke the host permission,
+ * e.g. in about:addons or Chrome's "on click" setting): modules/site-access.js
+ * keeps a toolbar badge in step with it, and the popup / cache page show a
+ * banner with a Grant button.
  *
  * Init ordering: `initialize()` runs at module load and its promise is kept
  * as `ready`, below. All Chrome listeners are registered synchronously at

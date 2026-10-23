@@ -1,9 +1,9 @@
 /**
  * Site access -- detecting a withheld host permission.
  *
- * Firefox MV3 treats `host_permissions` as optional and does not grant them
- * at install; Chrome grants them but a user can restrict the extension to
- * "on click". Without access to the backend's origin every upload is
+ * A user can withhold or later revoke the extension's site access (Firefox:
+ * about:addons, Permissions; Chrome: site access "on click" or "on specific
+ * sites"). Without access to the backend's origin every upload is
  * CORS-checked, the API refuses the extension's origin at the preflight, and
  * fetch() throws a TypeError -- indistinguishable, at the call site, from the
  * backend being unreachable. This module answers the one question that tells
