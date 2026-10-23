@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     # path); default is unchanged from the historical 60-minute idle
     # behavior.
     jwt_refresh_token_expire_days_remembered: int = 90
+    # audit_events retention (backlog #90): rows of the classes an
+    # unauthenticated caller can append (bad X-API-Key, failed login, public
+    # demo entry; see audit_repo.ANONYMOUS_CLASSES) are pruned daily after
+    # this many days. Authenticated classes are never pruned.
+    audit_anonymous_retention_days: int = 90
     session_idle_minutes: int = 60
     session_idle_minutes_demo: int = 720
     session_idle_minutes_remembered: int = 0

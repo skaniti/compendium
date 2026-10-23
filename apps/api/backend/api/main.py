@@ -417,6 +417,8 @@ async def lifespan(app: FastAPI):
 
     # Daily TTL: keep app_logs bounded
     asyncio.create_task(_prune_app_logs_loop())
+    # Daily TTL: keep the anonymous audit_events classes bounded (backlog #90)
+    app.state._audit_prune_task = asyncio.create_task(_prune_audit_events_loop())
     # Daily refresh-token sweep (demo-one-click-entry)
     app.state._token_cleanup_task = asyncio.create_task(_token_cleanup_loop())
 
@@ -487,6 +489,28 @@ async def _prune_app_logs_loop(retention_days: int = 14, interval_hours: int = 2
                 logger.info(f"app_logs prune: removed {deleted} rows older than {retention_days}d")
         except Exception:
             logger.exception("app_logs prune failed")
+        await asyncio.sleep(interval_hours * 3600)
+
+
+async def _prune_audit_events_loop(
+    retention_days: int | None = None, interval_hours: int = 24
+) -> None:
+    """Background task: delete anonymous-class audit_events rows older than
+    ``retention_days`` (default ``settings.audit_anonymous_retention_days``).
+
+    Same shape as ``_prune_app_logs_loop``: once shortly after startup, then
+    every ``interval_hours``; failures are logged, never crash the loop. Only
+    ``audit_repo.ANONYMOUS_CLASSES`` are touched; authenticated classes are kept.
+    """
+    await asyncio.sleep(60)  # let startup settle
+    while True:
+        days = retention_days if retention_days is not None else settings.audit_anonymous_retention_days
+        try:
+            deleted = await asyncio.to_thread(audit_repo.prune_older_than, days)
+            if deleted:
+                logger.info(f"audit_events prune: removed {deleted} anonymous rows older than {days}d")
+        except Exception:
+            logger.exception("audit_events prune failed")
         await asyncio.sleep(interval_hours * 3600)
 
 

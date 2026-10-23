@@ -2,13 +2,15 @@
 
 `record()` is the only writer: own short connection, synchronous, and it
 NEVER raises -- an audit outage must not break login. `list_events()` backs
-the admin read endpoint.
+the admin read endpoint. `prune_older_than()` is the only deleter: it bounds
+the classes an unauthenticated caller can append (see ANONYMOUS_CLASSES).
 """
 
 import hashlib
 import hmac
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from psycopg2.extras import Json
@@ -39,6 +41,17 @@ SECRET_SHAPES: tuple[re.Pattern[str], ...] = tuple(re.compile(p) for p in SECRET
 
 _REDACTED = "<redacted>"
 _MAX_LIMIT = 500
+
+# Event classes any unauthenticated caller can append to (bad X-API-Key, failed
+# login, public demo entry), so retention-pruned; every other class is an
+# authenticated action and is kept forever. Pruning, not throttling: a
+# per-client limiter would erase the brute-force signal the table is for.
+ANONYMOUS_CLASSES: tuple[str, ...] = (
+    "api_key.auth_failed",
+    "auth.login.failed",
+    "auth.demo_entry.failed",
+    "auth.demo_entry.ok",
+)
 
 _COLUMNS = "id, at, event, actor_user_id, subject_user_id, origin_class, client_hash, detail"
 
@@ -137,3 +150,22 @@ def list_events(
         rows = cur.fetchall()
     keys = [c.strip() for c in _COLUMNS.split(",")]
     return [dict(zip(keys, r)) for r in rows]
+
+
+def prune_older_than(days: int) -> int:
+    """Delete ANONYMOUS_CLASSES rows older than ``days`` days; returns rows deleted.
+
+    The class list is fixed here (not a parameter) so no caller can delete an
+    authenticated class through it. ``days`` must be >= 1: a zero or negative
+    window would wipe every row of those classes, including the recent
+    brute-force trail.
+    """
+    if days < 1:
+        raise ValueError(f"audit prune window must be >= 1 day, got {days}")
+    cutoff = datetime.now(tz=UTC) - timedelta(days=days)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM audit_events WHERE event = ANY(%s) AND at < %s",
+            (list(ANONYMOUS_CLASSES), cutoff),
+        )
+        return cur.rowcount or 0
