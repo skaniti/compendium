@@ -545,6 +545,17 @@ class TestLabelMatchTier:
         query = "ai"
         assert _label_match_tier("ai tools", query, _tokenize(query)) == 1
 
+    def test_prefix_inside_word_is_not_tier_1(self):
+        # "the" must not prefix-match "theory of x" (or the reverse).
+        query = "theory of x"
+        assert _label_match_tier("the", query, _tokenize(query)) is None
+        assert _label_match_tier("theory of x", "the", _tokenize("the")) is None
+
+    def test_token_prefix_is_tier_1(self):
+        assert _label_match_tier("computer_science", "computer", _tokenize("computer")) == 1
+        q = "computer science basics"
+        assert _label_match_tier("computer science", q, _tokenize(q)) == 1
+
     def test_substring_inside_word_is_not_a_match(self):
         # "the" must not match inside "synthesis" (full-string containment).
         assert _label_match_tier("the", "synthesis", _tokenize("synthesis")) is None
@@ -568,7 +579,7 @@ class TestLabelMatchTier:
 
     def test_hyphen_and_underscore_separate_tokens(self):
         assert _label_match_tier("data-science", "science", _tokenize("science")) == 2
-        assert _label_match_tier("computer_science", "computer science fans", _tokenize("computer science fans")) == 2
+        assert _label_match_tier("computer_science", "computer science fans", _tokenize("computer science fans")) == 1
 
 
 class TestMatchTaxonomy:

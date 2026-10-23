@@ -216,10 +216,15 @@ def _contains_token_run(haystack: list[str], needle: list[str]) -> bool:
     return any(haystack[i : i + n] == needle for i in range(len(haystack) - n + 1))
 
 
+def _starts_with_tokens(tokens: list[str], prefix: list[str]) -> bool:
+    """True when ``prefix`` is a non-empty whole-token prefix of ``tokens``."""
+    return bool(prefix) and tokens[: len(prefix)] == prefix
+
+
 def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> Optional[int]:
     """Best-match tier for a fuzzy taxonomy-label lookup.
 
-    0 = exact match. 1 = prefix (one string starts with the other) or an
+    0 = exact match. 1 = whole-token prefix (one token sequence starts with the other) or an
     exact single-token match. 2 = whole-token containment (either direction). 3 =
     typo-tolerant close match (``difflib``, cutoff 0.8, e.g. "astonomy" ->
     "astronomy"). ``None`` = no match at any tier. Lower is better; callers
@@ -250,7 +255,9 @@ def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> O
     query_full_tokens = _tokenize(query_norm)
     if label_long_enough:
         if len(query_norm) >= 3:
-            if label_norm.startswith(query_norm) or query_norm.startswith(label_norm):
+            if _starts_with_tokens(label_tokens, query_full_tokens) or _starts_with_tokens(
+                query_full_tokens, label_tokens
+            ):
                 return 1
             if _contains_token_run(label_tokens, query_full_tokens) or _contains_token_run(
                 query_full_tokens, label_tokens
