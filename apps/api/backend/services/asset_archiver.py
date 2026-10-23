@@ -395,9 +395,12 @@ def _insert_asset(
 def _link_assets_to_page(page_content_id: int, links: list[tuple[int, str]]) -> None:
     """Link assets to a page, recording the URL the page used for each.
 
-    ``links`` is ``[(asset_id, page_url)]``. Re-linking fills a NULL ``page_url``
-    (rows linked before migration 060) but never overwrites one, so the first
-    URL recorded for a link stands.
+    ``links`` is ``[(asset_id, page_url)]``. Re-linking overwrites ``page_url``:
+    ``archive_assets_for_page`` runs on the HTML just stored, and a page fetched
+    again can serve the same bytes under a new URL (signed or cache-busting CDN
+    links) that dedups to the same row, so the link must follow the URL now in
+    the stored HTML. This also fills rows linked before migration 060. If one
+    call names the same asset under two URLs, the last one stands.
     """
     if not links:
         return
@@ -408,7 +411,8 @@ def _link_assets_to_page(page_content_id: int, links: list[tuple[int, str]]) -> 
                 INSERT INTO page_content_assets (page_content_id, asset_id, page_url)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (page_content_id, asset_id) DO UPDATE
-                    SET page_url = COALESCE(page_content_assets.page_url, EXCLUDED.page_url)
+                    SET page_url = EXCLUDED.page_url
+                    WHERE page_content_assets.page_url IS DISTINCT FROM EXCLUDED.page_url
                 """,
                 [(page_content_id, aid, url) for aid, url in links],
             )

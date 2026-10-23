@@ -26,7 +26,11 @@ When ``page_content_assets.page_url`` exists (migration 060), each moved link
 keeps its own ``page_url``; a NULL one is filled with the replaced row's
 ``source_url``, the URL that row was archived from. A reused row of U's keeps its
 own ``source_url``, so without this the preview renderer could no longer match the
-page's ``<img src>`` to it.
+page's ``<img src>`` to it. The replaced row's ``source_url`` is the best evidence of
+the page's URL still available, not proof: if that row was itself a sha256 dedup,
+the value can differ from the URL in the page's HTML. The archiver overwrites
+``page_url`` whenever the page is archived again, which corrects it, and
+``backend/scripts/backfill_asset_page_urls.py`` fills links left NULL.
 
 Deliberately stdlib + psycopg2 only (no ``backend`` imports); connects via
 ``DATABASE_URL``. Dry run by default.

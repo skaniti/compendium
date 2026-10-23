@@ -97,17 +97,19 @@ class TestLinkAssetsToPage:
         asset_archiver._link_assets_to_page(cid, [(a1, URL_PAGE), (a2, "https://cdn.example.test/b.png")])
         assert _page_urls(cid) == {a1: URL_PAGE, a2: "https://cdn.example.test/b.png"}
 
-    def test_relinking_fills_a_null_page_url_but_never_overwrites_one(self, user):
+    def test_relinking_sets_the_latest_page_url_over_null_and_stale_values(self, user):
+        """A page fetched again stores new HTML; identical bytes under a new URL
+        dedup to the same row, so the link must follow the URL now in the HTML."""
         cid = _content()
-        legacy, kept = _asset(user["id"]), _asset(user["id"], "https://cdn.example.test/b.png",
-                                                  sha="b" * 64, rel="b.png")
+        legacy, stale = _asset(user["id"]), _asset(user["id"], "https://cdn.example.test/b.png",
+                                                   sha="b" * 64, rel="b.png")
         _q("INSERT INTO page_content_assets (page_content_id, asset_id) VALUES (%s, %s)", (cid, legacy))
         _q("INSERT INTO page_content_assets (page_content_id, asset_id, page_url) VALUES (%s, %s, %s)",
-           (cid, kept, "https://cdn.example.test/original.png"))
+           (cid, stale, "https://cdn.example.test/original.png"))
         asset_archiver._link_assets_to_page(
-            cid, [(legacy, URL_PAGE), (kept, "https://cdn.example.test/other.png")]
+            cid, [(legacy, URL_PAGE), (stale, "https://cdn.example.test/new.png")]
         )
-        assert _page_urls(cid) == {legacy: URL_PAGE, kept: "https://cdn.example.test/original.png"}
+        assert _page_urls(cid) == {legacy: URL_PAGE, stale: "https://cdn.example.test/new.png"}
 
     def test_empty_list_is_a_no_op(self):
         asset_archiver._link_assets_to_page(_content(), [])
@@ -155,6 +157,20 @@ class TestArchiverRecordsPageUrl:
         (aid, source_url), = _q("SELECT id, source_url FROM captured_assets")
         assert source_url == URL_FIRST
         assert _page_urls(cid) == {aid: URL_FIRST}
+
+    @pytest.mark.asyncio
+    async def test_refetched_page_with_a_new_url_for_the_same_bytes_follows_the_new_url(
+        self, user, tmp_path
+    ):
+        cid = _content()
+        await self._archive(user["id"], cid, self._html(URL_FIRST), tmp_path)
+        (aid,), = _q("SELECT id FROM captured_assets")
+        assert _page_urls(cid) == {aid: URL_FIRST}
+        # the site now serves the same image under a cache-busting URL
+        await self._archive(user["id"], cid, self._html(URL_PAGE), tmp_path)
+        assert _q("SELECT count(*) FROM captured_assets") == [(1,)]
+        assert _page_urls(cid) == {aid: URL_PAGE}
+        assert URL_PAGE in _load_asset_map(cid, lambda p: p)
 
     @pytest.mark.asyncio
     async def test_rearchiving_fills_links_made_before_the_column(self, user, tmp_path):
@@ -235,6 +251,24 @@ class TestBackfillAssetPageUrls:
         assert (stats.links_filled, stats.links_unresolved) == (0, 1)
         assert stats.unresolved == [(cid, mine)]
         assert _page_urls(cid) == {mine: None}
+
+    def test_site_rule_stylesheets_not_in_the_html_are_not_unresolved(self, bf, user):
+        """The archiver also archives rules_for(url).stylesheet_links (e.g. Wikipedia's
+        load.php), which are not in raw_html; those links are matched, not unresolved."""
+        from backend.services.site_rules import rules_for
+
+        url = "https://en.wikipedia.org/wiki/Backfill_site_rules"
+        load_php = rules_for(url).stylesheet_links[0]
+        cid = content_repo.get_or_create_content(url)["id"]
+        content_repo.update_content(
+            cid, raw_html=gzip.compress(b"<html><body><p>no link tags</p></body></html>"),
+            raw_html_usable=True,
+        )
+        css = _asset(user["id"], load_php, sha="d" * 64, rel="site.css")
+        _q("INSERT INTO page_content_assets (page_content_id, asset_id) VALUES (%s, %s)", (cid, css))
+        stats = self._run(bf, apply=True)
+        assert (stats.links_filled, stats.links_unresolved) == (0, 0)
+        assert _page_urls(cid) == {css: None}
 
     def test_a_row_with_another_sha_is_not_a_match(self, bf, user, other_user):
         cid = self._page(URL_PAGE)

@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db.connection import get_conn
 from backend.services.asset_archiver import extract_image_urls, extract_stylesheet_urls
+from backend.services.site_rules import rules_for
 
 TAG = "[backfill_asset_page_urls]"
 PROGRESS_EVERY = 100
@@ -66,9 +67,12 @@ def _check_sees_all_rows(cur) -> None:
 
 
 def _page_urls(raw_html_gz: bytes, base_url: str) -> list[str]:
-    """Image then stylesheet URLs of the archived HTML, in document order, absolute."""
+    """Every URL the archiver would have requested for this page, absolute: the
+    HTML's images and stylesheets in document order, then the site rules'
+    stylesheet links (e.g. Wikipedia's load.php), which are not in the HTML."""
     raw = gzip.decompress(bytes(raw_html_gz))
-    return extract_image_urls(raw, base_url) + extract_stylesheet_urls(raw, base_url)
+    urls = extract_image_urls(raw, base_url) + extract_stylesheet_urls(raw, base_url)
+    return urls + [u for u in rules_for(base_url).stylesheet_links if u not in urls]
 
 
 def _fill_page(cur, content_id: int, base_url: str, raw_html_gz: bytes, apply: bool,
