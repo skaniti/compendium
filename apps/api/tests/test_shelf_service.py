@@ -428,6 +428,7 @@ def test_concurrent_shelving_calls_never_overlap(monkeypatch):
 
     class Canon:
         ask = None
+        asked = 0
 
         def assign_many(self, items):
             with guard:
