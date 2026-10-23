@@ -150,14 +150,28 @@ object NotesStore {
     }
 
     /** Delete any stray staging file for [shotFile] (dialog torn down without cancel, deleted note). */
-    fun clearStaging(shotFile: File) { stagingFile(shotFile).delete() }
+    fun clearStaging(shotFile: File) {
+        val staged = stagingFile(shotFile)
+        staged.delete()
+        File(staged.parentFile, staged.name + ".tmp").delete()
+    }
+
+    /** Delete every stray `*.pending.png` / `*.pending.png.tmp` in [dir]; call when a dialog opens (one open at a time). */
+    fun sweepStaging(dir: File) {
+        dir.listFiles()?.forEach {
+            if (it.name.endsWith(".pending.png") || it.name.endsWith(".pending.png.tmp")) it.delete()
+        }
+    }
 
     /**
      * Commit [pending] and return the attachment name to store: derived from dialog
      * state ([hadShot] + [pending]), never from what happens to be on disk. If a
      * Replace fails with an I/O error the old shot is kept and its name returned.
      */
-    fun commitAndName(id: String, hadShot: Boolean, shotFile: File, pending: PendingShot): String? {
+    fun commitAndName(
+        id: String, hadShot: Boolean, shotFile: File, pending: PendingShot,
+        onFailure: (java.io.IOException) -> Unit = {},
+    ): String? {
         val old = if (hadShot) "$id.png" else null
         return try {
             commitPendingShot(shotFile, pending)
@@ -168,6 +182,7 @@ object NotesStore {
             }
         } catch (e: java.io.IOException) {
             discardPendingShot(pending)
+            onFailure(e)
             old
         }
     }

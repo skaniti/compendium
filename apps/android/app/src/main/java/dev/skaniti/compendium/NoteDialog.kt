@@ -46,7 +46,7 @@ object NoteDialog {
         val id = existing?.id ?: "note-${System.currentTimeMillis()}"
         val shotFile = NotesStore.screenshotFile(activity, id)
         // A rotation or process death can leave a staged file behind (no cancel callback).
-        NotesStore.clearStaging(shotFile)
+        NotesStore.sweepStaging(NotesStore.dir(activity))
 
         // Seed the working screenshot: edit -> existing file; new -> autoShot copied to <id>.png
         var hasShot = false
@@ -117,7 +117,10 @@ object NoteDialog {
                 if (body.isEmpty()) { discardAll(); return@setPositiveButton }
                 val type = if (toggle.checkedButtonId == R.id.typeImprovement)
                     NotesStore.TYPE_IMPROVEMENT else NotesStore.TYPE_ISSUE
-                val shotName = NotesStore.commitAndName(id, hasShot, shotFile, pending)
+                val shotName = NotesStore.commitAndName(id, hasShot, shotFile, pending) { e ->
+                    android.util.Log.w("NoteDialog", "Screenshot commit failed", e)
+                    android.widget.Toast.makeText(activity, "Screenshot not saved; kept previous", android.widget.Toast.LENGTH_LONG).show()
+                }
                 val now = System.currentTimeMillis()
                 if (existing == null) {
                     NotesStore.addNote(

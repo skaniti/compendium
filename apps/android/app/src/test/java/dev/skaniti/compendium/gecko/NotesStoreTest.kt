@@ -212,4 +212,36 @@ class NotesStoreTest {
         assertEquals("n.png", NotesStore.commitAndName("n", true, shot, NotesStore.PendingShot.Replace(missing)))
         assertEquals("old", shot.readText())
     }
+
+    // ---- fix round 2 ----
+
+    @Test
+    fun clearStagingAlsoDeletesTheTempFile() {
+        val shot = java.io.File(tmp.root, "n.png")
+        val t = tmp.newFile("n.pending.png.tmp")
+        NotesStore.clearStaging(shot)
+        assertFalse(t.exists())
+    }
+
+    @Test
+    fun sweepStagingDeletesAllStrayStagingFilesOnly() {
+        val a = tmp.newFile("note-1.pending.png")
+        val b = tmp.newFile("note-2.pending.png.tmp")
+        val keep1 = tmp.newFile("note-3.png")
+        val keep2 = tmp.newFile("notes.json")
+        NotesStore.sweepStaging(tmp.root)
+        assertFalse(a.exists()); assertFalse(b.exists())
+        assertTrue(keep1.exists()); assertTrue(keep2.exists())
+    }
+
+    @Test
+    fun commitAndNameReportsAFailedCommit() {
+        val shot = tmp.newFile("n.png")
+        var failed = false
+        NotesStore.commitAndName(
+            "n", true, shot,
+            NotesStore.PendingShot.Replace(java.io.File(tmp.root, "n.pending.png")),
+        ) { failed = true }
+        assertTrue(failed)
+    }
 }
