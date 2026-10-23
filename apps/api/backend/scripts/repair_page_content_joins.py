@@ -50,22 +50,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.db.connection import get_conn
-from backend.utils.url_normalize import normalize_url
+from backend.services.content_join_check import find_mismatched_pages
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
-
-# Heavy comparison in SQL. Rows whose own normalized_url is NULL are returned too so
-# Python can derive it from the url (the column is NOT NULL today; belt and braces).
-_MISMATCH_SQL = """
-    SELECT p.id, p.user_id, p.url, p.normalized_url, p.status, p.archive_reason,
-           p.page_content_id, pc.normalized_url
-    FROM pages p
-    JOIN page_content pc ON pc.id = p.page_content_id
-    WHERE (p.normalized_url IS NULL OR pc.normalized_url <> p.normalized_url)
-      AND (%(uid)s::int IS NULL OR p.user_id = %(uid)s)
-    ORDER BY p.id
-"""
 
 _REPORT_FIELDS = [
     "page_id",
@@ -81,29 +69,12 @@ _REPORT_FIELDS = [
 
 
 def find_mismatches(cur, user_id: int | None = None) -> list[dict]:
-    """Return one dict per mismatched page, with the repair action decided."""
-    cur.execute(_MISMATCH_SQL, {"uid": user_id})
-    rows = []
-    for pid, uid, url, norm, status, reason, old_cid, old_norm in cur.fetchall():
-        if norm is None:
-            norm = normalize_url(url or "")
-            if norm == old_norm:
-                continue  # not actually mismatched once normalized
-        if normalize_url(url or "") == old_norm:
-            # The stored pages.normalized_url predates a normalizer change but the
-            # join is right under today's rules: not a mismatch, leave it alone.
-            continue
-        rows.append(
-            {
-                "page_id": pid,
-                "user_id": uid,
-                "url": url,
-                "normalized_url": norm,
-                "old_status": status,
-                "old_archive_reason": reason,
-                "old_content_id": old_cid,
-            }
-        )
+    """Return one dict per mismatched page, with the repair action decided.
+
+    The mismatch definition lives in ``backend.services.content_join_check`` (shared with
+    the nightly check); only the repair action is decided here.
+    """
+    rows = find_mismatched_pages(cur, user_id)
     if not rows:
         return rows
 
