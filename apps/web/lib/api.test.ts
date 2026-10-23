@@ -901,6 +901,15 @@ describe("pipeline fetchers", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/summary?range=30d&tz=UTC");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/pipeline/timeline?range=all&tz=Europe%2FParis");
   });
+  it("fetchContentJoinCheck calls the unscoped route and surfaces a failure", async () => {
+    const fetchMock = ok({ state: "never", checked_at: null, count: 0, page_ids: [] });
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchContentJoinCheck } = await import("./api");
+    expect((await fetchContentJoinCheck()).state).toBe("never");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/pipeline/content-join-check");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404, statusText: "Not Found" })));
+    await expect(fetchContentJoinCheck()).rejects.toThrow("fetchContentJoinCheck failed: 404 Not Found");
+  });
   it("fetchOverviewSummary and fetchOverviewTimeline send range and tz", async () => {
     const fetchMock = ok({});
     vi.stubGlobal("fetch", fetchMock);

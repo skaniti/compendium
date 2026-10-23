@@ -306,6 +306,16 @@ export interface PipelinePage {
 export type PageSortColumn = "title" | "domain" | "status" | "processing_depth" | "visited_at" | "created_at";
 export type SortDir = "asc" | "desc";
 export interface PipelinePagesResponse { rows: PipelinePage[]; total: number; limit: number; offset: number; sort: PageSortColumn; dir: SortDir }
+/** Latest nightly page/content join check, the caller's own slice (GET /api/pipeline/content-join-check); not range-scoped. */
+export type ContentJoinState = "clean" | "mismatches" | "error" | "never";
+export interface ContentJoinCheckResult {
+  state: ContentJoinState;
+  /** When the nightly run that recorded the check finished (ISO); null when never checked. */
+  checked_at: string | null;
+  count: number;
+  /** Up to 20 of the caller's mismatched page ids, ascending; `count` is the true total. */
+  page_ids: number[];
+}
 
 // Overview dev view (apps/api backend/api/routers/overview.py). Every endpoint takes the shared period (`range`, `tz`).
 export type SpendPurposeKey = "gates" | "clustering" | "chat" | "other";

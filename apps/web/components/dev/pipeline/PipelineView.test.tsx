@@ -35,6 +35,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(api.fetchPipelineTimeline).mockResolvedValue({ range: "30d", granularity: "day", buckets: [] });
   vi.mocked(api.fetchPipelinePages).mockResolvedValue({ rows: [row], total: 1, limit: 50, offset: 0, sort: "created_at", dir: "desc" });
+  vi.mocked(api.fetchContentJoinCheck).mockResolvedValue({ state: "clean", checked_at: "2026-10-22T07:30:00+00:00", count: 0, page_ids: [] });
 });
 const loaded = () => waitFor(() => expect(document.querySelector(".chart-legend-flow")).toBeTruthy());
 const mount = (tw: "7" | "30" | "all" = "30") => render(<TimeWindowProvider initialWindow={tw}><PipelineView /></TimeWindowProvider>);
@@ -161,4 +162,23 @@ it("category colours stay the same across periods with different gate categories
   await userEvent.click(screen.getByRole("button", { name: "All time" }));
   await waitFor(() => expect(within(document.querySelector(".chart-legend-flow") as HTMLElement).queryByText("Ad Heavy")).toBeNull());
   expect({ login: colorOf("Login Wall"), paywall: colorOf("Paywall") }).toEqual(before);
+});
+it("shows the nightly content-join check above the summary, fetched once and not tied to the period", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  const { container } = mount();
+  await loaded();
+  const line = await screen.findByText(/Content joins: clean, checked/);
+  const sum = container.querySelector('[data-section="summary"]') as HTMLElement;
+  expect(line.compareDocumentPosition(sum) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "All time" }));
+  await waitFor(() => expect(api.fetchPipelineSummary).toHaveBeenLastCalledWith("all", expect.any(String)));
+  expect(api.fetchContentJoinCheck).toHaveBeenCalledTimes(1);
+});
+it("a failing join check does not take the rest of the view down", async () => {
+  vi.mocked(api.fetchPipelineSummary).mockResolvedValue(summary());
+  vi.mocked(api.fetchContentJoinCheck).mockRejectedValue(new Error("boom"));
+  mount();
+  await loaded();
+  expect(await screen.findByText(/Content joins: couldn't load the check \(boom\)/)).toBeInTheDocument();
+  expect(await screen.findByText("Row page")).toBeInTheDocument();
 });

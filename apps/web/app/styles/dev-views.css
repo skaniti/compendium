@@ -395,6 +395,16 @@
 .rule-filter-patterns li span:last-child { color: var(--panel-caption); }
 .rule-filter-footnote { margin: 0; }
 .rule-filter-hidden { margin: 8px 0 0; color: var(--panel-caption); }
+/* Nightly page/content join check (Pipeline view): a quiet line, or a panel when pages are mis-joined. */
+.join-check { margin: 0 0 var(--pipeline-gap, 20px); font-family: monospace; font-size: 0.72rem; color: var(--panel-caption); }
+.join-check.dev-panel { padding: 14px 20px; color: var(--text); }
+.join-check.is-mismatch { box-shadow: inset 4px 0 0 var(--highlight); background: color-mix(in oklch, var(--highlight) 10%, var(--surface)); }
+.join-check-head { margin: 0 0 8px; font-size: 0.8rem; }
+.join-check-head strong { color: var(--highlight); }
+.join-check-when, .join-check-more { color: var(--panel-caption); }
+.join-check-ids { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.join-check-fix { margin: 0; color: var(--panel-caption); }
+.join-check-fix code { color: var(--text); overflow-wrap: anywhere; }
 .pipeline-flow-panel .dev-empty-inline { text-align: center; padding: 60px 20px; font-size: 0.85rem; }
 .pipeline-summary .dev-panel { margin: 0; }
 .pipeline-filters-row > .dev-panel { min-width: 0; }

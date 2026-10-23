@@ -12,6 +12,7 @@ import CategoryLegend from "./CategoryLegend";
 import RuleFilterPanel from "./RuleFilterPanel";
 import SkipGateConfigPanel from "./SkipGateConfigPanel";
 import PagesTable from "./PagesTable";
+import ContentJoinCheck from "./ContentJoinCheck";
 import { usePeriodFetch } from "./usePeriodFetch";
 
 export const PIPELINE_SUBTITLE = "Where every page captured in the selected period went: archived before the gate, filtered by rules with no LLM, skipped by the LLM gate, or processed into your graph; how that changed over time; and every page in the period.";
@@ -55,6 +56,7 @@ export default function PipelineView() {
         <RangePills value={timeWindow} onChange={setTimeWindow} />
       </div>
       <div className="dev-view-body">
+        <ContentJoinCheck tz={tz} />
         <div data-section="summary" className={busy ? "pipeline-summary is-refreshing" : "pipeline-summary"} aria-busy={busy}>
           <section className="dev-panel pipeline-flow-panel">
             {error ? <p className="dev-empty" role="alert">Couldn&apos;t load pipeline summary ({error}).</p>

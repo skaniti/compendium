@@ -1,5 +1,6 @@
 import type {
   ClusteringStatus,
+  ContentJoinCheckResult,
   DiaryWindow,
   GraphPayload,
   MemberExclusion,
@@ -210,6 +211,11 @@ export async function fetchPipelineTimeline(range: RangeKey, tz: string): Promis
 export async function fetchPipelinePages(limit: number, offset: number, sort: PageSortColumn, dir: SortDir, range: RangeKey, tz: string): Promise<PipelinePagesResponse> {
   const res = await apiFetch(`/api/pipeline/pages?limit=${limit}&offset=${offset}&sort=${sort}&dir=${dir}&${periodQuery(range, tz)}`);
   if (!res.ok) throw new Error(`fetchPipelinePages failed: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+export async function fetchContentJoinCheck(): Promise<ContentJoinCheckResult> {
+  const res = await apiFetch("/api/pipeline/content-join-check");
+  if (!res.ok) throw new Error(`fetchContentJoinCheck failed: ${res.status} ${res.statusText}`);
   return res.json();
 }
 export async function fetchOverviewSummary(range: RangeKey, tz: string): Promise<OverviewSummary> {
