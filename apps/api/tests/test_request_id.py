@@ -28,8 +28,10 @@ def test_overlong_id_truncated():
     assert len(out) == ci.REQUEST_ID_MAX_LEN
 
 
-def test_long_unbroken_alnum_run_is_truncated_not_replaced():
-    assert ci.clean_request_id("a" * 5000) == "a" * ci.REQUEST_ID_MAX_LEN
+def test_long_unprefixed_alnum_run_is_replaced_by_uuid():
+    assert _is_uuid(ci.clean_request_id("aB3" * 17))  # 51-char base62
+    assert _is_uuid(ci.clean_request_id("a" * 5000))
+    assert _is_uuid(ci.clean_request_id("a1b2c3d4" * 8 + "ff"))  # 66 hex is not an allowed trace id
 
 
 def test_control_and_separator_chars_stripped():
@@ -52,7 +54,8 @@ def test_long_hyphenated_and_hex_ids_pass_through_truncated():
     assert ci.clean_request_id(traceparent) == traceparent
     hex64 = "a1b2c3d4" * 8
     assert ci.clean_request_id(hex64) == hex64
-    assert ci.clean_request_id(hex64 + "ff") == hex64
+    u = str(uuid.uuid4())
+    assert ci.clean_request_id(u) == u
 
 
 def test_bearer_with_space_still_redacted():
@@ -64,11 +67,11 @@ def test_cleaned_id_on_error_response():
     client = TestClient(app)
     r = client.post(
         "/api/anything",
-        headers={"X-Request-ID": "bad\x01id " + "r" * 100, "Content-Length": str(10**9)},
+        headers={"X-Request-ID": "bad\x01id " + "r." * 50, "Content-Length": str(10**9)},
         content=b"x",
     )
     assert r.status_code == 413
-    assert r.headers["X-Request-ID"] == "badid" + "r" * (ci.REQUEST_ID_MAX_LEN - 5)
+    assert r.headers["X-Request-ID"] == ("badid" + "r." * 50)[: ci.REQUEST_ID_MAX_LEN]
 
 
 def test_middleware_echoes_cleaned_value():

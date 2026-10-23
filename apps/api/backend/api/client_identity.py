@@ -128,22 +128,25 @@ REQUEST_ID_MAX_LEN = 64
 _WHITESPACE_RE = re.compile(r"\s")
 
 
-# The audit table's credential patterns minus its two length-only ones (bare
-# 48+ hex / alphanumeric runs): a long id is legitimate (W3C traceparent, 64-hex
-# trace ids) and is truncated, while a scheme-headed secret is still refused.
-_REQUEST_ID_SECRET_SHAPES = tuple(
-    re.compile(p) for p in SECRET_SHAPE_PATTERNS if not p.startswith(r"\b[")
+# Legitimate long request-id shapes that the audit table's length-only patterns
+# (bare 48+ hex / alphanumeric runs) would otherwise reject: a W3C traceparent,
+# a plain 32- or 64-hex trace id, and a uuid. Anything else goes through the
+# FULL SECRET_SHAPES set, so an unprefixed 48+ character secret is still refused.
+_REQUEST_ID_ALLOWED = re.compile(
+    r"[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}"
+    r"|[0-9a-f]{32}|[0-9a-f]{64}"
+    r"|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
 
 
 def clean_request_id(value: str | None) -> str:
-    """A safe X-Request-ID: control and invisible characters removed, scheme-
-    headed credentials refused, whitespace stripped, capped at
-    REQUEST_ID_MAX_LEN. A fresh uuid4 when nothing usable is left."""
+    """A safe X-Request-ID: control and invisible characters removed, credential
+    shapes refused (allowlisted trace-id shapes excepted), whitespace stripped,
+    capped at REQUEST_ID_MAX_LEN. A fresh uuid4 when nothing usable is left."""
     if value:
         value = value[: REQUEST_ID_MAX_LEN + _WORKING_MARGIN]
         value = _INVISIBLE_RE.sub("", _CONTROL_RE.sub(" ", value))
-        if any(p.search(value) for p in _REQUEST_ID_SECRET_SHAPES):
+        if not _REQUEST_ID_ALLOWED.fullmatch(value) and any(p.search(value) for p in SECRET_SHAPES):
             return str(uuid.uuid4())
         value = _WHITESPACE_RE.sub("", value)[:REQUEST_ID_MAX_LEN]
     return value or str(uuid.uuid4())
