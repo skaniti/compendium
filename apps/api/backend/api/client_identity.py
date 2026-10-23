@@ -27,6 +27,7 @@ the Android collector's is browser-shaped.
 
 import logging
 import re
+import uuid
 from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import unquote
@@ -121,6 +122,23 @@ def _clean(value: str | None, limit: int, *, oversized: bool = False) -> str | N
         if any(head in logged for head in _SECRET_HEADS):
             return _REDACTED
     return value[:limit]
+
+
+REQUEST_ID_MAX_LEN = 64
+_WHITESPACE_RE = re.compile(r"\s")
+
+
+def clean_request_id(value: str | None) -> str:
+    """A safe X-Request-ID: whitespace, control and invisible characters
+    removed, credential-shaped values redacted, capped at REQUEST_ID_MAX_LEN.
+    A fresh uuid4 when nothing usable is left."""
+    if value:
+        value = value[: REQUEST_ID_MAX_LEN + _WORKING_MARGIN]
+        value = _WHITESPACE_RE.sub("", _INVISIBLE_RE.sub("", _CONTROL_RE.sub("", value)))
+    cleaned = _clean(value, REQUEST_ID_MAX_LEN)
+    if not cleaned or cleaned == _REDACTED:
+        return str(uuid.uuid4())
+    return cleaned
 
 
 def _parse_client(value: str | None) -> tuple[str | None, str | None]:

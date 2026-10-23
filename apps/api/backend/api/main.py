@@ -754,7 +754,7 @@ _QUIET_ACCESS_PATHS = frozenset({"/api/logs", "/health", "/metrics"})
 # ---------------------------------------------------------------------------
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request_id = _client_identity.clean_request_id(request.headers.get("X-Request-ID"))
     start = time.perf_counter()
 
     response = await call_next(request)
