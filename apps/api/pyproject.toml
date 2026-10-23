@@ -43,3 +43,10 @@ ignore = [
     # in case ruff's notebook handling changes.
     "F401",
 ]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # slowapi/extension.py calls asyncio.iscoroutinefunction (deprecated in
+    # 3.14, removal in 3.16). Upstream's code; we cannot fix it at source.
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:slowapi",
+]

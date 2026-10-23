@@ -95,7 +95,7 @@ def test_flag_off_never_imports_or_calls_labeller(monkeypatch):
 
 def test_flag_off_does_not_load_labeller_module_fresh(monkeypatch):
     monkeypatch.setattr(settings, "label_first_enabled", False)
-    sys.modules.pop(LABELLER, None)
+    monkeypatch.delitem(sys.modules, LABELLER, raising=False)
     _run([_result(URLS[0], 100)], [_row(10, URLS[0])], monkeypatch)
     assert LABELLER not in sys.modules
 
