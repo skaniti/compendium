@@ -61,6 +61,8 @@ openssl rand -hex 32
 
 Single-quote any value that contains `$`, `#` or spaces. `docker compose` refuses to start until all five are set, and names the one that's missing.
 
+Shortcut: `bash scripts/setup-env.sh` asks for your email, password and OpenAI key, generates the two secrets, and writes `.env` from `.env.example` in one step. It refuses to overwrite an existing `.env`, and never prints your password or keys. It needs bash (macOS, Linux or WSL); on Windows without WSL, use the steps above.
+
 **2. Start it.**
 
 ```bash
