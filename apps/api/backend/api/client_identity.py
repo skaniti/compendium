@@ -41,6 +41,12 @@ DEVICE_HEADER = "X-Compendium-Device"
 KNOWN_KINDS = frozenset({"extension", "android", "web"})
 
 _REDACTED = "<redacted>"
+# A value is cut to limit + this many raw characters before any regex runs, so
+# one huge header cannot make the cleaning and secret patterns scan megabytes.
+# Wide enough that a credential straddling the cap is still seen whole.
+_WORKING_MARGIN = 64
+# A percent-encoded character is at most 12 characters (4 UTF-8 bytes x "%XX").
+_MAX_ESCAPE_EXPANSION = 12
 _MAX_DEVICE = 64
 _MAX_ORIGIN = 100
 _MAX_USER_AGENT = 200
@@ -61,16 +67,19 @@ _EXTENSION_ORIGIN_PREFIXES = (
 
 
 def _clean(value: str | None, limit: int) -> str | None:
-    """Strip control/invisible characters, trim, redact, then truncate.
+    """Bound, strip control/invisible characters, trim, redact, then truncate.
 
-    A value shaped like a credential (the audit table's SECRET_SHAPES) comes
-    back as "<redacted>" in full. The match runs on the whole cleaned value
-    BEFORE the cut: truncating first could leave a key's head too short to
+    The raw value is first cut to a working prefix of limit + _WORKING_MARGIN
+    characters, so no regex below ever sees an unbounded header. A value shaped
+    like a credential (the audit table's SECRET_SHAPES) then comes back as
+    "<redacted>" in full. That match runs on the whole working prefix BEFORE the
+    cut to `limit`: truncating first could leave a key's head too short to
     match (cmp_ plus 19 characters) and still carry it into api.jsonl and the
     audit row. None when nothing is left.
     """
     if not value:
         return None
+    value = value[: limit + _WORKING_MARGIN]
     value = _INVISIBLE_RE.sub("", _CONTROL_RE.sub(" ", value)).strip()
     if not value:
         return None
@@ -83,7 +92,7 @@ def _parse_client(value: str | None) -> tuple[str | None, str | None]:
     """(kind, version) from a well-formed header naming a known kind, else (None, None)."""
     if not value:
         return None, None
-    m = _CLIENT_RE.match(value)
+    m = _CLIENT_RE.match(value[:128])  # longer than any valid value (32 + "/" + 32 + padding)
     if not m:
         return None, None
     kind = m.group(1).lower()
@@ -94,7 +103,7 @@ def _parse_client(value: str | None) -> tuple[str | None, str | None]:
 
 def _infer_kind(origin: str | None, headers: Any) -> str:
     if origin:
-        lowered = origin.lower()
+        lowered = origin[:32].lower()  # the longest scheme prefix checked is 26 characters
         if lowered.startswith(_EXTENSION_ORIGIN_PREFIXES):
             return "extension"
         if lowered.startswith(("http://", "https://")):
@@ -119,6 +128,8 @@ def describe(headers: Any) -> dict[str, str]:
         if version:
             out["client_version"] = version
         raw_device = headers.get(DEVICE_HEADER)
+        if raw_device:
+            raw_device = raw_device[: (_MAX_DEVICE + _WORKING_MARGIN) * _MAX_ESCAPE_EXPANSION]
         device = _clean(unquote(raw_device, errors="replace") if raw_device else None, _MAX_DEVICE)
         if device:
             out["device"] = device

@@ -243,3 +243,61 @@ def test_line_paragraph_and_arabic_letter_marks_are_stripped():
     # U+2028, U+2029, U+061C percent-decoded from a device label.
     out = ci.describe(_h(x_compendium_device="a%E2%80%A8b%E2%80%A9c%D8%9Cd"))
     assert out["device"] == "abcd"
+
+
+_SEEN: list[int] = []  # lengths of the text each spied pattern was shown
+
+
+class _SpyPattern:
+    """Stands in for a SECRET_SHAPES pattern and records how much text it is shown."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def search(self, text):
+        _SEEN.append(len(text))
+        return self._real.search(text)
+
+
+def test_an_oversized_header_is_bounded_before_any_regex_runs(monkeypatch):
+    import time
+
+    _SEEN.clear()
+    monkeypatch.setattr(ci, "SECRET_SHAPES", tuple(_SpyPattern(p) for p in ci.SECRET_SHAPES))
+    big = "ab. " * 25_000  # 100 KB
+    started = time.perf_counter()
+    out = ci.describe(
+        _h(
+            x_compendium_device=quote(big),
+            x_compendium_client="extension/" + big,
+            origin="https://" + big,
+            user_agent=big,
+        )
+    )
+    assert time.perf_counter() - started < 2.0
+    assert len(out["device"]) <= 64
+    assert len(out["origin"]) <= 100
+    assert len(out["user_agent"]) <= 200
+    assert out["client"] == "web"  # the oversized client value is ignored; Origin decides
+    # The widest field is the user agent: 200 + the 64-character margin.
+    assert _SEEN and max(_SEEN) <= 200 + 64
+
+
+def test_a_key_straddling_the_cap_is_still_redacted_inside_an_oversized_value():
+    key = "cmp_" + "ab12" * 8
+    tail = "ab. " * 25_000
+    for header, limit, field in (
+        ("user_agent", 200, "user_agent"),
+        ("origin", 100, "origin"),
+    ):
+        value = ("x. " * limit)[: limit - 23] + key + tail
+        out = ci.describe(_h(**{header: value}))
+        assert out[field] == "<redacted>", header
+
+
+def test_a_key_far_past_the_cap_is_dropped_by_truncation_not_logged():
+    key = "cmp_" + "ab12" * 8
+    value = ("x. " * 300)[:300] + key + "ab. " * 25_000  # key starts at offset 300
+    out = ci.describe(_h(user_agent=value))
+    assert len(out["user_agent"]) == 200
+    assert "cmp_" not in out["user_agent"]
