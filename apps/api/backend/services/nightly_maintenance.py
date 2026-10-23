@@ -18,6 +18,11 @@ call :func:`register_jobs` yourself first.
 Cost-flatness on quiet days comes from gating only the recluster step on
 new pages (recorded as ``recluster_skipped`` in the notes); the cheap
 maintenance steps still run so nothing strands until the next night.
+
+The page/content join check (:mod:`backend.services.content_join_check`) also
+always runs, read-only, right after the pending sweep; its result is recorded
+under ``content_join_mismatches`` in the notes and a nonzero count is logged as
+a WARNING. It flags only: repair is a manual run of the repair script.
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from datetime import datetime
 from backend.config.settings import settings
 from backend.db import page_repo
 from backend.db.connection import get_conn
-from backend.services import scheduler
+from backend.services import content_join_check, scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +81,34 @@ def _last_successful_recluster_at(user_id: int):
         )
         row = cur.fetchone()
         return row[0] if row else None
+
+
+async def _content_join_check_notes() -> dict:
+    """Run the page/content join check; never raises.
+
+    Returns the notes payload (``{"count", "by_user"}``), or ``{"error": <message>}``
+    when the check itself failed, so a broken check cannot fail the nightly run or
+    skip the steps after it. A nonzero count logs one WARNING with the count and the
+    capped page ids per user.
+    """
+    try:
+        # sync, blocking SQL over pages x page_content: keep it off the event loop
+        result = await asyncio.to_thread(content_join_check.check_content_joins)
+    except Exception as exc:
+        logger.exception("content join check failed")
+        return {"error": str(exc)[:300]}
+    if result["count"]:
+        per_user = "; ".join(
+            f"user {uid}: {u['count']} page(s), ids {u['page_ids']}"
+            for uid, u in result["by_user"].items()
+        )
+        logger.warning(
+            "content join check: %d page(s) point at a content row for a different url (%s). "
+            "Repair: python -m backend.scripts.repair_page_content_joins",
+            result["count"],
+            per_user,
+        )
+    return result
 
 
 async def _maybe_weekly_shelf_maintenance(user_id: int) -> dict:
@@ -155,8 +188,9 @@ async def _maybe_label_catchup(user_id: int) -> dict:
 
 async def run_nightly_maintenance() -> dict:
     """Nightly maintenance orchestrator. Always: reap stale runs, sweep
-    stranded pending captures, run catch-up backfills, write a status
-    snapshot. Reclusters only when new pages exist since the last run.
+    stranded pending captures, check page/content joins (flag only), run
+    catch-up backfills, write a status snapshot. Reclusters only when new
+    pages exist since the last run.
     Returns notes for scheduled_runs (cost_usd + counts + skip reasons).
     Any exception propagates so the scheduler records a failed run.
     """
@@ -175,6 +209,10 @@ async def run_nightly_maintenance() -> dict:
     sweep = await sweep_pending_once(user_id)
     notes["pending_swept"] = sweep["processed"]
     notes["pending_failed"] = sweep["failed"]
+
+    # 2a. Page/content join check (read-only; flags only): after the sweep so pages it
+    # just re-processed are included. Failure-proof: an error lands in the notes.
+    notes[content_join_check.NOTES_KEY] = await _content_join_check_notes()
 
     cost = 0.0
 
