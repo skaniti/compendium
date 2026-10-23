@@ -28,10 +28,8 @@ def test_overlong_id_truncated():
     assert len(out) == ci.REQUEST_ID_MAX_LEN
 
 
-def test_long_unbroken_alnum_run_is_treated_as_secret_shaped():
-    # 48+ unbroken [A-Za-z0-9_-] characters match the audit table's key patterns, so the
-    # id is replaced by a uuid rather than logged truncated.
-    assert _is_uuid(ci.clean_request_id("a" * 5000))
+def test_long_unbroken_alnum_run_is_truncated_not_replaced():
+    assert ci.clean_request_id("a" * 5000) == "a" * ci.REQUEST_ID_MAX_LEN
 
 
 def test_control_and_separator_chars_stripped():
@@ -46,6 +44,31 @@ def test_empty_or_invalid_replaced_by_uuid():
 
 def test_secret_shaped_id_replaced_by_uuid():
     assert _is_uuid(ci.clean_request_id("sk-ant-" + "x" * 40))
+
+
+def test_long_hyphenated_and_hex_ids_pass_through_truncated():
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    assert len(traceparent) == 55
+    assert ci.clean_request_id(traceparent) == traceparent
+    hex64 = "a1b2c3d4" * 8
+    assert ci.clean_request_id(hex64) == hex64
+    assert ci.clean_request_id(hex64 + "ff") == hex64
+
+
+def test_bearer_with_space_still_redacted():
+    assert _is_uuid(ci.clean_request_id("Bearer " + "A1b2C3d4" * 3))
+    assert _is_uuid(ci.clean_request_id("token=abcdef"))
+
+
+def test_cleaned_id_on_error_response():
+    client = TestClient(app)
+    r = client.post(
+        "/api/anything",
+        headers={"X-Request-ID": "bad\x01id " + "r" * 100, "Content-Length": str(10**9)},
+        content=b"x",
+    )
+    assert r.status_code == 413
+    assert r.headers["X-Request-ID"] == "badid" + "r" * (ci.REQUEST_ID_MAX_LEN - 5)
 
 
 def test_middleware_echoes_cleaned_value():

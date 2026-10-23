@@ -128,17 +128,25 @@ REQUEST_ID_MAX_LEN = 64
 _WHITESPACE_RE = re.compile(r"\s")
 
 
+# The audit table's credential patterns minus its two length-only ones (bare
+# 48+ hex / alphanumeric runs): a long id is legitimate (W3C traceparent, 64-hex
+# trace ids) and is truncated, while a scheme-headed secret is still refused.
+_REQUEST_ID_SECRET_SHAPES = tuple(
+    re.compile(p) for p in SECRET_SHAPE_PATTERNS if not p.startswith(r"\b[")
+)
+
+
 def clean_request_id(value: str | None) -> str:
-    """A safe X-Request-ID: whitespace, control and invisible characters
-    removed, credential-shaped values redacted, capped at REQUEST_ID_MAX_LEN.
-    A fresh uuid4 when nothing usable is left."""
+    """A safe X-Request-ID: control and invisible characters removed, scheme-
+    headed credentials refused, whitespace stripped, capped at
+    REQUEST_ID_MAX_LEN. A fresh uuid4 when nothing usable is left."""
     if value:
         value = value[: REQUEST_ID_MAX_LEN + _WORKING_MARGIN]
-        value = _WHITESPACE_RE.sub("", _INVISIBLE_RE.sub("", _CONTROL_RE.sub("", value)))
-    cleaned = _clean(value, REQUEST_ID_MAX_LEN)
-    if not cleaned or cleaned == _REDACTED:
-        return str(uuid.uuid4())
-    return cleaned
+        value = _INVISIBLE_RE.sub("", _CONTROL_RE.sub(" ", value))
+        if any(p.search(value) for p in _REQUEST_ID_SECRET_SHAPES):
+            return str(uuid.uuid4())
+        value = _WHITESPACE_RE.sub("", value)[:REQUEST_ID_MAX_LEN]
+    return value or str(uuid.uuid4())
 
 
 def _parse_client(value: str | None) -> tuple[str | None, str | None]:
