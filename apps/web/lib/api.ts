@@ -215,6 +215,7 @@ export async function fetchPipelinePages(limit: number, offset: number, sort: Pa
 }
 export async function fetchContentJoinCheck(): Promise<ContentJoinCheckResult> {
   const res = await apiFetch("/api/pipeline/content-join-check");
+  if (res.status === 404) throw new Error(STALE_API_MESSAGE);
   if (!res.ok) throw new Error(`fetchContentJoinCheck failed: ${res.status} ${res.statusText}`);
   return res.json();
 }

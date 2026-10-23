@@ -1,5 +1,6 @@
 "use client";
 import { fetchContentJoinCheck } from "@/lib/api";
+import { STALE_API_MESSAGE } from "@/lib/overview";
 import { usePeriodFetch } from "./usePeriodFetch";
 
 export const REPAIR_COMMAND = "python -m backend.scripts.repair_page_content_joins";
@@ -20,6 +21,7 @@ function dayIn(iso: string | null, tz: string): string {
  */
 export default function ContentJoinCheck({ tz }: { tz: string }) {
   const { data, error } = usePeriodFetch("content-join-check", fetchContentJoinCheck);
+  if (error === STALE_API_MESSAGE) return <p className="join-check" data-state="stale" aria-busy="false">Content joins: the API is older than this view; restart it to load the check.</p>;
   if (error) return <p className="join-check" data-state="unavailable" aria-busy="false">Content joins: couldn&apos;t load the check ({error}).</p>;
   if (!data) return <p className="join-check" aria-busy="true">Content joins: checking…</p>;
   const day = dayIn(data.checked_at, tz);

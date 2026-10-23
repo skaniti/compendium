@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { vi, it, expect, beforeEach } from "vitest";
 import * as api from "@/lib/api";
+import { STALE_API_MESSAGE } from "@/lib/overview";
 import type { ContentJoinCheckResult } from "@/lib/types";
 import ContentJoinCheck from "./ContentJoinCheck";
 vi.mock("@/lib/api");
@@ -71,6 +72,13 @@ it("a failed request shows a plain line with the reason", async () => {
   const { container } = mount();
   await screen.findByText("Content joins: couldn't load the check (fetchContentJoinCheck failed: 404 Not Found).");
   expect(container.querySelector(".join-check")).toHaveAttribute("data-state", "unavailable");
+});
+it("a stale API (404) says to restart it, instead of showing the marker string", async () => {
+  vi.mocked(api.fetchContentJoinCheck).mockRejectedValue(new Error(STALE_API_MESSAGE));
+  const { container } = mount();
+  await screen.findByText("Content joins: the API is older than this view; restart it to load the check.");
+  expect(container.querySelector(".join-check")).toHaveAttribute("data-state", "stale");
+  expect(container).not.toHaveTextContent(STALE_API_MESSAGE);
 });
 it("renders no native title tooltips", async () => {
   vi.mocked(api.fetchContentJoinCheck).mockResolvedValue(result({ state: "mismatches", count: 2, page_ids: [1, 2] }));
