@@ -577,6 +577,12 @@ class TestLabelMatchTier:
         query = "machine tools for sourdough"
         assert _label_match_tier("deep learning", query, _tokenize(query)) is None
 
+    def test_punctuation_label_is_not_long_enough(self):
+        # "C++" tokenizes to "c": too short to match inside unrelated queries.
+        for q in ("vitamin c benefits", "c and rust"):
+            assert _label_match_tier("C++", q, _tokenize(q)) is None
+        assert _label_match_tier("C++", "c++", _tokenize("c++")) == 0
+
     def test_hyphen_and_underscore_separate_tokens(self):
         assert _label_match_tier("data-science", "science", _tokenize("science")) == 2
         assert _label_match_tier("computer_science", "computer science fans", _tokenize("computer science fans")) == 1

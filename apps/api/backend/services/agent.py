@@ -232,11 +232,11 @@ def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> O
 
     Checked against both the full normalized query AND its individual word
     tokens (>=3 chars), so a multi-word query like "tell me about astronomy"
-    still substring-matches a label "astronomy" even though the full query
-    string isn't a substring of it.
+    still matches a label "astronomy" on the whole token "astronomy" even
+    though the full query string doesn't contain it as a token run.
 
-    Prefix/substring/close-match tiers additionally require the label be
-    >=3 chars (mirroring the token-length guard below), so a short label
+    Prefix/containment/close-match tiers additionally require the label have
+    >=3 alphanumeric chars (mirroring the token-length guard below), so a short label
     like "AI" can't substring-match into an unrelated query (e.g. "mail
     merge tutorials" via "ai" ⊂ "mail"). Exact matches are exempt --
     a query of "ai" must still match a label "AI".
@@ -248,10 +248,11 @@ def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> O
         return None
     if label_norm == query_norm:
         return 0
-    label_long_enough = len(label_norm) >= 3
     # Containment is on whole tokens (``_`` / ``-`` / whitespace separate
     # them), never bare substrings: "the" must not match inside "synthesis".
     label_tokens = _tokenize(label_norm)
+    # Length guard counts alphanumerics only, so "C++" (token "c") is "short".
+    label_long_enough = sum(map(len, label_tokens)) >= 3
     query_full_tokens = _tokenize(query_norm)
     if label_long_enough:
         if len(query_norm) >= 3:
@@ -2121,8 +2122,8 @@ class CompendiumAgent:
         """Look up a cluster or supercluster by name/slug (fuzzy,
         typo-tolerant) and return its pages.
 
-        Ranks every candidate label by match quality (exact > prefix >
-        substring > close-match typo, via `_label_match_tier`) instead of
+        Ranks every candidate label by match quality (exact > token prefix >
+        whole-token containment > close-match typo, via `_label_match_tier`) instead of
         the first substring hit in cluster order, and checks supercluster
         labels alongside leaf cluster names/slugs (P1: taxonomy visible
         from this tool too, not just the search cascade's taxonomy stage).
