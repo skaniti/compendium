@@ -279,8 +279,8 @@ def test_an_oversized_header_is_bounded_before_any_regex_runs(monkeypatch):
     assert len(out["origin"]) <= 100
     assert len(out["user_agent"]) <= 200
     assert out["client"] == "web"  # the oversized client value is ignored; Origin decides
-    # The widest field is the user agent: 200 + the 64-character margin.
-    assert _SEEN and max(_SEEN) <= 200 + 64
+    # The widest field is the user agent: 200 + the 1024-character margin.
+    assert _SEEN and max(_SEEN) <= 200 + 1024
 
 
 def test_a_key_straddling_the_cap_is_still_redacted_inside_an_oversized_value():
@@ -297,7 +297,77 @@ def test_a_key_straddling_the_cap_is_still_redacted_inside_an_oversized_value():
 
 def test_a_key_far_past_the_cap_is_dropped_by_truncation_not_logged():
     key = "cmp_" + "ab12" * 8
-    value = ("x. " * 300)[:300] + key + "ab. " * 25_000  # key starts at offset 300
+    # Key starts at offset 1300, past the 200 + 1024 window and the logged 200.
+    value = ("x. " * 500)[:1300] + key + "ab. " * 25_000
     out = ci.describe(_h(user_agent=value))
     assert len(out["user_agent"]) == 200
     assert "cmp_" not in out["user_agent"]
+
+
+# -- credentials whose terminator can fall past the working window -------------
+
+
+def test_secret_heads_are_read_off_the_audit_pattern_list():
+    # Derived from SECRET_SHAPE_PATTERNS, so a new pattern with a literal head
+    # joins automatically; these are the schemes that exist today.
+    expected = {"sk-ant-", "sk-", "cmp_", "hf_", "ghp_", "eyj", "bearer", "postgres"}
+    assert expected <= set(ci._SECRET_HEADS)
+    # Length-based patterns have no literal head and add nothing.
+    assert ci._literal_head(r"\b[A-Za-z0-9_-]{48,}\b") == ""
+    assert ci._literal_head(r"(?i)\b(password|pgpassword|passwd|secret|token)=\S+") == ""
+
+
+def test_long_url_credential_with_the_at_sign_past_the_window_is_redacted():
+    # postgres://user:<password>@host needs its "@" to match; here it sits well
+    # past the 200 + 1024 window of a user agent, and the dotted password has no
+    # 48-character run for the length-based pattern to catch instead.
+    value = "postgres://svc:" + "a.b." * 2000 + "@db.example"
+    assert len(value) > 200 + 1024
+    out = ci.describe(_h(user_agent=value))
+    assert out["user_agent"] == "<redacted>"
+    assert "postgres" not in str(out)
+    # Same on the device path (percent-encoded, then decoded) and the log path.
+    assert ci.describe(_h(x_compendium_device=quote(value)))["device"] == "<redacted>"
+    fields = ci.rejection_log_fields(
+        method="GET", status_code=401, headers=_h(user_agent=value), allowed_origins=["*"]
+    )
+    assert fields["user_agent"] == "<redacted>"
+
+
+def test_long_jwt_is_redacted():
+    header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+    value = f"{header}.{'eyJzdWIiOiIx' * 400}.{'sig_' * 100}"
+    assert len(value) > 200 + 1024
+    assert ci.describe(_h(user_agent=value))["user_agent"] == "<redacted>"
+
+
+def test_oversized_value_without_a_credential_head_is_truncated_not_redacted():
+    out = ci.describe(_h(user_agent="Mozilla/5.0 " + "ab. " * 25_000))
+    assert len(out["user_agent"]) == 200
+    assert out["user_agent"].startswith("Mozilla/5.0 ab. ab.")
+
+
+def test_head_past_the_logged_part_of_an_oversized_value_is_just_truncated_away():
+    value = ("x. " * 100)[:150] + "postgres://" + "a.b." * 2000
+    out = ci.describe(_h(user_agent=value))
+    # "postgres" starts at 150 and runs into the logged 200: head present -> redacted.
+    assert out["user_agent"] == "<redacted>"
+    later = ("x. " * 100)[:250] + "postgres://" + "a.b." * 2000  # starts past the 200 cut
+    out = ci.describe(_h(user_agent=later))
+    assert len(out["user_agent"]) == 200
+    assert "postgres" not in out["user_agent"]
+
+
+def test_a_short_value_with_a_head_but_no_full_credential_is_not_redacted():
+    # Within the window the real patterns decide exactly; heads are only a
+    # fallback for a value too long to examine whole.
+    out = ci.describe(_h(user_agent="docs about postgres://host-only/db and sk-learn"))
+    assert out["user_agent"] == "docs about postgres://host-only/db and sk-learn"
+
+
+def test_device_header_cut_before_decoding_still_gets_the_head_check():
+    # Longer than (64 + 1024) * 12 raw characters, so it is cut before unquote
+    # and the decoded text is short; the head check must still run.
+    value = "postgres://svc:" + "a.b." * 5000 + "@db.example"
+    assert len(quote(value)) > (64 + 1024) * 12
+    assert ci.describe(_h(x_compendium_device=quote(value)))["device"] == "<redacted>"

@@ -31,7 +31,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import unquote
 
-from backend.db.audit_repo import SECRET_SHAPES
+from backend.db.audit_repo import SECRET_SHAPE_PATTERNS, SECRET_SHAPES
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,11 @@ KNOWN_KINDS = frozenset({"extension", "android", "web"})
 _REDACTED = "<redacted>"
 # A value is cut to limit + this many raw characters before any regex runs, so
 # one huge header cannot make the cleaning and secret patterns scan megabytes.
-# Wide enough that a credential straddling the cap is still seen whole.
-_WORKING_MARGIN = 64
+# Wide enough that a credential straddling the cap is still seen whole, and
+# that the terminator some patterns need (the "@" of a postgres URL, the third
+# segment of a JWT) is usually inside the window too. When it is not, the head
+# check in _clean covers the gap (see _SECRET_HEADS).
+_WORKING_MARGIN = 1024
 # A percent-encoded character is at most 12 characters (4 UTF-8 bytes x "%XX").
 _MAX_ESCAPE_EXPANSION = 12
 _MAX_DEVICE = 64
@@ -66,25 +69,57 @@ _EXTENSION_ORIGIN_PREFIXES = (
 )
 
 
-def _clean(value: str | None, limit: int) -> str | None:
+def _literal_head(pattern: str) -> str:
+    """Leading literal text of a SECRET_SHAPE_PATTERNS entry, lowercased; ''
+    when it starts with a class or group (the length-based patterns). Skips a
+    leading (?i) flag and \\b, so "(?i)bearer\\s+..." gives "bearer"."""
+    text = pattern.removeprefix("(?i)").removeprefix("\\b")
+    head = []
+    for ch in text:
+        if ch in "[](){}\\.*+?|^$":
+            break
+        head.append(ch)
+    return "".join(head).lower()
+
+
+# The credential-scheme heads (sk-ant-, sk-, cmp_, hf_, ghp_, eyJ, bearer,
+# postgres, ...), read off the audit table's own pattern list so they cannot
+# drift from it. Used only for a value longer than the working window: a
+# pattern that needs a terminator past the window cannot match there, so a head
+# in the part that will be logged gets the whole field redacted instead.
+_SECRET_HEADS = tuple(sorted({h for h in map(_literal_head, SECRET_SHAPE_PATTERNS) if len(h) >= 3}))
+
+
+def _clean(value: str | None, limit: int, *, oversized: bool = False) -> str | None:
     """Bound, strip control/invisible characters, trim, redact, then truncate.
 
-    The raw value is first cut to a working prefix of limit + _WORKING_MARGIN
+    The raw value is first cut to a working window of limit + _WORKING_MARGIN
     characters, so no regex below ever sees an unbounded header. A value shaped
     like a credential (the audit table's SECRET_SHAPES) then comes back as
-    "<redacted>" in full. That match runs on the whole working prefix BEFORE the
-    cut to `limit`: truncating first could leave a key's head too short to
-    match (cmp_ plus 19 characters) and still carry it into api.jsonl and the
-    audit row. None when nothing is left.
+    "<redacted>" in full. That match runs on the whole window BEFORE the cut to
+    `limit`: truncating first could leave a key's head too short to match
+    (cmp_ plus 19 characters) and still carry it into api.jsonl and the audit
+    row.
+
+    When the raw value was longer than the window (`oversized` says the caller
+    already cut it), a pattern whose terminator lies past the window cannot
+    match, so the field is also redacted if the part that would be logged
+    contains a credential-scheme head. None when nothing is left.
     """
     if not value:
         return None
-    value = value[: limit + _WORKING_MARGIN]
+    window = limit + _WORKING_MARGIN
+    oversized = oversized or len(value) > window
+    value = value[:window]
     value = _INVISIBLE_RE.sub("", _CONTROL_RE.sub(" ", value)).strip()
     if not value:
         return None
     if any(p.search(value) for p in SECRET_SHAPES):
         return _REDACTED
+    if oversized:
+        logged = value[:limit].lower()
+        if any(head in logged for head in _SECRET_HEADS):
+            return _REDACTED
     return value[:limit]
 
 
@@ -128,9 +163,16 @@ def describe(headers: Any) -> dict[str, str]:
         if version:
             out["client_version"] = version
         raw_device = headers.get(DEVICE_HEADER)
+        device_cut = False
         if raw_device:
-            raw_device = raw_device[: (_MAX_DEVICE + _WORKING_MARGIN) * _MAX_ESCAPE_EXPANSION]
-        device = _clean(unquote(raw_device, errors="replace") if raw_device else None, _MAX_DEVICE)
+            cap = (_MAX_DEVICE + _WORKING_MARGIN) * _MAX_ESCAPE_EXPANSION
+            device_cut = len(raw_device) > cap
+            raw_device = raw_device[:cap]
+        device = _clean(
+            unquote(raw_device, errors="replace") if raw_device else None,
+            _MAX_DEVICE,
+            oversized=device_cut,
+        )
         if device:
             out["device"] = device
         if origin:
