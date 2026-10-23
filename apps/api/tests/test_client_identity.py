@@ -5,6 +5,9 @@ describe() lowercases lookups itself via a CIMultiDict-like wrapper in the
 tests below).
 """
 
+from urllib.parse import quote
+
+import pytest
 from starlette.datastructures import Headers
 
 from backend.api import client_identity as ci
@@ -81,11 +84,12 @@ def test_declared_header_wins_over_inference():
 
 
 def test_values_are_truncated():
+    # Dotted, so the 48+ char token shape (redacted whole) does not fire.
     out = ci.describe(
         _h(
-            x_compendium_device="a" * 500,
-            origin="https://" + "o" * 500,
-            user_agent="u" * 500,
+            x_compendium_device="ab." * 200,
+            origin="https://" + "ab." * 200,
+            user_agent="ab." * 400,
         )
     )
     assert len(out["device"]) == 64
@@ -188,3 +192,54 @@ def test_rejection_fields_redact_credential_shaped_values():
     assert key not in str(out)
     assert out["device"] == "<redacted>"
     assert out["user_agent"] == "<redacted>"
+
+
+def _straddling(limit):
+    """41-char-style prefix sized so a cmp_ key crosses the cap with 23 of its
+    36 characters (cmp_ + 19) on the kept side: too short to match
+    cmp_[A-Za-z0-9_-]{20,} on its own, which is what a truncate-then-redact
+    order would leave behind."""
+    key = "cmp_" + "ab12" * 8
+    prefix = ("x. " * limit)[: limit - 23]
+    return key, prefix + key
+
+
+@pytest.mark.parametrize(
+    ("header", "field", "limit"),
+    [
+        ("x-compendium-device", "device", 64),
+        ("origin", "origin", 100),
+        ("user-agent", "user_agent", 200),
+    ],
+)
+def test_key_straddling_the_cap_is_redacted_whole_not_half_kept(header, field, limit):
+    key, value = _straddling(limit)
+    sent = quote(value) if header == "x-compendium-device" else value
+    out = ci.describe(_h(**{header.replace("-", "_"): sent}))
+    assert out[field] == "<redacted>"
+    assert "cmp_" not in str(out)
+    # Same through the log-line path.
+    fields = ci.rejection_log_fields(
+        method="GET",
+        status_code=401,
+        headers=_h(**{header.replace("-", "_"): sent}),
+        allowed_origins=["*"],
+    )
+    assert fields[field] == "<redacted>"
+    assert key[:12] not in str(fields)
+
+
+def test_a_long_unbroken_token_is_redacted_whole():
+    out = ci.describe(_h(user_agent="u" * 500))
+    assert out["user_agent"] == "<redacted>"
+
+
+def test_redaction_does_not_change_the_inferred_kind():
+    key = "cmp_" + "ab12" * 8
+    assert ci.describe(_h(origin="https://" + key)) == {"client": "web", "origin": "<redacted>"}
+
+
+def test_line_paragraph_and_arabic_letter_marks_are_stripped():
+    # U+2028, U+2029, U+061C percent-decoded from a device label.
+    out = ci.describe(_h(x_compendium_device="a%E2%80%A8b%E2%80%A9c%D8%9Cd"))
+    assert out["device"] == "abcd"

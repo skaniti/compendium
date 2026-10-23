@@ -7,9 +7,10 @@ small, safe dict that the request log (4xx lines) and the `api_key.auth_failed`
 audit detail both carry.
 
 Everything here is client-supplied DATA, never authentication: a caller can
-claim any kind, version or device label. Values are sanitised (control and
-bidi-override characters stripped) and truncated before they reach a log line
-or a database row. Dependency-light on purpose (no settings, no db) so the
+claim any kind, version or device label. Values are sanitised (control,
+bidi and line-separator characters stripped), redacted when shaped like a
+credential, and truncated, in that order, before they reach a log line or a
+database row. Dependency-light on purpose (no settings, no db) so the
 audit path and the middleware can both import it without a cycle.
 
 Headers the collectors send (apps/extension/modules/config.js::buildHeaders;
@@ -39,16 +40,18 @@ DEVICE_HEADER = "X-Compendium-Device"
 
 KNOWN_KINDS = frozenset({"extension", "android", "web"})
 
+_REDACTED = "<redacted>"
 _MAX_DEVICE = 64
 _MAX_ORIGIN = 100
 _MAX_USER_AGENT = 200
 _MAX_CORS_HEADERS = 200
 
 _CLIENT_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_-]{0,31})(?:/([0-9A-Za-z._+-]{1,32}))?\s*$")
-# C0/C1 controls become a space; bidi overrides/isolates and zero-width marks
-# (which can make a log line read differently from what it holds) are dropped.
+# C0/C1 controls become a space; bidi marks/overrides/isolates, zero-width
+# marks and the Unicode line/paragraph separators (which can make a log line
+# read differently from what it holds) are dropped.
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_INVISIBLE_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+_INVISIBLE_RE = re.compile(r"[\u061c\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]")
 _EXTENSION_ORIGIN_PREFIXES = (
     "moz-extension://",
     "chrome-extension://",
@@ -58,11 +61,22 @@ _EXTENSION_ORIGIN_PREFIXES = (
 
 
 def _clean(value: str | None, limit: int) -> str | None:
-    """Strip control/bidi characters, trim, truncate. None when nothing is left."""
+    """Strip control/invisible characters, trim, redact, then truncate.
+
+    A value shaped like a credential (the audit table's SECRET_SHAPES) comes
+    back as "<redacted>" in full. The match runs on the whole cleaned value
+    BEFORE the cut: truncating first could leave a key's head too short to
+    match (cmp_ plus 19 characters) and still carry it into api.jsonl and the
+    audit row. None when nothing is left.
+    """
     if not value:
         return None
     value = _INVISIBLE_RE.sub("", _CONTROL_RE.sub(" ", value)).strip()
-    return value[:limit] or None
+    if not value:
+        return None
+    if any(p.search(value) for p in SECRET_SHAPES):
+        return _REDACTED
+    return value[:limit]
 
 
 def _parse_client(value: str | None) -> tuple[str | None, str | None]:
@@ -100,7 +114,7 @@ def describe(headers: Any) -> dict[str, str]:
         origin = _clean(headers.get("origin"), _MAX_ORIGIN)
         kind, version = _parse_client(headers.get(CLIENT_HEADER))
         if kind is None:
-            kind = _infer_kind(origin, headers)
+            kind = _infer_kind(headers.get("origin"), headers)
         out: dict[str, str] = {"client": kind}
         if version:
             out["client_version"] = version
@@ -116,15 +130,6 @@ def describe(headers: Any) -> dict[str, str]:
         return out
     except Exception:  # noqa: BLE001 - naming a client must never break a request
         return {"client": "unknown"}
-
-
-def _redact(value: Any) -> Any:
-    """Replace a string shaped like a credential (the audit table's own
-    SECRET_SHAPES list) so a key pasted into a label, user agent or Origin
-    never reaches a log line. The audit path scrubs on write by itself."""
-    if isinstance(value, str) and any(p.search(value) for p in SECRET_SHAPES):
-        return "<redacted>"
-    return value
 
 
 def rejection_log_fields(
@@ -161,4 +166,4 @@ def rejection_log_fields(
                 fields["cors_request_headers"] = requested_headers
     except Exception:  # a log line must never break a response
         logger.debug("cors preflight fields unavailable", exc_info=True)
-    return {k: _redact(v) for k, v in fields.items()}
+    return fields

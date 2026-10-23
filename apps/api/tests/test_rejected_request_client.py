@@ -143,7 +143,7 @@ def test_key_pasted_into_a_client_field_is_scrubbed_from_log_and_audit(env, clie
     (line,) = _request_lines(caplog, "/api/auth/me")
     assert line.device == "<redacted>" and line.user_agent == "<redacted>"
     detail = audit_repo.list_events(event="api_key.auth_failed")[0]["detail"]
-    assert detail["device"] == "<redacted>" and detail["redacted"] is True
+    assert detail["device"] == "<redacted>" and detail["user_agent"] == "<redacted>"
     assert BAD_KEY not in json.dumps(detail)
     _no_key_anywhere(caplog)
 
