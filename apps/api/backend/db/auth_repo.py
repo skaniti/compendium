@@ -188,7 +188,8 @@ def get_refresh_token(token_hash: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, remembered, break_glass
+                SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, remembered, break_glass,
+                       rotated_at, EXTRACT(EPOCH FROM (NOW() - rotated_at))
                 FROM refresh_tokens
                 WHERE token_hash = %s
                 """,
@@ -208,17 +209,63 @@ def get_refresh_token(token_hash: str) -> dict | None:
         "revoked_at": row[5],
         "remembered": row[6],
         "break_glass": row[7],
+        # migration 061: set only when a rotation revoked this token. The age
+        # is computed by the DB clock so it cannot skew against the app's.
+        "rotated_at": row[8],
+        "rotated_age_seconds": float(row[9]) if row[9] is not None else None,
     }
 
 
 def revoke_refresh_token(token_hash: str) -> None:
-    """Mark a refresh token as revoked."""
+    """Mark a refresh token as revoked (logout, expiry). Not a rotation:
+    ``rotated_at`` stays NULL, so this token never gets reuse grace."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = %s",
                 (token_hash,),
             )
+
+
+def mark_refresh_token_rotated(token_hash: str) -> bool:
+    """Atomically claim a live token for rotation: revoke it and stamp
+    ``rotated_at`` (migration 061) in one statement. Returns True when this
+    call did it, False when the token was already revoked (or gone) -- i.e.
+    another request rotated it first. Two simultaneous requests with the same
+    live token therefore cannot both rotate it; the loser is handled as a
+    replay of a just-rotated token."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE refresh_tokens SET revoked_at = NOW(), rotated_at = NOW()
+                WHERE token_hash = %s AND revoked_at IS NULL
+                """,
+                (token_hash,),
+            )
+            return cur.rowcount == 1
+
+
+def session_revoked_since_rotation(user_id: int, rotated_at: datetime) -> bool:
+    """True if any refresh token of the account was revoked WITHOUT a rotation
+    (logout, revoke-all, expiry) at or after ``rotated_at``.
+
+    The reuse grace window uses this so a deliberate sign-out cannot be undone
+    by replaying an older token inside the window. Account-wide on purpose: an
+    unrelated sign-out in the same few seconds makes the replay fall back to
+    the full-revocation path (fail safe)."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM refresh_tokens
+                    WHERE user_id = %s AND rotated_at IS NULL AND revoked_at >= %s
+                )
+                """,
+                (user_id, rotated_at),
+            )
+            return bool(cur.fetchone()[0])
 
 
 def revoke_all_user_tokens(user_id: int) -> int:

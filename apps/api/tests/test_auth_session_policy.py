@@ -118,6 +118,9 @@ def _stub_rotation(monkeypatch, *, remembered, role, user_id=10, email="rot@test
     monkeypatch.setattr(
         "backend.db.auth_repo.revoke_refresh_token", lambda token_hash: None
     )
+    monkeypatch.setattr(
+        "backend.db.auth_repo.mark_refresh_token_rotated", lambda token_hash: True
+    )
     monkeypatch.setattr("backend.db.auth_repo.get_role", lambda uid: role)
     monkeypatch.setattr(
         "backend.db.user_repo.get_user_by_id",
@@ -341,6 +344,262 @@ class TestRotateRefreshTokenSessionPolicy:
         # revoked row's horizon (stub: 1 day) instead of sliding to 7 days.
         delta_days = (save_calls[0]["expires_at"] - before).total_seconds() / 86400
         assert 0.9 < delta_days < 1.1
+
+
+def _stub_revoked_replay(
+    monkeypatch,
+    *,
+    rotated_age,
+    role="user",
+    revoked_by_rotation=True,
+    session_revoked_since=False,
+    expires_in=timedelta(days=1),
+    user_id=10,
+):
+    """Stand in for the DB state of a refresh token that is ALREADY revoked
+    and gets presented again. ``rotated_age`` is the DB-clock seconds since
+    the rotation that revoked it (None = revoked some other way: logout,
+    revoke-all, expiry). Returns the recorders the grace-window tests assert
+    on: audit rows, revoke-all calls and trusted-browser revocations."""
+    stored = {
+        "id": 1,
+        "user_id": user_id,
+        "token_hash": "irrelevant",
+        "expires_at": datetime.now(UTC) + expires_in,
+        "created_at": datetime.now(UTC) - timedelta(minutes=30),
+        "revoked_at": datetime.now(UTC),
+        "remembered": True,
+        "break_glass": False,
+        "rotated_at": datetime.now(UTC) if revoked_by_rotation else None,
+        "rotated_age_seconds": rotated_age if revoked_by_rotation else None,
+    }
+    rec = {"audit": [], "revoke_all": [], "browsers": [], "stored": stored}
+    monkeypatch.setattr(
+        "backend.db.auth_repo.get_refresh_token", lambda token_hash: stored
+    )
+    monkeypatch.setattr(
+        "backend.db.auth_repo.session_revoked_since_rotation",
+        lambda uid, rotated_at: session_revoked_since,
+    )
+    monkeypatch.setattr(
+        "backend.db.auth_repo.revoke_all_user_tokens",
+        lambda uid: rec["revoke_all"].append(uid) or 1,
+    )
+    monkeypatch.setattr(
+        "backend.db.trusted_browser_repo.revoke_all",
+        lambda uid=None: rec["browsers"].append(uid) or 2,
+    )
+    monkeypatch.setattr("backend.db.auth_repo.get_role", lambda uid: role)
+    monkeypatch.setattr(
+        "backend.db.user_repo.get_user_by_id",
+        lambda uid: {"id": user_id, "email": "rot@test.local", "name": "Rot User"},
+    )
+    monkeypatch.setattr(
+        "backend.db.audit_repo.record",
+        lambda event, **kw: rec["audit"].append((event, kw.get("detail"))),
+    )
+    return rec
+
+
+class TestRefreshReuseGraceWindow:
+    """Refresh-token reuse grace window (backlog #43): a replay of a token
+    that was ROTATED less than ``refresh_reuse_grace_seconds`` ago is a
+    benign race (tabs waking together, a retry after a lost response) and
+    must not revoke the account; anything older keeps the revoke-everything
+    behaviour. Mock-based like the rotation tests above; the real-DB flow is
+    in tests/test_auth_audit_events.py."""
+
+    @pytest.fixture(autouse=True)
+    def _window_30s(self, monkeypatch):
+        monkeypatch.setattr(settings, "refresh_reuse_grace_seconds", 30)
+
+    def test_replay_inside_window_issues_a_fresh_pair_and_revokes_nothing(self, monkeypatch):
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=1.5)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        result = auth_service.rotate_refresh_token("raw-token-value", True)
+
+        assert result is not None
+        access, refresh, policy = result
+        assert access and refresh
+        assert policy["remembered"] is True
+        assert len(save_calls) == 1
+        assert rec["revoke_all"] == []
+        assert rec["browsers"] == []
+
+    def test_replay_inside_window_is_audited_as_a_grace_reuse(self, monkeypatch):
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=1.5)
+        _capture_save_refresh_token(monkeypatch)
+
+        auth_service.rotate_refresh_token("raw-token-value", True)
+
+        events = dict(rec["audit"])
+        reuse = events["auth.refresh.reuse_detected"]
+        assert reuse["revoked_all"] is False
+        assert reuse["grace_window"] is True
+        assert reuse["age_seconds"] == 1.5
+        assert events["auth.refresh.ok"]["grace_reuse"] is True
+
+    def test_replay_outside_window_still_revokes_everything(self, monkeypatch):
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=30.5)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == [10]
+        assert rec["browsers"] == [10]
+        assert save_calls == []
+        assert rec["audit"] == [
+            (
+                "auth.refresh.reuse_detected",
+                {"revoked_all": True, "trusted_browsers_revoked": 2},
+            )
+        ]
+
+    def test_window_edge_is_inclusive(self, monkeypatch):
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=30.0)
+        _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is not None
+        assert rec["revoke_all"] == []
+
+    def test_token_revoked_without_rotation_gets_no_grace(self, monkeypatch):
+        """Logout, revoke-all and expiry revocation leave rotated_at NULL, so
+        a just-logged-out token can never be replayed into a new session."""
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=0.1, revoked_by_rotation=False)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == [10]
+        assert save_calls == []
+
+    def test_zero_window_disables_grace(self, monkeypatch):
+        monkeypatch.setattr(settings, "refresh_reuse_grace_seconds", 0)
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=0.01)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == [10]
+        assert save_calls == []
+
+    def test_deliberate_revocation_since_rotation_blocks_grace(self, monkeypatch):
+        """A logout or revoke-all after the rotation must not be undone by
+        replaying the older token inside the window: fall back to today's
+        full revocation, flagged so the audit row says why grace was refused."""
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=2.0, session_revoked_since=True)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == [10]
+        assert save_calls == []
+        _event, detail = rec["audit"][0]
+        assert detail["revoked_all"] is True
+        assert detail["grace_denied"] == "session_revoked"
+
+    def test_expired_token_gets_no_grace(self, monkeypatch):
+        rec = _stub_revoked_replay(
+            monkeypatch, rotated_age=1.0, expires_in=timedelta(seconds=-5)
+        )
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is None
+
+        assert rec["revoke_all"] == [10]
+        assert save_calls == []
+
+    def test_demo_role_keeps_its_narrower_behaviour_inside_the_window(self, monkeypatch):
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=0.5, role="demo")
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        assert auth_service.rotate_refresh_token("raw-token-value", False) is None
+
+        assert rec["revoke_all"] == []
+        assert rec["browsers"] == []
+        assert save_calls == []
+        assert rec["audit"] == [
+            ("auth.refresh.reuse_detected", {"revoked_all": False, "role": "demo"})
+        ]
+
+    def test_grace_mint_keeps_the_normal_mint_rules(self, monkeypatch):
+        """The sibling pair is minted through the same path as a rotation:
+        remembered is recomputed from the CURRENT ingress verdict."""
+        _stub_revoked_replay(monkeypatch, rotated_age=1.0)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+
+        result = auth_service.rotate_refresh_token("raw-token-value", False)
+
+        assert result is not None
+        assert result[2]["remembered"] is False
+        assert save_calls[0]["remembered"] is False
+
+    def test_losing_the_atomic_claim_lands_in_the_grace_branch(self, monkeypatch):
+        """Two simultaneous requests present the same LIVE token: both read
+        it unrevoked, only one wins the atomic rotation claim. The loser must
+        be treated as a replay of a just-rotated token, not mint silently and
+        not trip full revocation."""
+        rec = _stub_revoked_replay(monkeypatch, rotated_age=0.05)
+        save_calls = _capture_save_refresh_token(monkeypatch)
+        live = dict(rec["stored"], revoked_at=None, rotated_at=None, rotated_age_seconds=None)
+        reads = iter([live, rec["stored"]])
+        monkeypatch.setattr(
+            "backend.db.auth_repo.get_refresh_token", lambda token_hash: next(reads)
+        )
+        monkeypatch.setattr(
+            "backend.db.auth_repo.mark_refresh_token_rotated", lambda token_hash: False
+        )
+
+        result = auth_service.rotate_refresh_token("raw-token-value", True)
+
+        assert result is not None
+        assert len(save_calls) == 1
+        assert rec["revoke_all"] == []
+        assert dict(rec["audit"])["auth.refresh.reuse_detected"]["grace_window"] is True
+
+    def test_first_use_marks_the_token_rotated_not_just_revoked(self, monkeypatch):
+        _stub_rotation(monkeypatch, remembered=False, role="user")
+        _capture_save_refresh_token(monkeypatch)
+        marked = []
+        monkeypatch.setattr(
+            "backend.db.auth_repo.mark_refresh_token_rotated",
+            lambda token_hash: marked.append(token_hash) or True,
+        )
+
+        assert auth_service.rotate_refresh_token("raw-token-value", True) is not None
+
+        assert marked == [auth_service._hash_token("raw-token-value")]
+
+
+class TestRefreshReuseGraceSetting:
+    def test_default_is_30_seconds(self):
+        s = Settings(
+            environment="development",
+            jwt_secret_key="a-real-production-secret",
+            cors_origins="https://compendium.example.com",
+        )
+        assert s.refresh_reuse_grace_seconds == 30
+
+    @pytest.mark.parametrize("bad", [-1, 301])
+    def test_out_of_range_value_fails_at_boot(self, bad):
+        with pytest.raises(ValueError, match="refresh_reuse_grace_seconds"):
+            Settings(
+                environment="development",
+                jwt_secret_key="a-real-production-secret",
+                cors_origins="https://compendium.example.com",
+                refresh_reuse_grace_seconds=bad,
+            )
+
+    @pytest.mark.parametrize("ok", [0, 60, 300])
+    def test_in_range_values_accepted(self, ok):
+        s = Settings(
+            environment="development",
+            jwt_secret_key="a-real-production-secret",
+            cors_origins="https://compendium.example.com",
+            refresh_reuse_grace_seconds=ok,
+        )
+        assert s.refresh_reuse_grace_seconds == ok
 
 
 class TestRefreshEndpointIngressHeader:

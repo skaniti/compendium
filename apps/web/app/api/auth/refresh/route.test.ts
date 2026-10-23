@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { POST } from "./route";
 import { INGRESS_HEADER } from "@/lib/ingress";
+import { clearAllSingleFlights } from "@/lib/refresh-single-flight";
 
 // D2 (batch 04 auth/session parity): the refresh route SessionKeeper polls.
 // No route-handler test idiom exists yet in this repo (task-4-brief
@@ -54,7 +55,13 @@ function makeRefreshRequest(headers?: Record<string, string>): Request {
 describe("POST /api/auth/refresh", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
     vi.mocked(cookies).mockReset();
+    // The route retains a settled success for a few seconds (see the
+    // late-caller tests below); drop it so tests sharing a token value stay
+    // independent.
+    clearAllSingleFlights();
   });
 
   it("returns 401 without calling the backend when there is no refresh_token cookie", async () => {
@@ -320,6 +327,141 @@ describe("POST /api/auth/refresh", () => {
     await Promise.all([POST(makeRefreshRequest()), POST(makeRefreshRequest())]);
 
     expect(backendCalls).toBe(2);
+  });
+
+  // Refresh-token reuse (backlog #43): a second tab can reach the route just
+  // AFTER the first backend call settled while still carrying the old cookie
+  // (its request was sent before the first response's Set-Cookie landed). The
+  // in-flight entry is gone by then, so without retention it would rotate an
+  // already-rotated token and the backend would see a replay. The settled
+  // success is kept for a few seconds and handed to that late caller.
+  describe("late callers after the first refresh settled", () => {
+    function accessToken() {
+      const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+      const payload = Buffer.from(
+        JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 900 }),
+      ).toString("base64url");
+      return `${header}.${payload}.sig`;
+    }
+
+    function okBackend(refreshToken = "new-refresh") {
+      const token = accessToken();
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          access_token: token,
+          refresh_token: refreshToken,
+          token_type: "bearer",
+          session_policy: { idle_minutes: 60, resume: true, remembered: false },
+        }),
+      }));
+      vi.stubGlobal("fetch", fetchMock);
+      return { fetchMock, token };
+    }
+
+    it("hands the same successor tokens to a late caller still holding the old cookie, with no second backend call", async () => {
+      const jarA = makeFakeCookieJar({ refresh_token: "late-old" });
+      const jarB = makeFakeCookieJar({ refresh_token: "late-old" });
+      vi.mocked(cookies)
+        .mockImplementationOnce(async () => jarA as never)
+        .mockImplementationOnce(async () => jarB as never);
+      const { fetchMock, token } = okBackend("late-new");
+
+      const first = await POST(makeRefreshRequest());
+      const second = await POST(makeRefreshRequest());
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(jarB.get("access_token")?.value).toBe(token);
+      expect(jarB.get("refresh_token")?.value).toBe("late-new");
+    });
+
+    it("stops handing them out after the retention window (10 s by default)", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.mocked(cookies).mockImplementation(
+        async () => makeFakeCookieJar({ refresh_token: "expiry-old" }) as never,
+      );
+      const { fetchMock } = okBackend();
+
+      await POST(makeRefreshRequest());
+      vi.advanceTimersByTime(9_999);
+      await POST(makeRefreshRequest());
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(2);
+      await POST(makeRefreshRequest());
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("REFRESH_SINGLE_FLIGHT_RETAIN_MS=0 turns retention off", async () => {
+      vi.stubEnv("REFRESH_SINGLE_FLIGHT_RETAIN_MS", "0");
+      vi.mocked(cookies).mockImplementation(
+        async () => makeFakeCookieJar({ refresh_token: "off-old" }) as never,
+      );
+      const { fetchMock } = okBackend();
+
+      await POST(makeRefreshRequest());
+      await POST(makeRefreshRequest());
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("REFRESH_SINGLE_FLIGHT_RETAIN_MS sets the window, and an unusable value falls back to the default", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      vi.mocked(cookies).mockImplementation(
+        async () => makeFakeCookieJar({ refresh_token: "env-old" }) as never,
+      );
+      const { fetchMock } = okBackend();
+
+      vi.stubEnv("REFRESH_SINGLE_FLIGHT_RETAIN_MS", "2000");
+      await POST(makeRefreshRequest());
+      vi.advanceTimersByTime(2_001);
+      await POST(makeRefreshRequest());
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      clearAllSingleFlights();
+      vi.stubEnv("REFRESH_SINGLE_FLIGHT_RETAIN_MS", "soon");
+      await POST(makeRefreshRequest());
+      vi.advanceTimersByTime(5_000);
+      await POST(makeRefreshRequest());
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it("never retains an auth failure: the next caller asks the backend again", async () => {
+      vi.mocked(cookies).mockImplementation(
+        async () => makeFakeCookieJar({ refresh_token: "dead-old" }) as never,
+      );
+      const fetchMock = mockFetchResponse({ ok: false, status: 401, json: async () => ({}) });
+
+      const first = await POST(makeRefreshRequest());
+      const second = await POST(makeRefreshRequest());
+
+      expect(first.status).toBe(401);
+      expect(second.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("never retains a transient backend failure: the next caller retries for real", async () => {
+      vi.mocked(cookies).mockImplementation(
+        async () => makeFakeCookieJar({ refresh_token: "blip-old" }) as never,
+      );
+      const flaky = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: accessToken(), refresh_token: "blip-new", token_type: "bearer" }),
+        });
+      vi.stubGlobal("fetch", flaky);
+
+      const first = await POST(makeRefreshRequest());
+      const second = await POST(makeRefreshRequest());
+
+      expect(first.status).toBe(502);
+      expect(second.status).toBe(200);
+      expect(flaky).toHaveBeenCalledTimes(2);
+    });
   });
 
   // batch-06 deploy-flip fix wave: Vercel has no trusted edge in front of

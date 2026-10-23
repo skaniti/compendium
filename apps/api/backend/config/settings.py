@@ -117,6 +117,16 @@ class Settings(BaseSettings):
     # path); default is unchanged from the historical 60-minute idle
     # behavior.
     jwt_refresh_token_expire_days_remembered: int = 90
+    # Refresh-token reuse grace window (backlog #43): replaying a refresh
+    # token that was ROTATED at most this many seconds ago is treated as a
+    # benign race (tabs waking together, a retry after a lost response): the
+    # caller gets a fresh token pair, nothing is revoked, and the audit row is
+    # flagged ``grace_window``. A replay older than this (or of a token revoked
+    # any other way) still revokes every session and trusted browser of the
+    # account. 0 turns the window off. Capped at 300 so a typo cannot quietly
+    # gut theft detection; a bad value fails at boot like
+    # ``audit_anonymous_retention_days``.
+    refresh_reuse_grace_seconds: int = Field(30, ge=0, le=300)
     # audit_events retention (backlog #90): rows of the classes an
     # unauthenticated caller can append (bad X-API-Key, failed login, public
     # demo entry; see audit_repo.ANONYMOUS_CLASSES) are pruned daily after

@@ -163,6 +163,30 @@ def ingress_trusted(headers) -> bool:
     return value == settings.session_ingress_trusted_value
 
 
+def _reuse_grace_age(stored: dict, expires: datetime) -> tuple[float | None, str | None]:
+    """Decide whether a replay of an already-revoked token is a benign race.
+
+    Returns ``(age_seconds, None)`` when the replay is inside the reuse grace
+    window and should get a fresh pair, else ``(None, reason)`` where
+    ``reason`` is None for "no grace applies" and ``"session_revoked"`` when
+    the token is inside the window but the account was signed out since (that
+    sign-out must not be undone by the replay).
+
+    Grace needs ALL of: the window is on; the token was revoked by a ROTATION
+    (``rotated_at`` set -- logout, revoke-all and expiry leave it NULL) no more
+    than the window ago; the token is not itself expired.
+    """
+    window = settings.refresh_reuse_grace_seconds
+    age = stored.get("rotated_age_seconds")
+    if window <= 0 or stored.get("rotated_at") is None or age is None or age > window:
+        return None, None
+    if expires < datetime.now(timezone.utc):
+        return None, None
+    if auth_repo.session_revoked_since_rotation(stored["user_id"], stored["rotated_at"]):
+        return None, "session_revoked"
+    return age, None
+
+
 def rotate_refresh_token(
     raw_token: str, ingress_trusted: bool, audit_ctx: AuditCtx | None = None
 ) -> tuple[str, str, dict] | None:
@@ -174,10 +198,19 @@ def rotate_refresh_token(
     token's own ``remembered`` flag is audit/record-keeping only and no
     longer carries forward on its own. A device that leaves the tailnet
     drops to the default policy at its next rotation; one that joins the
-    tailnet upgrades at its next rotation. Replaying an already-rotated token
-    revokes every session of the account, except for the shared ``demo`` role,
-    where only the replayed token is refused. A break-glass session (spec 4.3)
+    tailnet upgrades at its next rotation. A break-glass session (spec 4.3)
     is never remembered.
+
+    Replaying an already-rotated token revokes every session of the account,
+    except (a) the shared ``demo`` role, where only the replayed token is
+    refused, and (b) a replay inside the reuse grace window
+    (``settings.refresh_reuse_grace_seconds``, backlog #43): that is a benign
+    race (two tabs, a retry after a lost response), so the caller gets a fresh
+    token pair, nothing is revoked, and the audit rows carry ``grace_window`` /
+    ``grace_reuse``. Rotation claims the token atomically
+    (``auth_repo.mark_refresh_token_rotated``), so two simultaneous requests
+    with the same live token cannot both rotate it: the loser is treated as a
+    replay of a just-rotated token.
     """
     token_hash = _hash_token(raw_token)
     stored = auth_repo.get_refresh_token(token_hash)
@@ -185,9 +218,28 @@ def rotate_refresh_token(
     if stored is None:
         return None
 
-    # Already revoked (possible token reuse attack)
-    if stored["revoked_at"] is not None:
-        ctx = audit_ctx or CLI
+    ctx = audit_ctx or CLI
+    expires = stored["expires_at"]
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+
+    claimed = False
+    if stored["revoked_at"] is None:
+        # Expired
+        if expires < datetime.now(timezone.utc):
+            auth_repo.revoke_refresh_token(token_hash)
+            return None
+        # Revoke old (as a rotation), issue new
+        claimed = auth_repo.mark_refresh_token_rotated(token_hash)
+        if not claimed:
+            # A concurrent request rotated it between our read and write.
+            stored = auth_repo.get_refresh_token(token_hash)
+            if stored is None or stored["revoked_at"] is None:
+                return None
+
+    grace_age: float | None = None
+    if not claimed:
+        # Already revoked (possible token reuse attack)
         # Every public-demo visitor shares the single demo account, so one
         # replay (a two-tab race or a deliberate attempt) must not log out
         # every visitor; the read-only demo identity has nothing to protect.
@@ -201,29 +253,34 @@ def rotate_refresh_token(
                 detail={"revoked_all": False, "role": "demo"},
             )
             return None
-        auth_repo.revoke_all_user_tokens(stored["user_id"])
-        from backend.db import trusted_browser_repo
+        grace_age, grace_denied = _reuse_grace_age(stored, expires)
+        if grace_age is None:
+            auth_repo.revoke_all_user_tokens(stored["user_id"])
+            from backend.db import trusted_browser_repo
 
-        browsers_revoked = trusted_browser_repo.revoke_all(stored["user_id"])
+            browsers_revoked = trusted_browser_repo.revoke_all(stored["user_id"])
+            detail = {"revoked_all": True, "trusted_browsers_revoked": browsers_revoked}
+            if grace_denied:
+                detail["grace_denied"] = grace_denied
+            audit_repo.record(
+                "auth.refresh.reuse_detected",
+                subject_user_id=stored["user_id"],
+                origin_class=ctx.origin_class,
+                client_key=ctx.client_key,
+                detail=detail,
+            )
+            return None
         audit_repo.record(
             "auth.refresh.reuse_detected",
             subject_user_id=stored["user_id"],
             origin_class=ctx.origin_class,
             client_key=ctx.client_key,
-            detail={"revoked_all": True, "trusted_browsers_revoked": browsers_revoked},
+            detail={
+                "revoked_all": False,
+                "grace_window": True,
+                "age_seconds": round(grace_age, 2),
+            },
         )
-        return None
-
-    # Expired
-    expires = stored["expires_at"]
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < datetime.now(timezone.utc):
-        auth_repo.revoke_refresh_token(token_hash)
-        return None
-
-    # Revoke old, issue new
-    auth_repo.revoke_refresh_token(token_hash)
 
     from backend.db import user_repo
 
@@ -252,14 +309,16 @@ def rotate_refresh_token(
         user["id"], remembered=remembered, expires_at_cap=cap, break_glass=pinned
     )
     policy = session_policy(role, remembered)
-    ctx = audit_ctx or CLI
+    detail = {"remembered": remembered}
+    if grace_age is not None:
+        detail["grace_reuse"] = True
     audit_repo.record(
         "auth.refresh.ok",
         actor_user_id=user["id"],
         subject_user_id=user["id"],
         origin_class=ctx.origin_class,
         client_key=ctx.client_key,
-        detail={"remembered": remembered},
+        detail=detail,
     )
     return access, refresh, policy
 
