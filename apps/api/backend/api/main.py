@@ -23,6 +23,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
 from backend.api import audit_ctx as _audit_ctx
+from backend.api import client_identity as _client_identity
 from backend.api.rate_limit_key import client_key
 from backend.config.settings import settings
 from backend.db import (
@@ -248,7 +249,7 @@ async def verify_api_key(
             "api_key.auth_failed",
             origin_class=ctx.origin_class,
             client_key=ctx.client_key,
-            detail={"prefix": x_api_key[:8]},
+            detail={"prefix": x_api_key[:8], **_client_identity.describe(request.headers)},
         )
 
     from fastapi import HTTPException
@@ -775,16 +776,27 @@ async def observability_middleware(request: Request, call_next):
         if path in _QUIET_ACCESS_PATHS and response.status_code < 400
         else logger.info
     )
-    log_method(
-        "request completed",
-        extra={
-            "request_id": request_id,
-            "method": request.method,
-            "path": path,
-            "status_code": response.status_code,
-            "duration_ms": round(duration_ms, 1),
-        },
-    )
+    log_extra = {
+        "request_id": request_id,
+        "method": request.method,
+        "path": path,
+        "status_code": response.status_code,
+        "duration_ms": round(duration_ms, 1),
+    }
+    if 400 <= response.status_code < 500:
+        # Name the client behind a rejected request (backlog #77): claimed
+        # kind/version/device plus Origin and User-Agent, all sanitised and
+        # truncated, and the CORS facts when CORSMiddleware refused a
+        # preflight (this middleware sits outside it, so it sees that 400).
+        log_extra.update(
+            _client_identity.rejection_log_fields(
+                method=request.method,
+                status_code=response.status_code,
+                headers=request.headers,
+                allowed_origins=_cors_origins,
+            )
+        )
+    log_method("request completed", extra=log_extra)
     return response
 
 

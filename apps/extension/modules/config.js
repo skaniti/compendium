@@ -77,16 +77,61 @@ export async function saveConfig({ backendUrl, apiKey, deviceLabel }) {
   await chrome.storage.local.set(updates);
 }
 
+const DEVICE_HEADER_MAX_CHARS = 64;
+const CLIENT_VERSION_RE = /^[0-9A-Za-z._+-]{1,32}$/;
+
+/**
+ * Value of X-Compendium-Client: `extension/<manifest version>` (just
+ * `extension` when the version is unavailable or malformed). Lets the API name
+ * this client in the log and audit record of a rejected request (backlog #77).
+ */
+function clientHeaderValue() {
+  try {
+    const version = chrome.runtime.getManifest().version;
+    if (typeof version === 'string' && CLIENT_VERSION_RE.test(version)) {
+      return `extension/${version}`;
+    }
+  } catch {
+    // No runtime (tests) or no manifest: name the kind without a version.
+  }
+  return 'extension';
+}
+
+/**
+ * Value of X-Compendium-Device: the device label cut to 64 code points and
+ * percent-encoded. Header values must be ByteStrings -- a raw label with an
+ * accent or emoji would make fetch() throw the same TypeError that
+ * validateApiKey exists to prevent, and read as "backend unavailable".
+ * Returns '' (header omitted) for an empty label or one that cannot be
+ * encoded (a lone surrogate); never throws.
+ */
+function deviceHeaderValue(label) {
+  if (!label) return '';
+  try {
+    return encodeURIComponent(Array.from(label).slice(0, DEVICE_HEADER_MAX_CHARS).join(''));
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Build standard headers for backend requests, including API key if set.
  *
  * X-API-Key contract is a three-way twin: this header, verify_api_key in
  * apps/api/backend/api/main.py, and the request in
  * apps/android/.../SessionExporter.kt.
+ *
+ * X-Compendium-Client / X-Compendium-Device are labels, not credentials: the
+ * API records them (sanitised, truncated) beside a rejected request so a stale
+ * key or a refused origin can be traced to a device. Parsed by
+ * apps/api/backend/api/client_identity.py.
  */
 export function buildHeaders(config) {
   const headers = { 'Content-Type': 'application/json' };
   if (config.apiKey) headers['X-API-Key'] = config.apiKey;
+  headers['X-Compendium-Client'] = clientHeaderValue();
+  const device = deviceHeaderValue(config.deviceLabel);
+  if (device) headers['X-Compendium-Device'] = device;
   return headers;
 }
 

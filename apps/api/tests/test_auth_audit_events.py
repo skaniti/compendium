@@ -477,7 +477,10 @@ def test_api_key_auth_failed_only_for_presented_key(env, client):
     assert client.get("/api/auth/me", headers={"X-API-Key": bad}).status_code == 401
     row = _last("api_key.auth_failed")
     assert row["actor_user_id"] is None and row["subject_user_id"] is None
-    assert row["detail"] == {"prefix": bad[:8]}
+    # prefix plus the claimed-client fields (backlog #77); detail in full is
+    # asserted in test_rejected_request_client.py
+    assert row["detail"]["prefix"] == bad[:8]
+    assert set(row["detail"]) <= {"prefix", "client", "user_agent"}
     _no_secret(row, bad)
 
     n = len(audit_repo.list_events(event="api_key.auth_failed"))

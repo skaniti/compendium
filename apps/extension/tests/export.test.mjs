@@ -862,3 +862,48 @@ test('exportActiveCapture: delivered path returns body and the post-pass flush',
   assert.deepEqual(result.flush, EMPTY_FLUSH);
   assert.match(calls[0].url, /\/api\/captures$/);
 });
+
+// ── Client naming on delivery (backlog #77) ──────────────────────────────────
+
+test('delivery: every backend POST names the client and device in its headers', async () => {
+  shim.reset();
+  shim.runtime.version = '0.5.1';
+  shim.storage.set('apiKey', 'cmp_testkey');
+  shim.storage.set('deviceLabel', 'Desktop Firefox');
+  const calls = fetchQueue([{ status: 200, json: { ok: true } }]);
+
+  const result = await exportPassiveCapture(capture('named1'));
+
+  assert.equal(result.delivery, 'delivered');
+  const headers = calls[0].options.headers;
+  assert.equal(headers['X-Compendium-Client'], 'extension/0.5.1');
+  assert.equal(headers['X-Compendium-Device'], 'Desktop%20Firefox');
+  assert.equal(headers['X-API-Key'], 'cmp_testkey');
+});
+
+test('delivery: a buffered capture flushed later carries the same client headers', async () => {
+  shim.reset();
+  shim.runtime.version = '0.5.1';
+  shim.storage.set('pendingExports', [capture('named2')]);
+  const calls = fetchQueue([{ status: 200, json: {} }]);
+
+  await flushPendingExports();
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.headers['X-Compendium-Client'], 'extension/0.5.1');
+  assert.equal('X-Compendium-Device' in calls[0].options.headers, false);
+});
+
+test('delivery: a device label the headers cannot carry still delivers', async () => {
+  shim.reset();
+  shim.storage.set('deviceLabel', 'Lap\u00e9top \u{1F4F1}');
+  const calls = fetchQueue([{ status: 200, json: {} }]);
+
+  const result = await exportPassiveCapture(capture('named3'));
+
+  assert.equal(result.delivery, 'delivered');
+  assert.equal(
+    decodeURIComponent(calls[0].options.headers['X-Compendium-Device']),
+    'Lap\u00e9top \u{1F4F1}'
+  );
+});

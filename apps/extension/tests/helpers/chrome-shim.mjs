@@ -28,6 +28,7 @@ function normalizeKeys(keys) {
  *   permissions: { granted: boolean, requestResult: boolean|'throw', containsCalls: Array,
  *                  requests: Array, fireAdded: Function, fireRemoved: Function },
  *   action: { badgeText: string, badgeColor: string|null, title: string|null },
+ *   runtime: { version: string },
  *   reset: () => void
  * }}
  */
@@ -53,6 +54,10 @@ export function installChromeShim() {
   };
 
   const action = { badgeText: '', badgeColor: null, title: null };
+
+  // chrome.runtime: only getManifest() is read (config.js::buildHeaders puts
+  // the manifest version in X-Compendium-Client). Tests may change .version.
+  const runtime = { version: '0.0.0-test' };
 
   function get(keys, callback) {
     const names = normalizeKeys(keys);
@@ -119,6 +124,11 @@ export function installChromeShim() {
       onAdded: { addListener: fn => permissionListeners.added.push(fn) },
       onRemoved: { addListener: fn => permissionListeners.removed.push(fn) }
     },
+    runtime: {
+      getManifest() {
+        return { version: runtime.version };
+      }
+    },
     action: {
       async setBadgeText({ text }) {
         action.badgeText = text;
@@ -169,9 +179,10 @@ export function installChromeShim() {
     action.badgeText = '';
     action.badgeColor = null;
     action.title = null;
+    runtime.version = '0.0.0-test';
   }
 
-  return { storage: store, alarms, permissions, action, reset };
+  return { storage: store, alarms, permissions, action, runtime, reset };
 }
 
 /**

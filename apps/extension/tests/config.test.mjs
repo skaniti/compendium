@@ -7,7 +7,9 @@ import { installChromeShim, silenceLog } from './helpers/chrome-shim.mjs';
 const shim = installChromeShim();
 silenceLog();
 
-const { validateApiKey, saveConfig, maskApiKey, CONFIG } = await import('../modules/config.js');
+const { validateApiKey, saveConfig, maskApiKey, buildHeaders, CONFIG } = await import(
+  '../modules/config.js'
+);
 
 // ── CONFIG additions ─────────────────────────────────────────────────────────
 
@@ -140,4 +142,67 @@ test('saveConfig: apiKey \'\' clears an existing key; saveConfig({}) leaves it u
 
   await saveConfig({ apiKey: '' });
   assert.equal(shim.storage.get('apiKey'), '');
+});
+
+// ── buildHeaders: client + device naming (backlog #77) ──────────────────────
+
+test('buildHeaders: names the client with the manifest version', () => {
+  shim.reset();
+  shim.runtime.version = '0.5.1';
+  const h = buildHeaders({ apiKey: 'cmp_abc', deviceLabel: '' });
+  assert.equal(h['X-Compendium-Client'], 'extension/0.5.1');
+  assert.equal(h['X-API-Key'], 'cmp_abc');
+  assert.equal(h['Content-Type'], 'application/json');
+});
+
+test('buildHeaders: no device header when the label is empty or missing', () => {
+  shim.reset();
+  assert.equal('X-Compendium-Device' in buildHeaders({ apiKey: '', deviceLabel: '' }), false);
+  assert.equal('X-Compendium-Device' in buildHeaders({ apiKey: '' }), false);
+});
+
+test('buildHeaders: device label is percent-encoded so it is always ByteString-safe', () => {
+  shim.reset();
+  const label = 'Desktop Firefox \u00e9 \u{1F4F1} \u2014';
+  const h = buildHeaders({ apiKey: '', deviceLabel: label });
+  assert.match(h['X-Compendium-Device'], /^[\x21-\x7e]+$/);
+  assert.equal(decodeURIComponent(h['X-Compendium-Device']), label);
+  // The real constraint: fetch() builds a Headers object from these.
+  assert.doesNotThrow(() => new Headers(h));
+});
+
+test('buildHeaders: device label is cut to 64 characters before encoding', () => {
+  shim.reset();
+  const h = buildHeaders({ apiKey: '', deviceLabel: 'x'.repeat(200) });
+  assert.equal(decodeURIComponent(h['X-Compendium-Device']), 'x'.repeat(64));
+  // Cut by code point, not UTF-16 unit: never splits a surrogate pair.
+  const emoji = buildHeaders({ apiKey: '', deviceLabel: '\u{1F4F1}'.repeat(100) });
+  assert.equal(Array.from(decodeURIComponent(emoji['X-Compendium-Device'])).length, 64);
+});
+
+test('buildHeaders: a lone surrogate in the label drops the device header, never throws', () => {
+  shim.reset();
+  let h;
+  assert.doesNotThrow(() => {
+    h = buildHeaders({ apiKey: '', deviceLabel: 'bad\ud800label' });
+  });
+  assert.equal('X-Compendium-Device' in h, false);
+  assert.equal(h['X-Compendium-Client'], 'extension/0.0.0-test');
+});
+
+test('buildHeaders: without chrome.runtime the client header carries no version', () => {
+  shim.reset();
+  const saved = globalThis.chrome.runtime;
+  delete globalThis.chrome.runtime;
+  try {
+    assert.equal(buildHeaders({ apiKey: '' })['X-Compendium-Client'], 'extension');
+  } finally {
+    globalThis.chrome.runtime = saved;
+  }
+});
+
+test('buildHeaders: a malformed manifest version is not sent', () => {
+  shim.reset();
+  shim.runtime.version = 'not ok/\n';
+  assert.equal(buildHeaders({ apiKey: '' })['X-Compendium-Client'], 'extension');
 });

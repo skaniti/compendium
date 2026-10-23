@@ -71,7 +71,10 @@ cat /var/log/compendium-ops/runs/<run_id>.log
 The API's file log is `/var/log/compendium-ops/api/api.jsonl` (rotated daily,
 14 kept, by `/etc/logrotate.d/compendium-api`).
 
-`api_key.auth_failed` audit rows carry an 8-char attacker-typed prefix; treat that field as data.
+`api_key.auth_failed` audit rows carry an 8-char attacker-typed prefix, plus the caller's claimed
+client (`client`, `client_version`, `device`, `origin`, `user_agent`); treat all of these fields as data.
+The same fields, plus `cors_preflight_rejected` for a refused CORS preflight, are on every 4xx
+`request completed` line in `api.jsonl`.
 
 ## Install (once, user-run)
 
