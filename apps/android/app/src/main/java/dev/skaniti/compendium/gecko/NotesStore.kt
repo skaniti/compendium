@@ -140,9 +140,35 @@ object NotesStore {
             PendingShot.None -> Unit
             PendingShot.Remove -> shotFile.delete()
             is PendingShot.Replace -> {
-                pending.staged.copyTo(shotFile, overwrite = true)
-                pending.staged.delete()
+                // rename is atomic within the directory; copy only if it is refused
+                if (!pending.staged.renameTo(shotFile)) {
+                    pending.staged.copyTo(shotFile, overwrite = true)
+                    pending.staged.delete()
+                }
             }
+        }
+    }
+
+    /** Delete any stray staging file for [shotFile] (dialog torn down without cancel, deleted note). */
+    fun clearStaging(shotFile: File) { stagingFile(shotFile).delete() }
+
+    /**
+     * Commit [pending] and return the attachment name to store: derived from dialog
+     * state ([hadShot] + [pending]), never from what happens to be on disk. If a
+     * Replace fails with an I/O error the old shot is kept and its name returned.
+     */
+    fun commitAndName(id: String, hadShot: Boolean, shotFile: File, pending: PendingShot): String? {
+        val old = if (hadShot) "$id.png" else null
+        return try {
+            commitPendingShot(shotFile, pending)
+            when (pending) {
+                PendingShot.None -> old
+                PendingShot.Remove -> null
+                is PendingShot.Replace -> "$id.png"
+            }
+        } catch (e: java.io.IOException) {
+            discardPendingShot(pending)
+            old
         }
     }
 
@@ -192,7 +218,7 @@ object NotesStore {
 
     @Synchronized
     fun deleteNote(context: Context, id: String) {
-        screenshotFile(context, id).delete()
+        screenshotFile(context, id).let { it.delete(); clearStaging(it) }
         persist(context, withDeleted(all(context), id))
     }
 

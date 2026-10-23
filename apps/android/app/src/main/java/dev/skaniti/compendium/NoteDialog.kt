@@ -45,6 +45,8 @@ object NoteDialog {
 
         val id = existing?.id ?: "note-${System.currentTimeMillis()}"
         val shotFile = NotesStore.screenshotFile(activity, id)
+        // A rotation or process death can leave a staged file behind (no cancel callback).
+        NotesStore.clearStaging(shotFile)
 
         // Seed the working screenshot: edit -> existing file; new -> autoShot copied to <id>.png
         var hasShot = false
@@ -86,8 +88,14 @@ object NoteDialog {
         btnReplace.setOnClickListener {
             picker.pickImage { uri ->
                 val staged = NotesStore.stagingFile(shotFile)
-                if (uri != null && copyUriToFile(activity, uri, staged)) {
-                    pending = NotesStore.PendingShot.Replace(staged); renderThumb()
+                if (uri != null) {
+                    // Copy to a fresh temp first so a failed pick cannot truncate an earlier staged file.
+                    val tmpFile = File(staged.parentFile, staged.name + ".tmp")
+                    if (copyUriToFile(activity, uri, tmpFile) && tmpFile.renameTo(staged)) {
+                        pending = NotesStore.PendingShot.Replace(staged); renderThumb()
+                    } else {
+                        tmpFile.delete()
+                    }
                 }
             }
         }
@@ -109,8 +117,7 @@ object NoteDialog {
                 if (body.isEmpty()) { discardAll(); return@setPositiveButton }
                 val type = if (toggle.checkedButtonId == R.id.typeImprovement)
                     NotesStore.TYPE_IMPROVEMENT else NotesStore.TYPE_ISSUE
-                NotesStore.commitPendingShot(shotFile, pending)
-                val shotName = if (shotFile.exists()) "$id.png" else null
+                val shotName = NotesStore.commitAndName(id, hasShot, shotFile, pending)
                 val now = System.currentTimeMillis()
                 if (existing == null) {
                     NotesStore.addNote(

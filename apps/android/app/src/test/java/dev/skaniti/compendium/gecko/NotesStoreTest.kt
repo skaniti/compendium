@@ -171,4 +171,45 @@ class NotesStoreTest {
         NotesStore.discardPendingShot(NotesStore.PendingShot.Replace(staged))
         assertFalse(staged.exists())
     }
+
+    // ---- fix round 1 ----
+
+    @Test
+    fun clearStagingDeletesAStrayStagedFile() {
+        val shot = java.io.File(tmp.root, "n.png")
+        val stray = tmp.newFile("n.pending.png")
+        NotesStore.clearStaging(shot)
+        NotesStore.clearStaging(shot)
+        assertFalse(stray.exists())
+    }
+
+    @Test
+    fun commitAndNameReplaceNamesTheShot() {
+        val shot = java.io.File(tmp.root, "n.png")
+        val staged = tmp.newFile("n.pending.png").apply { writeText("x") }
+        assertEquals("n.png", NotesStore.commitAndName("n", false, shot, NotesStore.PendingShot.Replace(staged)))
+        assertEquals("x", shot.readText())
+    }
+
+    @Test
+    fun commitAndNameRemoveGivesNull() {
+        val shot = tmp.newFile("n.png")
+        assertNull(NotesStore.commitAndName("n", true, shot, NotesStore.PendingShot.Remove))
+        assertFalse(shot.exists())
+    }
+
+    @Test
+    fun commitAndNameNoneFollowsHadShotNotTheFilesystem() {
+        val stray = tmp.newFile("n.png")
+        assertNull(NotesStore.commitAndName("n", false, stray, NotesStore.PendingShot.None))
+        assertEquals("n.png", NotesStore.commitAndName("n", true, stray, NotesStore.PendingShot.None))
+    }
+
+    @Test
+    fun commitAndNameKeepsTheOldShotWhenReplaceFails() {
+        val shot = tmp.newFile("n.png").apply { writeText("old") }
+        val missing = java.io.File(tmp.root, "n.pending.png")
+        assertEquals("n.png", NotesStore.commitAndName("n", true, shot, NotesStore.PendingShot.Replace(missing)))
+        assertEquals("old", shot.readText())
+    }
 }
