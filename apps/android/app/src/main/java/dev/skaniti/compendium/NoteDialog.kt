@@ -56,10 +56,18 @@ object NoteDialog {
             hasShot = true
         }
 
+        // Remove/Replace are deferred to Save; the saved file stays untouched until then.
+        var pending: NotesStore.PendingShot = NotesStore.PendingShot.None
+
         fun renderThumb() {
-            if (hasShot && shotFile.exists()) {
+            val shown = when (val p = pending) {
+                is NotesStore.PendingShot.Replace -> p.staged
+                NotesStore.PendingShot.Remove -> null
+                NotesStore.PendingShot.None -> if (hasShot && shotFile.exists()) shotFile else null
+            }
+            if (shown != null) {
                 thumb.visibility = ImageView.VISIBLE
-                thumb.setImageBitmap(android.graphics.BitmapFactory.decodeFile(shotFile.absolutePath))
+                thumb.setImageBitmap(android.graphics.BitmapFactory.decodeFile(shown.absolutePath))
                 btnRemove.visibility = Button.VISIBLE
             } else {
                 thumb.visibility = ImageView.GONE
@@ -77,22 +85,32 @@ object NoteDialog {
 
         btnReplace.setOnClickListener {
             picker.pickImage { uri ->
-                if (uri != null && copyUriToFile(activity, uri, shotFile)) {
-                    hasShot = true; renderThumb()
+                val staged = NotesStore.stagingFile(shotFile)
+                if (uri != null && copyUriToFile(activity, uri, staged)) {
+                    pending = NotesStore.PendingShot.Replace(staged); renderThumb()
                 }
             }
         }
-        btnRemove.setOnClickListener { shotFile.delete(); hasShot = false; renderThumb() }
+        btnRemove.setOnClickListener {
+            NotesStore.discardPendingShot(pending)
+            pending = NotesStore.PendingShot.Remove; renderThumb()
+        }
+
+        fun discardAll() {
+            NotesStore.discardPendingShot(pending)
+            NotesStore.discardWorkingShot(existing, shotFile)
+        }
 
         AlertDialog.Builder(activity)
             .setTitle(if (existing == null) "New note" else "Edit note")
             .setView(view)
             .setPositiveButton("Save") { _, _ ->
                 val body = text.text.toString().trim()
-                if (body.isEmpty()) { NotesStore.discardWorkingShot(existing, shotFile); return@setPositiveButton }
+                if (body.isEmpty()) { discardAll(); return@setPositiveButton }
                 val type = if (toggle.checkedButtonId == R.id.typeImprovement)
                     NotesStore.TYPE_IMPROVEMENT else NotesStore.TYPE_ISSUE
-                val shotName = if (hasShot && shotFile.exists()) "$id.png" else null
+                NotesStore.commitPendingShot(shotFile, pending)
+                val shotName = if (shotFile.exists()) "$id.png" else null
                 val now = System.currentTimeMillis()
                 if (existing == null) {
                     NotesStore.addNote(
@@ -111,11 +129,11 @@ object NoteDialog {
             }
             .setNegativeButton("Cancel") { _, _ ->
                 // discard a freshly-copied auto-shot for a never-saved new note
-                NotesStore.discardWorkingShot(existing, shotFile)
+                discardAll()
             }
             // Back / tap outside cancels the dialog without calling the Cancel button
             // handler; mirror it so the auto-shot is not orphaned in dev-notes/.
-            .setOnCancelListener { NotesStore.discardWorkingShot(existing, shotFile) }
+            .setOnCancelListener { discardAll() }
             .show()
     }
 

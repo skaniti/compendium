@@ -105,4 +105,70 @@ class NotesStoreTest {
         NotesStore.discardWorkingShot(existing = null, shotFile = shot)
         assertFalse(shot.exists())
     }
+
+    // ---- pending screenshot action: Remove/Replace deferred to Save ----
+
+    @Test
+    fun stagingFileIsASiblingOfTheShot() {
+        val shot = java.io.File(tmp.root, "note-9.png")
+        val staged = NotesStore.stagingFile(shot)
+        assertEquals(tmp.root, staged.parentFile)
+        assertEquals("note-9.pending.png", staged.name)
+    }
+
+    @Test
+    fun commitPendingNoneLeavesTheSavedShot() {
+        val shot = tmp.newFile("a.png").apply { writeText("old") }
+        NotesStore.commitPendingShot(shot, NotesStore.PendingShot.None)
+        assertEquals("old", shot.readText())
+    }
+
+    @Test
+    fun commitPendingRemoveDeletesTheSavedShot() {
+        val shot = tmp.newFile("a.png")
+        NotesStore.commitPendingShot(shot, NotesStore.PendingShot.Remove)
+        assertFalse(shot.exists())
+    }
+
+    @Test
+    fun commitPendingReplaceOverwritesAndConsumesTheStagedFile() {
+        val shot = tmp.newFile("a.png").apply { writeText("old") }
+        val staged = tmp.newFile("a.pending.png").apply { writeText("new") }
+        NotesStore.commitPendingShot(shot, NotesStore.PendingShot.Replace(staged))
+        assertEquals("new", shot.readText())
+        assertFalse(staged.exists())
+    }
+
+    @Test
+    fun commitPendingReplaceCreatesTheShotWhenNoneExisted() {
+        val shot = java.io.File(tmp.root, "b.png")
+        val staged = tmp.newFile("b.pending.png").apply { writeText("new") }
+        NotesStore.commitPendingShot(shot, NotesStore.PendingShot.Replace(staged))
+        assertEquals("new", shot.readText())
+    }
+
+    @Test
+    fun discardPendingReplaceDeletesOnlyTheStagedFile() {
+        val shot = tmp.newFile("a.png").apply { writeText("old") }
+        val staged = tmp.newFile("a.pending.png")
+        NotesStore.discardPendingShot(NotesStore.PendingShot.Replace(staged))
+        assertFalse(staged.exists())
+        assertEquals("old", shot.readText())
+    }
+
+    @Test
+    fun discardPendingRemoveAndNoneTouchNothing() {
+        val shot = tmp.newFile("a.png")
+        NotesStore.discardPendingShot(NotesStore.PendingShot.Remove)
+        NotesStore.discardPendingShot(NotesStore.PendingShot.None)
+        assertTrue(shot.exists())
+    }
+
+    @Test
+    fun discardPendingReplaceToleratesAMissingStagedFile() {
+        val staged = java.io.File(tmp.root, "gone.pending.png")
+        NotesStore.discardPendingShot(NotesStore.PendingShot.Replace(staged))
+        NotesStore.discardPendingShot(NotesStore.PendingShot.Replace(staged))
+        assertFalse(staged.exists())
+    }
 }

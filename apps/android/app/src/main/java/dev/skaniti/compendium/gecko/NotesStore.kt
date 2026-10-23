@@ -118,6 +118,39 @@ object NotesStore {
         if (existing == null) shotFile.delete()
     }
 
+    /**
+     * A screenshot change made in the note dialog but not yet saved. Remove and
+     * Replace only record intent (Replace holds a staged copy); the saved file is
+     * touched on Save via [commitPendingShot] and left alone on dismiss via
+     * [discardPendingShot].
+     */
+    sealed interface PendingShot {
+        data object None : PendingShot
+        data object Remove : PendingShot
+        data class Replace(val staged: File) : PendingShot
+    }
+
+    /** Sibling staging file for a replacement of [shotFile] (`<id>.png` -> `<id>.pending.png`). */
+    fun stagingFile(shotFile: File): File =
+        File(shotFile.parentFile, shotFile.nameWithoutExtension + ".pending." + shotFile.extension)
+
+    /** Apply [pending] to the saved [shotFile]; call on Save. Consumes a staged file. */
+    fun commitPendingShot(shotFile: File, pending: PendingShot) {
+        when (pending) {
+            PendingShot.None -> Unit
+            PendingShot.Remove -> shotFile.delete()
+            is PendingShot.Replace -> {
+                pending.staged.copyTo(shotFile, overwrite = true)
+                pending.staged.delete()
+            }
+        }
+    }
+
+    /** Drop a staged replacement without touching the saved file; call on any dismiss. Idempotent. */
+    fun discardPendingShot(pending: PendingShot) {
+        if (pending is PendingShot.Replace) pending.staged.delete()
+    }
+
     // ---- Context-bound shell (verified on-device) ----
 
     fun dir(context: Context): File =
