@@ -96,7 +96,7 @@ async def _content_join_check_notes() -> dict:
         result = await asyncio.to_thread(content_join_check.check_content_joins)
     except Exception as exc:
         logger.exception("content join check failed")
-        return {"error": str(exc)[:300]}
+        return {"error": f"{type(exc).__name__}: {exc}"[:300]}
     if result["count"]:
         per_user = "; ".join(
             f"user {uid}: {u['count']} page(s), ids {u['page_ids']}"

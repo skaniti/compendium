@@ -1,5 +1,11 @@
 import asyncio
-from unittest.mock import patch, MagicMock
+import contextlib
+import logging
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 import backend.services.nightly_maintenance as nm
 
 
@@ -59,13 +65,6 @@ def test_nightly_reclusters_when_new_pages():
 
 # --- content join check step -------------------------------------------------
 
-import contextlib
-import logging
-from datetime import UTC, datetime
-
-import pytest
-
-
 def _run_nightly(check, calls=None):
     """Run the whole nightly with every other step stubbed; ``check`` stands in for the join check."""
     calls = calls if calls is not None else []
@@ -109,7 +108,7 @@ def test_join_check_result_is_recorded_in_notes_and_runs_after_the_sweep():
         order.append("check")
         return result
 
-    notes, calls = _run_nightly(
+    notes, _ = _run_nightly(
         patch.object(nm.content_join_check, "check_content_joins", side_effect=_check), calls=order
     )
     assert notes["content_join_mismatches"] == result
@@ -143,7 +142,7 @@ def test_clean_join_check_logs_no_warning(caplog):
 def test_join_check_failure_is_recorded_and_later_steps_still_run():
     boom = patch.object(nm.content_join_check, "check_content_joins", side_effect=RuntimeError("db went away"))
     notes, calls = _run_nightly(boom)
-    assert notes["content_join_mismatches"] == {"error": "db went away"}
+    assert notes["content_join_mismatches"] == {"error": "RuntimeError: db went away"}
     assert "error" not in notes  # the run itself did not fail
     for step in ("sweep", "recluster", "catchup", "snapshot"):
         assert step in calls

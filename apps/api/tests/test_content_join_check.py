@@ -174,6 +174,26 @@ class TestCheckContentJoins:
         assert slice_["count"] == 25
         assert slice_["page_ids"] == sorted(p.values())[:20]
 
+    def test_check_runs_under_a_local_statement_timeout_that_does_not_leak(self, monkeypatch):
+        seen = {}
+        real = cjc.find_mismatched_pages
+
+        def spy(cur, user_id=None):
+            cur.execute("SHOW statement_timeout")
+            seen["during"] = cur.fetchone()[0]
+            return real(cur, user_id)
+
+        monkeypatch.setattr(cjc, "find_mismatched_pages", spy)
+        cjc.check_content_joins()
+        assert seen["during"] == "1min"  # Postgres displays '60s' as 1min
+        assert _sql("SHOW statement_timeout") != [("1min",)]  # SET LOCAL ended with the transaction
+
+    def test_the_shared_finder_sets_no_timeout_so_the_repair_script_is_unaffected(self):
+        with get_conn() as conn, conn.cursor() as cur:
+            cjc.find_mismatched_pages(cur)
+            cur.execute("SHOW statement_timeout")
+            assert cur.fetchone()[0] != "1min"
+
     def test_check_never_writes(self):
         u = _user("ro@example.test")
         p = _pages(u, ["a", "b"])

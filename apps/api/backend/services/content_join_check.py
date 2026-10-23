@@ -27,6 +27,9 @@ NOTES_KEY = "content_join_mismatches"
 PAGE_ID_CAP = 20
 """Most page ids kept per user in the notes (the count is always the true total)."""
 
+STATEMENT_TIMEOUT = "60s"
+"""Cap on the nightly check's query, so a pathological table cannot hold the run (SET LOCAL: this transaction only)."""
+
 # Heavy comparison in SQL. Rows whose own normalized_url is NULL are returned too so
 # Python can derive it from the url (the column is NOT NULL today; belt and braces).
 _MISMATCH_SQL = """
@@ -81,6 +84,8 @@ def check_content_joins(user_id: int | None = None, cap: int = PAGE_ID_CAP) -> d
     distinguishable from "did not run". Never writes.
     """
     with get_conn() as conn, conn.cursor() as cur:
+        # Only here, not in find_mismatched_pages: the manual repair script shares that and must not time out.
+        cur.execute(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'")
         rows = find_mismatched_pages(cur, user_id)
     by_user: dict[str, dict] = {}
     for r in rows:  # rows are ordered by page id, so each user's ids stay ascending

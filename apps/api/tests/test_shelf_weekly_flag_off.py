@@ -51,6 +51,7 @@ def _run_nightly(settings_ns, weekday_today):
         patch("backend.db.page_repo.get_page_status_counts", return_value={}),
         patch("backend.db.trends_repo.get_total_cost_usd", return_value=0.0),
         patch("backend.db.trends_repo.insert_status_snapshot"),
+        patch.object(nm.content_join_check, "check_content_joins", return_value={"count": 0, "by_user": {}}),
     ):
         return asyncio.run(nm.run_nightly_maintenance())
 
