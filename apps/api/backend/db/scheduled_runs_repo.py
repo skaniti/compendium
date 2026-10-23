@@ -104,3 +104,30 @@ def get_last_run(job_name: str) -> dict | None:
                 return None
             cols = [d[0] for d in cur.description]
             return dict(zip(cols, row))
+
+
+def get_last_run_with_note(job_name: str, note_key: str) -> dict | None:
+    """Return the most recent *completed* run of ``job_name`` whose notes carry ``note_key``.
+
+    Runs recorded before a check existed (no key in their notes) and failed runs
+    (notes hold only ``error``) are skipped, so the result is "the latest run that
+    actually recorded this". Returns ``{id, finished_at, notes}`` or None.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, finished_at, notes
+                  FROM scheduled_runs
+                 WHERE job_name = %s
+                   AND status = 'completed'
+                   AND notes -> %s IS NOT NULL
+              ORDER BY started_at DESC, id DESC
+                 LIMIT 1
+                """,
+                (job_name, note_key),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"id": row[0], "finished_at": row[1], "notes": row[2]}

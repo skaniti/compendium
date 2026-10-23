@@ -368,6 +368,103 @@ class TestDbRejectedTz:
         assert tc.get(path, params={"tz": "UTC"}).status_code == 422
 
 
+def _record_nightly(notes, job="nightly_maintenance"):
+    """Insert a completed scheduled run carrying ``notes``; returns its id."""
+    from backend.db import scheduled_runs_repo
+
+    run_id = scheduled_runs_repo.start_run(job)
+    scheduled_runs_repo.complete_run(run_id, elapsed_seconds=1.0, notes=notes)
+    return run_id
+
+
+def _check_notes(count=0, by_user=None):
+    return {"content_join_mismatches": {"count": count, "by_user": by_user or {}}}
+
+
+class TestContentJoinCheck:
+    URL = "/api/pipeline/content-join-check"
+
+    def test_never_when_no_run_has_recorded_the_check(self, client):
+        tc, _ = client
+        assert tc.get(self.URL).json() == {
+            "state": "never",
+            "checked_at": None,
+            "count": 0,
+            "page_ids": [],
+        }
+
+    def test_a_nightly_run_without_the_check_still_reads_as_never(self, client):
+        tc, _ = client
+        _record_nightly({"pending_swept": 0})
+        assert tc.get(self.URL).json()["state"] == "never"
+
+    def test_other_jobs_are_ignored(self, client):
+        tc, _ = client
+        _record_nightly(_check_notes(), job="something_else")
+        assert tc.get(self.URL).json()["state"] == "never"
+
+    def test_clean(self, client):
+        tc, _ = client
+        _record_nightly(_check_notes())
+        body = tc.get(self.URL).json()
+        assert (body["state"], body["count"], body["page_ids"]) == ("clean", 0, [])
+        assert datetime.fromisoformat(body["checked_at"]).tzinfo is not None
+
+    def test_mismatches_report_count_and_page_ids(self, client):
+        tc, user = client
+        _record_nightly(_check_notes(2, {str(user["id"]): {"count": 2, "page_ids": [4, 9]}}))
+        body = tc.get(self.URL).json()
+        assert (body["state"], body["count"], body["page_ids"]) == ("mismatches", 2, [4, 9])
+
+    def test_error(self, client):
+        tc, _ = client
+        _record_nightly({"content_join_mismatches": {"error": "connection to db failed"}})
+        body = tc.get(self.URL).json()
+        assert body["state"] == "error"
+        assert "connection" not in str(body)
+
+    def test_caller_never_sees_another_users_count_or_ids(self, client):
+        tc, user = client
+        other = _user("other-pipe@example.com")
+        _record_nightly(
+            _check_notes(
+                5,
+                {
+                    str(user["id"]): {"count": 2, "page_ids": [4, 9]},
+                    str(other["id"]): {"count": 3, "page_ids": [301, 302, 303]},
+                },
+            )
+        )
+        mine = tc.get(self.URL).json()
+        assert (mine["count"], mine["page_ids"]) == (2, [4, 9])
+        assert "301" not in str(mine)
+        from backend.api.main import app, verify_api_key
+
+        app.dependency_overrides[verify_api_key] = lambda: other["id"]
+        theirs = tc.get(self.URL).json()
+        assert (theirs["count"], theirs["page_ids"]) == (3, [301, 302, 303])
+        # a user absent from by_user reads clean, whatever the totals say
+        bystander = _user("bystander-pipe@example.com")
+        app.dependency_overrides[verify_api_key] = lambda: bystander["id"]
+        assert tc.get(self.URL).json()["state"] == "clean"
+        assert tc.get(self.URL).json()["count"] == 0
+
+    def test_latest_run_with_the_check_wins(self, client):
+        tc, user = client
+        _record_nightly(_check_notes(1, {str(user["id"]): {"count": 1, "page_ids": [7]}}))
+        _record_nightly(_check_notes())  # newer, clean
+        _record_nightly({"pending_swept": 1})  # newest, no check recorded (older code)
+        assert tc.get(self.URL).json()["state"] == "clean"
+
+    def test_failed_runs_are_not_considered(self, client):
+        from backend.db import scheduled_runs_repo
+
+        tc, _ = client
+        run_id = scheduled_runs_repo.start_run("nightly_maintenance")
+        scheduled_runs_repo.fail_run(run_id, error="boom", elapsed_seconds=1.0)
+        assert tc.get(self.URL).json()["state"] == "never"
+
+
 class TestRemoved:
     def test_skip_trends_is_gone(self, client):
         tc, _ = client
@@ -385,6 +482,7 @@ class TestAuth:
             "/api/pipeline/summary",
             "/api/pipeline/timeline",
             "/api/pipeline/pages",
+            "/api/pipeline/content-join-check",
         ):
             assert tc.get(path).status_code == 401, path
 

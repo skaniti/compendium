@@ -4,7 +4,8 @@ Pipeline routes, all taking ``range`` and ``tz``: ``/summary`` (the
 outcome -> detail -> fate ``flow`` with top domains, plus rule-filter and
 skip-gate config), ``/timeline`` (bucketed total / archived / per-outcome series
 with gate categories) and ``/pages`` (paginated windowed pages, each carrying
-its outcome, detail, detail_label and fate).
+its outcome, detail, detail_label and fate). ``/content-join-check`` is not
+range-scoped: it reports the latest nightly page/content join check.
 
 Auth: verify_api_key only. The 05 disposition rules Pipeline demo-visitable;
 every query is scoped to the caller's user_id, so a demo session reads its
@@ -18,7 +19,8 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.api.main import verify_api_key
 from backend.api.period_params import guard_tz, tz_param
-from backend.db import auth_repo, page_repo, pipeline_repo
+from backend.db import auth_repo, page_repo, pipeline_repo, scheduled_runs_repo
+from backend.services import content_join_check
 from backend.services import pipeline_summary as ps
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
@@ -108,3 +110,16 @@ async def pipeline_pages(
         "sort": sort,
         "dir": dir,
     }
+
+
+@router.get("/content-join-check")
+async def pipeline_content_join_check(user_id: int = Depends(verify_api_key)) -> dict:
+    """Latest nightly page/content join check, the caller's own slice only.
+
+    ``state`` is ``clean``, ``mismatches`` (``count`` + ``page_ids``), ``error`` (the
+    check failed on that run) or ``never`` (no run has recorded the check yet).
+    """
+    run = scheduled_runs_repo.get_last_run_with_note(
+        "nightly_maintenance", content_join_check.NOTES_KEY
+    )
+    return content_join_check.status_for_user(run, user_id)
