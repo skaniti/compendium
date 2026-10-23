@@ -5,7 +5,7 @@ import os
 import pytest
 
 
-@pytest.mark.parametrize("var", ["LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING", "LANGCHAIN_TRACING"])
+@pytest.mark.parametrize("var", ["LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING", "LANGCHAIN_TRACING"])
 def test_tracing_env_is_false_during_run(var):
     assert os.environ[var] == "false"
 
@@ -23,3 +23,9 @@ def test_agent_traceable_is_a_passthrough():
         return 1
 
     assert traceable("x")(fn) is fn
+
+
+def test_langsmith_sdk_tracing_is_disabled():
+    from langsmith.utils import tracing_is_enabled
+
+    assert not tracing_is_enabled()

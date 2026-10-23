@@ -15,8 +15,22 @@ from pathlib import Path
 # backend import: settings.py reads the env at import and, if tracing plus an
 # API key are configured (e.g. in apps/api/.env), copies them into os.environ
 # and the agent/LLM modules would then send real traces from tests.
-for _tracing_var in ("LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING", "LANGCHAIN_TRACING"):
+# langsmith's own tracing_is_enabled() checks LANGSMITH_TRACING_V2 first.
+for _tracing_var in (
+    "LANGSMITH_TRACING_V2",
+    "LANGCHAIN_TRACING_V2",
+    "LANGSMITH_TRACING",
+    "LANGCHAIN_TRACING",
+):
     os.environ[_tracing_var] = "false"
+# Keys and endpoints do nothing with tracing off; drop them from the run.
+for _var in (
+    "LANGSMITH_API_KEY",
+    "LANGCHAIN_API_KEY",
+    "LANGSMITH_ENDPOINT",
+    "LANGCHAIN_ENDPOINT",
+):
+    os.environ.pop(_var, None)
 
 import pytest
 
