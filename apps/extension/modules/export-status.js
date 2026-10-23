@@ -10,6 +10,7 @@
 // forceFinalize response (spec D5/D6: `{ success, delivery, flush }`).
 const FLUSH_STOP_HINTS = {
   offline: ' (backend unreachable)',
+  site_access: ' (site access is off, use Grant access)',
   rate_limited: ' (rate limited, retrying in a minute)',
   batch_cap: ' (more will flush shortly)',
   auth: ' (rejected: check API key)'

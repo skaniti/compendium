@@ -50,6 +50,18 @@ test('composeExportResult: batch_cap stop appends the batch-cap hint', () => {
   });
 });
 
+test('composeExportResult: site_access stop says site access is off, not "unreachable"', () => {
+  const result = composeExportResult({
+    success: true,
+    delivery: 'buffered',
+    flush: { delivered: 0, remaining: 4, stop: 'site_access', lastError: 'site access missing' }
+  });
+  assert.deepEqual(result, {
+    text: 'Exported 0, 4 buffered (site access is off, use Grant access)',
+    cls: 'export-warn'
+  });
+});
+
 test('composeExportResult: auth stop appends the auth hint', () => {
   const result = composeExportResult({
     success: true,

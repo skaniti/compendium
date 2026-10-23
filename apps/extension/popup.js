@@ -9,6 +9,7 @@
 
 import { validateApiKey, saveConfig, maskApiKey, CONFIG } from './modules/config.js';
 import { composeExportResult } from './modules/export-status.js';
+import { initSiteAccessBanner } from './modules/site-access-ui.js';
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -510,3 +511,13 @@ saveSettingsBtn.addEventListener('click', async () => {
 }
 
 updateStatus();
+
+// ── Site access ──────────────────────────────────────────────────────────────
+
+// Banner + Grant button while the browser withholds access to the backend
+// (logic and click handling live in modules/site-access-ui.js).
+initSiteAccessBanner({
+  banner: document.getElementById('siteAccessBanner'),
+  text: document.getElementById('siteAccessText'),
+  button: document.getElementById('grantAccessBtn')
+}).catch(() => {});

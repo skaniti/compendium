@@ -10,7 +10,9 @@
  * pendingExports queue flushed by flushPendingExports(). A flush pass
  * self-paces (spec D4): at most CONFIG.FLUSH_BATCH_MAX requests, stopping
  * early on 429 ('rate_limited'), 401/403 ('auth'), or a network/TypeError
- * ('offline') so the remaining queue stays intact and in order. There is no
+ * ('offline', or 'site_access' when the browser is withholding the backend's
+ * host permission, see modules/site-access.js) so the remaining queue stays
+ * intact and in order. There is no
  * Retry-After from the server, so draining a large backlog relies on the
  * periodic CONFIG.FLUSH_ALARM_NAME alarm (spec D7, background.js) rather
  * than retrying in a tight loop — ensureFlushAlarm()/clearFlushAlarm() keep
@@ -50,6 +52,12 @@
  */
 
 import { CONFIG, getConfig, buildHeaders, validateApiKey } from './config.js';
+import {
+  SITE_ACCESS_STOP,
+  SITE_ACCESS_ERROR,
+  hasSiteAccess,
+  setSiteAccessBadge
+} from './site-access.js';
 
 // ── Backend Transport ───────────────────────────────────────────────────────
 
@@ -434,7 +442,9 @@ let flushInFlight = null;
  *   - 429                     -> stop:'rate_limited'
  *   - 401/403                 -> stop:'auth' (retrying others is pointless with a bad key)
  *   - stored key invalid (InvalidApiKeyError) -> stop:'auth' (never reaches fetch)
- *   - network/TypeError throw -> stop:'offline'
+ *   - network/TypeError throw -> stop:'offline', or stop:'site_access' when
+ *     the throw happened while the backend's host permission is missing
+ *     (the CORS-blocked fetch looks exactly like an unreachable backend)
  * Any other non-2xx keeps just that item and continues. 409 counts as
  * delivered (spec D3). ensures/clears CONFIG.FLUSH_ALARM_NAME by whether
  * anything remains after the pass. Concurrent callers share one in-flight
@@ -511,9 +521,18 @@ async function runFlushPass() {
         stop = 'auth';
         break;
       }
-      // Backend unreachable -- stop trying; every un-iterated item (plus
-      // the current one) simply stays in storage since we never removed
-      // it, so no explicit re-push is needed here.
+      // A fetch that throws is either "backend unreachable" or a CORS block
+      // from withheld site access; only the permission state tells them
+      // apart. Either way stop -- every un-iterated item (plus the current
+      // one) simply stays in storage since we never removed it, so no
+      // explicit re-push is needed here.
+      if (!(await hasSiteAccess())) {
+        console.warn(`[Export] Flush stopped, site access missing: ${item.captureId}`, err);
+        await setSiteAccessBadge(true);
+        lastError = SITE_ACCESS_ERROR;
+        stop = SITE_ACCESS_STOP;
+        break;
+      }
       console.warn(`[Export] Flush offline: ${item.captureId}`, err);
       lastError = err.message;
       stop = 'offline';
@@ -568,6 +587,11 @@ export async function retrySingleExport(captureId) {
       // sanitized); never interpolate the key itself.
       console.warn(`[Export] Retry rejected: stored API key is invalid for ${captureId}`, err);
       return { success: false, delivery: 'backend_error', error: err.message };
+    }
+    if (!(await hasSiteAccess())) {
+      console.warn(`[Export] Retry blocked, site access missing: ${captureId}`, err);
+      await setSiteAccessBadge(true);
+      return { success: false, delivery: SITE_ACCESS_STOP, error: SITE_ACCESS_ERROR };
     }
     console.warn(`[Export] Retry offline: ${captureId}`, err);
     return { success: false, delivery: 'backend_offline', error: err.message };

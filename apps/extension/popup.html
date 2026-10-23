@@ -15,6 +15,12 @@
       <a id="version" class="version"></a>
     </header>
 
+    <!-- Site access banner: shown while the browser withholds access to the backend -->
+    <div id="siteAccessBanner" class="site-access-banner hidden" role="alert">
+      <span id="siteAccessText" class="site-access-text"></span>
+      <button id="grantAccessBtn" class="btn btn-grant">Grant access</button>
+    </div>
+
     <!-- Tab Bar -->
     <div class="tab-bar">
       <button class="tab tab-passive active" data-tab="passive" title="Passive capture of your browsing, finalized after 60 minutes idle. Disable in settings">

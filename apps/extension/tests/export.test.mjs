@@ -414,6 +414,58 @@ test('flushPendingExports: network throw stops with "offline", preserves un-iter
   assert.ok(warn.calls.some(args => args.some(a => a instanceof Error)));
 });
 
+test('flushPendingExports: network throw while site access is missing stops as "site_access", not "offline"', async () => {
+  shim.reset();
+  shim.permissions.granted = false;
+  shim.storage.set('pendingExports', items(3, 's'));
+  fetchQueue([{ throw: 'NetworkError when attempting to fetch resource.' }]);
+  const warn = spyWarn();
+
+  const result = await flushPendingExports();
+  warn.restore();
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.delivered, 0);
+  assert.equal(result.remaining, 3);
+  assert.equal(result.stop, 'site_access');
+  assert.equal(result.lastError, 'site access missing');
+  assert.deepEqual(
+    shim.storage.get('pendingExports').map(i => i.captureId),
+    ['s0', 's1', 's2']
+  );
+  assert.ok(shim.alarms.created.some(a => a.name === CONFIG.FLUSH_ALARM_NAME));
+  assert.equal(shim.action.badgeText, '!');
+  assert.ok(warn.calls.some(args => args.some(a => a instanceof Error)));
+});
+
+test('flushPendingExports: network throw while site access is granted stays "offline" with the original error', async () => {
+  shim.reset();
+  shim.storage.set('pendingExports', items(1, 'g'));
+  fetchQueue([{ throw: 'fetch failed' }]);
+  const warn = spyWarn();
+
+  const result = await flushPendingExports();
+  warn.restore();
+
+  assert.equal(result.stop, 'offline');
+  assert.equal(result.lastError, 'fetch failed');
+  assert.equal(shim.action.badgeText, '');
+});
+
+test('flushPendingExports: missing site access does not hide a response -- an HTTP status keeps its own handling', async () => {
+  shim.reset();
+  shim.permissions.granted = false;
+  shim.storage.set('pendingExports', items(2, 'h'));
+  // A server that allows the extension origin works without the permission:
+  // no throw, so no reclassification and no site_access stop.
+  fetchQueue([{ status: 200, json: {} }, { status: 200, json: {} }]);
+
+  const result = await flushPendingExports();
+
+  assert.equal(result.delivered, 2);
+  assert.equal(result.stop, null);
+});
+
 test('flushPendingExports: other non-2xx (e.g. 422) keeps just that item and continues', async () => {
   shim.reset();
   shim.storage.set('pendingExports', items(2, 'm'));
@@ -611,6 +663,25 @@ test('retrySingleExport: throw returns the error message and logs the error obje
   assert.equal(result.delivery, 'backend_offline');
   assert.equal(result.error, 'boom');
   assert.ok(warn.calls.some(args => args.some(a => a instanceof Error)));
+});
+
+test('retrySingleExport: throw while site access is missing returns "site_access" with a readable error', async () => {
+  shim.reset();
+  shim.permissions.granted = false;
+  shim.storage.set('pendingExports', [{ captureId: 'r5' }]);
+  fetchQueue([{ throw: 'NetworkError when attempting to fetch resource.' }]);
+  const warn = spyWarn();
+
+  const result = await retrySingleExport('r5');
+  warn.restore();
+
+  assert.deepEqual(result, {
+    success: false,
+    delivery: 'site_access',
+    error: 'site access missing'
+  });
+  assert.deepEqual(shim.storage.get('pendingExports').map(i => i.captureId), ['r5']);
+  assert.equal(shim.action.badgeText, '!');
 });
 
 test('retrySingleExport: unknown captureId returns not_found', async () => {

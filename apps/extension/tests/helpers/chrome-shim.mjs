@@ -5,7 +5,9 @@
  * callers must call installChromeShim() BEFORE dynamically importing the
  * modules under test. There is no real browser here -- storage is a plain
  * Map, alarms are recorded (not scheduled), and fetch is stubbed separately
- * via fetchQueue().
+ * via fetchQueue(). chrome.permissions is a single granted/not-granted flag
+ * (default granted, so tests that don't care about site access are unaffected)
+ * and chrome.action records the toolbar badge.
  */
 
 function normalizeKeys(keys) {
@@ -20,11 +22,37 @@ function normalizeKeys(keys) {
  * Installs `chrome` and `navigator` on globalThis and returns handles for
  * asserting on stored state / alarm activity from tests.
  *
- * @returns {{ storage: Map, alarms: { created: Array, cleared: Array }, reset: () => void }}
+ * @returns {{
+ *   storage: Map,
+ *   alarms: { created: Array, cleared: Array },
+ *   permissions: { granted: boolean, requestResult: boolean|'throw', containsCalls: Array,
+ *                  requests: Array, fireAdded: Function, fireRemoved: Function },
+ *   action: { badgeText: string, badgeColor: string|null, title: string|null },
+ *   reset: () => void
+ * }}
  */
 export function installChromeShim() {
   const store = new Map();
   const alarms = { created: [], cleared: [] };
+  const storageListeners = [];
+  const permissionListeners = { added: [], removed: [] };
+
+  const permissions = {
+    granted: true,
+    // What request() resolves to: true grants (and fires onAdded), false is a
+    // user denial, 'throw' rejects (Firefox does this outside a user gesture).
+    requestResult: true,
+    containsCalls: [],
+    requests: [],
+    fireAdded() {
+      permissionListeners.added.forEach(fn => fn({ origins: [], permissions: [] }));
+    },
+    fireRemoved() {
+      permissionListeners.removed.forEach(fn => fn({ origins: [], permissions: [] }));
+    }
+  };
+
+  const action = { badgeText: '', badgeColor: null, title: null };
 
   function get(keys, callback) {
     const names = normalizeKeys(keys);
@@ -45,6 +73,11 @@ export function installChromeShim() {
 
   function set(items, callback) {
     for (const [k, v] of Object.entries(items)) store.set(k, v);
+    if (storageListeners.length > 0) {
+      const changes = {};
+      for (const [k, v] of Object.entries(items)) changes[k] = { newValue: v };
+      storageListeners.forEach(fn => fn(changes, 'local'));
+    }
     if (typeof callback === 'function') {
       callback();
       return undefined;
@@ -64,7 +97,38 @@ export function installChromeShim() {
 
   globalThis.chrome = {
     storage: {
-      local: { get, set, remove }
+      local: { get, set, remove },
+      onChanged: { addListener: fn => storageListeners.push(fn) }
+    },
+    permissions: {
+      async contains(query) {
+        permissions.containsCalls.push(query);
+        return permissions.granted;
+      },
+      async request(query) {
+        permissions.requests.push(query);
+        if (permissions.requestResult === 'throw') {
+          throw new Error('permissions.request may only be called from a user input handler');
+        }
+        if (permissions.requestResult) {
+          permissions.granted = true;
+          permissions.fireAdded();
+        }
+        return permissions.requestResult;
+      },
+      onAdded: { addListener: fn => permissionListeners.added.push(fn) },
+      onRemoved: { addListener: fn => permissionListeners.removed.push(fn) }
+    },
+    action: {
+      async setBadgeText({ text }) {
+        action.badgeText = text;
+      },
+      async setBadgeBackgroundColor({ color }) {
+        action.badgeColor = color;
+      },
+      async setTitle({ title }) {
+        action.title = title;
+      }
     },
     alarms: {
       create(name, info) {
@@ -95,9 +159,19 @@ export function installChromeShim() {
     store.clear();
     alarms.created.length = 0;
     alarms.cleared.length = 0;
+    storageListeners.length = 0;
+    permissionListeners.added.length = 0;
+    permissionListeners.removed.length = 0;
+    permissions.granted = true;
+    permissions.requestResult = true;
+    permissions.containsCalls.length = 0;
+    permissions.requests.length = 0;
+    action.badgeText = '';
+    action.badgeColor = null;
+    action.title = null;
   }
 
-  return { storage: store, alarms, reset };
+  return { storage: store, alarms, permissions, action, reset };
 }
 
 /**

@@ -120,6 +120,40 @@ h1 {
 }
 
 /* =============================================================================
+   Site access banner -- shown while the browser withholds access to the
+   backend (modules/site-access-ui.js toggles .hidden)
+   ============================================================================= */
+
+.site-access-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--c-warn);
+  border-radius: 6px;
+  background: var(--c-surface);
+}
+
+.site-access-text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--c-text-soft);
+}
+
+.btn-grant {
+  width: 100%;
+  font-weight: 500;
+  border: 1px solid var(--c-warn);
+  background: transparent;
+  color: var(--c-warn);
+}
+
+.btn-grant:hover:not(:disabled) {
+  background: var(--c-surface-2);
+}
+
+/* =============================================================================
    Tab Bar
    ============================================================================= */
 

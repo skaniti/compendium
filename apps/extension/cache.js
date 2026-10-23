@@ -10,6 +10,7 @@
 
 import { formatRange } from './modules/format.js';
 import { readCacheIndex, readCacheEntry, readAllCacheEntries } from './modules/export.js';
+import { initSiteAccessBanner } from './modules/site-access-ui.js';
 
 // =============================================================================
 // DOM refs
@@ -694,3 +695,11 @@ function crc32(data) {
 // =============================================================================
 
 refresh();
+
+// Banner + Grant button while the browser withholds access to the backend
+// (logic and click handling live in modules/site-access-ui.js).
+initSiteAccessBanner({
+  banner: document.getElementById('siteAccessBanner'),
+  text: document.getElementById('siteAccessText'),
+  button: document.getElementById('grantAccessBtn')
+}).catch(() => {});

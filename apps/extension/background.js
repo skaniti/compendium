@@ -15,6 +15,10 @@
  * to off finalizes (exports) whatever the current passive capture already
  * holds, rather than silently dropping it, and clears the timeout alarm.
  *
+ * Missing site access (Firefox leaves the host permission ungranted; Chrome
+ * lets users withhold it): modules/site-access.js keeps a toolbar badge in
+ * step with it, and the popup / cache page show a banner with a Grant button.
+ *
  * Init ordering: `initialize()` runs at module load and its promise is kept
  * as `ready`, below. All Chrome listeners are registered synchronously at
  * module top level (required so a woken MV3 service worker doesn't miss the
@@ -35,6 +39,7 @@ import { recordPageVisit, recordCurrentPage, recordEvent } from './modules/track
 import * as passive from './modules/passive-tracker.js';
 import * as active from './modules/active-tracker.js';
 import { flushPendingExports, retrySingleExport, readCacheIndex } from './modules/export.js';
+import { startSiteAccessMonitor, refreshSiteAccessBadge } from './modules/site-access.js';
 
 // =============================================================================
 // Transition Metadata Bridge
@@ -326,7 +331,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } else if (alarm.name === CONFIG.FLUSH_ALARM_NAME) {
     // Periodic drain of buffered exports (spec D7) -- self-manages whether
     // it needs to keep firing via ensureFlushAlarm()/clearFlushAlarm().
-    flushPendingExports();
+    // The alarm only runs while uploads are queued, which is exactly when a
+    // stale site-access badge matters, so re-sync it after every pass (covers
+    // a browser that grants access without firing permissions.onAdded).
+    flushPendingExports()
+      .then(() => refreshSiteAccessBadge())
+      .catch((err) => console.warn('[Export] Alarm flush failed:', err));
   }
 });
 
@@ -517,6 +527,11 @@ async function initialize() {
   flushPendingExports();
   console.log('[Compendium] Unified extension initialized');
 }
+
+// Site-access badge: the listeners register synchronously here (MV3 requires
+// that at top level) and the first check covers worker start and fresh
+// installs. Independent of `ready` -- it touches no tracker state.
+startSiteAccessMonitor().catch((err) => console.warn('[SiteAccess] monitor start failed:', err));
 
 // Kept so every listener above can await tracker-state readiness before
 // dispatching into passive/active state -- see header comment. Caught here

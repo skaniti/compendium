@@ -121,6 +121,39 @@ a:hover {
   color: var(--c-muted);
 }
 
+/* Site access banner -- shown while the browser withholds access to the
+   backend (modules/site-access-ui.js toggles .hidden) */
+.site-access-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--c-warn);
+  border-radius: 6px;
+  background: var(--c-surface);
+  min-width: 0;
+}
+
+.site-access-text {
+  flex: 1;
+  color: var(--c-text-soft);
+}
+
+.btn-grant {
+  font-weight: 500;
+  border: 1px solid var(--c-warn);
+  background: transparent;
+  color: var(--c-warn);
+}
+
+.btn-grant:hover:not(:disabled) {
+  background: var(--c-surface-2);
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* Toolbar */
 .toolbar {
   display: flex;

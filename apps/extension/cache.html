@@ -15,6 +15,12 @@
       <p class="subtitle">Recovery and capture inspection</p>
     </header>
 
+    <!-- Site access banner: shown while the browser withholds access to the backend -->
+    <div id="siteAccessBanner" class="site-access-banner hidden" role="alert">
+      <span id="siteAccessText" class="site-access-text"></span>
+      <button id="grantAccessBtn" class="btn btn-grant">Grant access</button>
+    </div>
+
     <div class="toolbar">
       <span id="summary" class="summary">Loading...</span>
       <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
