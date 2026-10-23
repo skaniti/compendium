@@ -545,6 +545,31 @@ class TestLabelMatchTier:
         query = "ai"
         assert _label_match_tier("ai tools", query, _tokenize(query)) == 1
 
+    def test_substring_inside_word_is_not_a_match(self):
+        # "the" must not match inside "synthesis" (full-string containment).
+        assert _label_match_tier("the", "synthesis", _tokenize("synthesis")) is None
+        assert _label_match_tier("synthesis", "the", _tokenize("the")) is None
+
+    def test_substring_inside_query_word_is_not_a_match(self):
+        query = "a theory of synthesis"
+        assert _label_match_tier("the", query, _tokenize(query)) is None
+
+    def test_science_does_not_match_pseudoscience(self):
+        assert _label_match_tier("science", "pseudoscience", _tokenize("pseudoscience")) is None
+        assert _label_match_tier("pseudoscience", "science", _tokenize("science")) is None
+
+    def test_multi_word_label_contiguous_in_query_matches(self):
+        query = "tell me about machine learning basics"
+        assert _label_match_tier("machine learning", query, _tokenize(query)) == 2
+
+    def test_multi_word_label_unrelated_words_do_not_match(self):
+        query = "machine tools for sourdough"
+        assert _label_match_tier("deep learning", query, _tokenize(query)) is None
+
+    def test_hyphen_and_underscore_separate_tokens(self):
+        assert _label_match_tier("data-science", "science", _tokenize("science")) == 2
+        assert _label_match_tier("computer_science", "computer science fans", _tokenize("computer science fans")) == 2
+
 
 class TestMatchTaxonomy:
     """Cascade stage 2: query-names-a-topic-area, in-memory, no embedding call."""

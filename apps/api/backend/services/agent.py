@@ -208,11 +208,19 @@ def _tokenize(text: str) -> list[str]:
     return _WORD_RE.findall(text.lower())
 
 
+def _contains_token_run(haystack: list[str], needle: list[str]) -> bool:
+    """True when ``needle`` appears as a contiguous run of whole tokens in ``haystack``."""
+    n = len(needle)
+    if n == 0 or n > len(haystack):
+        return False
+    return any(haystack[i : i + n] == needle for i in range(len(haystack) - n + 1))
+
+
 def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> Optional[int]:
     """Best-match tier for a fuzzy taxonomy-label lookup.
 
     0 = exact match. 1 = prefix (one string starts with the other) or an
-    exact single-token match. 2 = substring (either direction). 3 =
+    exact single-token match. 2 = whole-token containment (either direction). 3 =
     typo-tolerant close match (``difflib``, cutoff 0.8, e.g. "astonomy" ->
     "astronomy"). ``None`` = no match at any tier. Lower is better; callers
     take the minimum tier across all candidate labels.
@@ -236,11 +244,17 @@ def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> O
     if label_norm == query_norm:
         return 0
     label_long_enough = len(label_norm) >= 3
+    # Containment is on whole tokens (``_`` / ``-`` / whitespace separate
+    # them), never bare substrings: "the" must not match inside "synthesis".
+    label_tokens = _tokenize(label_norm)
+    query_full_tokens = _tokenize(query_norm)
     if label_long_enough:
         if len(query_norm) >= 3:
             if label_norm.startswith(query_norm) or query_norm.startswith(label_norm):
                 return 1
-            if label_norm in query_norm or query_norm in label_norm:
+            if _contains_token_run(label_tokens, query_full_tokens) or _contains_token_run(
+                query_full_tokens, label_tokens
+            ):
                 return 2
             if difflib.get_close_matches(query_norm, [label_norm], n=1, cutoff=0.8):
                 return 3
@@ -255,7 +269,7 @@ def _label_match_tier(label: str, query_norm: str, query_tokens: list[str]) -> O
         if tok == label_norm:
             return 1
         if label_long_enough:
-            if tok in label_norm or label_norm in tok:
+            if tok in label_tokens:
                 return 2
             if difflib.get_close_matches(tok, [label_norm], n=1, cutoff=0.8):
                 return 3
