@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _logger = logging.getLogger(__name__)
@@ -120,8 +120,9 @@ class Settings(BaseSettings):
     # audit_events retention (backlog #90): rows of the classes an
     # unauthenticated caller can append (bad X-API-Key, failed login, public
     # demo entry; see audit_repo.ANONYMOUS_CLASSES) are pruned daily after
-    # this many days. Authenticated classes are never pruned.
-    audit_anonymous_retention_days: int = 90
+    # this many days (>= 1: a bad value fails at boot rather than wiping the
+    # recent trail). Authenticated classes are never pruned.
+    audit_anonymous_retention_days: int = Field(90, ge=1)
     session_idle_minutes: int = 60
     session_idle_minutes_demo: int = 720
     session_idle_minutes_remembered: int = 0

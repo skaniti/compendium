@@ -18,6 +18,17 @@ def test_retention_setting_reads_env(monkeypatch):
     assert Settings().audit_anonymous_retention_days == 30
 
 
+@pytest.mark.parametrize("bad", ["0", "-5"])
+def test_retention_setting_rejects_non_positive_values(monkeypatch, bad):
+    from pydantic import ValidationError
+
+    from backend.config.settings import Settings
+
+    monkeypatch.setenv("AUDIT_ANONYMOUS_RETENTION_DAYS", bad)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 def _run_loop(main, monkeypatch, *, ticks, **loop_kwargs):
     sleeps = []
 

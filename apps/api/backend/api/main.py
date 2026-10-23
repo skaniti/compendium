@@ -504,11 +504,17 @@ async def _prune_audit_events_loop(
     """
     await asyncio.sleep(60)  # let startup settle
     while True:
-        days = retention_days if retention_days is not None else settings.audit_anonymous_retention_days
+        days = (
+            retention_days
+            if retention_days is not None
+            else settings.audit_anonymous_retention_days
+        )
         try:
             deleted = await asyncio.to_thread(audit_repo.prune_older_than, days)
             if deleted:
-                logger.info(f"audit_events prune: removed {deleted} anonymous rows older than {days}d")
+                logger.info(
+                    f"audit_events prune: removed {deleted} anonymous rows older than {days}d"
+                )
         except Exception:
             logger.exception("audit_events prune failed")
         await asyncio.sleep(interval_hours * 3600)
