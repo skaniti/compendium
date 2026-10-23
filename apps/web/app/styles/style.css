@@ -476,12 +476,18 @@
        (#dev-graph-toggle-btn) -- icon on top, caption below. Background
        intentionally stays transparent (vs the toggle's accent fill) so
        only ONE button on the bar reads as "active mode-switch action."
-       Width is flex:1 so all tabs together fill #header-dev-tabs and
-       stay equal-width. position:relative anchors the dq-bot-badge
-       overlay (top-right corner). */
+       Width: flex-basis is the card size (--card-h, content box, so the
+       outer width adds the padding and border) and flex-grow is 1, so the
+       tabs fill #header-dev-tabs and stay equal-width when there is room.
+       flex-shrink is 0 and min-width is the caption's own width, so at
+       half-screen width the tabs keep their size and #header-dev-tabs
+       scrolls sideways (overflow-x: auto, shared with the graph header's
+       cards) instead of squishing until the captions overflow.
+       position:relative anchors the dq-bot-badge overlay (top-right
+       corner). */
     position: relative;
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 var(--card-h, 82px);
+    min-width: max-content;
     /* 54 -> 76 (2026-07-13 header-scaling pass, ~1.405x with the header),
        then 76 -> 82 (2026-07-13 tweak pass, item 1: dev-mode widgets are
        widgets too, so .dev-tab-btn tracks --card-h's 67 -> 82 restore). */
