@@ -49,8 +49,8 @@ export interface CompleteEvent {
   // compendium) omit cluster_ids, sources_detail, and images entirely.
   //
   // Task group C fix: was `number[]` -- WRONG. Verified against
-  // backend/services/agent.py: `cluster_ids` is
-  // `list(set(state.clusters_cited))` and `clusters_cited: list[str]` is
+  // backend/services/agent.py: `cluster_ids` is the clusters with a page
+  // the answer cites (a subset of `state.clusters_cited`) and `clusters_cited: list[str]` is
   // populated exclusively via `state.clusters_cited.append(c["cluster_slug"])`
   // (agent.py:1286/1329/1355/1487/1827) -- these are cluster SLUGS
   // (strings), matching GraphCluster.id (string) and the

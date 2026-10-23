@@ -1230,8 +1230,12 @@ class CompendiumAgent:
             trace.clusters_cited = list(set(state.clusters_cited))
 
             try:
-                answer_clusters = _clusters_for_answer(
-                    state, trace.final_answer, answer_sources, self._cluster_urls_by_slug()
+                answer_clusters = (
+                    _clusters_for_answer(
+                        state, trace.final_answer, answer_sources, self._cluster_urls_by_slug()
+                    )
+                    if state.clusters_cited
+                    else []
                 )
             except Exception:
                 # No framing is the safe failure: a graph left where it was
