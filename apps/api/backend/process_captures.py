@@ -182,7 +182,9 @@ def _pair_rows_with_results(pages: list[dict], results: list) -> tuple[list, lis
     differ from request order). Pairing by position then shifts every later
     page onto its neighbour's content. Within one URL key, rows (visited_at
     order) and results (request order) are paired in order; surplus rows reuse
-    the group's last result (same URL, same fetched content).
+    the group's last result (same URL, same fetched content). Both sides are
+    keyed with today's ``normalize_url``: the stored ``pages.normalized_url``
+    can predate a normalizer change and would never match.
 
     Returns ``(pairs, unmatched_rows, unmatched_results)``.
     """
@@ -194,7 +196,7 @@ def _pair_rows_with_results(pages: list[dict], results: list) -> tuple[list, lis
     unmatched_rows: list[dict] = []
     used: dict[str, int] = {}
     for row in pages:
-        key = row.get("normalized_url") or _identity_key(row.get("url"))
+        key = _identity_key(row.get("url"))
         group = by_key.get(key)
         if not group:
             unmatched_rows.append(row)

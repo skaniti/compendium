@@ -113,3 +113,15 @@ def test_persist_failure_counts_as_error():
         patch.object(process_captures.capture_repo, "update_capture"),
     ):
         assert process_captures.update_pages_from_response(1, response) == 1
+
+
+def test_stale_stored_normalized_url_still_pairs():
+    # A row's stored normalized_url can predate a normalizer change (here the
+    # old rules kept github's ?tab= param). Keying rows by that stale column
+    # while results are keyed by today's normalize_url left the row unmatched
+    # and pending forever, so the hourly sweep re-processed its capture.
+    url = "https://github.com/example-user?tab=repositories"
+    row = {"id": 10, "url": url, "normalized_url": url}
+    persisted, errors = _run([row], [_result(url)])
+    assert persisted == {10: url}
+    assert errors == 0
