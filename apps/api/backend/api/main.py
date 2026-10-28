@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 import asyncio
+import functools
 import json
 import logging
 import os
@@ -198,6 +199,26 @@ def _record_learning_gate_cost(lg_response, page_url: str | None = None) -> None
         )
     except Exception:
         logger.debug("trends learning_gate cost event insert failed", exc_info=True)
+
+
+def _record_vision_cost(vision_response, page_url: str | None = None) -> None:
+    """Emit a wiki_image_vision cost_event for one Wikipedia image description.
+    Best-effort: never raises into the capture pipeline."""
+    try:
+        from backend.db import trends_repo
+
+        trends_repo.insert_cost_event(
+            user_id=get_default_user_id(),
+            event_type="wiki_image_vision",
+            model=vision_response.model,
+            input_tokens=vision_response.input_tokens,
+            output_tokens=vision_response.output_tokens,
+            cost_usd=vision_response.cost_usd,
+            latency_ms=getattr(vision_response, "latency_ms", None),
+            metadata={"page_url": page_url} if page_url else None,
+        )
+    except Exception:
+        logger.debug("trends wiki_image_vision cost event insert failed", exc_info=True)
 
 
 async def verify_api_key(
@@ -1614,12 +1635,15 @@ async def process_capture(
         # M8: Wikipedia fetcher accepts an optional LLMService for vision-based
         # image descriptions. Other fetchers ignore the llm kwarg, so scope the
         # branch tightly to avoid silent behavioral drift on additions.
+        cost_kwargs: dict[str, Any] = {}
         if tool_name == "fetch_wikipedia_content":
             tool_args["llm"] = llm
+            # Kept out of tool_args, which is recorded on the result.
+            cost_kwargs["on_llm_cost"] = functools.partial(_record_vision_cost, page_url=page.url)
 
         fetch_start = time.perf_counter()
         try:
-            content = await func(**tool_args)
+            content = await func(**tool_args, **cost_kwargs)
             fetch_ms = (time.perf_counter() - fetch_start) * 1000
 
             content_dict = content.model_dump()

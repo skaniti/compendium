@@ -26,7 +26,9 @@ from backend.services.arxiv_pdf_parser import parse_pdf
 
 if TYPE_CHECKING:
     # Type-only to avoid circular import: llm_service imports content_fetcher.
-    from backend.services.llm_service import LLMService
+    from collections.abc import Callable
+
+    from backend.services.llm_service import LLMResponse, LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -745,6 +747,7 @@ def _collect_sections(sections) -> list[dict]:
 async def fetch_wikipedia_content(
     url: str,
     llm: "LLMService | None" = None,
+    on_llm_cost: "Callable[[LLMResponse], None] | None" = None,
 ) -> WikipediaContent:
     """Fetch content from a Wikipedia article.
 
@@ -762,6 +765,8 @@ async def fetch_wikipedia_content(
     Args:
         url: A Wikipedia article URL.
         llm: Optional LLMService for vision; omit to skip the image pass.
+        on_llm_cost: Optional callback given each successful vision call's
+            LLMResponse (refusals included), so the caller can record its cost.
 
     Returns:
         A WikipediaContent model with extracted page data.
@@ -885,7 +890,9 @@ async def fetch_wikipedia_content(
                             "Vision call failed for %s: %s", img.url, result
                         )
                         continue
-                    desc, _ = result
+                    desc, vision_resp = result
+                    if on_llm_cost is not None:
+                        on_llm_cost(vision_resp)
                     if is_refusal_description(desc.description):
                         refusals += 1
                         logger.info(

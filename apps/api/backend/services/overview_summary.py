@@ -39,6 +39,7 @@ EVENT_LABELS = {
     "embedding_gist": "Embedding gists",
     "agent_query": "Chat answers",
     "skip_category_backfill": "Skip-category backfill",
+    "wiki_image_vision": "Wikipedia image descriptions",
 }
 
 
