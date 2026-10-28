@@ -235,6 +235,16 @@ class TestPageRepo:
         pages = page_repo.get_pages_for_capture(cap["id"])
         assert pages[0]["status"] == "active"
 
+    def test_archive_reason_no_pipeline_result_allowed(self):
+        # Migration 063: rows with no pipeline result leave 'pending' this way.
+        user = _make_user()
+        cap = _make_capture(user["id"])
+        ids = page_repo.insert_pages(cap["id"], [{"url": "https://example.com", "title": "T"}])
+        page_repo.archive_page(ids[0], "no_pipeline_result")
+        pages = page_repo.get_pages_for_capture(cap["id"])
+        assert pages[0]["status"] == "archived"
+        assert pages[0]["archive_reason"] == "no_pipeline_result"
+
 
 # ── Recluster + cluster repos ──────────────────────────────────────────
 

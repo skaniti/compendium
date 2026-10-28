@@ -220,9 +220,10 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
     so a single failure (e.g. URL too long for the page_content index)
     doesn't kill the entire capture.
 
-    Rows with no matching result are left untouched (still ``pending`` so the
-    pending sweep retries them) and counted as errors. Results with no row
-    are logged and skipped.
+    Rows with no matching result are archived as ``no_pipeline_result`` and
+    counted as errors: a retry would get no result either, and a row left
+    ``pending`` made the hourly sweep re-process its whole capture forever.
+    Results with no row are logged and skipped.
     Returns the number of pages that failed to persist.
     """
     pages = page_repo.get_pages_for_capture(cap_db_id)
@@ -238,12 +239,18 @@ def update_pages_from_response(cap_db_id: int, response) -> int:
         )
     for row in unmatched_rows:
         logger.warning(
-            "capture %s: page id=%s has no matching result; left untouched url=%s",
+            "capture %s: page id=%s has no matching result; archived url=%s",
             response.capture_id,
             row.get("id"),
             (row.get("url") or "")[:100],
         )
         page_errors += 1
+        try:
+            page_repo.archive_page(row["id"], "no_pipeline_result")
+        except Exception:
+            logger.exception(
+                "capture %s: archiving page id=%s failed", response.capture_id, row.get("id")
+            )
 
     persisted_results = []
     for page_row, result in pairs:

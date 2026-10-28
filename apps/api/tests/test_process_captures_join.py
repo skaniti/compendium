@@ -28,18 +28,26 @@ def _row(pid, url, normalized=True):
     return row
 
 
-def _run(rows, results):
-    """Run update_pages_from_response; return {page_id: result.url} persisted."""
+def _run(rows, results, archived=None):
+    """Run update_pages_from_response; return {page_id: result.url} persisted.
+
+    Pass a dict as ``archived`` to collect {page_id: reason} from archive_page.
+    """
     response = SimpleNamespace(
         capture_id="cap_x", results=results, capture_title="t", mini_summary="s"
     )
     persisted = {}
+    archived = {} if archived is None else archived
 
     def fake_persist(page_row, result, _response):
         persisted[page_row["id"]] = result.url
 
+    def fake_archive(page_id, reason):
+        archived[page_id] = reason
+
     with (
         patch.object(process_captures.page_repo, "get_pages_for_capture", return_value=rows),
+        patch.object(process_captures.page_repo, "archive_page", side_effect=fake_archive),
         patch.object(process_captures, "_persist_single_page", side_effect=fake_persist),
         patch.object(process_captures.capture_repo, "update_capture"),
     ):
@@ -71,13 +79,40 @@ def test_unmatched_result_skipped_and_logged(caplog):
     assert any(URLS[3] in r.getMessage() and r.levelno == logging.INFO for r in caplog.records)
 
 
-def test_unmatched_row_not_written_and_warned(caplog):
+def test_unmatched_row_archived_not_written_and_warned(caplog):
+    # A row with no result would get no result on any retry either; leaving it
+    # pending made the hourly sweep re-process its whole capture forever.
     rows = [_row(10, URLS[0]), _row(11, URLS[1])]
+    archived = {}
     with caplog.at_level(logging.INFO, logger="backend.process_captures"):
-        persisted, errors = _run(rows, [_result(URLS[0])])
+        persisted, errors = _run(rows, [_result(URLS[0])], archived=archived)
     assert persisted == {10: URLS[0]}
+    assert archived == {11: "no_pipeline_result"}
     assert errors == 1
     assert any(r.levelno == logging.WARNING and "id=11" in r.getMessage() for r in caplog.records)
+
+
+def test_archive_failure_for_unmatched_row_does_not_abort(caplog):
+    rows = [_row(10, URLS[0]), _row(11, URLS[1])]
+    response = SimpleNamespace(
+        capture_id="cap_x", results=[_result(URLS[0])], capture_title="t", mini_summary="s"
+    )
+    persisted = {}
+    with (
+        patch.object(process_captures.page_repo, "get_pages_for_capture", return_value=rows),
+        patch.object(
+            process_captures.page_repo, "archive_page", side_effect=RuntimeError("db down")
+        ),
+        patch.object(
+            process_captures,
+            "_persist_single_page",
+            side_effect=lambda row, res, _r: persisted.update({row["id"]: res.url}),
+        ),
+        patch.object(process_captures.capture_repo, "update_capture"),
+    ):
+        errors = process_captures.update_pages_from_response(1, response)
+    assert persisted == {10: URLS[0]}
+    assert errors == 1
 
 
 def test_revisit_rows_share_last_result_and_pair_in_order():
