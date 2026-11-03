@@ -1,4 +1,5 @@
 """Claude rows in llm_service.MODEL_PRICING must equal the vendored backend/prices.json."""
+import fnmatch
 import json
 from pathlib import Path
 
@@ -16,13 +17,48 @@ def _claude_rows():
     return [m for m in MODEL_PRICING if m.startswith("claude-")]
 
 
+def _dockerignore_excludes(text, rel_path):
+    """Uncommented, non-negated patterns that would exclude ``rel_path``."""
+    hits = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        pat = line.rstrip("/")
+        if pat.startswith("**/"):
+            pat = pat[3:]
+        name = rel_path.rsplit("/", 1)[-1]
+        if fnmatch.fnmatch(rel_path, pat) or fnmatch.fnmatch(name, pat):
+            hits.append(line)
+            continue
+        if any(fnmatch.fnmatch("/".join(rel_path.split("/")[: i + 1]), pat)
+               for i in range(len(rel_path.split("/")) - 1)):
+            hits.append(line)
+    return hits
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("# prices.json mentioned in a comment\n", []),
+        ("*.log\ntests\n", []),
+        ("*.json\n", ["*.json"]),
+        ("backend/prices.json\n", ["backend/prices.json"]),
+        ("**/prices.json\n", ["**/prices.json"]),
+        ("backend\n", ["backend"]),
+        ("!*.json\n# *.json\n", []),
+    ],
+)
+def test_dockerignore_guard_matches_excluding_lines_only(text, expected):
+    assert _dockerignore_excludes(text, "backend/prices.json") == expected
+
+
 def test_prices_json_sits_inside_backend():
     # Dockerfile does `COPY . .` from apps/api, so backend/ rides into the image.
     assert (_BACKEND / "prices.json").is_file()
     assert (_BACKEND / "prices.json.sha256").is_file()
     dockerignore = (_BACKEND.parent / ".dockerignore").read_text()
-    assert "*.json" not in dockerignore
-    assert "prices" not in dockerignore
+    assert _dockerignore_excludes(dockerignore, "backend/prices.json") == []
 
 
 def test_per_1k_aliases():
@@ -77,3 +113,27 @@ def test_estimate_cost_finds_haiku_5_5(monkeypatch):
     monkeypatch.setattr(settings, "label_model", "claude-haiku-5-5")
     est = page_labeller.estimate_cost(10)
     assert est["usd_list"] > 0
+
+
+def test_per_1k_malformed_json_names_path(monkeypatch, tmp_path):
+    from backend.services import claude_prices
+
+    bad = tmp_path / "prices.json"
+    bad.write_text("{not json")
+    monkeypatch.setattr(claude_prices, "PRICES_PATH", bad)
+    with pytest.raises(ValueError, match="not valid JSON") as exc:
+        claude_prices.per_1k()
+    assert str(bad) in str(exc.value)
+    assert "\n" not in str(exc.value)
+
+
+def test_per_1k_missing_models_key_names_path(monkeypatch, tmp_path):
+    from backend.services import claude_prices
+
+    bad = tmp_path / "prices.json"
+    bad.write_text('{"other": {}}')
+    monkeypatch.setattr(claude_prices, "PRICES_PATH", bad)
+    with pytest.raises(KeyError) as exc:
+        claude_prices.per_1k()
+    assert "models" in str(exc.value)
+    assert str(bad) in str(exc.value)
