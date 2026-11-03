@@ -139,7 +139,7 @@ def test_anthropic_default_request_has_no_sampling_params():
             "system": "sys",
         }
     ]
-    assert resp.cost_usd == pytest.approx((1000 * 0.0008 + 200 * 0.004) / 1000)
+    assert resp.cost_usd == pytest.approx((1000 * 0.001 + 200 * 0.005) / 1000)
 
 
 def test_anthropic_extra_kwargs_are_merged():

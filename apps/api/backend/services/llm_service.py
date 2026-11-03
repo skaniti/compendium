@@ -19,6 +19,7 @@ import httpx
 from openai.types.chat import ChatCompletionMessageToolCall
 
 from backend.config.settings import settings
+from backend.services.claude_prices import per_1k as _claude_per_1k
 from backend.services.skip_categories import SKIP_CATEGORIES, SKIP_CATEGORY_IDS
 from backend.services.content_fetcher import (
     fetch_wikipedia_content,
@@ -77,16 +78,18 @@ MODEL_ALIASES = {
 # realtime calls.
 BATCH_API_DISCOUNT = 0.50
 
-# Pricing per 1K tokens (as of Feb 2025)
+# Pricing per 1K tokens. Claude rows come from the vendored backend/prices.json
+# (every model in it, plus the dated aliases below); OpenAI and HuggingFace
+# rows stay hand-written.
+_CLAUDE_DATED_ALIASES = {
+    "claude-haiku-4-5-20251001": "claude-haiku-4-5",
+    "claude-sonnet-4-5-20250514": "claude-sonnet-4-5",
+}
 MODEL_PRICING = {
     "gpt-4o": {"input": 0.0025, "output": 0.01},
     "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
     "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
-    "claude-sonnet-4-5-20250514": {"input": 0.003, "output": 0.015},
-    "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},
-    # List prices $0.10/$0.50 and $2/$10 per million tokens
-    "claude-haiku-5-5": {"input": 0.0001, "output": 0.0005},
-    "claude-sonnet-5-5": {"input": 0.002, "output": 0.01},
+    **_claude_per_1k(aliases=_CLAUDE_DATED_ALIASES),
     # HuggingFace Inference API - free tier
     "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0},
     "mistralai/Mixtral-8x7B-Instruct-v0.1": {"input": 0.0, "output": 0.0},
