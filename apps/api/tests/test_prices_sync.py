@@ -7,11 +7,7 @@ import pytest
 _BACKEND = Path(__file__).resolve().parent.parent / "backend"
 _PRICES = json.loads((_BACKEND / "prices.json").read_text())["models"]
 
-# Dated ids the table carries -> canonical prices.json id.
-_ALIASES = {
-    "claude-haiku-4-5-20251001": "claude-haiku-4-5",
-    "claude-sonnet-4-5-20250514": "claude-sonnet-4-5",
-}
+from backend.services.llm_service import _CLAUDE_DATED_ALIASES as _ALIASES
 
 
 def _claude_rows():

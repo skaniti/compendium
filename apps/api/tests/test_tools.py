@@ -1182,8 +1182,10 @@ class TestAnthropicLiveAPI:
             max_tokens=16,
         )
 
-        # Haiku pricing: $0.0008/1K input, $0.004/1K output
-        expected_cost = (response.input_tokens * 0.0008 + response.output_tokens * 0.004) / 1000
+        from backend.services.llm_service import MODEL_PRICING
+
+        price = MODEL_PRICING[self.MODEL]
+        expected_cost = (response.input_tokens * price["input"] + response.output_tokens * price["output"]) / 1000
         assert abs(response.cost_usd - expected_cost) < 1e-9
 
     @pytest.mark.asyncio
