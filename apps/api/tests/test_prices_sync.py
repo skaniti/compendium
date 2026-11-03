@@ -19,7 +19,10 @@ def _claude_rows():
 
 def _dockerignore_excludes(text, rel_path):
     """Uncommented, non-negated patterns that would exclude ``rel_path``."""
+    # Negations (!) are deliberately not honoured: a "*.json" + "!backend/prices.json"
+    # pair trips the guard by design.
     hits = []
+    name = rel_path.rsplit("/", 1)[-1]
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith(("#", "!")):
@@ -27,11 +30,10 @@ def _dockerignore_excludes(text, rel_path):
         pat = line.rstrip("/")
         if pat.startswith("**/"):
             pat = pat[3:]
-        name = rel_path.rsplit("/", 1)[-1]
-        if fnmatch.fnmatch(rel_path, pat) or fnmatch.fnmatch(name, pat):
+        if fnmatch.fnmatchcase(rel_path, pat) or fnmatch.fnmatchcase(name, pat):
             hits.append(line)
             continue
-        if any(fnmatch.fnmatch("/".join(rel_path.split("/")[: i + 1]), pat)
+        if any(fnmatch.fnmatchcase("/".join(rel_path.split("/")[: i + 1]), pat)
                for i in range(len(rel_path.split("/")) - 1)):
             hits.append(line)
     return hits
