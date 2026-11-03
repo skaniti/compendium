@@ -80,7 +80,10 @@ BATCH_API_DISCOUNT = 0.50
 
 # Pricing per 1K tokens. Claude rows come from the vendored backend/prices.json
 # (every model in it, plus the dated aliases below); OpenAI and HuggingFace
-# rows stay hand-written.
+# rows stay hand-written. Rows carry input/output only: prices.json's
+# long_prompt, cache_read and batch_discount fields are intentionally not
+# modelled (labeller prompts are far below the tier; _calculate_cost bills
+# input/output).
 _CLAUDE_DATED_ALIASES = {
     "claude-haiku-4-5-20251001": "claude-haiku-4-5",
     "claude-sonnet-4-5-20250514": "claude-sonnet-4-5",
