@@ -709,6 +709,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
             menu.menu.add(0, 3, 2, if (bookmarked) "Remove bookmark" else "Add bookmark")
             menu.menu.add(0, 4, 3, "Bookmarks")
             menu.menu.add(0, 6, 4, "Add note")
+            menu.menu.add(0, 7, 5, "Open in Chrome")
             menu.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> { showFindBar(); true }
@@ -716,6 +717,12 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
                     3 -> { toggleBookmark(); true }
                     4 -> { startActivity(Intent(this, BookmarksActivity::class.java)); true }
                     6 -> { addNoteFromBrowser(); true }
+                    7 -> {
+                        if (!ExternalBrowser.openInChrome(this, tab?.url)) {
+                            Toast.makeText(this, "No web page to open", Toast.LENGTH_SHORT).show()
+                        }
+                        true
+                    }
                     else -> false
                 }
             }
