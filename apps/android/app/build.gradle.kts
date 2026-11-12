@@ -14,8 +14,8 @@ android {
         applicationId = "dev.skaniti.compendium"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "2.10"
+        versionCode = 15
+        versionName = "2.11"
     }
 
     buildTypes {
