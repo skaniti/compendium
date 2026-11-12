@@ -180,6 +180,9 @@ function loadFixtures(fixturesDir, now = new Date()) {
   };
 }
 
+// Same shape as the backend's 409 for a suggestion that is no longer offered.
+const SUGGESTION_GONE = "This suggestion is no longer available. Refresh to see the current list.";
+
 // Icons the stub gives accepted suggestions (ids from lib/icon-data.json), by
 // synthetic group id; any other id falls back to "atom".
 const ACCEPT_ICONS = { 501: "atom", 502: "coffee", 503: "mountain", 504: "scroll", 505: "palette", 506: "microscope" };
@@ -752,7 +755,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       pattern: /^\/api\/topics\/suggestions\/(\d+)\/accept$/,
       handler: gated(async (req, res, m) => {
         const group = state.suggestions.find((g) => g.id === Number(m[1]));
-        if (!group) return sendJson(res, 404, { detail: `Suggested group ${m[1]} not found` });
+        if (!group) return sendJson(res, 409, { detail: SUGGESTION_GONE });
         const body = await readJsonBody(req);
         const keyword = (typeof body.keyword === "string" && body.keyword.trim()) || group.label;
         if (!keyword) return sendJson(res, 400, { detail: "Keyword must be non-empty" });
@@ -778,7 +781,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       pattern: /^\/api\/topics\/suggestions\/(\d+)\/dismiss$/,
       handler: gated((req, res, m) => {
         const group = state.suggestions.find((g) => g.id === Number(m[1]));
-        if (!group) return sendJson(res, 404, { detail: `Suggested group ${m[1]} not found` });
+        if (!group) return sendJson(res, 409, { detail: SUGGESTION_GONE });
         state.suggestions = state.suggestions.filter((g) => g.id !== group.id);
         syncSuggestedCount(state);
         sendJson(res, 200, { dismissed: group.label, dismissed_topics: [{ label: group.label, dismissed_at: getNow().toISOString() }] });

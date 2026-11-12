@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ScPopover, { type ScPopoverProps } from "./ScPopover";
 import * as apiModule from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { getIconsGrouped } from "@/lib/icons";
 import type { MemberExclusion, TopicInterest, TopicMember, TopicSuggestion } from "@/lib/types";
 
@@ -590,6 +591,51 @@ describe("ScPopover: suggested superclusters", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(refetchTopics).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
+  });
+
+  it("409 on Add: shows the backend's message, refetches suggestions and status, stays open", async () => {
+    const detail = "This suggestion is no longer available (accepted). Refresh to see the current list.";
+    vi.spyOn(apiModule, "acceptTopicSuggestion").mockRejectedValue(new ApiError(detail, 409));
+    const { onClose, refetchSuggestions, refetchStatus, refetchTopics } = renderPopover({ suggestions: SUGGS, initialSuggestionId: 11 });
+
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(detail);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/Could not add/);
+    expect(refetchSuggestions).toHaveBeenCalled();
+    expect(refetchStatus).toHaveBeenCalled();
+    expect(refetchTopics).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("409 on Not interested: same message and refetches", async () => {
+    vi.spyOn(apiModule, "dismissTopicSuggestion").mockRejectedValue(new ApiError("Already dismissed.", 409));
+    const { onClose, refetchSuggestions, refetchStatus } = renderPopover({ suggestions: SUGGS, initialSuggestionId: 11 });
+
+    await userEvent.click(screen.getByRole("button", { name: "Not interested" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Already dismissed.");
+    expect(refetchSuggestions).toHaveBeenCalled();
+    expect(refetchStatus).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("the 409 message stays visible when the suggestion then drops out of the list (fall-back body)", async () => {
+    vi.spyOn(apiModule, "acceptTopicSuggestion").mockRejectedValue(new ApiError("Gone, refresh.", 409));
+    const props = {
+      slot: 0, topic: undefined, topics: [] as TopicInterest[], onClose: vi.fn(), refetchTopics: vi.fn(),
+      refreshGraph: vi.fn().mockResolvedValue(undefined), refetchSuggestions: vi.fn(), refetchStatus: vi.fn(),
+      demoLocked: false, plainDemo: false, initialSuggestionId: 11,
+    };
+    const { rerender } = render(<ScPopover {...props} suggestions={SUGGS} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await screen.findByRole("alert");
+
+    rerender(<ScPopover {...props} suggestions={[JAPAN]} />);
+
+    expect(screen.queryByText("SUGGESTED SUPERCLUSTER")).toBeNull();
+    expect(screen.getByText("ADD SUPERCLUSTER")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Gone, refresh.");
   });
 
   it("Not interested posts dismiss, refetches suggestions and status (not the graph), and closes", async () => {

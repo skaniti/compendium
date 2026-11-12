@@ -371,18 +371,43 @@ export async function fetchTopicSuggestions(): Promise<TopicSuggestion[]> {
 // Accept as a declared topic. `keyword` overrides the suggestion's label
 // (omitted when the owner left the name alone). Returns the full updated
 // topic list, like addTopic.
+// Error carrying the HTTP status, so a caller can react to a specific one (the
+// suggestion calls below: 409 = "no longer offered").
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// Throws an ApiError for a non-ok response, using the FastAPI JSON body's
+// string `detail` as the message when present, else "<what> failed: <status>
+// <statusText>". Used by the suggestion accept/dismiss calls only.
+async function throwWithDetail(res: Response, what: string): Promise<never> {
+  let detail: string | undefined;
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string" && body.detail.trim()) detail = body.detail;
+  } catch {
+    // Not JSON: fall back to the status text below.
+  }
+  throw new ApiError(detail ?? `${what} failed: ${res.status} ${res.statusText}`, res.status);
+}
+
 export async function acceptTopicSuggestion(id: number, keyword?: string): Promise<TopicInterest[]> {
   const res = await apiFetch(`/api/topics/suggestions/${id}/accept`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(keyword !== undefined ? { keyword } : {}),
   });
-  if (!res.ok) throw new Error(`acceptTopicSuggestion failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) return throwWithDetail(res, "acceptTopicSuggestion");
   const body = (await res.json()) as { topic: { keyword: string }; topics: TopicInterest[]; relabeled_clusters: number };
   return body.topics;
 }
 
 export async function dismissTopicSuggestion(id: number): Promise<void> {
   const res = await apiFetch(`/api/topics/suggestions/${id}/dismiss`, { method: "POST" });
-  if (!res.ok) throw new Error(`dismissTopicSuggestion failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) return throwWithDetail(res, "dismissTopicSuggestion");
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   acceptTopicSuggestion,
+  ApiError,
   addMemberExclusion,
   addTopic,
   apiFetch,
@@ -771,9 +772,25 @@ describe("acceptTopicSuggestion", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/topics/suggestions/7/accept", expect.objectContaining({ body: JSON.stringify({ keyword: "books" }) }));
   });
 
-  it("throws on a 403 (demo-gated mutation)", async () => {
+  it("throws on a 403 (demo-gated mutation); a non-JSON body falls back to the status text", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("forbidden", { status: 403, statusText: "Forbidden" })));
     await expect(acceptTopicSuggestion(7)).rejects.toThrow("acceptTopicSuggestion failed: 403 Forbidden");
+  });
+
+  it("uses the JSON body's string detail as the message and keeps the status (409)", async () => {
+    const detail = "This suggestion is no longer available (accepted). Refresh to see the current list.";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail }), { status: 409, statusText: "Conflict" })));
+    const err = await acceptTopicSuggestion(7).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe(detail);
+    expect(err.status).toBe(409);
+  });
+
+  it("falls back to the status text when the JSON has no string detail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: [{ msg: "x" }] }), { status: 422, statusText: "Unprocessable" })));
+    await expect(acceptTopicSuggestion(7)).rejects.toThrow("acceptTopicSuggestion failed: 422 Unprocessable");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({}), { status: 500, statusText: "Server Error" })));
+    await expect(acceptTopicSuggestion(7)).rejects.toThrow("acceptTopicSuggestion failed: 500 Server Error");
   });
 });
 
@@ -788,9 +805,17 @@ describe("dismissTopicSuggestion", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/topics/suggestions/7/dismiss", { method: "POST" });
   });
 
-  it("throws on a 404", async () => {
+  it("throws on a 404 (non-JSON body: status text)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404, statusText: "Not Found" })));
     await expect(dismissTopicSuggestion(7)).rejects.toThrow("dismissTopicSuggestion failed: 404 Not Found");
+  });
+
+  it("uses the JSON body's string detail as the message (409)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "No longer available." }), { status: 409, statusText: "Conflict" })));
+    const err = await dismissTopicSuggestion(7).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe("No longer available.");
+    expect(err.status).toBe(409);
   });
 });
 

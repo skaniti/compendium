@@ -6,6 +6,7 @@ import {
   acceptTopicSuggestion,
   addMemberExclusion,
   addTopic,
+  ApiError,
   dismissTopicSuggestion,
   fetchMemberExclusions,
   fetchTopicMembers,
@@ -227,6 +228,19 @@ export default function ScPopover({
     }
   }
 
+  // A 409 means the suggestion is no longer offered (added, dismissed or covered
+  // since the list was read): show the backend's own message and refresh the
+  // list so the stale ghost tile goes. Any other failure: "<what>: <message>".
+  function reportSuggestionFailure(e: unknown, what: string) {
+    if (e instanceof ApiError && e.status === 409) {
+      setError(e.message);
+      refetchSuggestions();
+      refetchStatus();
+      return;
+    }
+    setError(`${what}: ${e instanceof Error ? e.message : "request failed"}`);
+  }
+
   async function handleAcceptSuggestion(suggestion: TopicSuggestion, rawName: string) {
     const name = rawName.trim();
     if (!name || demoLocked || busy) return;
@@ -244,7 +258,7 @@ export default function ScPopover({
     } catch (e) {
       // A failed refresh after a successful write is swallowed like add's; only
       // a failed write is shown.
-      if (!written) setError(`Could not add "${name}": ${e instanceof Error ? e.message : "request failed"}`);
+      if (!written) reportSuggestionFailure(e, `Could not add "${name}"`);
     } finally {
       setBusy(false);
     }
@@ -260,7 +274,7 @@ export default function ScPopover({
       refetchSuggestions();
       refetchStatus();
     } catch (e) {
-      setError(`Could not dismiss "${suggestion.label}": ${e instanceof Error ? e.message : "request failed"}`);
+      reportSuggestionFailure(e, `Could not dismiss "${suggestion.label}"`);
     } finally {
       setBusy(false);
     }
@@ -350,7 +364,6 @@ export default function ScPopover({
         key={shownSuggestion.id}
         suggestion={shownSuggestion}
         busy={busy}
-        error={error}
         demoLocked={demoLocked}
         onBack={() => setView(topic ? { kind: "list" } : { kind: "default" })}
         onAdd={(name) => handleAcceptSuggestion(shownSuggestion, name)}
@@ -414,6 +427,13 @@ export default function ScPopover({
       style={{ display: "block" }}
     >
       {body}
+      {/* Popover-level (not inside the suggestion body) so the message survives
+          the fall-back to the list when the suggestion drops out of it. */}
+      {error && (
+        <div className="hbar-sc-error" role="alert">
+          {error}
+        </div>
+      )}
     </div>,
     portalEl
   );
@@ -444,14 +464,13 @@ function SuggestionList({ suggestions, onPick }: SuggestionListProps) {
 interface SuggestionBodyProps {
   suggestion: TopicSuggestion;
   busy: boolean;
-  error: string | null;
   demoLocked: boolean;
   onBack: () => void;
   onAdd: (name: string) => void;
   onDismiss: () => void;
 }
 
-function SuggestionBody({ suggestion, busy, error, demoLocked, onBack, onAdd, onDismiss }: SuggestionBodyProps) {
+function SuggestionBody({ suggestion, busy, demoLocked, onBack, onAdd, onDismiss }: SuggestionBodyProps) {
   const [name, setName] = useState(suggestion.label);
   const lockTip = useHoverTooltip();
   const members = suggestion.cluster_names;
@@ -503,11 +522,6 @@ function SuggestionBody({ suggestion, busy, error, demoLocked, onBack, onAdd, on
       </div>
       {hidden > 0 && <div className="hbar-sc-sugg-more">+{hidden} more</div>}
 
-      {error && (
-        <div className="hbar-sc-error" role="alert">
-          {error}
-        </div>
-      )}
       <div className="hbar-sc-sugg-actions">
         <button
           type="button"

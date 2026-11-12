@@ -758,10 +758,18 @@ describe("topic suggestions: GET /api/topics/suggestions, accept, dismiss", () =
     });
   });
 
-  it("answers 404 for an unknown suggestion id", async () => {
+  it("answers 409 with a readable detail for a suggestion that is no longer offered (unknown, accepted or dismissed id)", async () => {
     await withServer(async (base) => {
-      expect((await req(base, "POST", "/api/topics/suggestions/99999/accept", {}, adminToken())).status).toBe(404);
-      expect((await req(base, "POST", "/api/topics/suggestions/99999/dismiss", undefined, adminToken())).status).toBe(404);
+      const admin = adminToken();
+      const unknown = await req(base, "POST", "/api/topics/suggestions/99999/accept", {}, admin);
+      expect(unknown.status).toBe(409);
+      expect((await unknown.json()).detail).toMatch(/no longer available/);
+      expect((await req(base, "POST", "/api/topics/suggestions/99999/dismiss", undefined, admin)).status).toBe(409);
+
+      const first = (await (await req(base, "GET", "/api/topics/suggestions")).json()).suggestions[0] as Sug;
+      await req(base, "POST", `/api/topics/suggestions/${first.id}/accept`, {}, admin);
+      expect((await req(base, "POST", `/api/topics/suggestions/${first.id}/accept`, {}, admin)).status).toBe(409);
+      expect((await req(base, "POST", `/api/topics/suggestions/${first.id}/dismiss`, undefined, admin)).status).toBe(409);
     });
   });
 
