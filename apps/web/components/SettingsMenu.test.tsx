@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import SettingsMenu, { formatPaletteCaption } from "./SettingsMenu";
 import * as ThemeProviderModule from "./ThemeProvider";
 import * as StarfieldProviderModule from "./StarfieldProvider";
+import * as PageTitlesProviderModule from "./PageTitlesProvider";
 import { getSwatches } from "@/lib/theme";
 
 // SettingsMenu now consumes StarfieldProvider's context directly (mig-01
@@ -16,6 +17,11 @@ function mockStarfield(variant = "twinkle", setVariant = vi.fn()) {
   return setVariant;
 }
 
+function mockPageTitles(show = false, setShow = vi.fn()) {
+  vi.spyOn(PageTitlesProviderModule, "usePageTitles").mockReturnValue({ show, setShow });
+  return setShow;
+}
+
 function mockTheme(variant = "Green", setVariant = vi.fn()) {
   vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant, setVariant });
   return setVariant;
@@ -24,6 +30,7 @@ function mockTheme(variant = "Green", setVariant = vi.fn()) {
 describe("SettingsMenu", () => {
   beforeEach(() => {
     mockStarfield();
+    mockPageTitles();
   });
 
   afterEach(() => {
@@ -146,5 +153,49 @@ describe("SettingsMenu", () => {
     await userEvent.click(screen.getByText("Open display tuners"));
 
     expect(onOpenTuners).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a PAGE TITLES section with Off and On pills, styled like the starfield pills", () => {
+    mockTheme();
+
+    const { container } = render(<SettingsMenu />);
+    const headers = Array.from(container.querySelectorAll(".picker-section-header")).map((h) => h.textContent);
+    expect(headers).toContain("PAGE TITLES");
+    const off = container.querySelector<HTMLButtonElement>('[data-page-titles="off"]')!;
+    const on = container.querySelector<HTMLButtonElement>('[data-page-titles="on"]')!;
+    expect(off).toHaveTextContent("Off");
+    expect(on).toHaveTextContent("On");
+    expect(off).toHaveClass("starry-sky-selector-pill");
+    expect(on).toHaveClass("starry-sky-selector-pill");
+    expect(off.parentElement).toHaveClass("starfield-pills-row");
+  });
+
+  it("marks Off active when page titles are off (the default)", () => {
+    mockTheme();
+    mockPageTitles(false);
+
+    const { container } = render(<SettingsMenu />);
+    expect(container.querySelector('[data-page-titles="off"]')).toHaveClass("active");
+    expect(container.querySelector('[data-page-titles="on"]')).not.toHaveClass("active");
+  });
+
+  it("marks On active when page titles are on", () => {
+    mockTheme();
+    mockPageTitles(true);
+
+    const { container } = render(<SettingsMenu />);
+    expect(container.querySelector('[data-page-titles="on"]')).toHaveClass("active");
+    expect(container.querySelector('[data-page-titles="off"]')).not.toHaveClass("active");
+  });
+
+  it("clicking On / Off calls setShow with true / false", async () => {
+    mockTheme();
+    const setShow = mockPageTitles(false);
+
+    const { container } = render(<SettingsMenu />);
+    await userEvent.click(container.querySelector('[data-page-titles="on"]')!);
+    expect(setShow).toHaveBeenLastCalledWith(true);
+    await userEvent.click(container.querySelector('[data-page-titles="off"]')!);
+    expect(setShow).toHaveBeenLastCalledWith(false);
   });
 });

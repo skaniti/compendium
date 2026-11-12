@@ -1077,6 +1077,26 @@
 //      pointers, marks, the tail remeasureScLayout) keeps the actual canvas.
 //      A canvas with both sides >= 640 plans exactly as before.
 //
+// Page titles off by default (decision: owner, 2026-11-12 -- "I prefer to
+// know the cluster names over the page names"):
+//  41. Page-title labels (`text.page-title-label`, delta #8's lodNicety
+//      reveal past PAGE_TITLE_LOD_K_MIN) are now OPT-IN. A module var
+//      `__showPageTitles` (default false) is written only by the new
+//      exported `setPageTitles(show)` setter; `drawPageTitleLabels` binds
+//      an EMPTY dataset while it is false, so no title element exists at
+//      any zoom and none takes part in `runLabelCull` (updatePageTitleLabels
+//      finds nothing to place). The setter re-draws the labels from the
+//      nodes the last settle drew (`__pageTitleNodes`) and runs the cull
+//      once, with NO re-layout -- unlike toggleNoise, flipping this never
+//      re-runs the force sim. Like toggleNoise it writes the var first, so
+//      a call before the first render() still seeds that render. The
+//      `.hull-labels` layer is now appended AFTER `.singleton-labels` (both
+//      render branches): when titles are on, cluster names paint above
+//      them; the cull already let cluster labels claim space first. GraphCanvas
+//      drives the setter from the `show_page_titles` preference (SettingsMenu
+//      PAGE TITLES pills -> PageTitlesProvider). Dev alias:
+//      `window.__d3SetPageTitles`.
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -1112,6 +1132,7 @@ var __vendorRecolor;
 var __vendorSetSelection;
 var __vendorSetFilterDim;
 var __vendorToggleNoise;
+var __vendorSetPageTitles;
 var __vendorFrameNodes;
 var __vendorGetClusterPages;
 var __vendorHasNode;
@@ -1392,6 +1413,13 @@ var __vendorExpandedGroups;
     // show-everything) -- GraphCanvas.tsx overrides this explicitly at
     // mount from the session's persisted show_noise preference regardless.
     var __showNoise = true;
+
+    // Delta #41: page-title opt-in, written only by the exported
+    // setPageTitles(show) setter. Default OFF (cluster names are what the
+    // owner wants to read). __pageTitleNodes is the node set the last
+    // settle drew titles for, so the setter can re-draw without a layout.
+    var __showPageTitles = false;
+    var __pageTitleNodes = null;
 
     // Read the current noise-toggle state (module var -- see __showNoise's
     // own comment for the DOM-mirror this replaced).
@@ -5818,7 +5846,9 @@ var __vendorExpandedGroups;
         drawGroupLabels(root, clusters, nodes);
 
         // Page titles for ALL dots (singletons included) — revealed past
-        // PAGE_TITLE_LOD_K_MIN, collision-culled (audit V3).
+        // PAGE_TITLE_LOD_K_MIN, collision-culled (audit V3). Opt-in since
+        // delta #41: drawPageTitleLabels draws nothing while off.
+        __pageTitleNodes = nodes;
         drawPageTitleLabels(root, nodes);
 
         scheduleSettleChunk(ctx, function () {
@@ -6163,10 +6193,11 @@ var __vendorExpandedGroups;
             // occlude a knot's center (known T11 territory).
             root.append('g').attr('class', 'knot-hits');
             root.append('g').attr('class', 'watermarks');
-            root.append('g').attr('class', 'hull-labels');
-            // Per-page page-title labels for featured starfield singletons.
-            // Drawn above hull-labels so they remain visible when overlapping.
+            // Per-page page-title labels (opt-in, delta #41). Drawn BELOW
+            // hull-labels: when titles are on, cluster names must stay
+            // readable where the two overlap (was the reverse before #41).
             root.append('g').attr('class', 'singleton-labels');
+            root.append('g').attr('class', 'hull-labels');
         } else {
             svg.select('.graph-root').selectAll('*').remove();
             svg.select('defs').selectAll('radialGradient[id^="nebula-grad-"]').remove();
@@ -6178,12 +6209,13 @@ var __vendorExpandedGroups;
             root.append('g').attr('class', 'nodes');
             root.append('g').attr('class', 'knot-hits');
             root.append('g').attr('class', 'watermarks');
-            root.append('g').attr('class', 'hull-labels');
             // Was missing from the re-render branch — every re-render
             // silently dropped the layer, so page-title labels (and the
             // retired singleton labels before them) only existed on the
-            // very first render.
+            // very first render. Below hull-labels, same as the first-render
+            // branch (delta #41).
             root.append('g').attr('class', 'singleton-labels');
+            root.append('g').attr('class', 'hull-labels');
         }
 
         var root = svg.select('.graph-root');
@@ -6499,9 +6531,11 @@ var __vendorExpandedGroups;
     // collision-culled as the lowest-priority label class. Rendered into
     // the .singleton-labels layer (same z-slot the retired singleton
     // labels used); all opacity control lives in updatePageTitleLabels.
+    // Delta #41: while __showPageTitles is false the dataset is empty, so
+    // the exit selection removes any existing titles and none are drawn.
     function drawPageTitleLabels(root, nodes) {
         if (!SANDBOX_SECTION_GATES.lodNicety) return;  // S2 sandbox-bar gate (header comment delta #8)
-        var data = (nodes || []).filter(function (n) {
+        var data = !__showPageTitles ? [] : (nodes || []).filter(function (n) {
             return n.x != null && n.y != null && (n.label || '').trim();
         });
         var sel = root.select('.singleton-labels').selectAll('text.page-title-label')
@@ -7879,6 +7913,27 @@ var __vendorExpandedGroups;
         window.__d3ToggleNoise = __vendorToggleNoise;
     }
 
+    /**
+     * Delta #41: turn the page-title labels on or off. Writes
+     * `__showPageTitles` first (so a call before the first render() still
+     * seeds it), then, if a graph is on screen, re-draws just the title
+     * layer from the nodes the last settle drew and runs the label cull
+     * once. No re-layout, no re-render.
+     *
+     * @param {boolean} show - true to show page titles (default false)
+     */
+    __vendorSetPageTitles = function (show) {
+        __showPageTitles = !!show;
+        if (!svg || !__pageTitleNodes) return;
+        var root = svg.select('.graph-root');
+        if (root.empty()) return;
+        drawPageTitleLabels(root, __pageTitleNodes);
+        runLabelCull();
+    };
+    if (process.env.NODE_ENV !== "production") {
+        window.__d3SetPageTitles = __vendorSetPageTitles;
+    }
+
     // DEBUG: read current selection state (used to diagnose why graph
     // initially renders dimmed). Safe to leave; minimal overhead.
     __vendorDebugGetSelection = function () {
@@ -8045,6 +8100,7 @@ export {
     __vendorSetSelection as setSelection,
     __vendorSetFilterDim as setFilterDim,
     __vendorToggleNoise as toggleNoise,
+    __vendorSetPageTitles as setPageTitles,
     __vendorFrameNodes as frameNodes,
     __vendorGetClusterPages as getClusterPages,
     __vendorHasNode as hasNode,

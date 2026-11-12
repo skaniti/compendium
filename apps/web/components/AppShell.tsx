@@ -3,6 +3,7 @@ import CompendiumLoader from "./CompendiumLoader";
 import Header from "./Header";
 import NavProvider from "./NavProvider";
 import PageZoomGuard from "./PageZoomGuard";
+import PageTitlesProvider from "./PageTitlesProvider";
 import PanelGrid from "./PanelGrid";
 import PlainDemoBodyClass from "./PlainDemoBodyClass";
 import StarfieldProvider from "./StarfieldProvider";
@@ -11,6 +12,7 @@ import {
   getInitialCompendiumLoaderSeen,
   getInitialPanelWidths,
   getInitialSessionRole,
+  getInitialShowPageTitles,
   getInitialStarfieldVariant,
   getInitialTimeWindow,
 } from "@/lib/preferences.server";
@@ -38,6 +40,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
     { hasSeen: compendiumLoaderSeen, canPersist: compendiumLoaderCanPersist },
     { role: sessionRole, actingAsDemo },
     initialTimeWindow,
+    initialShowPageTitles,
   ] = await Promise.all([
     getInitialPanelWidths(),
     // Same "read before first paint" role as the panel widths above, so
@@ -61,6 +64,9 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
     getInitialSessionRole(),
     // Persisted shared time period (graph + dev views), seeded before first paint.
     getInitialTimeWindow(),
+    // PAGE TITLES pills (Header -> SettingsMenu) and the graph (center slot)
+    // are siblings below this point, so one provider wraps both.
+    getInitialShowPageTitles(),
   ]);
 
   // Any demo session: a direct demo login or an admin viewing as demo.
@@ -116,6 +122,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
           future reader) share one context instance. */}
+      <PageTitlesProvider initialShow={initialShowPageTitles} canPersist={canPersistPreferences}>
       <TimeWindowProvider initialWindow={startWindow} canPersist={canPersistPreferences}>
         <Header mode={mode} />
         {/* Supercluster popovers portal (app.py:1912) -- deliberately OUTSIDE
@@ -151,6 +158,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
         </NavProvider>
         )}
       </TimeWindowProvider>
+      </PageTitlesProvider>
     </StarfieldProvider>
   );
 }

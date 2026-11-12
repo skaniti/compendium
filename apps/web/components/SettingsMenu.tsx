@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { getSwatches, type Swatch } from "@/lib/theme";
 import { useTheme } from "./ThemeProvider";
 import { useStarfield, STARFIELD_VARIANTS } from "./StarfieldProvider";
+import { usePageTitles } from "./PageTitlesProvider";
 
 // Mirrors app.py's _format_palette_caption: strips a legacy trailing
 // " Dark" suffix (pre-2026-07-17 persisted value) so old and new palette
@@ -91,6 +92,9 @@ export default function SettingsMenu({
   // to be a no-op `activeStarfield`/`onStarfieldChange` prop pair before
   // StarfieldProvider existed).
   const { variant: activeStarfield, setVariant: setStarfieldVariant } = useStarfield();
+  // PAGE TITLES pills: same context-direct pattern. Off by default; the
+  // graph shows cluster names only until this is switched on.
+  const { show: showPageTitles, setShow: setShowPageTitles } = usePageTitles();
   const swatches = getSwatches();
 
   return (
@@ -167,6 +171,22 @@ export default function SettingsMenu({
               onClick={() => setStarfieldVariant(v)}
             >
               {v}
+            </button>
+          ))}
+        </div>
+
+        {/* PAGE TITLES: reuses the STARFIELD pill styling on purpose. */}
+        <div className="picker-section-header">PAGE TITLES</div>
+        <div className="starfield-pills-row">
+          {([false, true] as const).map((on) => (
+            <button
+              key={String(on)}
+              type="button"
+              data-page-titles={on ? "on" : "off"}
+              className={`starry-sky-selector-pill${on === showPageTitles ? " active" : ""}`}
+              onClick={() => setShowPageTitles(on)}
+            >
+              {on ? "On" : "Off"}
             </button>
           ))}
         </div>

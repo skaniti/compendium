@@ -160,6 +160,20 @@ export async function getInitialStarfieldVariant(): Promise<string> {
     : DEFAULT_STARFIELD_VARIANT;
 }
 
+// Server-side seed for PageTitlesProvider: the signed-in user's persisted
+// `show_page_titles` preference (default false -- page titles are opt-in,
+// vendor header comment delta #41). Only a literal boolean true counts, same
+// as show_noise's reader; any failed read or odd value falls back to false.
+// Shares the one cached preferences fetch with the other readers.
+export async function getInitialShowPageTitles(): Promise<boolean> {
+  const token = (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
+  const fetched = await fetchPreferencesRow(token);
+  if (!fetched.ok) return false;
+  const prefs = fetched.body;
+  if (typeof prefs !== "object" || prefs === null) return false;
+  return (prefs as Record<string, unknown>).show_page_titles === true;
+}
+
 export interface InitialCompendiumLoaderState {
   // Drives components/CompendiumLoader.tsx's first-run/return mode split
   // -- mirrors compendium_loader.py's `"return" if has_seen else

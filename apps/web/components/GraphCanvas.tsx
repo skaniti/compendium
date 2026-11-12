@@ -21,6 +21,7 @@ import type { IconEntry } from "@/lib/icons";
 import { GRAPH_DEFAULTS, type GraphDefaults } from "@/lib/graph/constants";
 import { resolveTunerSnapshot } from "@/lib/graph/tuner-snapshot";
 import { publishView } from "@/lib/graph/view-bus";
+import { useOptionalPageTitles } from "./PageTitlesProvider";
 
 // Type-only handle onto the vendor module's own shape (lib/graph/vendor.d.ts)
 // -- used below to type renderRef, which holds the raw render() binding
@@ -290,6 +291,14 @@ export default function GraphCanvas() {
   // Task A1-3 (Step 4): the vendor's toggleNoise(show) setter, captured at
   // mount like setSelectionRef/recolorRef above.
   const toggleNoiseRef = useRef<((show: boolean) => void) | null>(null);
+  // The vendor's setPageTitles(show) setter (header comment delta #41),
+  // captured at mount like toggleNoiseRef. `showPageTitles` comes from
+  // PageTitlesProvider (the `show_page_titles` preference); outside a
+  // provider (tests) it stays false, the vendor's own default.
+  const setPageTitlesRef = useRef<((show: boolean) => void) | null>(null);
+  const showPageTitles = useOptionalPageTitles()?.show ?? false;
+  const showPageTitlesRef = useRef(showPageTitles);
+  showPageTitlesRef.current = showPageTitles;
   // Task A1-3 (Step 5): the vendor's setFilterDim(nodeIds) setter -- the
   // independent dimming layer (vendor header comment delta #15) that
   // composes with setSelection's own highlight set instead of clobbering
@@ -521,6 +530,7 @@ export default function GraphCanvas() {
       // the vendor module currently holds, no per-call arguments needed.
       recolorRef.current = vendor.recolor;
       toggleNoiseRef.current = vendor.toggleNoise;
+      setPageTitlesRef.current = vendor.setPageTitles;
       setFilterDimRef.current = vendor.setFilterDim;
       // Task group B, Part 1 fix 1 (carried A1-3 correction,
       // task-B-brief.md): apply the noise state BEFORE the first render()
@@ -537,6 +547,9 @@ export default function GraphCanvas() {
       // TWICE per mount, with a visible flash of noise nodes whenever the
       // pref was false.
       vendor.toggleNoise(showNoiseRef.current);
+      // Same pre-render seeding as toggleNoise above (delta #41): the first
+      // render() then draws titles or not in a single pass.
+      vendor.setPageTitles(showPageTitlesRef.current);
       disposeRef.current = vendor.render(containerRef.current, payloadRef.current, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
@@ -661,6 +674,7 @@ export default function GraphCanvas() {
       setSelectionRef.current = null;
       recolorRef.current = null;
       toggleNoiseRef.current = null;
+      setPageTitlesRef.current = null;
       setFilterDimRef.current = null;
       // Item 3c: a disposed mount can never reach a later onSettleEnd for
       // whatever cycle was in flight -- drop the veil and its failsafe
@@ -870,6 +884,14 @@ export default function GraphCanvas() {
   useEffect(() => {
     toggleNoiseRef.current?.(showNoise);
   }, [showNoise]);
+
+  // PAGE TITLES pills (SettingsMenu) -> live graph, no reload and no
+  // re-layout: the vendor redraws only its title layer. No-ops via the ref
+  // guard until the mount effect has resolved; that effect seeds the
+  // current value itself.
+  useEffect(() => {
+    setPageTitlesRef.current?.(showPageTitles);
+  }, [showPageTitles]);
 
   // Step 5: inbound wiring. Subscribes to NavProvider's selection state and
   // applies it via the vendor's __d3SetSelection semantics (setSelection

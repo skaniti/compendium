@@ -8,6 +8,7 @@ import SessionProvider from "./SessionProvider";
 import NavProvider, { useNav } from "./NavProvider";
 import ThemeProvider, { useTheme } from "./ThemeProvider";
 import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
+import PageTitlesProvider, { usePageTitles } from "./PageTitlesProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
 import * as preferences from "@/lib/preferences";
@@ -56,12 +57,14 @@ const setSelectionMock = vi.fn();
 const recolorMock = vi.fn();
 const toggleNoiseMock = vi.fn();
 const setFilterDimMock = vi.fn();
+const setPageTitlesMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   render: (...args: unknown[]) => renderMock(...args),
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
   recolor: (...args: unknown[]) => recolorMock(...args),
   toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
   setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
+  setPageTitles: (...args: unknown[]) => setPageTitlesMock(...args),
 }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -133,6 +136,7 @@ afterEach(() => {
   recolorMock.mockClear();
   toggleNoiseMock.mockClear();
   setFilterDimMock.mockClear();
+  setPageTitlesMock.mockClear();
   // ThemeProvider (wave 8) persists the picked variant to localStorage --
   // clear between tests so one test's setVariant() call can't seed the
   // next test's initial readStoredVariant() read (same convention
@@ -407,6 +411,7 @@ describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion
       setSelection: (...args: unknown[]) => setSelectionMock(...args),
       recolor: (...args: unknown[]) => recolorMock(...args),
       toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
+      setPageTitles: (...args: unknown[]) => setPageTitlesMock(...args),
       setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
     }));
   });
@@ -430,6 +435,7 @@ describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion
         setSelection: vi.fn(),
         recolor: vi.fn(),
         toggleNoise: vi.fn(),
+        setPageTitles: vi.fn(),
         setFilterDim: vi.fn(),
       };
     });
@@ -1988,3 +1994,74 @@ describe("GraphCanvas mount safety: AlmagestTuner stays out of the static import
   });
 });
 
+
+// Vendor header comment delta #41: page titles are opt-in. GraphCanvas seeds
+// the vendor's setPageTitles() from PageTitlesProvider BEFORE the first
+// render() (same pre-render seeding as toggleNoise) and pushes later changes
+// to the live graph without remounting.
+function PageTitlesProbe() {
+  const { show, setShow } = usePageTitles();
+  return (
+    <div>
+      <span data-testid="page-titles">{String(show)}</span>
+      <button onClick={() => setShow(!show)}>flip-page-titles</button>
+    </div>
+  );
+}
+
+function renderCanvasWithPageTitles(initialShow?: boolean) {
+  mockApiFetch(SIGNED_OUT, 401);
+  return render(
+    <SessionProvider>
+      <ThemeProvider>
+        <PageTitlesProvider initialShow={initialShow} canPersist={false}>
+          <TimeWindowProvider>
+            <NavProvider>
+              <GraphCanvas />
+              <PageTitlesProbe />
+            </NavProvider>
+          </TimeWindowProvider>
+        </PageTitlesProvider>
+      </ThemeProvider>
+    </SessionProvider>
+  );
+}
+
+describe("GraphCanvas page titles (header comment delta #41)", () => {
+  it("seeds setPageTitles(false) strictly BEFORE the first render() by default", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvasWithPageTitles();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(setPageTitlesMock).toHaveBeenCalledWith(false);
+    expect(setPageTitlesMock.mock.invocationCallOrder[0]).toBeLessThan(renderMock.mock.invocationCallOrder[0]);
+  });
+
+  it("seeds setPageTitles(true) before the first render() when the preference is on", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvasWithPageTitles(true);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(setPageTitlesMock).toHaveBeenCalledWith(true);
+    expect(setPageTitlesMock.mock.invocationCallOrder[0]).toBeLessThan(renderMock.mock.invocationCallOrder[0]);
+  });
+
+  it("flipping the setting later pushes it to the live graph without a second render()", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvasWithPageTitles(false);
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("flip-page-titles").click());
+
+    await waitFor(() => expect(setPageTitlesMock).toHaveBeenLastCalledWith(true));
+    expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("works without a PageTitlesProvider (titles stay off)", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(setPageTitlesMock).toHaveBeenCalledWith(false);
+  });
+});

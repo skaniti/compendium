@@ -125,6 +125,9 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   // (dims nothing).
   export function setFilterDim(nodeIds: string[] | undefined): void;
   export function toggleNoise(show: boolean): void;
+  // Delta #41: page-title labels are opt-in (default off). Redraws only the
+  // title layer on a live graph; safe to call before the first render().
+  export function setPageTitles(show: boolean): void;
   export function frameNodes(nodeIds: string[], visibleH?: number): void;
   export function getClusterPages(clusterId: string): string[];
   export function hasNode(nodeId: string): boolean;

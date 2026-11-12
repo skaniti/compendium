@@ -4,6 +4,7 @@ import {
   getInitialCompendiumLoaderSeen,
   getInitialPanelWidths,
   getInitialSessionRole,
+  getInitialShowPageTitles,
   getInitialStarfieldVariant,
   getInitialThemeVariant,
   getInitialTimeWindow,
@@ -544,5 +545,33 @@ describe("getInitialTimeWindow", () => {
     vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "tw-token-arr" }) as never);
     mockFetchResponse({ ok: true, json: async () => ["x"] });
     await expect(getInitialTimeWindow()).resolves.toBe("all");
+  });
+});
+
+// Vendor header comment delta #41: show_page_titles seeds PageTitlesProvider.
+// Only a literal boolean true turns page titles on; everything else is off.
+describe("getInitialShowPageTitles", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is true only for a stored literal true", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "page-titles-on" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ show_page_titles: true }) });
+    await expect(getInitialShowPageTitles()).resolves.toBe(true);
+  });
+
+  it("is false when the key is absent, not a boolean, or the read fails", async () => {
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "page-titles-absent" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ starfield: "pan" }) });
+    await expect(getInitialShowPageTitles()).resolves.toBe(false);
+
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "page-titles-string" }) as never);
+    mockFetchResponse({ ok: true, json: async () => ({ show_page_titles: "true" }) });
+    await expect(getInitialShowPageTitles()).resolves.toBe(false);
+
+    vi.mocked(cookies).mockResolvedValue(makeFakeCookieJar({ access_token: "page-titles-fail" }) as never);
+    mockFetchResponse({ ok: false, status: 401, json: async () => ({}) });
+    await expect(getInitialShowPageTitles()).resolves.toBe(false);
   });
 });
