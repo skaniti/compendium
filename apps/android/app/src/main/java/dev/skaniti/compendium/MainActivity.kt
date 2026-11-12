@@ -342,15 +342,14 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     @Deprecated("Use onBackPressedDispatcher")
     override fun onBackPressed() {
         val tab = tabManager.activeTab()
-        if (isPageFullScreen && tab != null) {
-            tab.session.exitFullScreen()
-            return
-        }
-        if (tab != null && tab.canGoBack) {
-            activeMapper()?.markBack()
-            tab.session.goBack()
-        } else {
-            super.onBackPressed()
+        when (BackPolicy.decide(tab != null, isPageFullScreen, tab?.canGoBack == true)) {
+            BackPolicy.Action.EXIT_FULLSCREEN -> tab?.session?.exitFullScreen()
+            BackPolicy.Action.GO_BACK -> {
+                activeMapper()?.markBack()
+                tab?.session?.goBack()
+            }
+            // finish() would drop the task and its tabs from recents
+            BackPolicy.Action.MOVE_TO_BACKGROUND -> moveTaskToBack(true)
         }
     }
 
