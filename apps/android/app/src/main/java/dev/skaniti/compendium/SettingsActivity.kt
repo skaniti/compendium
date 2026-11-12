@@ -138,6 +138,12 @@ class SettingsActivity : AppCompatActivity() {
             addView(fontLabel)
             addView(fontSeek)
             addView(buttons)
+            // Which build is installed, to confirm an update landed.
+            addView(TextView(this@SettingsActivity).apply {
+                text = "Version ${appVersion(this@SettingsActivity)}"
+                setPadding(0, 48, 0, 0)
+                alpha = 0.6f
+            })
         }
         setContentView(ScrollView(this).apply { addView(column) })
     }

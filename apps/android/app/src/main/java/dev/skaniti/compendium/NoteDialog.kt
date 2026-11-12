@@ -147,12 +147,6 @@ object NoteDialog {
             .show()
     }
 
-    private fun appVersion(activity: Activity): String = try {
-        val pm = activity.packageManager.getPackageInfo(activity.packageName, 0)
-        @Suppress("DEPRECATION")
-        "${pm.versionName} (${pm.versionCode})"
-    } catch (_: Exception) { "" }
-
     private fun copyUriToFile(activity: Activity, uri: Uri, dest: File): Boolean = try {
         activity.contentResolver.openInputStream(uri)?.use { input ->
             dest.outputStream().use { input.copyTo(it) }
