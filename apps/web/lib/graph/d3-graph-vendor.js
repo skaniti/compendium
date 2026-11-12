@@ -1132,6 +1132,26 @@
 //      reported; GraphCanvas shows it as the "Detected:" line. Dev alias:
 //      `window.__d3SetInputProfile`.
 //
+// Group collapse off (decision: owner, 2026-11-12 -- "I literally just like
+// having the cluster names like it used to be originally"):
+//  43. The July 2026 group-collapse machinery (Rethink R2.5 / R4.3: casual/
+//      binge groups folded into one packed mass under a white ▶ caption,
+//      knot nebula + click target) is switched OFF by ONE module var,
+//      `GROUP_COLLAPSE_ENABLED` (false), and not deleted. Off means every
+//      group is permanently in what the code calls the expanded state:
+//      `isCollapsedCluster` is always false (so every cluster draws its own
+//      `text.hull-label` through the unchanged page-count LOD + collision
+//      cull, and no collapsed-group knot nebula is computed);
+//      `drawGroupLabels` draws nothing (no `text.group-label` exists);
+//      no `circle.knot-hit` is created; `toggleGroupExpansion` is a no-op
+//      (no re-render, no framing). The switch also rides the worker payload
+//      (`SimStartPayload.groupCollapse`), so sim-layout.ts skips Phase 1.6
+//      tier packing and members lay out like any other cluster -- the
+//      pre-rethink layout, with no framing animation on load (framing only
+//      ever ran from a toggle). Turn it back on with
+//      `GROUP_COLLAPSE_ENABLED = true`; tests flip it through the exported
+//      `setGroupCollapseEnabled(on)` (dev alias `window.__d3SetGroupCollapse`).
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -1170,6 +1190,7 @@ var __vendorSetFilterDim;
 var __vendorToggleNoise;
 var __vendorSetPageTitles;
 var __vendorSetInputProfile;
+var __vendorSetGroupCollapseEnabled;
 var __vendorFrameNodes;
 var __vendorGetClusterPages;
 var __vendorHasNode;
@@ -1394,13 +1415,18 @@ var __vendorExpandedGroups;
     // dense mass — members packed tight, per-cluster labels suppressed,
     // a single group label shown — unless expanded this session. Click the
     // group label to toggle; state resets on reload by design.
+    //
+    // Delta #43: GROUP_COLLAPSE_ENABLED is the one switch for all of it.
+    // false (the owner's choice) = groups are always in the expanded state,
+    // no caption, no knot, no toggle; true restores the July behaviour.
+    var GROUP_COLLAPSE_ENABLED = false;
     var expandedGroups = {};
     __vendorExpandedGroups = expandedGroups;   // module export (delta #7)
     if (process.env.NODE_ENV !== "production") {
         window.__d3ExpandedGroups = expandedGroups;   // debug/CDP access
     }
     function isCollapsedCluster(c) {
-        return !!c && c.group_id != null &&
+        return GROUP_COLLAPSE_ENABLED && !!c && c.group_id != null &&
             (c.group_tier === 'casual' || c.group_tier === 'binge') &&
             !expandedGroups[c.group_id];
     }
@@ -3846,7 +3872,7 @@ var __vendorExpandedGroups;
         // Still nested inside drawNebula (no independent call site exists
         // to gate on its own), but nebula:true + knot:false now suppresses
         // just the knot push, not the whole cloud.
-        if (SANDBOX_SECTION_GATES.knot) {
+        if (SANDBOX_SECTION_GATES.knot && GROUP_COLLAPSE_ENABLED) {
             computeCollapsedKnotData(clusters, nodes).forEach(function (k) {
                 nebulaData.push(k);
             });
@@ -5308,6 +5334,7 @@ var __vendorExpandedGroups;
     // THEN frame over it), just triggered by the worker's `end` message
     // instead of render() returning.
     function toggleGroupExpansion(groupId, expanding) {
+        if (!GROUP_COLLAPSE_ENABLED) return;   // delta #43: no-op, no re-render
         expandedGroups[groupId] = expanding;
         if (!rawData) return;
         // rawData, not currentData: render() re-assigns rawData from its argument, and currentData may be noise-filtered — passing it would corrupt the toggle's source of truth.
@@ -5402,6 +5429,7 @@ var __vendorExpandedGroups;
             // never pruned, same lifetime as the module itself).
             labelDims: labelDimsCache,
             expandedGroups: expandedGroups,
+            groupCollapse: GROUP_COLLAPSE_ENABLED,   // delta #43
         };
     }
 
@@ -6773,6 +6801,12 @@ var __vendorExpandedGroups;
     }
 
     function drawGroupLabels(root, clusters, nodes) {
+        // Delta #43: no group caption when collapse is off. Any left over
+        // from a render made while it was on goes too.
+        if (!GROUP_COLLAPSE_ENABLED) {
+            root.select('.hull-labels').selectAll('g.group-label-group').remove();
+            return;
+        }
         // One caption per casual/binge group (batch C C1). Collapsed: the
         // only label over the dense mass, "▸ label (N topics · Mp)", click
         // to expand. Expanded: "▾ label" header above the members, click to
@@ -8017,6 +8051,20 @@ var __vendorExpandedGroups;
     }
 
     /**
+     * Delta #43: turn the July group-collapse machinery on or off (default
+     * off). Test hook / dev alias only -- the app never calls it. Takes
+     * effect on the next render().
+     *
+     * @param {boolean} on
+     */
+    __vendorSetGroupCollapseEnabled = function (on) {
+        GROUP_COLLAPSE_ENABLED = !!on;
+    };
+    if (process.env.NODE_ENV !== "production") {
+        window.__d3SetGroupCollapse = __vendorSetGroupCollapseEnabled;
+    }
+
+    /**
      * Delta #42: choose how the mouse wheel maps to zoom/pan. Takes effect on
      * the very next wheel event of the live graph (the zoom filter and the
      * pan listener read the module var per event), so no re-render is
@@ -8206,6 +8254,7 @@ export {
     __vendorToggleNoise as toggleNoise,
     __vendorSetPageTitles as setPageTitles,
     __vendorSetInputProfile as setInputProfile,
+    __vendorSetGroupCollapseEnabled as setGroupCollapseEnabled,
     __vendorFrameNodes as frameNodes,
     __vendorGetClusterPages as getClusterPages,
     __vendorHasNode as hasNode,

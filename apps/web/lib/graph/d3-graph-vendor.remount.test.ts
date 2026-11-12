@@ -847,7 +847,9 @@ describe("d3-graph-vendor render() settle lifecycle callbacks (header comment de
   // needing the generalized carry-forward (delta #31), not just delta #28's
   // original opts-omitted-entirely fallback.
   it("carries both callbacks through an opts-SPARSE re-render (toggleGroupExpansion's knot-expand render call)", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+    const { render, setGroupCollapseEnabled } = await import("@/lib/graph/d3-graph-vendor.js");
+    // Delta #43: the collapse machinery is off by default; this test drives it.
+    setGroupCollapseEnabled(true);
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -899,6 +901,7 @@ describe("d3-graph-vendor render() settle lifecycle callbacks (header comment de
     expect(onRenderCycleStart).toHaveBeenCalledTimes(2);
     flushSettleChunks();
     expect(onSettleEnd).toHaveBeenCalledTimes(2);
+    setGroupCollapseEnabled(false);
   });
 });
 
@@ -1726,7 +1729,9 @@ describe("d3-graph-vendor toggleGroupExpansion() frame (Task V2, vision-review F
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Delta #43: the collapse machinery is off by default; this block tests it.
+    (await import("@/lib/graph/d3-graph-vendor.js")).setGroupCollapseEnabled(true);
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     (
       SVGElement.prototype as unknown as { getScreenCTM: () => DOMMatrix }
@@ -1736,6 +1741,10 @@ describe("d3-graph-vendor toggleGroupExpansion() frame (Task V2, vision-review F
     // so a previous test's expand/collapse doesn't leak into this one.
     const w = window as unknown as { __d3ExpandedGroups?: Record<number, boolean> };
     if (w.__d3ExpandedGroups) delete w.__d3ExpandedGroups[GROUP_ID];
+  });
+
+  afterEach(async () => {
+    (await import("@/lib/graph/d3-graph-vendor.js")).setGroupCollapseEnabled(false);
   });
 
   afterEach(() => {

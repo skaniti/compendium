@@ -260,8 +260,12 @@ function rectRectOverlap(a: Rect, b: Rect, pad = 0): RectOverlap {
 }
 
 /** vendor isCollapsedCluster, :482-486. */
-function isCollapsedCluster(c: SimClusterInput | undefined, expandedGroups: Record<string, boolean>): boolean {
-  return !!c && c.group_id != null && (c.group_tier === "casual" || c.group_tier === "binge") && !expandedGroups[String(c.group_id)];
+function isCollapsedCluster(
+  c: SimClusterInput | undefined,
+  expandedGroups: Record<string, boolean>,
+  groupCollapse: boolean
+): boolean {
+  return groupCollapse && !!c && c.group_id != null && (c.group_tier === "casual" || c.group_tier === "binge") && !expandedGroups[String(c.group_id)];
 }
 
 // ── Phase 1 node/link shapes ─────────────────────────────────────────────
@@ -307,6 +311,7 @@ function runClusterCentroidPhases(
   scNameCharWidth: number,
   labelDims: LabelDims,
   expandedGroups: Record<string, boolean>,
+  groupCollapse: boolean,
   scSeparation: SimStartPayload["scSeparation"]
 ): Map<string, { x: number; y: number }> {
   // ── Phase 1: Position cluster centroids by similarity (vendor :3234-3267) ──
@@ -608,7 +613,7 @@ function runClusterCentroidPhases(
   // ── Phase 1.6: tier-driven collapse packing (vendor :3537-3582) ──────
   const collapsePack = new Map<number, string[]>();
   clusters.forEach((c) => {
-    if (!isCollapsedCluster(c, expandedGroups)) return;
+    if (!isCollapsedCluster(c, expandedGroups, groupCollapse)) return;
     const gid = c.group_id as number;
     const arr = collapsePack.get(gid) ?? [];
     arr.push(c.id);
@@ -722,6 +727,7 @@ export class SimEngine {
       payload.scNameCharWidth,
       payload.labelDims,
       expandedGroups,
+      payload.groupCollapse !== false,
       payload.scSeparation
     );
 

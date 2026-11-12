@@ -223,3 +223,34 @@ describe("Phase 1.5b footprint-aware seeding (delta #32)", () => {
     expect(a).toEqual(b);
   });
 });
+
+describe("Phase 1.6 tier packing and the groupCollapse switch (delta #43)", () => {
+  const grouped = (groupCollapse?: boolean) =>
+    payload({
+      nodes: [
+        { id: "p1", parent_id: "c1" }, { id: "p2", parent_id: "c1" },
+        { id: "p3", parent_id: "c2" }, { id: "p4", parent_id: "c2" },
+        { id: "p5", parent_id: "c3" }, { id: "p6", parent_id: "c3" },
+      ],
+      links: [],
+      clusters: [
+        { id: "c1", name: "One", page_ids: ["p1", "p2"], group_id: 1, group_tier: "casual" },
+        { id: "c2", name: "Two", page_ids: ["p3", "p4"], group_id: 1, group_tier: "casual" },
+        { id: "c3", name: "Three", page_ids: ["p5", "p6"], group_id: 1, group_tier: "casual" },
+      ],
+      ...(groupCollapse === undefined ? {} : { groupCollapse }),
+    });
+
+  it("groupCollapse:false lays a casual group out exactly like the same clusters with no tier", () => {
+    const off = runToEnd(grouped(false));
+    const ungrouped = grouped(false);
+    ungrouped.clusters = ungrouped.clusters.map((c) => ({ ...c, group_id: undefined, group_tier: undefined }));
+    expect(Array.from(off)).toEqual(Array.from(runToEnd(ungrouped)));
+  });
+
+  it("groupCollapse absent or true still packs the group (positions differ from the unpacked layout)", () => {
+    const packed = Array.from(runToEnd(grouped()));
+    expect(Array.from(runToEnd(grouped(true)))).toEqual(packed);
+    expect(packed).not.toEqual(Array.from(runToEnd(grouped(false))));
+  });
+});

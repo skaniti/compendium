@@ -134,6 +134,8 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   // Delta #42: wheel input profile (default "auto"). Takes effect on the next
   // wheel event of the live graph; safe to call before the first render().
   export function setInputProfile(profile: "auto" | "mouse" | "trackpad"): void;
+  /** Delta #43 test hook: turn the July group-collapse machinery on/off (default off). */
+  export function setGroupCollapseEnabled(on: boolean): void;
   export function frameNodes(nodeIds: string[], visibleH?: number): void;
   export function getClusterPages(clusterId: string): string[];
   export function hasNode(nodeId: string): boolean;

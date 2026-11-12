@@ -154,6 +154,11 @@ export interface SimStartPayload {
    *  to skip collapse-packing for a group the user has expanded this
    *  session. */
   expandedGroups: Record<string, boolean>;
+  /** Vendor GROUP_COLLAPSE_ENABLED (header comment delta #43). false =
+   *  Phase 1.6 packs nothing: every group lays out in its expanded state.
+   *  Absent = true, so a payload built before the switch existed keeps its
+   *  old behaviour. */
+  groupCollapse?: boolean;
 }
 
 export type SimStartMessage = { type: "start" } & SimStartPayload;
