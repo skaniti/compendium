@@ -81,7 +81,13 @@ def _label_ok(label: str) -> bool:
     )
 
 
-def validate_topics(raw, candidate_ids: set[int], max_topics: int | None = None) -> list[dict]:
+def validate_topics(
+    raw,
+    candidate_ids: set[int],
+    max_topics: int | None = None,
+    *,
+    min_clusters: int = MIN_TOPIC_CLUSTERS,
+) -> list[dict]:
     """Clean the model's ``{"topics": [...]}`` into ``[{label, cluster_ids}]``.
 
     Per entry: trims the label; drops it when it is too long (more than 4
@@ -94,7 +100,8 @@ def validate_topics(raw, candidate_ids: set[int], max_topics: int | None = None)
     merge, a topic claiming more than 60 percent of the candidates (with at
     least 6 candidates) is dropped as an umbrella. Unknown cluster ids are
     dropped, a cluster claimed twice goes to the first topic that claimed it,
-    and topics left with fewer than 2 clusters are dropped. With
+    and topics left with fewer than *min_clusters* clusters (default 2) are
+    dropped. With
     *max_topics* the result is cut in model-output order; callers that can
     rank use ``rank_and_cap`` instead."""
     topics = raw.get("topics") if isinstance(raw, dict) else None
@@ -125,7 +132,7 @@ def validate_topics(raw, candidate_ids: set[int], max_topics: int | None = None)
         ):
             continue
         kept = [i for i in entry["ids"] if i not in claimed]
-        if len(kept) < MIN_TOPIC_CLUSTERS:
+        if len(kept) < min_clusters:
             continue
         claimed.update(kept)
         out.append({"label": entry["label"], "cluster_ids": kept})
@@ -278,7 +285,11 @@ async def propose_topics(
     ids = {c["id"] for c in candidates}
     if shape == "fields":
         raw = group_fields(parse_fields(raw, ids))
-    topics = validate_topics(raw, ids, None)
+    # The floor is the owner's setting, so lowering it to 1 lets a broad
+    # one-cluster field through instead of being cut here first.
+    topics = validate_topics(
+        raw, ids, None, min_clusters=settings.supercluster_suggestion_min_clusters
+    )
     return rank_and_cap(
         topics, candidates, existing_topics, dismissed_labels, max_topics,
         min_clusters=settings.supercluster_suggestion_min_clusters,

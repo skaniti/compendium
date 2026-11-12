@@ -430,6 +430,11 @@ class TestLabelSetAndKeys:
     def test_two_letter_label_is_fine(self):
         assert len(tp.validate_topics({"topics": [{"label": "AI", "cluster_ids": [1, 2]}]}, self.IDS)) == 1
 
+    def test_min_clusters_follows_the_caller(self):
+        raw = {"topics": [{"label": "Cooking", "cluster_ids": [1]}]}
+        assert tp.validate_topics(raw, self.IDS) == []
+        assert [t["label"] for t in tp.validate_topics(raw, self.IDS, min_clusters=1)] == ["Cooking"]
+
     @pytest.mark.parametrize("a,b", [("Health & Fitness", "Health and Fitness"),
                                      ("Sci-Fi", "Sci Fi"), ("Cooking", "Cooking.")])
     def test_label_variants_group_together(self, a, b):
