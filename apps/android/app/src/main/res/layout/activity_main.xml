@@ -189,6 +189,15 @@
                 android:background="@drawable/badge_background"
                 android:visibility="gone" />
         </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="Settings"
+            android:background="?attr/selectableItemBackgroundBorderless" />
     </LinearLayout>
 
 </LinearLayout>

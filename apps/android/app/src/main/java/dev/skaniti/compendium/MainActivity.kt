@@ -685,6 +685,9 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         findViewById<ImageButton>(R.id.btnNewTab).setOnClickListener { createNewTab(DEFAULT_URL, isTyped = true) }
         findViewById<ImageButton>(R.id.btnTabs).setOnClickListener { showTabGrid() }
         findViewById<ImageButton>(R.id.btnHub).setOnClickListener { launchAnalysisHub() }
+        findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
         // Long-press Hub opens settings.
         findViewById<ImageButton>(R.id.btnHub).setOnLongClickListener {
