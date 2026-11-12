@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  acceptTopicSuggestion,
   addMemberExclusion,
   addTopic,
   apiFetch,
+  dismissTopicSuggestion,
   fetchClusteringStatus,
   fetchDiaryWindows,
   fetchGraph,
@@ -10,6 +12,7 @@ import {
   fetchNodeDetail,
   fetchPageContent,
   fetchTopicMembers,
+  fetchTopicSuggestions,
   fetchTopics,
   postRecluster,
   recoverSession,
@@ -723,6 +726,71 @@ describe("addTopic", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("forbidden", { status: 403, statusText: "Forbidden" })));
 
     await expect(addTopic("rust")).rejects.toThrow("addTopic failed: 403 Forbidden");
+  });
+});
+
+describe("fetchTopicSuggestions", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GETs /api/topics/suggestions and unwraps .suggestions (splits ignored)", async () => {
+    const suggestions = [{ id: 1, label: "Science", member_count: 2, page_count: 9 }];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ suggestions, splits: [{ group_id: 3 }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await fetchTopicSuggestions()).toEqual(suggestions);
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toBe("/api/topics/suggestions");
+  });
+
+  it("throws a descriptive error on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500, statusText: "Server Error" })));
+    await expect(fetchTopicSuggestions()).rejects.toThrow("fetchTopicSuggestions failed: 500 Server Error");
+  });
+});
+
+describe("acceptTopicSuggestion", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs an empty body when no keyword override is given and unwraps .topics", async () => {
+    const topics = [{ keyword: "Science", icon_id: "atom", cluster_count: 2 }];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ topic: { keyword: "Science" }, topics, relabeled_clusters: 2 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await acceptTopicSuggestion(7)).toEqual(topics);
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/suggestions/7/accept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+  });
+
+  it("sends the keyword override when given", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ topic: { keyword: "books" }, topics: [], relabeled_clusters: 0 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await acceptTopicSuggestion(7, "books");
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/suggestions/7/accept", expect.objectContaining({ body: JSON.stringify({ keyword: "books" }) }));
+  });
+
+  it("throws on a 403 (demo-gated mutation)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("forbidden", { status: 403, statusText: "Forbidden" })));
+    await expect(acceptTopicSuggestion(7)).rejects.toThrow("acceptTopicSuggestion failed: 403 Forbidden");
+  });
+});
+
+describe("dismissTopicSuggestion", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs /api/topics/suggestions/{id}/dismiss", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ dismissed: "Science", dismissed_topics: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await dismissTopicSuggestion(7);
+    expect(fetchMock).toHaveBeenCalledWith("/api/topics/suggestions/7/dismiss", { method: "POST" });
+  });
+
+  it("throws on a 404", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404, statusText: "Not Found" })));
+    await expect(dismissTopicSuggestion(7)).rejects.toThrow("dismissTopicSuggestion failed: 404 Not Found");
   });
 });
 

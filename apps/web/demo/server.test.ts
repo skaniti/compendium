@@ -663,6 +663,120 @@ describe("isPlainDemo (exported for Task 6's write gate)", () => {
   });
 });
 
+describe("topic suggestions: GET /api/topics/suggestions, accept, dismiss", () => {
+  type Sug = { id: number; label: string; member_count: number; page_count: number; cluster_names: string[] };
+
+  it("serves 3 synthetic suggestions in the backend shape (none with fewer than 2 clusters), matching the status line count", async () => {
+    await withServer(async (base) => {
+      const body = await (await req(base, "GET", "/api/topics/suggestions")).json();
+      expect(body.splits).toEqual([]);
+      expect(body.suggestions.length).toBe(3);
+      for (const g of body.suggestions as Sug[]) {
+        expect(g.cluster_names.length).toBe(g.member_count);
+        expect(g.member_count).toBeGreaterThanOrEqual(2); // one-cluster groups are never offered
+        expect(g.page_count).toBeGreaterThan(0);
+      }
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.stats_line1).toContain("3 suggested");
+    });
+  });
+
+  it("agrees with the graph fixture: group ids, member clusters, backend tiers, no declared-topic cluster", async () => {
+    await withServer(async (base) => {
+      const { suggestions } = await (await req(base, "GET", "/api/topics/suggestions")).json();
+      const graph = await (await req(base, "GET", "/api/graph")).json();
+      const groups = new Map((graph.groups as Array<{ id: number; source: string; tier: string }>).map((g) => [g.id, g]));
+      const declared = new Set((await (await req(base, "GET", "/api/topics")).json()).topics.map((t: { keyword: string }) => t.keyword));
+      const tiers = ["declared", "recurrent", "casual", "binge"];
+      for (const g of suggestions as Array<Sug & { interest_tier: string }>) {
+        expect(groups.get(g.id)?.source).toBe("suggested");
+        expect(g.interest_tier).toBe(groups.get(g.id)?.tier);
+        expect(tiers).toContain(g.interest_tier);
+        const members = (graph.clusters as Array<{ name: string; group_id: number; super_cluster: string; page_ids: string[] }>).filter((c) => c.group_id === g.id);
+        expect(g.cluster_names).toEqual(members.map((c) => c.name));
+        expect(g.page_count).toBe(members.reduce((n, c) => n + c.page_ids.length, 0));
+        for (const c of members) expect(declared.has(c.super_cluster)).toBe(false);
+      }
+      // best tier first, then pages (the endpoint's order)
+      const ranks = (suggestions as Array<{ interest_tier: string }>).map((g) => tiers.indexOf(g.interest_tier));
+      expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    });
+  });
+
+  it("accept adds a topic (label by default), removes the suggestion and updates the status count", async () => {
+    await withServer(async (base) => {
+      const admin = adminToken();
+      const first = (await (await req(base, "GET", "/api/topics/suggestions")).json()).suggestions[0] as Sug;
+      const res = await req(base, "POST", `/api/topics/suggestions/${first.id}/accept`, {}, admin);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.topic.keyword).toBe(first.label);
+      expect(body.topics.find((t: { keyword: string }) => t.keyword === first.label).icon_id).toBeTruthy();
+      const after = await (await req(base, "GET", "/api/topics/suggestions")).json();
+      expect(after.suggestions.length).toBe(2);
+      expect(after.suggestions.some((g: Sug) => g.id === first.id)).toBe(false);
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(5);
+      // the accepted topic serves the suggestion's own clusters as its members
+      const members = await (await req(base, "GET", `/api/topics/${encodeURIComponent(first.label)}/members`)).json();
+      expect(members.members.map((m: { cluster_name: string }) => m.cluster_name)).toEqual(first.cluster_names);
+      expect(members.members[0].page_count).toBeGreaterThan(0);
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.stats_line1).toContain("2 suggested");
+    });
+  });
+
+  it("accept with a keyword override uses it as the topic name", async () => {
+    await withServer(async (base) => {
+      const first = (await (await req(base, "GET", "/api/topics/suggestions")).json()).suggestions[0] as Sug;
+      const res = await req(base, "POST", `/api/topics/suggestions/${first.id}/accept`, { keyword: "Renamed On Accept" }, adminToken());
+      expect((await res.json()).topic.keyword).toBe("Renamed On Accept");
+    });
+  });
+
+  it("dismiss removes the suggestion without adding a topic and updates the status count", async () => {
+    await withServer(async (base) => {
+      const first = (await (await req(base, "GET", "/api/topics/suggestions")).json()).suggestions[0] as Sug;
+      const res = await req(base, "POST", `/api/topics/suggestions/${first.id}/dismiss`, undefined, adminToken());
+      expect(res.status).toBe(200);
+      expect((await res.json()).dismissed).toBe(first.label);
+      const after = await (await req(base, "GET", "/api/topics/suggestions")).json();
+      expect(after.suggestions.length).toBe(2);
+      const topics = await (await req(base, "GET", "/api/topics")).json();
+      expect(topics.topics.length).toBe(4);
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.stats_line1).toContain("2 suggested");
+    });
+  });
+
+  it("drops the suggested part of the status line once every suggestion is gone", async () => {
+    await withServer(async (base) => {
+      const { suggestions } = await (await req(base, "GET", "/api/topics/suggestions")).json();
+      for (const g of suggestions as Sug[]) await req(base, "POST", `/api/topics/suggestions/${g.id}/dismiss`, undefined, adminToken());
+      const status = await (await req(base, "GET", "/api/clustering/status")).json();
+      expect(status.stats_line1).toBe("49 clusters · 4 topics");
+    });
+  });
+
+  it("answers 404 for an unknown suggestion id", async () => {
+    await withServer(async (base) => {
+      expect((await req(base, "POST", "/api/topics/suggestions/99999/accept", {}, adminToken())).status).toBe(404);
+      expect((await req(base, "POST", "/api/topics/suggestions/99999/dismiss", undefined, adminToken())).status).toBe(404);
+    });
+  });
+
+  it("refuses accept and dismiss for a plain demo token (403) and leaves the list untouched", async () => {
+    await withServer(async (base) => {
+      const demo = plainDemoToken();
+      const first = (await (await req(base, "GET", "/api/topics/suggestions", undefined, demo)).json()).suggestions[0] as Sug;
+      expect((await req(base, "POST", `/api/topics/suggestions/${first.id}/accept`, {}, demo)).status).toBe(403);
+      expect((await req(base, "POST", `/api/topics/suggestions/${first.id}/dismiss`, undefined, demo)).status).toBe(403);
+      const after = await (await req(base, "GET", "/api/topics/suggestions", undefined, demo)).json();
+      expect(after.suggestions.length).toBe(3);
+    });
+  });
+});
+
 describe("mutation endpoints (Task 6): topics CRUD", () => {
   it("adds, renames, deletes a topic; topics list reflects each", async () => {
     await withServer(async (base) => {

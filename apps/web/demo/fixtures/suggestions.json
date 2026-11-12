@@ -1,0 +1,146 @@
+{
+  "suggestions": [
+    {
+      "id": 125,
+      "label": "Arts and Ideas",
+      "source": "suggested",
+      "topic": null,
+      "topic_similarity": null,
+      "interest_tier": "binge",
+      "evidence": {
+        "n_days": 2,
+        "n_weeks": 1,
+        "n_visits": 41,
+        "span_days": 1,
+        "dwell_median": 38,
+        "dwell_p90": 150,
+        "re_url_count": 4
+      },
+      "member_count": 13,
+      "page_count": 37,
+      "cluster_ids": [
+        7305,
+        7304,
+        7291,
+        7310,
+        7309,
+        7299,
+        7308,
+        7298,
+        7289,
+        7306,
+        7287,
+        7288,
+        7307
+      ],
+      "cluster_names": [
+        "Time, Sleep, and Dreams",
+        "Thermodynamics and Energy",
+        "Light and Color",
+        "Philosophy and Economics",
+        "Human Behavior and Society",
+        "Law and Religion",
+        "Social Sciences",
+        "Education and Language",
+        "Mathematics and Linear Algebra",
+        "Visual Arts",
+        "Music Theory Concepts",
+        "Architectural Styles",
+        "Visual Arts Composition"
+      ],
+      "split_proposal": null,
+      "cluster_slugs": [
+        "time_sleep_and_dreams",
+        "thermodynamics_and_energy",
+        "light_and_color",
+        "philosophy_and_economics",
+        "human_behavior_and_society",
+        "law_and_religion",
+        "social_sciences",
+        "education_and_language",
+        "mathematics_and_linear_algebra",
+        "visual_arts",
+        "music_theory_concepts",
+        "architectural_styles",
+        "visual_arts_composition"
+      ]
+    },
+    {
+      "id": 124,
+      "label": "Food and Drink",
+      "source": "suggested",
+      "topic": null,
+      "topic_similarity": null,
+      "interest_tier": "binge",
+      "evidence": {
+        "n_days": 2,
+        "n_weeks": 1,
+        "n_visits": 13,
+        "span_days": 1,
+        "dwell_median": 52,
+        "dwell_p90": 210,
+        "re_url_count": 2
+      },
+      "member_count": 4,
+      "page_count": 11,
+      "cluster_ids": [
+        7281,
+        7286,
+        7282,
+        7280
+      ],
+      "cluster_names": [
+        "Bread and Sourdough",
+        "Natural Earth Features",
+        "Materials Science",
+        "Beverages: Tea and Coffee"
+      ],
+      "split_proposal": null,
+      "cluster_slugs": [
+        "bread_and_sourdough",
+        "natural_earth_features",
+        "materials_science",
+        "beverages_tea_and_coffee"
+      ]
+    },
+    {
+      "id": 126,
+      "label": "Geology",
+      "source": "suggested",
+      "topic": null,
+      "topic_similarity": null,
+      "interest_tier": "binge",
+      "evidence": {
+        "n_days": 1,
+        "n_weeks": 1,
+        "n_visits": 10,
+        "span_days": 1,
+        "dwell_median": 61,
+        "dwell_p90": 240,
+        "re_url_count": 1
+      },
+      "member_count": 4,
+      "page_count": 9,
+      "cluster_ids": [
+        7293,
+        7302,
+        7303,
+        7290
+      ],
+      "cluster_names": [
+        "Plate Tectonics and Continental Drift",
+        "Volcanic Features",
+        "Natural Geographical Features",
+        "Natural Landforms"
+      ],
+      "split_proposal": null,
+      "cluster_slugs": [
+        "plate_tectonics_and_continental_drift",
+        "volcanic_features",
+        "natural_geographical_features",
+        "natural_landforms"
+      ]
+    }
+  ],
+  "splits": []
+}

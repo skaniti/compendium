@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useGraph } from "@/hooks/useGraph";
-import { fetchClusteringStatus, fetchTopics, postRecluster } from "@/lib/api";
+import { fetchClusteringStatus, fetchTopicSuggestions, fetchTopics, postRecluster } from "@/lib/api";
 import { formatRunDateTime } from "@/lib/clusters";
 import { TopicIcon } from "@/lib/icons";
+import { clustersPagesLabel, MAX_GHOST_TILES, MAX_SUPERCLUSTERS, scLayout } from "@/lib/superclusters";
 import { useHoverTooltip } from "./charts/HoverTooltip";
 import ScPopover from "./ScPopover";
 import ScTooltips from "./ScTooltip";
 import { useSession } from "./SessionProvider";
 import { useTimeWindow, type TimeWindow } from "./TimeWindowProvider";
-import type { ClusteringStatus, TopicInterest } from "@/lib/types";
+import type { ClusteringStatus, TopicInterest, TopicSuggestion } from "@/lib/types";
 
 // Ports app.py's _build_graph_widgets (lines 282-415) into JSX: three
 // "mini-cards" (CLUSTERING / DATE RANGE / SUPERCLUSTERS) rendered inside
@@ -64,10 +65,6 @@ function ReclusterIcon() {
   );
 }
 
-// topics.py:630 -- mirrored as a literal constant rather than imported
-// (no shared contract module exists yet between the two repos).
-const MAX_SUPERCLUSTERS = 12;
-
 export default function HeaderCards() {
   const { graphVersion, refresh } = useGraph();
   const { timeWindow, setTimeWindow } = useTimeWindow();
@@ -75,7 +72,11 @@ export default function HeaderCards() {
   // the API refuses its recluster (2026-10-04), so the button stays visible
   // but greyed out, with a tooltip saying why. aria-disabled rather than
   // `disabled` so the tooltip still shows on hover in every browser.
-  const reclusterLocked = useSession().role === "demo";
+  const { role, actingAsDemo } = useSession();
+  const isDemo = role === "demo";
+  // A direct demo login (what body.plain-demo keys off), not an admin viewing as demo.
+  const plainDemo = isDemo && !actingAsDemo;
+  const reclusterLocked = isDemo;
   const reclusterLabel = reclusterLocked ? "Recluster is disabled in demo view" : "Recluster now";
   // Chart-kit tooltip, not a native title (2026-10-04).
   const reclusterTip = useHoverTooltip();
@@ -83,16 +84,45 @@ export default function HeaderCards() {
   const [status, setStatus] = useState<ClusteringStatus>(INITIAL_STATUS);
   const [busy, setBusy] = useState(false);
   const [topics, setTopics] = useState<TopicInterest[]>([]);
+  const [suggestions, setSuggestions] = useState<TopicSuggestion[]>([]);
   const [openSlot, setOpenSlot] = useState<number | null>(null);
 
+  // Request sequence per refetch: a response only lands if no newer request was
+  // started since, so a slow older read cannot overwrite a newer one.
+  const topicsSeq = useRef(0);
+  const suggestionsSeq = useRef(0);
+
   const refetchTopics = useCallback(() => {
+    const seq = ++topicsSeq.current;
     fetchTopics()
-      .then((next) => setTopics(next))
+      .then((next) => {
+        if (seq === topicsSeq.current) setTopics(next);
+      })
       .catch(() => {
         // Best-effort: keep whatever tiles are already on screen rather
         // than blanking them -- same stale-while-revalidate idiom
         // DiaryPanel/TopicDetail use for their own fetch effects. Task
         // 8-C3 can wire a real error surface into the SC card if needed.
+      });
+  }, []);
+
+  const refetchSuggestions = useCallback(() => {
+    const seq = ++suggestionsSeq.current;
+    fetchTopicSuggestions()
+      .then((next) => {
+        if (seq === suggestionsSeq.current) setSuggestions(next);
+      })
+      .catch(() => {
+        // Best-effort, same stale-while-revalidate idiom as refetchTopics: a
+        // failed read leaves the ghost tiles already on screen.
+      });
+  }, []);
+
+  const refetchStatus = useCallback(() => {
+    fetchClusteringStatus()
+      .then((next) => setStatus(next))
+      .catch(() => {
+        // Leave whatever status is already on screen -- see INITIAL_STATUS's comment.
       });
   }, []);
 
@@ -108,12 +138,8 @@ export default function HeaderCards() {
   // post-recluster status refetch -- no separate manual call needed there
   // (final-review I1).
   useEffect(() => {
-    fetchClusteringStatus()
-      .then((next) => setStatus(next))
-      .catch(() => {
-        // Leave whatever status is already on screen -- see INITIAL_STATUS's comment.
-      });
-  }, [graphVersion]);
+    refetchStatus();
+  }, [graphVersion, refetchStatus]);
 
   // Independent 60-second freshness poll -- Dash's
   // dcc.Interval(id="cache-badge-interval", interval=60_000) (app.py:1758)
@@ -132,7 +158,7 @@ export default function HeaderCards() {
     return () => clearInterval(id);
   }, []);
 
-  // Topics power the SUPERCLUSTERS card's title (N/12) and tiles. Refetch
+  // Topics power the SUPERCLUSTERS card's title (N/24) and tiles. Refetch
   // on mount AND whenever graphVersion bumps (a recluster or another
   // topic-mutation-adjacent commit) -- Dash parity: render_sc_card lists
   // topic-mutation-trigger as an Input, and this card's own recluster
@@ -141,6 +167,12 @@ export default function HeaderCards() {
   useEffect(() => {
     refetchTopics();
   }, [graphVersion, refetchTopics]);
+
+  // Suggested superclusters: same cadence as the topics (a recluster re-derives
+  // them, an accept consumes one).
+  useEffect(() => {
+    refetchSuggestions();
+  }, [graphVersion, refetchSuggestions]);
 
   async function handleRecluster(): Promise<void> {
     if (busy || reclusterLocked) return;
@@ -246,10 +278,15 @@ export default function HeaderCards() {
 
       <SuperclustersCard
         topics={topics}
+        suggestions={suggestions}
+        demoLocked={isDemo}
+        plainDemo={plainDemo}
         openSlot={openSlot}
         onTileClick={handleTileClick}
         onClosePopover={closePopover}
         refetchTopics={refetchTopics}
+        refetchSuggestions={refetchSuggestions}
+        refetchStatus={refetchStatus}
         refreshGraph={refresh}
       />
     </div>
@@ -258,29 +295,51 @@ export default function HeaderCards() {
 
 interface SuperclustersCardProps {
   topics: TopicInterest[];
+  suggestions: TopicSuggestion[];
+  demoLocked: boolean;
+  plainDemo: boolean;
   openSlot: number | null;
   onTileClick: (slot: number) => void;
   onClosePopover: () => void;
   refetchTopics: () => void;
+  refetchSuggestions: () => void;
+  refetchStatus: () => void;
   refreshGraph: () => Promise<void>;
 }
 
 // Ports topics.py's render_sc_card title/body rules (~1116-1218), plus the
 // popover/tooltip mount points (Task 8-C3 -- see ScPopover.tsx / ScTooltip.tsx).
+// Suggested superclusters (2026-11-12): the first MAX_GHOST_TILES empty slots
+// show the top suggestions as ghost tiles, and the title counts them all.
 function SuperclustersCard({
   topics,
+  suggestions,
+  demoLocked,
+  plainDemo,
   openSlot,
   onTileClick,
   onClosePopover,
   refetchTopics,
+  refetchSuggestions,
+  refetchStatus,
   refreshGraph,
 }: SuperclustersCardProps) {
   const n = topics.length;
   const overflow = n > MAX_SUPERCLUSTERS;
+  const suggestedPart = suggestions.length > 0 ? ` · ${suggestions.length} SUGGESTED` : "";
   const title = overflow
     ? `SUPERCLUSTERS OVERFLOW (${n}/${MAX_SUPERCLUSTERS})`
-    : `SUPERCLUSTERS (${n}/${MAX_SUPERCLUSTERS} ALLOCATED)`;
+    : `SUPERCLUSTERS (${n}/${MAX_SUPERCLUSTERS} ALLOCATED${suggestedPart})`;
   const titleClass = overflow ? "hbar-card-title hbar-sc-title-overflow" : "hbar-card-title";
+
+  // The last free slot always stays a plain "+" tile, so the add form is
+  // reachable whatever the suggestions.
+  const free = Math.max(0, MAX_SUPERCLUSTERS - n);
+  const ghostCount = Math.min(MAX_GHOST_TILES, suggestions.length, Math.max(0, free - 1));
+  const layout = scLayout(MAX_SUPERCLUSTERS);
+  // Suggestion shown by the open slot's ghost tile (undefined for any other slot).
+  const openGhost =
+    openSlot !== null && openSlot >= n && openSlot < n + ghostCount ? suggestions[openSlot - n] : undefined;
 
   return (
     <div className="hbar-card hbar-sc-card">
@@ -294,10 +353,21 @@ function SuperclustersCard({
         id="sc-card-body"
         className="hbar-card-body hbar-sc-body"
         data-open-slot={openSlot ?? ""}
+        style={
+          {
+            "--sc-cols": layout.cols,
+            "--sc-tile": `${layout.tilePx}px`,
+            "--sc-gap": `${layout.gapPx}px`,
+          } as CSSProperties
+        }
       >
-        {Array.from({ length: MAX_SUPERCLUSTERS }, (_, slot) => (
-          <SCTile key={slot} slot={slot} topic={topics[slot]} onClick={() => onTileClick(slot)} />
-        ))}
+        {Array.from({ length: MAX_SUPERCLUSTERS }, (_, slot) =>
+          slot >= n && slot < n + ghostCount ? (
+            <GhostTile key={slot} slot={slot} suggestion={suggestions[slot - n]} onClick={() => onTileClick(slot)} />
+          ) : (
+            <SCTile key={slot} slot={slot} topic={topics[slot]} iconPx={layout.iconPx} onClick={() => onTileClick(slot)} />
+          )
+        )}
       </div>
       {/* Mounted only while a slot is open -- key={openSlot} forces a clean
           remount (fresh busy/members state, fresh listeners) when switching
@@ -309,8 +379,14 @@ function SuperclustersCard({
           slot={openSlot}
           topic={topics[openSlot]}
           topics={topics}
+          suggestions={suggestions}
+          initialSuggestionId={openGhost?.id}
+          demoLocked={demoLocked}
+          plainDemo={plainDemo}
           onClose={onClosePopover}
           refetchTopics={refetchTopics}
+          refetchSuggestions={refetchSuggestions}
+          refetchStatus={refetchStatus}
           refreshGraph={refreshGraph}
         />
       )}
@@ -322,42 +398,100 @@ function SuperclustersCard({
   );
 }
 
+interface GhostTileProps {
+  slot: number;
+  suggestion: TopicSuggestion;
+  onClick: () => void;
+}
+
+// A suggested supercluster in an empty slot: dashed accent outline, the
+// suggestion's first letter dimmed where an icon would be (suggestions have no
+// icon until accepted), a small spark in the corner. Chart-kit hover tooltip,
+// never a native title.
+function GhostTile({ slot, suggestion, onClick }: GhostTileProps) {
+  const tip = useHoverTooltip();
+  const lines = [`${suggestion.label} · suggested`, clustersPagesLabel(suggestion)];
+  return (
+    <button
+      type="button"
+      className="hbar-sc-tile hbar-sc-tile-ghost"
+      data-sc-tile-slot={slot}
+      aria-label={`Suggested supercluster: ${suggestion.label}`}
+      onMouseEnter={(e) => tip.show(e, lines)}
+      onMouseMove={(e) => tip.show(e, lines)}
+      onMouseLeave={tip.hide}
+      onClick={() => {
+        tip.hide();
+        onClick();
+      }}
+    >
+      <span className="hbar-sc-ghost-letter" aria-hidden="true">
+        {Array.from(suggestion.label.trim())[0]?.toUpperCase() ?? "?"}
+      </span>
+      <svg className="hbar-sc-ghost-spark" viewBox="0 0 10 10" width="9" height="9" aria-hidden="true" focusable="false">
+        <path d="M5 0 L6.1 3.9 L10 5 L6.1 6.1 L5 10 L3.9 6.1 L0 5 L3.9 3.9 Z" fill="currentColor" />
+      </svg>
+      {tip.tooltip}
+    </button>
+  );
+}
+
+interface EmptyTileProps {
+  slot: number;
+  onClick: () => void;
+}
+
+// An unallocated "+" slot. Chart-kit hover tooltip (project rule: no native
+// title= tooltips).
+function EmptyTile({ slot, onClick }: EmptyTileProps) {
+  const tip = useHoverTooltip();
+  const label = `Add a supercluster (slot ${slot + 1})`;
+  return (
+    <button
+      type="button"
+      className="hbar-sc-tile hbar-sc-tile-empty"
+      data-sc-tile-slot={slot}
+      aria-label={label}
+      onMouseEnter={(e) => tip.show(e, [label])}
+      onMouseMove={(e) => tip.show(e, [label])}
+      onMouseLeave={tip.hide}
+      onClick={() => {
+        tip.hide();
+        onClick();
+      }}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="white"
+        strokeWidth={2}
+        strokeLinecap="round"
+        className="hbar-sc-plus"
+        style={{ display: "block" }}
+      >
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      {tip.tooltip}
+    </button>
+  );
+}
+
 interface SCTileProps {
   slot: number;
   topic: TopicInterest | undefined;
+  iconPx: number;
   onClick: () => void;
 }
 
 // Ports topics.py's _render_sc_tile (~659-732), inline <svg> instead of a
 // base64 data-URI <img> (Dash-only scaffolding -- see lib/icons.tsx's own
 // header comment for the same substitution on the icon side).
-function SCTile({ slot, topic, onClick }: SCTileProps) {
-  if (!topic) {
-    return (
-      <div
-        className="hbar-sc-tile hbar-sc-tile-empty"
-        title={`Add a supercluster (slot ${slot + 1})`}
-        data-sc-tile-slot={slot}
-        onClick={onClick}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="white"
-          strokeWidth={2}
-          strokeLinecap="round"
-          className="hbar-sc-plus"
-          style={{ display: "block" }}
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </div>
-    );
-  }
+function SCTile({ slot, topic, iconPx, onClick }: SCTileProps) {
+  if (!topic) return <EmptyTile slot={slot} onClick={onClick} />;
 
   // member_count === 0 -> "allocated but memberless" (dashed/thinner icon,
   // dimmed tile via the -allocated-empty CSS rule) -- canvas parity, see
@@ -371,14 +505,14 @@ function SCTile({ slot, topic, onClick }: SCTileProps) {
     // No title= here (topics.py:714-718) -- a real hover tooltip covers
     // allocated tiles in Task 8-C3; a native title would double-render
     // alongside it.
-    <div className={className} data-sc-tile-slot={slot} onClick={onClick}>
+    <button type="button" className={className} data-sc-tile-slot={slot} aria-label={topic.keyword} onClick={onClick}>
       <TopicIcon
         iconId={topic.icon_id ?? "bookmark"}
-        size={34}
+        size={iconPx}
         stroke="#ffffff"
         strokeWidth={isMemberless ? 1.5 : 2.0}
         strokeDasharray={isMemberless ? "6,4" : undefined}
       />
-    </div>
+    </button>
   );
 }

@@ -150,6 +150,7 @@ function loadFixtures(fixturesDir, now = new Date()) {
     capturedAssetsDir,
     clusteringStatus: readJson("clustering-status.json"),
     topics: readJson("topics.json"),
+    suggestions: readJson("suggestions.json"),
     exclusions: readJson("exclusions.json"),
     internals: readJson("internals.json"),
     me: readJson("me.json"),
@@ -179,6 +180,24 @@ function loadFixtures(fixturesDir, now = new Date()) {
   };
 }
 
+// Icons the stub gives accepted suggestions (ids from lib/icon-data.json), by
+// synthetic group id; any other id falls back to "atom".
+const ACCEPT_ICONS = { 501: "atom", 502: "coffee", 503: "mountain", 504: "scroll", 505: "palette", 506: "microscope" };
+
+// Keeps the CLUSTERING card's "· N suggested" stats part in step with the
+// live suggestion list (the real status line drops the part at zero).
+function syncSuggestedCount(state) {
+  const n = state.suggestions.length;
+  const line = state.clusteringStatus.stats_line1;
+  state.clusteringStatus.stats_line1 = /\d+ suggested/.test(line)
+    ? n > 0
+      ? line.replace(/\d+ suggested/, `${n} suggested`)
+      : line.replace(/ · \d+ suggested/, "")
+    : n > 0
+      ? `${line} · ${n} suggested`
+      : line;
+}
+
 // ---------------------------------------------------------------------------
 // Mutable state (Task 6) -- seeded fresh from the just-loaded fixtures on
 // every `startServer` call (loadFixtures itself re-reads the JSON files from
@@ -189,12 +208,19 @@ function loadFixtures(fixturesDir, now = new Date()) {
 // ---------------------------------------------------------------------------
 
 function createMutableState(fixtures) {
-  return {
+  const state = {
     topics: fixtures.topics.topics.map((t) => ({ ...t })),
+    suggestions: fixtures.suggestions.suggestions.map((g) => ({ ...g })),
+    // keyword -> member rows of a topic created by accepting a suggestion
+    acceptedMembers: new Map(),
     exclusions: fixtures.exclusions.exclusions.map((e) => ({ ...e })),
     preferences: { ...fixtures.preferences },
     clusteringStatus: { ...fixtures.clusteringStatus },
   };
+  // The captured status line carries a recorded "N suggested"; the widget offers what
+  // suggestions.json holds, so the line follows that count from the start.
+  syncSuggestedCount(state);
+  return state;
 }
 
 // ---------------------------------------------------------------------------
@@ -705,6 +731,60 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
       handler: (req, res) => sendJson(res, 200, { topics: state.topics }),
     },
 
+    // GET /api/topics/suggestions -> {suggestions, splits}. Synthetic groups no
+    // keyword claims (demo/fixtures/suggestions.json); accept/dismiss below
+    // remove entries, and the "N suggested" part of the CLUSTERING card's
+    // stats line follows the live count (syncSuggestedCount). `splits` is
+    // always empty -- the widget ignores it.
+    {
+      method: "GET",
+      pattern: /^\/api\/topics\/suggestions$/,
+      handler: (req, res) => sendJson(res, 200, { suggestions: state.suggestions, splits: [] }),
+    },
+
+    // POST /api/topics/suggestions/{id}/accept {keyword?} -> {topic, topics,
+    // relabeled_clusters}. Like the real endpoint the keyword defaults to the
+    // group's label; the accepted group leaves the suggestion list and becomes
+    // a topic (icon from ACCEPT_ICONS, cluster_count = the group's member_count),
+    // and its member clusters are served by the members route below.
+    {
+      method: "POST",
+      pattern: /^\/api\/topics\/suggestions\/(\d+)\/accept$/,
+      handler: gated(async (req, res, m) => {
+        const group = state.suggestions.find((g) => g.id === Number(m[1]));
+        if (!group) return sendJson(res, 404, { detail: `Suggested group ${m[1]} not found` });
+        const body = await readJsonBody(req);
+        const keyword = (typeof body.keyword === "string" && body.keyword.trim()) || group.label;
+        if (!keyword) return sendJson(res, 400, { detail: "Keyword must be non-empty" });
+        if (!state.topics.some((t) => t.keyword.toLowerCase() === keyword.toLowerCase())) {
+          // The real accept picks an icon (LLM); the stub picks a fixed one per group.
+          state.topics.push({ keyword, icon_id: ACCEPT_ICONS[group.id] ?? "atom", cluster_count: group.member_count });
+        }
+        // Page counts per member cluster come from the recorded clusters summary.
+        const sizeByName = new Map(fixtures.clusters.summary.clusters.map((c) => [c.name, c.size]));
+        state.acceptedMembers.set(
+          keyword,
+          group.cluster_names.map((name) => ({ cluster_name: name, page_count: sizeByName.get(name) ?? 1, mean_membership_probability: 1 }))
+        );
+        state.suggestions = state.suggestions.filter((g) => g.id !== group.id);
+        syncSuggestedCount(state);
+        sendJson(res, 200, { topic: { keyword }, topics: state.topics, relabeled_clusters: group.member_count });
+      }),
+    },
+
+    // POST /api/topics/suggestions/{id}/dismiss -> {dismissed, dismissed_topics}.
+    {
+      method: "POST",
+      pattern: /^\/api\/topics\/suggestions\/(\d+)\/dismiss$/,
+      handler: gated((req, res, m) => {
+        const group = state.suggestions.find((g) => g.id === Number(m[1]));
+        if (!group) return sendJson(res, 404, { detail: `Suggested group ${m[1]} not found` });
+        state.suggestions = state.suggestions.filter((g) => g.id !== group.id);
+        syncSuggestedCount(state);
+        sendJson(res, 200, { dismissed: group.label, dismissed_topics: [{ label: group.label, dismissed_at: getNow().toISOString() }] });
+      }),
+    },
+
     // POST /api/topics {keyword} -> {topic, topics} (only `topics` is
     // consumed downstream; `topic` is returned per contract regardless).
     // New topics get icon_id null and a plausible (0) cluster_count.
@@ -809,7 +889,14 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         const keyword = decodeURIComponent(m[1]);
         const body = await readJsonBody(req);
         const topic = state.topics.find((t) => t.keyword === keyword);
-        if (topic && typeof body.keyword === "string") topic.keyword = body.keyword;
+        if (topic && typeof body.keyword === "string") {
+          topic.keyword = body.keyword;
+          const accepted = state.acceptedMembers.get(keyword);
+          if (accepted) {
+            state.acceptedMembers.delete(keyword);
+            state.acceptedMembers.set(body.keyword, accepted);
+          }
+        }
         sendJson(res, 200, { topics: state.topics });
       }),
     },
@@ -835,7 +922,8 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
     // fixture file is still sitting on disk (renaming/deleting never
     // touches/removes those files). Only once the keyword is confirmed live
     // does fixture-file presence decide the body: the original 4 topics'
-    // files serve verbatim; anything else current (added at runtime via
+    // files serve verbatim; a topic made by accepting a suggestion serves that
+    // suggestion's clusters; anything else current (added at runtime via
     // POST, or a topic's NEW post-rename keyword) gets {members: []}.
     {
       method: "GET",
@@ -846,6 +934,8 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         const limit = url.searchParams.get("limit") === "5" ? 5 : 50;
         const file = path.join(fixtures.membersDir, `${encodeURIComponent(keyword)}-${limit}.json`);
         if (existsSync(file)) return sendJson(res, 200, JSON.parse(readFileSync(file, "utf8")));
+        const accepted = state.acceptedMembers.get(keyword);
+        if (accepted) return sendJson(res, 200, { members: accepted.slice(0, limit) });
         sendJson(res, 200, { members: [] });
       },
     },

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HeaderCards from "./HeaderCards";
@@ -8,7 +8,7 @@ import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as apiModule from "@/lib/api";
 import * as SessionProviderModule from "./SessionProvider";
 import type { SessionRole } from "./SessionProvider";
-import type { ClusteringStatus, GraphPayload, ReclusterResult, TopicInterest } from "@/lib/types";
+import type { ClusteringStatus, GraphPayload, ReclusterResult, TopicInterest, TopicSuggestion } from "@/lib/types";
 
 // Ports app.py's _build_graph_widgets (Dash source of truth) into a
 // JSX-parity suite: CLUSTERING / DATE RANGE / SUPERCLUSTERS cards. All
@@ -38,6 +38,15 @@ function makeTopic(overrides: Partial<TopicInterest> & { keyword: string }): Top
   return { icon_id: null, cluster_count: 0, ...overrides };
 }
 
+function makeSuggestion(overrides: Partial<TopicSuggestion> & { id: number; label: string }): TopicSuggestion {
+  return {
+    source: "suggested", topic: null, topic_similarity: null, interest_tier: "core",
+    evidence: { n_weeks: 6, span_days: 120 }, member_count: 3, page_count: 20,
+    cluster_ids: [], cluster_names: ["One", "Two", "Three"], split_proposal: null, cluster_slugs: [],
+    ...overrides,
+  };
+}
+
 function makeReclusterResult(overrides: Partial<ReclusterResult> = {}): ReclusterResult {
   return { cluster_count: 5, noise_count: 1, naming_cost: 0.01, elapsed_seconds: 25, ...overrides };
 }
@@ -48,6 +57,7 @@ function mockDefaults() {
   vi.spyOn(apiModule, "fetchGraph").mockResolvedValue(EMPTY_GRAPH);
   vi.spyOn(apiModule, "fetchClusteringStatus").mockResolvedValue(makeStatus());
   vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([]);
+  vi.spyOn(apiModule, "fetchTopicSuggestions").mockResolvedValue([]);
 }
 
 // vi.advanceTimersByTimeAsync alone leaves the setTimeout callback's
@@ -387,7 +397,7 @@ describe("HeaderCards", () => {
 
   // ── SUPERCLUSTERS card ───────────────────────────────────────────────
 
-  it("renders the N/12 ALLOCATED title from topics.length", async () => {
+  it("renders the N/24 ALLOCATED title from topics.length", async () => {
     mockDefaults();
     vi.spyOn(apiModule, "fetchTopics").mockResolvedValue([
       makeTopic({ keyword: "a" }),
@@ -396,34 +406,34 @@ describe("HeaderCards", () => {
     ]);
     renderHeaderCards();
 
-    const title = await screen.findByText("SUPERCLUSTERS (3/12 ALLOCATED)");
+    const title = await screen.findByText("SUPERCLUSTERS (3/24 ALLOCATED)");
     expect(title).toHaveAttribute("id", "sc-card-title");
     expect(title.className).toBe("hbar-card-title");
   });
 
   it("renders the overflow title + class when topics.length exceeds MAX_SUPERCLUSTERS", async () => {
     mockDefaults();
-    const overflowTopics = Array.from({ length: 13 }, (_, i) => makeTopic({ keyword: `t${i}` }));
+    const overflowTopics = Array.from({ length: 25 }, (_, i) => makeTopic({ keyword: `t${i}` }));
     vi.spyOn(apiModule, "fetchTopics").mockResolvedValue(overflowTopics);
     renderHeaderCards();
 
-    const title = await screen.findByText("SUPERCLUSTERS OVERFLOW (13/12)");
+    const title = await screen.findByText("SUPERCLUSTERS OVERFLOW (25/24)");
     expect(title.className).toBe("hbar-card-title hbar-sc-title-overflow");
-    // Still exactly 12 rendered tile slots regardless of overflow.
+    // Still exactly 24 rendered tile slots regardless of overflow.
     await waitFor(() =>
-      expect(document.querySelectorAll("[data-sc-tile-slot]")).toHaveLength(12)
+      expect(document.querySelectorAll("[data-sc-tile-slot]")).toHaveLength(24)
     );
   });
 
-  it("always renders exactly 12 tile slots with data-sc-tile-slot 0..11", async () => {
+  it("always renders exactly 24 tile slots with data-sc-tile-slot 0..23", async () => {
     mockDefaults();
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (0/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (0/24 ALLOCATED)");
 
     const slots = Array.from(document.querySelectorAll("[data-sc-tile-slot]")).map((el) =>
       el.getAttribute("data-sc-tile-slot")
     );
-    expect(slots).toEqual(Array.from({ length: 12 }, (_, i) => String(i)));
+    expect(slots).toEqual(Array.from({ length: 24 }, (_, i) => String(i)));
   });
 
   it("allocated tile (cluster_count > 0): allocated class, bold icon (strokeWidth 2, no dasharray), no title", async () => {
@@ -432,7 +442,7 @@ describe("HeaderCards", () => {
       makeTopic({ keyword: "cooking", icon_id: "notebook", cluster_count: 3 }),
     ]);
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (1/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (1/24 ALLOCATED)");
 
     const tile = document.querySelector('[data-sc-tile-slot="0"]') as HTMLElement;
     expect(tile.className).toBe("hbar-sc-tile hbar-sc-tile-allocated");
@@ -450,7 +460,7 @@ describe("HeaderCards", () => {
       makeTopic({ keyword: "empty-topic", icon_id: "rocket", cluster_count: 0 }),
     ]);
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (1/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (1/24 ALLOCATED)");
 
     const tile = document.querySelector('[data-sc-tile-slot="0"]') as HTMLElement;
     expect(tile.className).toBe("hbar-sc-tile hbar-sc-tile-allocated hbar-sc-tile-allocated-empty");
@@ -460,26 +470,31 @@ describe("HeaderCards", () => {
     expect(path.getAttribute("stroke-dasharray")).toBe("6,4");
   });
 
-  it("empty slot: empty class, add-a-supercluster title, plus-glyph svg", async () => {
+  it("empty slot: empty class, add-a-supercluster tooltip (no native title), plus-glyph svg", async () => {
     mockDefaults();
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (0/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (0/24 ALLOCATED)");
 
     const tile = document.querySelector('[data-sc-tile-slot="0"]') as HTMLElement;
     expect(tile.className).toBe("hbar-sc-tile hbar-sc-tile-empty");
-    expect(tile).toHaveAttribute("title", "Add a supercluster (slot 1)");
+    expect(tile).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(tile, { clientX: 20, clientY: 20 });
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Add a supercluster (slot 1)");
+    fireEvent.mouseLeave(tile);
+    expect(screen.queryByRole("tooltip")).toBeNull();
     const svg = tile.querySelector("svg.hbar-sc-plus");
     expect(svg).toBeInTheDocument();
     expect(svg?.querySelectorAll("line")).toHaveLength(2);
 
     const tile6 = document.querySelector('[data-sc-tile-slot="5"]') as HTMLElement;
-    expect(tile6).toHaveAttribute("title", "Add a supercluster (slot 6)");
+    expect(tile6).not.toHaveAttribute("title");
+    expect(tile6).toHaveAccessibleName("Add a supercluster (slot 6)");
   });
 
   it("tile click toggles the open slot: same slot closes, a different slot switches", async () => {
     mockDefaults();
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (0/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (0/24 ALLOCATED)");
 
     const body = document.getElementById("sc-card-body") as HTMLElement;
     const tile0 = document.querySelector('[data-sc-tile-slot="0"]') as HTMLElement;
@@ -503,7 +518,7 @@ describe("HeaderCards", () => {
   it("empty-slot tiles also participate in the same open/close click semantics", async () => {
     mockDefaults();
     renderHeaderCards();
-    await screen.findByText("SUPERCLUSTERS (0/12 ALLOCATED)");
+    await screen.findByText("SUPERCLUSTERS (0/24 ALLOCATED)");
 
     const body = document.getElementById("sc-card-body") as HTMLElement;
     const emptyTile = document.querySelector('[data-sc-tile-slot="3"]') as HTMLElement;
@@ -526,5 +541,317 @@ describe("HeaderCards", () => {
     await userEvent.click(screen.getByText("bump-graph-version"));
 
     await waitFor(() => expect(topicsSpy).toHaveBeenCalledTimes(2));
+  });
+
+  // ── Suggested superclusters ──────────────────────────────────────────
+
+  describe("suggestions", () => {
+    const SUGGS = [
+      makeSuggestion({ id: 11, label: "Literature", member_count: 9, page_count: 82 }),
+      makeSuggestion({ id: 12, label: "Japan", member_count: 2, page_count: 19 }),
+      makeSuggestion({ id: 13, label: "Games", member_count: 3, page_count: 31 }),
+      makeSuggestion({ id: 14, label: "Food", member_count: 2, page_count: 17 }),
+    ];
+
+    function mockWith(topics: TopicInterest[], suggestions: TopicSuggestion[]) {
+      mockDefaults();
+      vi.spyOn(apiModule, "fetchTopics").mockResolvedValue(topics);
+      vi.spyOn(apiModule, "fetchTopicSuggestions").mockResolvedValue(suggestions);
+    }
+    const topicsN = (n: number) => Array.from({ length: n }, (_, i) => makeTopic({ keyword: `t${i}`, icon_id: "rocket", cluster_count: 2 }));
+
+    it("title counts every suggestion, not just the ghost tiles", async () => {
+      mockWith(topicsN(9), SUGGS);
+      renderHeaderCards();
+      expect(await screen.findByText("SUPERCLUSTERS (9/24 ALLOCATED · 4 SUGGESTED)")).toBeInTheDocument();
+    });
+
+    it("no SUGGESTED part when there are none", async () => {
+      mockWith(topicsN(2), []);
+      renderHeaderCards();
+      expect(await screen.findByText("SUPERCLUSTERS (2/24 ALLOCATED)")).toBeInTheDocument();
+    });
+
+    it("the overflow title rule is unchanged by suggestions", async () => {
+      mockWith(topicsN(25), SUGGS);
+      renderHeaderCards();
+      expect(await screen.findByText("SUPERCLUSTERS OVERFLOW (25/24)")).toBeInTheDocument();
+    });
+
+    it("shows up to 3 ghost tiles right after the allocated tiles, the rest stay plain plus tiles", async () => {
+      mockWith(topicsN(2), SUGGS);
+      renderHeaderCards();
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+
+      const slotsOf = (cls: string) =>
+        Array.from(document.querySelectorAll(cls)).map((el) => el.getAttribute("data-sc-tile-slot"));
+      expect(slotsOf(".hbar-sc-tile-allocated")).toEqual(["0", "1"]);
+      expect(slotsOf(".hbar-sc-tile-ghost")).toEqual(["2", "3", "4"]);
+      expect(document.querySelectorAll(".hbar-sc-tile-empty")).toHaveLength(24 - 5);
+
+      const ghost = document.querySelector(".hbar-sc-tile-ghost") as HTMLElement;
+      expect(ghost).not.toHaveAttribute("title");
+      expect(ghost.querySelector(".hbar-sc-ghost-letter")).toHaveTextContent("L");
+      expect(ghost.querySelector(".hbar-sc-ghost-spark")).toBeInTheDocument();
+      expect(ghost.querySelector("svg path[stroke]")).toBeNull(); // no icon
+    });
+
+    it("fewer suggestions than 3: only that many ghost tiles", async () => {
+      mockWith(topicsN(2), SUGGS.slice(0, 1));
+      renderHeaderCards();
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(1));
+    });
+
+    it("every slot allocated: no ghost tiles, title still counts them", async () => {
+      mockWith(topicsN(24), SUGGS);
+      renderHeaderCards();
+      expect(await screen.findByText("SUPERCLUSTERS (24/24 ALLOCATED · 4 SUGGESTED)")).toBeInTheDocument();
+      expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(0);
+    });
+
+    it.each([
+      [21, 2],
+      [22, 1],
+      [23, 0],
+    ])("with %i allocated the last free slot stays a plain plus tile: %i ghost tile(s)", async (allocated, ghosts) => {
+      mockWith(topicsN(allocated), SUGGS);
+      renderHeaderCards();
+      await screen.findByText(new RegExp(`^SUPERCLUSTERS \\(${allocated}/24 ALLOCATED`));
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(ghosts));
+      const empties = document.querySelectorAll(".hbar-sc-tile-empty");
+      expect(empties).toHaveLength(24 - allocated - ghosts);
+      expect(empties.length).toBeGreaterThanOrEqual(1);
+      // the plus tile is the LAST slot
+      expect(empties[empties.length - 1]).toHaveAttribute("data-sc-tile-slot", "23");
+    });
+
+    it("lays the grid out from scLayout: two rows of 12 at a 24 allowance", async () => {
+      mockWith(topicsN(1), []);
+      renderHeaderCards();
+      await screen.findByText("SUPERCLUSTERS (1/24 ALLOCATED)");
+      const body = document.getElementById("sc-card-body") as HTMLElement;
+      expect(body.style.getPropertyValue("--sc-cols")).toBe("12");
+      expect(body.style.getPropertyValue("--sc-tile")).toBe("23px");
+    });
+
+    it("all three tile kinds are keyboard-reachable labelled buttons that Enter and Space activate", async () => {
+      const portal = document.createElement("div");
+      portal.id = "sc-popovers-portal";
+      document.body.appendChild(portal);
+      try {
+        mockWith(topicsN(1), SUGGS);
+        vi.spyOn(apiModule, "fetchTopicMembers").mockResolvedValue([]);
+        vi.spyOn(apiModule, "fetchMemberExclusions").mockResolvedValue([]);
+        renderHeaderCards();
+        await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+        const body = document.getElementById("sc-card-body") as HTMLElement;
+
+        const allocated = document.querySelector(".hbar-sc-tile-allocated") as HTMLElement;
+        const ghost = document.querySelector(".hbar-sc-tile-ghost") as HTMLElement;
+        const empty = document.querySelector(".hbar-sc-tile-empty") as HTMLElement;
+        for (const tile of [allocated, ghost, empty]) {
+          expect(tile.tagName).toBe("BUTTON");
+          expect(tile).toHaveAttribute("type", "button");
+          expect(tile).toHaveAccessibleName();
+        }
+        expect(allocated).toHaveAccessibleName("t0");
+        expect(ghost).toHaveAccessibleName("Suggested supercluster: Literature");
+
+        ghost.focus();
+        expect(ghost).toHaveFocus();
+        await userEvent.keyboard("{Enter}");
+        expect(body).toHaveAttribute("data-open-slot", "1");
+        await userEvent.keyboard("{Escape}");
+        await waitFor(() => expect(body).toHaveAttribute("data-open-slot", ""));
+
+        empty.focus();
+        await userEvent.keyboard(" ");
+        expect(body).toHaveAttribute("data-open-slot", String(empty.getAttribute("data-sc-tile-slot")));
+      } finally {
+        portal.remove();
+      }
+    });
+
+    it("an older suggestions response cannot overwrite a newer one", async () => {
+      mockDefaults();
+      vi.spyOn(apiModule, "fetchTopics").mockResolvedValue(topicsN(1));
+      let resolveFirst: (v: TopicSuggestion[]) => void = () => {};
+      const sugSpy = vi
+        .spyOn(apiModule, "fetchTopicSuggestions")
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+        .mockResolvedValue([SUGGS[1]]);
+      renderHeaderCards(<GraphVersionProbe />);
+      await waitFor(() => expect(sugSpy).toHaveBeenCalledTimes(1));
+      await userEvent.click(screen.getByText("bump-graph-version"));
+      await screen.findByText("SUPERCLUSTERS (1/24 ALLOCATED · 1 SUGGESTED)");
+
+      await act(async () => resolveFirst(SUGGS)); // the stale 4-suggestion answer arrives last
+      expect(screen.getByText("SUPERCLUSTERS (1/24 ALLOCATED · 1 SUGGESTED)")).toBeInTheDocument();
+    });
+
+    it("an older topics response cannot overwrite a newer one", async () => {
+      mockDefaults();
+      let resolveFirst: (v: TopicInterest[]) => void = () => {};
+      const topicsSpy = vi
+        .spyOn(apiModule, "fetchTopics")
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+        .mockResolvedValue(topicsN(3));
+      renderHeaderCards(<GraphVersionProbe />);
+      await waitFor(() => expect(topicsSpy).toHaveBeenCalledTimes(1));
+      await userEvent.click(screen.getByText("bump-graph-version"));
+      await screen.findByText("SUPERCLUSTERS (3/24 ALLOCATED)");
+
+      await act(async () => resolveFirst(topicsN(1)));
+      expect(screen.getByText("SUPERCLUSTERS (3/24 ALLOCATED)")).toBeInTheDocument();
+    });
+
+    describe("driven through the popover", () => {
+      let portal: HTMLDivElement;
+      beforeEach(() => {
+        portal = document.createElement("div");
+        portal.id = "sc-popovers-portal";
+        document.body.appendChild(portal);
+        vi.spyOn(apiModule, "fetchTopicMembers").mockResolvedValue([]);
+        vi.spyOn(apiModule, "fetchMemberExclusions").mockResolvedValue([]);
+      });
+      afterEach(() => portal.remove());
+
+      it("Add on a ghost tile: topics, suggestions and status refetch; the title and ghost tiles follow", async () => {
+        mockDefaults();
+        const topicsSpy = vi.spyOn(apiModule, "fetchTopics").mockResolvedValueOnce(topicsN(2)).mockResolvedValue(topicsN(3));
+        const sugSpy = vi.spyOn(apiModule, "fetchTopicSuggestions").mockResolvedValueOnce(SUGGS).mockResolvedValue(SUGGS.slice(1));
+        const statusSpy = vi.spyOn(apiModule, "fetchClusteringStatus").mockResolvedValue(makeStatus());
+        const acceptSpy = vi.spyOn(apiModule, "acceptTopicSuggestion").mockResolvedValue(topicsN(3));
+        renderHeaderCards();
+        await screen.findByText("SUPERCLUSTERS (2/24 ALLOCATED · 4 SUGGESTED)");
+        const statusCalls = statusSpy.mock.calls.length;
+
+        await userEvent.click(document.querySelector(".hbar-sc-tile-ghost") as HTMLElement);
+        await userEvent.click(screen.getByRole("button", { name: "Add" }));
+
+        await screen.findByText("SUPERCLUSTERS (3/24 ALLOCATED · 3 SUGGESTED)");
+        expect(acceptSpy).toHaveBeenCalledWith(11, undefined);
+        expect(topicsSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(sugSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(statusSpy.mock.calls.length).toBeGreaterThan(statusCalls); // via the graph refresh
+        expect(document.getElementById("sc-card-body")).toHaveAttribute("data-open-slot", "");
+        expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3);
+      });
+
+      it("Not interested on a ghost tile: suggestions and status refetch (no topics refetch), the count drops", async () => {
+        mockDefaults();
+        const topicsSpy = vi.spyOn(apiModule, "fetchTopics").mockResolvedValue(topicsN(2));
+        vi.spyOn(apiModule, "fetchTopicSuggestions").mockResolvedValueOnce(SUGGS).mockResolvedValue(SUGGS.slice(1));
+        const statusSpy = vi.spyOn(apiModule, "fetchClusteringStatus").mockResolvedValue(makeStatus());
+        const dismissSpy = vi.spyOn(apiModule, "dismissTopicSuggestion").mockResolvedValue(undefined);
+        renderHeaderCards();
+        await screen.findByText("SUPERCLUSTERS (2/24 ALLOCATED · 4 SUGGESTED)");
+        const topicsCalls = topicsSpy.mock.calls.length;
+        const statusCalls = statusSpy.mock.calls.length;
+
+        await userEvent.click(document.querySelector(".hbar-sc-tile-ghost") as HTMLElement);
+        await userEvent.click(screen.getByRole("button", { name: "Not interested" }));
+
+        await screen.findByText("SUPERCLUSTERS (2/24 ALLOCATED · 3 SUGGESTED)");
+        expect(dismissSpy).toHaveBeenCalledWith(11);
+        expect(statusSpy.mock.calls.length).toBe(statusCalls + 1);
+        expect(topicsSpy.mock.calls.length).toBe(topicsCalls);
+      });
+
+      it("plain demo login: a plus tile with no suggestions opens as before (add form rendered; the plain-demo CSS hides it)", async () => {
+        mockSession({ role: "demo", actingAsDemo: false });
+        mockWith(topicsN(1), []);
+        renderHeaderCards();
+        await screen.findByText("SUPERCLUSTERS (1/24 ALLOCATED)");
+
+        await userEvent.click(document.querySelector(".hbar-sc-tile-empty") as HTMLElement);
+        expect(screen.getByText("ADD SUPERCLUSTER")).toBeInTheDocument();
+        expect(document.querySelector(".hbar-sc-popover")).not.toHaveAttribute("data-sc-demo-readable");
+      });
+
+      it("plain demo login with suggestions: the plus popover is just the SUGGESTED list, readable", async () => {
+        mockSession({ role: "demo", actingAsDemo: false });
+        mockWith(topicsN(1), SUGGS);
+        renderHeaderCards();
+        await screen.findByText(/4 SUGGESTED/);
+
+        await userEvent.click(document.querySelector(".hbar-sc-tile-empty") as HTMLElement);
+        expect(screen.queryByText("ADD SUPERCLUSTER")).toBeNull();
+        expect(document.querySelectorAll(".hbar-sc-sugg-row")).toHaveLength(4);
+        expect(document.querySelector(".hbar-sc-popover")).toHaveAttribute("data-sc-demo-readable");
+      });
+
+      it("admin viewing as demo keeps the add form (plus the list)", async () => {
+        mockSession({ role: "demo", actingAsDemo: true });
+        mockWith(topicsN(1), SUGGS);
+        renderHeaderCards();
+        await screen.findByText(/4 SUGGESTED/);
+
+        await userEvent.click(document.querySelector(".hbar-sc-tile-empty") as HTMLElement);
+        expect(screen.getByText("ADD SUPERCLUSTER")).toBeInTheDocument();
+        expect(document.querySelectorAll(".hbar-sc-sugg-row")).toHaveLength(4);
+      });
+    });
+
+    it("ghost hover shows the chart-kit tooltip: name · suggested, clusters · pages", async () => {
+      mockWith(topicsN(2), SUGGS);
+      renderHeaderCards();
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+
+      const ghost = document.querySelector(".hbar-sc-tile-ghost") as HTMLElement;
+      fireEvent.mouseEnter(ghost, { clientX: 30, clientY: 30 });
+      const tip = screen.getByRole("tooltip");
+      expect(tip).toHaveTextContent("Literature · suggested");
+      expect(tip).toHaveTextContent("9 clusters · 82 pages");
+      fireEvent.mouseLeave(ghost);
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    });
+
+    it("clicking a ghost tile opens the popover on that suggestion", async () => {
+      const portal = document.createElement("div");
+      portal.id = "sc-popovers-portal";
+      document.body.appendChild(portal);
+      try {
+        mockWith(topicsN(2), SUGGS);
+        vi.spyOn(apiModule, "fetchTopicMembers").mockResolvedValue([]);
+        vi.spyOn(apiModule, "fetchMemberExclusions").mockResolvedValue([]);
+        renderHeaderCards();
+        await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+
+        await userEvent.click(document.querySelectorAll(".hbar-sc-tile-ghost")[1] as HTMLElement);
+        expect(document.getElementById("sc-card-body")).toHaveAttribute("data-open-slot", "3");
+        expect(screen.getByText("SUGGESTED SUPERCLUSTER")).toBeInTheDocument();
+        expect(screen.getByLabelText("Supercluster name")).toHaveValue("Japan");
+      } finally {
+        portal.remove();
+      }
+    });
+
+    it("refetches suggestions on mount and whenever graphVersion bumps", async () => {
+      mockDefaults();
+      const sugSpy = vi.spyOn(apiModule, "fetchTopicSuggestions").mockResolvedValue([]);
+      renderHeaderCards(<GraphVersionProbe />);
+      await waitFor(() => expect(sugSpy).toHaveBeenCalledTimes(1));
+      await userEvent.click(screen.getByText("bump-graph-version"));
+      await waitFor(() => expect(sugSpy).toHaveBeenCalledTimes(2));
+    });
+
+    it("a failed suggestions read keeps the ghost tiles already shown", async () => {
+      mockWith(topicsN(2), SUGGS);
+      const sugSpy = vi.spyOn(apiModule, "fetchTopicSuggestions");
+      renderHeaderCards(<GraphVersionProbe />);
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+      sugSpy.mockRejectedValue(new Error("boom"));
+      await userEvent.click(screen.getByText("bump-graph-version"));
+      await waitFor(() => expect(sugSpy).toHaveBeenCalledTimes(2));
+      expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3);
+    });
+
+    it("demo identity still sees the ghost tiles", async () => {
+      mockSession({ role: "demo" });
+      mockWith(topicsN(2), SUGGS);
+      renderHeaderCards();
+      await waitFor(() => expect(document.querySelectorAll(".hbar-sc-tile-ghost")).toHaveLength(3));
+    });
   });
 });

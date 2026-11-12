@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fetchTopicMembers } from "@/lib/api";
-import { computeAnchoredPosition, getHeaderGraphControls, getPortalElement, tileForSlot } from "@/lib/scPosition";
+import { anchorRectForTile, computeAnchoredPosition, getHeaderGraphControls, getPortalElement, tileForSlot } from "@/lib/scPosition";
 import type { TopicInterest, TopicMember } from "@/lib/types";
 
 // Task 8-C3: the SUPERCLUSTERS hover tooltip. Ports topics.py's
@@ -193,7 +193,7 @@ export function ScTooltip({ slot, topic, members }: ScTooltipProps) {
       const tile = tileForSlot(slot);
       const el = ref.current;
       if (!tile || !el) return;
-      const { top, left } = computeAnchoredPosition(tile.getBoundingClientRect(), el.getBoundingClientRect().width, {
+      const { top, left } = computeAnchoredPosition(anchorRectForTile(tile), el.getBoundingClientRect().width, {
         clampLeftMin: true,
       });
       el.style.top = `${top}px`;

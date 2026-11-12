@@ -17,6 +17,7 @@ import type {
   SortDir,
   TimeWindow,
   TopicInterest,
+  TopicSuggestion,
   TopicMember,
 } from "./types";
 import { isPreAuthPath } from "./pre-auth-paths";
@@ -356,4 +357,32 @@ export async function removeMemberExclusion(
   if (!res.ok) throw new Error(`removeMemberExclusion failed: ${res.status} ${res.statusText}`);
   const body = (await res.json()) as { exclusions: MemberExclusion[] };
   return body.exclusions;
+}
+
+// Suggested superclusters (the SUPERCLUSTERS widget's ghost tiles + list).
+// GET returns the backend's order (best first); `splits` is ignored.
+export async function fetchTopicSuggestions(): Promise<TopicSuggestion[]> {
+  const res = await apiFetch("/api/topics/suggestions");
+  if (!res.ok) throw new Error(`fetchTopicSuggestions failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { suggestions: TopicSuggestion[] };
+  return body.suggestions;
+}
+
+// Accept as a declared topic. `keyword` overrides the suggestion's label
+// (omitted when the owner left the name alone). Returns the full updated
+// topic list, like addTopic.
+export async function acceptTopicSuggestion(id: number, keyword?: string): Promise<TopicInterest[]> {
+  const res = await apiFetch(`/api/topics/suggestions/${id}/accept`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(keyword !== undefined ? { keyword } : {}),
+  });
+  if (!res.ok) throw new Error(`acceptTopicSuggestion failed: ${res.status} ${res.statusText}`);
+  const body = (await res.json()) as { topic: { keyword: string }; topics: TopicInterest[]; relabeled_clusters: number };
+  return body.topics;
+}
+
+export async function dismissTopicSuggestion(id: number): Promise<void> {
+  const res = await apiFetch(`/api/topics/suggestions/${id}/dismiss`, { method: "POST" });
+  if (!res.ok) throw new Error(`dismissTopicSuggestion failed: ${res.status} ${res.statusText}`);
 }

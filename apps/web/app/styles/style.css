@@ -993,33 +993,45 @@ a.page-link:hover {
 .hbar-sc-card { position: relative; }
 .hbar-sc-body {
     position: relative;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding-top: 2px;
-    /* 12 slots (2026-07-11): single row fits comfortably, but wrap
-       gracefully instead of overflowing the header on narrow windows.
-       Width math (2026-07-13 header-scaling pass, MEASURED not derived:
-       tiles are content-box with a 1px border all around, so each
-       renders 31+2 = 33px): 12 x 33 + 11 x 4px gap = 440px. The
-       22px-era 340px cap forced a clipped second row after the tile
-       bump -- 444px restores the single row with 4px slack. Wrap
-       remains only the degradation path; normal narrow-window handling
-       is the cards-row's horizontal scroll. */
-    flex-wrap: wrap;
-    max-width: 444px;
+    /* Grid set by HeaderCards from lib/superclusters.ts scLayout(): --sc-cols,
+       --sc-tile and --sc-gap (the fallbacks below are the 24-slot layout).
+       24 slots (2026-11-12) = two rows of 12 tiles inside the fixed 82px card
+       (the card must not grow, so neither may the header). Row-major grid, so
+       slots 0-11 fill the top row. Math, MEASURED against the 82px card: 64px
+       inner (82 - 2*8 padding - 2 border) - ~9px title - 4px gap leaves ~51px;
+       2 x 23px tiles + 3px gap = 49px. Width: 12 x 23 + 11 x 3 = 309px. At 12
+       slots or fewer scLayout returns the old single row of 33px tiles. */
+    --sc-cols: 12;
+    --sc-tile: 23px;
+    --sc-gap: 3px;
+    display: grid;
+    grid-template-columns: repeat(var(--sc-cols), var(--sc-tile));
+    grid-auto-rows: var(--sc-tile);
+    align-content: center;
+    gap: var(--sc-gap);
 }
 .hbar-sc-tile {
-    /* 22 -> 31 (2026-07-13 header-scaling pass, ~1.405x with the header). */
-    width: 31px;
-    height: 31px;
+    /* Sized by --sc-tile (see .hbar-sc-body); border-box so the 1px border is
+       inside it. A <button> (keyboard-reachable), so the UA button chrome is
+       reset here. */
+    width: var(--sc-tile);
+    height: var(--sc-tile);
+    box-sizing: border-box;
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    border-radius: 5px;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
-    flex: 0 0 auto;
+}
+.hbar-sc-tile:focus-visible {
+    outline: 2px solid var(--highlight, #7c5bff);
+    outline-offset: 1px;
 }
 .hbar-sc-tile-allocated {
     background: rgba(255, 255, 255, 0.1);
@@ -1062,6 +1074,32 @@ a.page-link:hover {
     line-height: 1;
     font-weight: 300;
     color: inherit;
+}
+/* Suggested supercluster in an empty slot (2026-11-12): dashed accent outline
+   on a faint accent tint, the suggestion's first letter dimmed where an icon
+   would sit, a small spark in the top-right corner. */
+.hbar-sc-tile-ghost {
+    background: color-mix(in srgb, var(--highlight, #7c5bff) 14%, transparent);
+    border: 1px dashed var(--highlight, #7c5bff);
+}
+.hbar-sc-tile-ghost:hover {
+    background: color-mix(in srgb, var(--highlight, #7c5bff) 26%, transparent);
+}
+.hbar-sc-ghost-letter {
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--on-primary);
+    opacity: 0.55;
+    user-select: none;
+}
+.hbar-sc-ghost-spark {
+    position: absolute;
+    top: -4px;
+    right: -3px;
+    color: var(--highlight, #7c5bff);
+    filter: brightness(1.35);
+    pointer-events: none;
 }
 .hbar-sc-title-overflow {
     color: #ef4444 !important;
@@ -1263,6 +1301,117 @@ a.page-link:hover {
     filter: brightness(1.1);
 }
 
+.hbar-sc-add-btn:disabled,
+.hbar-sc-add-btn[aria-disabled="true"],
+.hbar-sc-sugg-dismiss[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: none;
+}
+
+/* Suggested superclusters inside the popover (2026-11-12): the SUGGESTED list,
+   the suggestion state, the all-allocated footer and the action error. */
+.hbar-sc-sugg-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.hbar-sc-sugg-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 6px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.74rem;
+    text-align: left;
+    cursor: pointer;
+}
+.hbar-sc-sugg-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+.hbar-sc-sugg-row-name {
+    font-weight: 700;
+}
+.hbar-sc-sugg-row-meta {
+    font-size: 0.64rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    white-space: nowrap;
+}
+.hbar-sc-sugg-reason {
+    margin-top: 6px;
+    font-size: 0.66rem;
+    line-height: 1.35;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+}
+.hbar-sc-sugg-members .hbar-sc-member-name {
+    font-size: 0.7rem;
+}
+.hbar-sc-sugg-more {
+    padding: 2px 0;
+    font-size: 0.66rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+}
+.hbar-sc-sugg-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+.hbar-sc-sugg-dismiss {
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    background: transparent;
+    color: var(--text-muted, rgba(255, 255, 255, 0.7));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.hbar-sc-sugg-dismiss:hover:not([aria-disabled="true"]) {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.hbar-sc-sugg-footer,
+.hbar-sc-sugg-back {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 5px 0 0;
+    background: transparent;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted, rgba(255, 255, 255, 0.55));
+    font: inherit;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+.hbar-sc-sugg-back {
+    margin: 0 0 6px;
+    padding: 0;
+    border-top: none;
+}
+.hbar-sc-sugg-back + .hbar-sc-popover-title {
+    margin-top: 0;
+}
+.hbar-sc-sugg-footer:hover,
+.hbar-sc-sugg-back:hover {
+    color: var(--text);
+}
+.hbar-sc-error {
+    margin-top: 8px;
+    font-size: 0.66rem;
+    line-height: 1.3;
+    color: #ef4444;
+}
+
 /* Popover-local spinner (add-supercluster + delete-supercluster).
  *
  * The spinner overlays the right edge of the input box (not the gap
@@ -1448,12 +1597,15 @@ a.page-link:hover {
                                      today, hidden anyway for defense in
                                      depth since its callbacks still mutate
                                      preferences.
+   Exempt (2026-11-12): a popover marked [data-sc-demo-readable] -- the
+   suggestion views (one suggestion, the SUGGESTED list), which ScPopover
+   renders read-only for a demo identity (Add / Not interested greyed out).
    .hbar-sc-tooltip (hover-info, read-only) is intentionally NOT in this
    list -- it isn't a mutation control. #recluster-btn left this list on
    2026-10-04: every demo identity now sees it greyed out with a "disabled
    in demo view" tooltip (HeaderCards, [aria-disabled] rule above). ----- */
 body.plain-demo #suggested-topics-panel,
-body.plain-demo .hbar-sc-popover,
+body.plain-demo .hbar-sc-popover:not([data-sc-demo-readable]),
 body.plain-demo #icon-picker-grid,
 body.plain-demo #topic-panel {
     display: none !important;

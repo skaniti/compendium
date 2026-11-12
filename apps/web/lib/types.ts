@@ -244,6 +244,37 @@ export interface TopicInterest {
   cluster_count: number;
 }
 
+// GET /api/topics/suggestions -- {suggestions: TopicSuggestion[], splits}.
+// A suggestion is a discovered group no declared keyword claimed, already
+// ordered by the backend (interest tier, then pages); `splits` (split
+// proposals for declared topics) is not consumed by the widget. `evidence`
+// is the stored recurrence evidence (any key can be absent on old rows).
+export interface TopicSuggestionEvidence {
+  n_days?: number;
+  n_weeks?: number;
+  n_visits?: number;
+  span_days?: number;
+  dwell_median?: number;
+  dwell_p90?: number;
+  re_url_count?: number;
+}
+
+export interface TopicSuggestion {
+  id: number;
+  label: string;
+  source: string;
+  topic: string | null;
+  topic_similarity: number | null;
+  interest_tier: string;
+  evidence: TopicSuggestionEvidence | null;
+  member_count: number;
+  page_count: number;
+  cluster_ids: number[];
+  cluster_names: string[];
+  split_proposal: unknown;
+  cluster_slugs: string[];
+}
+
 // GET /api/topics/{keyword}/members?limit= -- {members: TopicMember[]},
 // ordered mean_membership_probability DESC NULLS LAST, page_count DESC,
 // name (cluster_repo.get_top_clusters_for_keyword).

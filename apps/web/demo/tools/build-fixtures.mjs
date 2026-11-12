@@ -52,6 +52,7 @@ import { execFileSync } from 'node:child_process';
 import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deriveSuggestions } from './suggestions-fixture.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -98,7 +99,7 @@ console.log('[build-fixtures] out:', OUT_DIR);
 
 const OUTPUT_ENTRIES = [
   'meta.json', 'ATTRIBUTION.md', 'me.json', 'preferences.json',
-  'topics.json', 'exclusions.json', 'clustering-status.json', 'internals.json',
+  'topics.json', 'exclusions.json', 'suggestions.json', 'clustering-status.json', 'internals.json',
   'graph.json', 'graph-window-7.json', 'graph-window-30.json',
   'graph-window-90.json', 'graph-window-365.json',
   'diary-day.json', 'diary-week.json', 'diary-month.json',
@@ -786,6 +787,11 @@ buildPipelineFixtures();
 buildOverviewFixtures();
 buildClustersFixtures();
 buildPromptsFixtures();
+
+// suggestions.json has no raw input: derived from the built graph fixture's own
+// suggested groups (see suggestions-fixture.mjs), so it must come after the
+// graph and clusters fixtures exist.
+writeJson('suggestions.json', deriveSuggestions(JSON.parse(readFileSync(path.join(OUT_DIR, 'graph.json'), 'utf8')), JSON.parse(readFileSync(path.join(OUT_DIR, 'clusters', 'summary.json'), 'utf8'))));
 
 // ---------------------------------------------------------------------------
 // Step 10: ATTRIBUTION.md

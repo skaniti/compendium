@@ -46,6 +46,15 @@ export function computeAnchoredPosition(
   return { top, left };
 }
 
+// Anchor rect for the popover and hover tooltip of a tile: the tile's own rect
+// but with its bottom pushed down to the card's bottom, so a panel hung from a
+// first-row tile does not cover the card's second tile row.
+export function anchorRectForTile(tile: Element): AnchorRect {
+  const t = tile.getBoundingClientRect();
+  const cardBottom = tile.closest(".hbar-sc-card")?.getBoundingClientRect().bottom ?? t.bottom;
+  return { top: t.top, left: t.left, bottom: Math.max(t.bottom, cardBottom) };
+}
+
 export function tileForSlot(slot: number): Element | null {
   return document.querySelector(`[data-sc-tile-slot="${slot}"]`);
 }

@@ -3,8 +3,10 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
+  acceptTopicSuggestion,
   addMemberExclusion,
   addTopic,
+  dismissTopicSuggestion,
   fetchMemberExclusions,
   fetchTopicMembers,
   removeMemberExclusion,
@@ -13,8 +15,10 @@ import {
   setTopicIcon,
 } from "@/lib/api";
 import { getIconsGrouped, TopicIcon } from "@/lib/icons";
-import { computeAnchoredPosition, getHeaderGraphControls, getPortalElement, tileForSlot } from "@/lib/scPosition";
-import type { MemberExclusion, TopicInterest, TopicMember } from "@/lib/types";
+import { anchorRectForTile, computeAnchoredPosition, getHeaderGraphControls, getPortalElement, tileForSlot } from "@/lib/scPosition";
+import { clustersPagesLabel, MAX_SUPERCLUSTERS, SUGGESTION_MEMBER_PREVIEW, suggestionReason } from "@/lib/superclusters";
+import type { MemberExclusion, TopicInterest, TopicMember, TopicSuggestion } from "@/lib/types";
+import { useHoverTooltip } from "./charts/HoverTooltip";
 
 // Task 8-C3: the SUPERCLUSTERS popover panel. Ports topics.py's
 // _render_sc_popover (~787-999) + _render_sc_icon_picker_flat (~735-784) +
@@ -33,9 +37,12 @@ import type { MemberExclusion, TopicInterest, TopicMember } from "@/lib/types";
 // "a popover is open" and "this component is mounted" are the same fact --
 // no separate open/closed branch to track.
 
-const SC_POPOVER_MEMBER_CAP = 50; // topics.py's SC_POPOVER_MEMBER_CAP (~636) -- mirrored literal,
-// same "no shared contract module yet" convention as HeaderCards.tsx's own
-// MAX_SUPERCLUSTERS mirror.
+const SC_POPOVER_MEMBER_CAP = 50; // topics.py's SC_POPOVER_MEMBER_CAP (~636) -- mirrored literal
+// (no shared contract module yet between the two repos).
+
+const EXCLUDE_HINT = "Doesn't belong here — excluded from this supercluster at every future recluster";
+const RESTORE_HINT = "Restore -- eligible for this supercluster again at the next recluster";
+const DEMO_LOCKED_LABEL = "Disabled in demo view"; // same wording as HeaderCards' recluster lock
 
 const NO_CLUSTERS_MESSAGE = "no clusters in the latest run"; // shared with ScTooltip.tsx's memberless message
 
@@ -50,9 +57,41 @@ export interface ScPopoverProps {
   onClose: () => void;
   refetchTopics: () => void;
   refreshGraph: () => Promise<void>;
+  // Suggested superclusters (best first), the one to open on (a ghost tile's
+  // suggestion; undefined = the slot's normal body), and the refetches the
+  // suggestion actions need. Accept refreshes graph + topics + suggestions
+  // like add does; dismiss only suggestions + the CLUSTERING card's count.
+  suggestions: TopicSuggestion[];
+  initialSuggestionId?: number;
+  refetchSuggestions: () => void;
+  refetchStatus: () => void;
+  // Any demo identity: suggestions stay readable, Add / Not interested are
+  // greyed out (HeaderCards' recluster-lock idiom).
+  demoLocked: boolean;
+  // A direct (plain) demo login only -- what `body.plain-demo` keys off. Its
+  // "+" popover shows just the SUGGESTED list instead of the add form; an
+  // admin viewing as demo keeps the add form.
+  plainDemo: boolean;
 }
 
-export default function ScPopover({ slot, topic, topics, onClose, refetchTopics, refreshGraph }: ScPopoverProps) {
+// What the popover body shows: the slot's own body (add form / allocated
+// controls), the full suggestion list, or one suggestion.
+type PopoverView = { kind: "default" } | { kind: "list" } | { kind: "suggestion"; id: number };
+
+export default function ScPopover({
+  slot,
+  topic,
+  topics,
+  onClose,
+  refetchTopics,
+  refreshGraph,
+  suggestions,
+  initialSuggestionId,
+  refetchSuggestions,
+  refetchStatus,
+  demoLocked,
+  plainDemo,
+}: ScPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +101,12 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
   // Dash's single sc-popover-spinner id per slot toggled by `running=` on
   // both sc_add_topic and sc_delete_topic (topics.py ~1296-1302, ~1417-1423).
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<PopoverView>(
+    initialSuggestionId !== undefined ? { kind: "suggestion", id: initialSuggestionId } : { kind: "default" }
+  );
+  // Visible failure of a suggestion action (the other popover actions swallow
+  // theirs; a failed Add / Not interested must not look like it worked).
+  const [error, setError] = useState<string | null>(null);
 
   // MEMBERS / EXCLUDED data for an allocated slot. null = not yet fetched
   // (renders nothing under MEMBERS rather than a false-empty flash);
@@ -102,7 +147,9 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
       const tile = tileForSlot(slot);
       const el = popoverRef.current;
       if (!tile || !el) return;
-      const { top, left } = computeAnchoredPosition(tile.getBoundingClientRect(), el.getBoundingClientRect().width);
+      // Anchored under the whole card, not the tile: with two rows of tiles a
+      // popover hung from a first-row tile would cover the second row.
+      const { top, left } = computeAnchoredPosition(anchorRectForTile(tile), el.getBoundingClientRect().width);
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
     }
@@ -116,7 +163,7 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
       window.removeEventListener("scroll", reposition);
       hgc?.removeEventListener("scroll", reposition);
     };
-  }, [slot, members, exclusions, busy]);
+  }, [slot, members, exclusions, busy, view, error, suggestions]);
 
   // Escape (capture phase) + outside click (capture phase) both close.
   useEffect(() => {
@@ -162,16 +209,58 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
       onClose();
       return;
     }
+    if (busy) return;
     setBusy(true);
     try {
       await addTopic(newKeyword);
+      // Close as soon as the write lands: the refetches below re-render the
+      // tiles, and an open popover would flip to another body meanwhile.
+      onClose();
       refetchTopics();
       await refreshGraph();
-      onClose();
     } catch {
       // Best-effort, same swallow-on-failure idiom as HeaderCards'
       // handleRecluster -- leave the popover open with whatever the user
       // typed rather than inventing new error UI.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAcceptSuggestion(suggestion: TopicSuggestion, rawName: string) {
+    const name = rawName.trim();
+    if (!name || demoLocked || busy) return;
+    setBusy(true);
+    setError(null);
+    let written = false;
+    try {
+      await acceptTopicSuggestion(suggestion.id, name !== suggestion.label ? name : undefined);
+      written = true;
+      // Close as soon as the write lands (see handleAdd), then refresh.
+      onClose();
+      refetchTopics();
+      refetchSuggestions();
+      await refreshGraph();
+    } catch (e) {
+      // A failed refresh after a successful write is swallowed like add's; only
+      // a failed write is shown.
+      if (!written) setError(`Could not add "${name}": ${e instanceof Error ? e.message : "request failed"}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDismissSuggestion(suggestion: TopicSuggestion) {
+    if (demoLocked || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await dismissTopicSuggestion(suggestion.id);
+      onClose();
+      refetchSuggestions();
+      refetchStatus();
+    } catch (e) {
+      setError(`Could not dismiss "${suggestion.label}": ${e instanceof Error ? e.message : "request failed"}`);
     } finally {
       setBusy(false);
     }
@@ -198,9 +287,9 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
     setBusy(true);
     try {
       await removeTopic(topic.keyword);
+      onClose(); // before the refetch: the slot turns empty and the body would flip
       refetchTopics();
       await refreshGraph();
-      onClose();
     } catch {
       // Swallow -- same idiom as handleAdd above.
     } finally {
@@ -245,18 +334,41 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
   const portalEl = getPortalElement();
   if (!portalEl) return null;
 
-  return createPortal(
-    <div
-      ref={popoverRef}
-      className="hbar-sc-popover"
-      data-sc-popover-slot={slot}
-      // Mounted only while open, so the panel is always "on" here --
-      // display:block overrides the ported CSS's display:none default (Dash
-      // toggles the same inline style on open/close; this component instead
-      // represents "closed" by not being mounted at all).
-      style={{ display: "block" }}
-    >
-      {topic ? (
+  const shownSuggestion = view.kind === "suggestion" ? suggestions.find((g) => g.id === view.id) : undefined;
+  // Every slot allocated: no ghost tiles, so the list is reached from here.
+  const listFooter = topic !== undefined && topics.length >= MAX_SUPERCLUSTERS && suggestions.length > 0;
+  // Demo (plain-demo CSS hides the popover wholesale): the suggestion views
+  // are read-only, so they are exempt from that rule.
+  const demoReadable = shownSuggestion !== undefined || view.kind === "list" || (topic === undefined && suggestions.length > 0);
+  // (a plain demo "+" popover with no suggestions is deliberately NOT readable:
+  // it is the add form, hidden by the plain-demo CSS exactly as before)
+
+  let body: React.ReactNode;
+  if (shownSuggestion) {
+    body = (
+      <SuggestionBody
+        key={shownSuggestion.id}
+        suggestion={shownSuggestion}
+        busy={busy}
+        error={error}
+        demoLocked={demoLocked}
+        onBack={() => setView(topic ? { kind: "list" } : { kind: "default" })}
+        onAdd={(name) => handleAcceptSuggestion(shownSuggestion, name)}
+        onDismiss={() => handleDismissSuggestion(shownSuggestion)}
+      />
+    );
+  } else if (view.kind === "list") {
+    body = (
+      <>
+        <button type="button" className="hbar-sc-sugg-back" onClick={() => setView({ kind: "default" })}>
+          ‹ Back
+        </button>
+        <SuggestionList suggestions={suggestions} onPick={(id) => setView({ kind: "suggestion", id })} />
+      </>
+    );
+  } else if (topic) {
+    body = (
+      <>
         <AllocatedBody
           topic={topic}
           topics={topics}
@@ -269,11 +381,163 @@ export default function ScPopover({ slot, topic, topics, onClose, refetchTopics,
           onExclude={handleExclude}
           onRestore={handleRestore}
         />
-      ) : (
+        {listFooter && (
+          <button type="button" className="hbar-sc-sugg-footer" onClick={() => setView({ kind: "list" })}>
+            SUGGESTED ({suggestions.length})
+          </button>
+        )}
+      </>
+    );
+  } else if (plainDemo && suggestions.length > 0) {
+    // A direct demo login cannot add: show only the list. With no suggestions
+    // the add form renders as before (the plain-demo CSS hides the popover).
+    body = <SuggestionList suggestions={suggestions} onPick={(id) => setView({ kind: "suggestion", id })} />;
+  } else {
+    body = (
+      <>
         <EmptyBody busy={busy} inputRef={addInputRef} onAdd={handleAdd} />
-      )}
+        <SuggestionList suggestions={suggestions} onPick={(id) => setView({ kind: "suggestion", id })} />
+      </>
+    );
+  }
+
+  return createPortal(
+    <div
+      ref={popoverRef}
+      className="hbar-sc-popover"
+      data-sc-popover-slot={slot}
+      data-sc-demo-readable={demoReadable || undefined}
+      // Mounted only while open, so the panel is always "on" here --
+      // display:block overrides the ported CSS's display:none default (Dash
+      // toggles the same inline style on open/close; this component instead
+      // represents "closed" by not being mounted at all).
+      style={{ display: "block" }}
+    >
+      {body}
     </div>,
     portalEl
+  );
+}
+
+interface SuggestionListProps {
+  suggestions: TopicSuggestion[];
+  onPick: (id: number) => void;
+}
+
+// SUGGESTED: one row per suggestion (name left, clusters/pages right); empty
+// list renders nothing at all.
+function SuggestionList({ suggestions, onPick }: SuggestionListProps) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="hbar-sc-sugg-list">
+      <div className="hbar-sc-popover-title">SUGGESTED</div>
+      {suggestions.map((g) => (
+        <button type="button" key={g.id} className="hbar-sc-sugg-row" onClick={() => onPick(g.id)}>
+          <span className="hbar-sc-sugg-row-name">{g.label}</span>
+          <span className="hbar-sc-sugg-row-meta">{clustersPagesLabel(g)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface SuggestionBodyProps {
+  suggestion: TopicSuggestion;
+  busy: boolean;
+  error: string | null;
+  demoLocked: boolean;
+  onBack: () => void;
+  onAdd: (name: string) => void;
+  onDismiss: () => void;
+}
+
+function SuggestionBody({ suggestion, busy, error, demoLocked, onBack, onAdd, onDismiss }: SuggestionBodyProps) {
+  const [name, setName] = useState(suggestion.label);
+  const lockTip = useHoverTooltip();
+  const members = suggestion.cluster_names;
+  const hidden = members.length - SUGGESTION_MEMBER_PREVIEW;
+  const addDisabled = !name.trim();
+
+  // Locked buttons keep a hover tooltip (aria-disabled, not `disabled`, so the
+  // tooltip still fires), exactly like the recluster button.
+  const lockProps = demoLocked
+    ? {
+        onMouseEnter: (e: React.MouseEvent) => lockTip.show(e, [DEMO_LOCKED_LABEL]),
+        onMouseMove: (e: React.MouseEvent) => lockTip.show(e, [DEMO_LOCKED_LABEL]),
+        onMouseLeave: lockTip.hide,
+      }
+    : {};
+
+  return (
+    <>
+      <button type="button" className="hbar-sc-sugg-back" onClick={onBack}>
+        ‹ SUGGESTED
+      </button>
+      <div className="hbar-sc-popover-title">SUGGESTED SUPERCLUSTER</div>
+      <div className="hbar-sc-input-wrapper">
+        <input
+          type="text"
+          value={name}
+          maxLength={36}
+          aria-label="Supercluster name"
+          className="hbar-sc-input"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (!addDisabled && !busy) onAdd(name);
+            }
+          }}
+        />
+        <span className="topic-spinner hbar-sc-popover-spinner" style={{ display: busy ? "inline-block" : "none" }} />
+      </div>
+      <div className="hbar-sc-sugg-reason">{suggestionReason(suggestion)}</div>
+
+      <div className="hbar-sc-popover-title">MEMBERS</div>
+      <div className="hbar-sc-member-list hbar-sc-sugg-members">
+        {members.slice(0, SUGGESTION_MEMBER_PREVIEW).map((n) => (
+          <div className="hbar-sc-member-row" key={n}>
+            <span className="hbar-sc-member-name">{n}</span>
+          </div>
+        ))}
+      </div>
+      {hidden > 0 && <div className="hbar-sc-sugg-more">+{hidden} more</div>}
+
+      {error && (
+        <div className="hbar-sc-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="hbar-sc-sugg-actions">
+        <button
+          type="button"
+          className="hbar-sc-add-btn hbar-sc-sugg-add"
+          disabled={addDisabled || busy}
+          aria-disabled={demoLocked || undefined}
+          onClick={() => {
+            lockTip.hide();
+            onAdd(name);
+          }}
+          {...lockProps}
+        >
+          Add
+        </button>
+        <button
+          type="button"
+          className="hbar-sc-sugg-dismiss"
+          disabled={busy}
+          aria-disabled={demoLocked || undefined}
+          onClick={() => {
+            lockTip.hide();
+            onDismiss();
+          }}
+          {...lockProps}
+        >
+          Not interested
+        </button>
+      </div>
+      {lockTip.tooltip}
+    </>
   );
 }
 
@@ -350,6 +614,15 @@ function AllocatedBody({
   // used, same as _render_sc_icon_picker_flat.
   const usedIds = new Set(topics.map((t) => t.icon_id).filter((id): id is string => Boolean(id)));
 
+  // One chart-kit tooltip shared by every control below (project rule: no
+  // native title= tooltips); each control keeps an aria-label of its own.
+  const tip = useHoverTooltip();
+  const tipHandlers = (text: string) => ({
+    onMouseEnter: (e: React.MouseEvent) => tip.show(e, [text]),
+    onMouseMove: (e: React.MouseEvent) => tip.show(e, [text]),
+    onMouseLeave: tip.hide,
+  });
+
   const pickGridStyle = {
     "--scpick-idle": "var(--text-muted)",
     "--scpick-active": "var(--highlight)",
@@ -377,7 +650,16 @@ function AllocatedBody({
             style={{ display: busy ? "inline-block" : "none" }}
           />
         </div>
-        <button type="button" className="hbar-sc-delete-btn" title="Delete supercluster" onClick={onDelete}>
+        <button
+          type="button"
+          className="hbar-sc-delete-btn"
+          aria-label="Delete supercluster"
+          {...tipHandlers("Delete supercluster")}
+          onClick={() => {
+            tip.hide();
+            onDelete();
+          }}
+        >
           ×
         </button>
       </div>
@@ -398,8 +680,17 @@ function AllocatedBody({
                 <div
                   key={iconId}
                   className={"hbar-sc-pick-cell" + (isActive ? " active" : "") + (isUsed ? " used" : "")}
-                  title={iconId}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={iconId}
+                  {...tipHandlers(iconId)}
                   onClick={() => onSelectIcon(iconId, isActive, isUsed)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectIcon(iconId, isActive, isUsed);
+                    }
+                  }}
                 >
                   {/* stroke="inherit" (not TopicIcon's default "currentColor"):
                       the ported CSS drives color via `.hbar-sc-pick-glyph`'s
@@ -422,14 +713,18 @@ function AllocatedBody({
           <div className="hbar-sc-member-list">
             {members.map((m) => (
               <div className="hbar-sc-member-row" key={m.cluster_name}>
-                <span className="hbar-sc-member-name" title={m.cluster_name}>
+                <span className="hbar-sc-member-name" {...tipHandlers(m.cluster_name)}>
                   {m.cluster_name}
                 </span>
                 <button
                   type="button"
                   className="hbar-sc-member-exclude-btn"
-                  title="Doesn't belong here — excluded from this supercluster at every future recluster"
-                  onClick={() => onExclude(m.cluster_name)}
+                  aria-label={`Exclude ${m.cluster_name}`}
+                  {...tipHandlers(EXCLUDE_HINT)}
+                  onClick={() => {
+                    tip.hide();
+                    onExclude(m.cluster_name);
+                  }}
                 >
                   ✕
                 </button>
@@ -446,14 +741,18 @@ function AllocatedBody({
           <div className="hbar-sc-member-list">
             {exclusions.map((e) => (
               <div className="hbar-sc-member-row hbar-sc-member-row-excluded" key={e.cluster_slug}>
-                <span className="hbar-sc-member-name" title={e.cluster_name}>
+                <span className="hbar-sc-member-name" {...tipHandlers(e.cluster_name)}>
                   {e.cluster_name}
                 </span>
                 <button
                   type="button"
                   className="hbar-sc-member-restore-btn"
-                  title="Restore -- eligible for this supercluster again at the next recluster"
-                  onClick={() => onRestore(e.cluster_name)}
+                  aria-label={`Restore ${e.cluster_name}`}
+                  {...tipHandlers(RESTORE_HINT)}
+                  onClick={() => {
+                    tip.hide();
+                    onRestore(e.cluster_name);
+                  }}
                 >
                   ↩
                 </button>
@@ -462,6 +761,7 @@ function AllocatedBody({
           </div>
         </>
       )}
+      {tip.tooltip}
     </>
   );
 }
