@@ -1097,6 +1097,41 @@
 //      PAGE TITLES pills -> PageTitlesProvider). Dev alias:
 //      `window.__d3SetPageTitles`.
 //
+// Graph input profiles (decision: owner, 2026-11-12 -- "recognize a laptop
+// trackpad versus a mouse, or a profile per navigation method, saved per
+// machine"):
+//  42. SUPERSEDES the plain-wheel half of #35 (plain wheel always panned).
+//      A module var `__inputProfile` ('auto' default | 'mouse' | 'trackpad'),
+//      written only by the new exported `setInputProfile(profile)` setter
+//      (GraphCanvas drives it from the SettingsMenu GRAPH CONTROLS pills,
+//      stored per machine in localStorage, never server preferences).
+//      Mapping, resolved by the pure `resolveWheel` (./wheel-intent.ts, own
+//      tests): Ctrl/Cmd+wheel (trackpad pinch) zooms in every profile;
+//      Shift+wheel pans as delivered (never zooms) in every profile; a plain
+//      wheel zooms about the cursor under `mouse`, pans on both axes under
+//      `trackpad`, and under `auto` is classified per GESTURE (events < 200 ms
+//      apart keep the first event's classification) from deltaMode, a
+//      horizontal delta, Chromium's wheelDeltaY (-3 x deltaY = touchpad,
+//      multiple of 120 = mouse), then delta magnitude (>= 50 px = mouse).
+//      Known limit, deliberately not solved: a free-spinning or
+//      high-resolution mouse wheel can look like a trackpad under Auto; the
+//      explicit Mouse profile is the fix. ONE decision per wheel event
+//      (`decideWheel`, memoised per event in a WeakMap) is shared by
+//      zoomBehavior's `.filter()` (wheel passes when the intent is zoom)
+//      and the `wheel.pan` listener (acts when the intent is pan), so the
+//      two can never both act or both skip. A zoom-intent wheel is
+//      preventDefault()ed by the filter itself: d3-zoom's own wheeled()
+//      returns WITHOUT preventDefault when `k` is already at a scaleExtent
+//      limit, which let the page scroll. Zoom step is the unchanged
+//      `.wheelDelta()` (~15% per mouse notch, x10 for Ctrl/pinch, clamped).
+//      Right-button drag also pans (the `.filter()` now admits mousedown
+//      button 2) and the svg suppresses `contextmenu` unconditionally (on
+//      Linux the menu opens on mousedown, so it cannot depend on a drag).
+//      New opt `onInputDetected(kind)` ('mouse' | 'trackpad') fires when Auto's
+//      classification of the latest gesture differs from the last one
+//      reported; GraphCanvas shows it as the "Detected:" line. Dev alias:
+//      `window.__d3SetInputProfile`.
+//
 // Everything else below -- indentation, Dash CSS class names
 // (hull-label, watermark, group-label, sc-edge-chip, etc.), function
 // bodies not listed above -- is unedited (computeLayout excepted -- item
@@ -1112,6 +1147,7 @@ import { selectPointers, placePointers, sizesAt } from './sc-pointers';
 import { layoutLine, faceForPx, averageAdvanceEm } from '../almagest/runtime';
 import { getGenerator } from '../almagest/generator';
 import d3 from "./d3";
+import { resolveWheel } from './wheel-intent';
 // Task group W (header comment delta #17): the force-layout pipeline's
 // main-thread client -- see that file's own header comment for why this
 // is a plain factory, not a React hook, despite the filename.
@@ -1133,6 +1169,7 @@ var __vendorSetSelection;
 var __vendorSetFilterDim;
 var __vendorToggleNoise;
 var __vendorSetPageTitles;
+var __vendorSetInputProfile;
 var __vendorFrameNodes;
 var __vendorGetClusterPages;
 var __vendorHasNode;
@@ -1420,6 +1457,40 @@ var __vendorExpandedGroups;
     // settle drew titles for, so the setter can re-draw without a layout.
     var __showPageTitles = false;
     var __pageTitleNodes = null;
+
+    // Delta #42: input profile ('auto' | 'mouse' | 'trackpad'), written only
+    // by the exported setInputProfile(profile) setter; __wheelState is Auto's
+    // per-gesture classifier state, __wheelDecisions the per-event memo, and
+    // __detectedKind the last kind reported through opts.onInputDetected.
+    var __inputProfile = 'auto';
+    var __wheelState = null;
+    var __wheelDecisions = new WeakMap();
+    var __detectedKind = null;
+
+    // One decision per wheel event, shared by the zoom filter and the
+    // 'wheel.pan' listener (delta #42). deltaMode is read BEFORE the delta
+    // values (Firefox reports line mode only if deltaMode is read first).
+    function decideWheel(event, onDetected) {
+        var hit = __wheelDecisions.get(event);
+        if (hit) return hit;
+        var deltaMode = event.deltaMode;
+        var r = resolveWheel(__inputProfile, __wheelState, {
+            deltaMode: deltaMode,
+            deltaX: event.deltaX,
+            deltaY: event.deltaY,
+            wheelDeltaY: event.wheelDeltaY,
+            shiftKey: !!event.shiftKey,
+            zoomModifier: !!(event.ctrlKey || event.metaKey),
+            time: event.timeStamp,
+        });
+        __wheelState = r.state;
+        if (r.kind && r.kind !== __detectedKind) {
+            __detectedKind = r.kind;
+            if (typeof onDetected === 'function') onDetected(r.kind);
+        }
+        __wheelDecisions.set(event, r);
+        return r;
+    }
 
     // Read the current noise-toggle state (module var -- see __showNoise's
     // own comment for the DOM-mirror this replaced).
@@ -6224,11 +6295,12 @@ var __vendorExpandedGroups;
         // before then: "scroll only — no click-drag pan" -- d3-zoom's own
         // default filter already allowed click-drag pan and touch/pinch
         // even when this comment claimed otherwise; only wheel behavior
-        // has ever actually changed here): plain wheel (a mouse wheel, or
-        // two-finger trackpad scroll) pans via the dedicated 'wheel.pan'
-        // listener below; Ctrl/Cmd+wheel (including a trackpad pinch,
-        // which browsers deliver as a ctrlKey wheel event) zooms via
-        // zoomBehavior's own default wheel handling. Click-drag and touch/
+        // has ever actually changed here): a wheel event pans via the
+        // dedicated 'wheel.pan' listener below or zooms via zoomBehavior's
+        // own wheel handling, per the input profile (delta #42, which
+        // superseded #35's "plain wheel always pans"); Ctrl/Cmd+wheel
+        // (including a trackpad pinch, which browsers deliver as a ctrlKey
+        // wheel event) always zooms. Click-drag and touch/
         // pinch are unaffected -- zoomBehavior's `.filter()` below mirrors
         // d3-zoom's own default for every non-wheel event type.
         // contentBBox is set by fitToContent after layout -- module-level
@@ -6268,22 +6340,27 @@ var __vendorExpandedGroups;
             .scaleExtent(__priorFitZoomForClamp != null
                 ? [__priorFitZoomForClamp * MIN_ZOOM_RATIO, __priorFitZoomForClamp * 4]
                 : [0.05, 6])
-            // Header comment delta #35: excludes a plain (non-modifier)
-            // wheel tick from driving THIS behavior's own zoom -- the new
-            // 'wheel.pan' listener below handles plain wheel instead (pan,
-            // not zoom). Ctrl/Cmd+wheel still reaches d3-zoom's own default
-            // wheel handling (browsers deliver two-finger trackpad pinch as
-            // a ctrlKey wheel event, so this doubles as the pinch-to-zoom
-            // gesture). The non-wheel branch is d3-zoom's own unmodified
+            // Header comment delta #35 (wheel rule superseded by #42, see
+            // below): keeps a pan-intent wheel tick from driving THIS
+            // behavior's own zoom -- the 'wheel.pan' listener below handles
+            // it instead. The non-wheel branch is d3-zoom's own unmodified
             // default filter (`!event.ctrlKey && !event.button`) restated
             // explicitly -- `.filter()` REPLACES the default entirely
             // rather than composing with it, so drag-to-pan (mousedown/
             // pointerdown-driven) and touch/pinch, neither of which are
             // 'wheel' events, must be spelled out here too or they'd stop
             // working.
+            // Delta #42 supersedes the plain-wheel rule above: the wheel
+            // passes when decideWheel says zoom (profile + Ctrl/Shift +
+            // Auto's classifier), and button 2 (right-drag) pans too.
             .filter(function (event) {
-                if (event.type === 'wheel') return !!(event.ctrlKey || event.metaKey);
-                return !event.ctrlKey && !event.button;
+                if (event.type === 'wheel') {
+                    if (decideWheel(event, opts && opts.onInputDetected).intent !== 'zoom') return false;
+                    // d3-zoom skips its own preventDefault at a scaleExtent limit.
+                    event.preventDefault();
+                    return true;
+                }
+                return !event.ctrlKey && (!event.button || event.button === 2);
             })
             // Fix review C2: d3-zoom's OWN default `wheelDelta` (verified
             // against the installed d3-zoom package,
@@ -6411,10 +6488,10 @@ var __vendorExpandedGroups;
         // internal 'dblclick.zoom' listener each time -- this disable must
         // be re-applied after every attach, not just once at construction.
         svg.on('dblclick.zoom', null);
-        // Header comment delta #35: plain wheel pans (two-finger trackpad
-        // scroll, or a mouse wheel), Ctrl/Cmd+wheel zooms (delta #35's own
-        // `.filter()` above excludes a plain wheel from zoomBehavior's own
-        // handling, so this listener owns it instead). `translateBy`
+        // Header comment delta #35 (which wheels pan is now decided by #42's
+        // decideWheel): pans the wheel events the `.filter()` above excluded
+        // from zoomBehavior's own handling (two-finger trackpad scroll,
+        // Shift+wheel, any wheel under the Trackpad profile). `translateBy`
         // dispatches the SAME 'zoom' event zoomBehavior's own gestures do,
         // so the manual pan clamp inside the `.on('zoom', ...)` handler
         // above applies here too -- this listener never touches
@@ -6432,12 +6509,17 @@ var __vendorExpandedGroups;
         // screen-pixel amount at any zoom (translateBy's dx/dy are in the
         // behavior's own pre-scale coordinate space).
         svg.on('wheel.pan', function (event) {
-            if (event.ctrlKey || event.metaKey) return; // zoomBehavior's own filter claims this gesture instead
+            // Delta #42: the same per-event decision the zoom filter used.
+            if (decideWheel(event, opts && opts.onInputDetected).intent !== 'pan') return;
             event.preventDefault();
             var t = d3.zoomTransform(svg.node());
             var mult = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? svg.node().clientHeight : 1;
             zoomBehavior.translateBy(svg, -event.deltaX * mult / t.k, -event.deltaY * mult / t.k);
         });
+        // Delta #42: right-drag pans (filter admits button 2), so the browser
+        // menu must never open on the graph. Unconditional: on Linux it
+        // fires on mousedown, before any drag is known.
+        svg.on('contextmenu', function (event) { event.preventDefault(); });
         storedZoomBehavior = zoomBehavior;
         ensureZoomIndicator(container, function () { return storedZoomBehavior; });
         ensureEdgeChipLayer(container);
@@ -7934,6 +8016,28 @@ var __vendorExpandedGroups;
         window.__d3SetPageTitles = __vendorSetPageTitles;
     }
 
+    /**
+     * Delta #42: choose how the mouse wheel maps to zoom/pan. Takes effect on
+     * the very next wheel event of the live graph (the zoom filter and the
+     * pan listener read the module var per event), so no re-render is
+     * needed; a call before the first render() seeds it. Resets Auto's
+     * gesture state and last-reported kind so the old profile's last gesture
+     * can't latch the next.
+     *
+     * @param {'auto'|'mouse'|'trackpad'} profile
+     */
+    __vendorSetInputProfile = function (profile) {
+        __inputProfile = (profile === 'mouse' || profile === 'trackpad') ? profile : 'auto';
+        __wheelState = null;
+        // Forget what was reported too: a fresh GraphCanvas mount (whose
+        // "Detected:" state starts empty) seeds the profile through here,
+        // and the next gesture must be reported again.
+        __detectedKind = null;
+    };
+    if (process.env.NODE_ENV !== "production") {
+        window.__d3SetInputProfile = __vendorSetInputProfile;
+    }
+
     // DEBUG: read current selection state (used to diagnose why graph
     // initially renders dimmed). Safe to leave; minimal overhead.
     __vendorDebugGetSelection = function () {
@@ -8101,6 +8205,7 @@ export {
     __vendorSetFilterDim as setFilterDim,
     __vendorToggleNoise as toggleNoise,
     __vendorSetPageTitles as setPageTitles,
+    __vendorSetInputProfile as setInputProfile,
     __vendorFrameNodes as frameNodes,
     __vendorGetClusterPages as getClusterPages,
     __vendorHasNode as hasNode,

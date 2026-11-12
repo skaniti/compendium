@@ -94,6 +94,9 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
     // be cheap (no React state per tick; write a style directly, as
     // Starfield.tsx does).
     onViewChange?: (view: GraphView) => void;
+    // Delta #42: fires when Auto's classification of the latest wheel
+    // gesture differs from the last one reported.
+    onInputDetected?: (kind: "mouse" | "trackpad") => void;
   }
 
   // A1-1 promotion (vendor header comment delta #11): returns a dispose()
@@ -128,6 +131,9 @@ declare module "@/lib/graph/d3-graph-vendor.js" {
   // Delta #41: page-title labels are opt-in (default off). Redraws only the
   // title layer on a live graph; safe to call before the first render().
   export function setPageTitles(show: boolean): void;
+  // Delta #42: wheel input profile (default "auto"). Takes effect on the next
+  // wheel event of the live graph; safe to call before the first render().
+  export function setInputProfile(profile: "auto" | "mouse" | "trackpad"): void;
   export function frameNodes(nodeIds: string[], visibleH?: number): void;
   export function getClusterPages(clusterId: string): string[];
   export function hasNode(nodeId: string): boolean;

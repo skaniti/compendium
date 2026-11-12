@@ -3,6 +3,7 @@ import CompendiumLoader from "./CompendiumLoader";
 import Header from "./Header";
 import NavProvider from "./NavProvider";
 import PageZoomGuard from "./PageZoomGuard";
+import InputProfileProvider from "./InputProfileProvider";
 import PageTitlesProvider from "./PageTitlesProvider";
 import PanelGrid from "./PanelGrid";
 import PlainDemoBodyClass from "./PlainDemoBodyClass";
@@ -122,6 +123,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
           NavProvider below so both the header (DATE RANGE pills, the
           writer) and the panels (batch 03's graph time-window filter, a
           future reader) share one context instance. */}
+      <InputProfileProvider>
       <PageTitlesProvider initialShow={initialShowPageTitles} canPersist={canPersistPreferences}>
       <TimeWindowProvider initialWindow={startWindow} canPersist={canPersistPreferences}>
         <Header mode={mode} />
@@ -159,6 +161,7 @@ export default async function AppShell({ left, center, right, mode = "graph", ch
         )}
       </TimeWindowProvider>
       </PageTitlesProvider>
+      </InputProfileProvider>
     </StarfieldProvider>
   );
 }

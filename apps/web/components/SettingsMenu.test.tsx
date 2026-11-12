@@ -5,6 +5,7 @@ import SettingsMenu, { formatPaletteCaption } from "./SettingsMenu";
 import * as ThemeProviderModule from "./ThemeProvider";
 import * as StarfieldProviderModule from "./StarfieldProvider";
 import * as PageTitlesProviderModule from "./PageTitlesProvider";
+import * as InputProfileProviderModule from "./InputProfileProvider";
 import { getSwatches } from "@/lib/theme";
 
 // SettingsMenu now consumes StarfieldProvider's context directly (mig-01
@@ -22,6 +23,20 @@ function mockPageTitles(show = false, setShow = vi.fn()) {
   return setShow;
 }
 
+function mockInputProfile(
+  profile: "auto" | "mouse" | "trackpad" = "auto",
+  detected: "mouse" | "trackpad" | null = null,
+  setProfile = vi.fn()
+) {
+  vi.spyOn(InputProfileProviderModule, "useInputProfile").mockReturnValue({
+    profile,
+    setProfile,
+    detected,
+    setDetected: vi.fn(),
+  });
+  return setProfile;
+}
+
 function mockTheme(variant = "Green", setVariant = vi.fn()) {
   vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant, setVariant });
   return setVariant;
@@ -31,6 +46,7 @@ describe("SettingsMenu", () => {
   beforeEach(() => {
     mockStarfield();
     mockPageTitles();
+    mockInputProfile();
   });
 
   afterEach(() => {
@@ -197,5 +213,42 @@ describe("SettingsMenu", () => {
     expect(setShow).toHaveBeenLastCalledWith(true);
     await userEvent.click(container.querySelector('[data-page-titles="off"]')!);
     expect(setShow).toHaveBeenLastCalledWith(false);
+  });
+  it("renders a GRAPH CONTROLS section with Auto, Mouse and Trackpad pills, Auto active by default", () => {
+    mockTheme();
+    const { container } = render(<SettingsMenu />);
+    const headers = Array.from(container.querySelectorAll(".picker-section-header")).map((h) => h.textContent);
+    expect(headers).toContain("GRAPH CONTROLS");
+    const pills = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-input-profile]"));
+    expect(pills.map((p) => p.textContent)).toEqual(["Auto", "Mouse", "Trackpad"]);
+    pills.forEach((p) => expect(p).toHaveClass("starry-sky-selector-pill"));
+    expect(container.querySelector('[data-input-profile="auto"]')).toHaveClass("active");
+    expect(container.querySelector('[data-input-profile="mouse"]')).not.toHaveClass("active");
+  });
+
+  it("clicking a GRAPH CONTROLS pill calls setProfile with its value", async () => {
+    mockTheme();
+    const setProfile = mockInputProfile("auto");
+    const { container } = render(<SettingsMenu />);
+    await userEvent.click(container.querySelector('[data-input-profile="trackpad"]')!);
+    await userEvent.click(container.querySelector('[data-input-profile="mouse"]')!);
+    expect(setProfile.mock.calls).toEqual([["trackpad"], ["mouse"]]);
+  });
+
+  it("shows what Auto detected, only while Auto is selected", () => {
+    mockTheme();
+    mockInputProfile("auto", null);
+    const first = render(<SettingsMenu />);
+    expect(first.container.querySelector(".picker-meta-line")).toHaveTextContent("Detected: nothing yet");
+    first.unmount();
+
+    mockInputProfile("auto", "trackpad");
+    const second = render(<SettingsMenu />);
+    expect(second.container.querySelector(".picker-meta-line")).toHaveTextContent("Detected: trackpad");
+    second.unmount();
+
+    mockInputProfile("mouse", "mouse");
+    const third = render(<SettingsMenu />);
+    expect(third.container.querySelector(".picker-meta-line")).toBeNull();
   });
 });

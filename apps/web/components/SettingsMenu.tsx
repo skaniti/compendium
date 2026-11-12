@@ -5,6 +5,8 @@ import { getSwatches, type Swatch } from "@/lib/theme";
 import { useTheme } from "./ThemeProvider";
 import { useStarfield, STARFIELD_VARIANTS } from "./StarfieldProvider";
 import { usePageTitles } from "./PageTitlesProvider";
+import { useInputProfile } from "./InputProfileProvider";
+import type { InputProfile } from "@/lib/graph/wheel-intent";
 
 // Mirrors app.py's _format_palette_caption: strips a legacy trailing
 // " Dark" suffix (pre-2026-07-17 persisted value) so old and new palette
@@ -81,6 +83,12 @@ export interface SettingsMenuProps {
   onOpenTuners?: () => void;
 }
 
+const INPUT_PROFILE_PILLS: ReadonlyArray<{ value: InputProfile; label: string }> = [
+  { value: "auto", label: "Auto" },
+  { value: "mouse", label: "Mouse" },
+  { value: "trackpad", label: "Trackpad" },
+];
+
 export default function SettingsMenu({
   onReplayTutorial = () => {},
   // TODO(mig-03/05): tuner open behavior arrives with the dev-tuner port/disposition.
@@ -95,6 +103,9 @@ export default function SettingsMenu({
   // PAGE TITLES pills: same context-direct pattern. Off by default; the
   // graph shows cluster names only until this is switched on.
   const { show: showPageTitles, setShow: setShowPageTitles } = usePageTitles();
+  // GRAPH CONTROLS pills: per-machine wheel mapping (localStorage, not a
+  // server preference); `detected` is what Auto last decided.
+  const { profile: inputProfile, setProfile: setInputProfile, detected: detectedInput } = useInputProfile();
   const swatches = getSwatches();
 
   return (
@@ -190,6 +201,27 @@ export default function SettingsMenu({
             </button>
           ))}
         </div>
+
+        {/* GRAPH CONTROLS: reuses the STARFIELD pill styling on purpose. */}
+        <div className="picker-section-header">GRAPH CONTROLS</div>
+        <div className="starfield-pills-row">
+          {INPUT_PROFILE_PILLS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              data-input-profile={value}
+              className={`starry-sky-selector-pill${value === inputProfile ? " active" : ""}`}
+              onClick={() => setInputProfile(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {inputProfile === "auto" && (
+          <div className="picker-meta-line" data-input-detected={detectedInput ?? "none"}>
+            Detected: {detectedInput ?? "nothing yet"}
+          </div>
+        )}
 
         {/* TUTORIAL */}
         <div className="picker-section-header">TUTORIAL</div>

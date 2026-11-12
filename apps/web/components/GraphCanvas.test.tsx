@@ -9,6 +9,7 @@ import NavProvider, { useNav } from "./NavProvider";
 import ThemeProvider, { useTheme } from "./ThemeProvider";
 import TimeWindowProvider, { useTimeWindow } from "./TimeWindowProvider";
 import PageTitlesProvider, { usePageTitles } from "./PageTitlesProvider";
+import InputProfileProvider, { useInputProfile, INPUT_PROFILE_STORAGE_KEY } from "./InputProfileProvider";
 import { useGraph, __resetGraphCacheForTest } from "@/hooks/useGraph";
 import * as api from "@/lib/api";
 import * as preferences from "@/lib/preferences";
@@ -58,6 +59,7 @@ const recolorMock = vi.fn();
 const toggleNoiseMock = vi.fn();
 const setFilterDimMock = vi.fn();
 const setPageTitlesMock = vi.fn();
+const setInputProfileMock = vi.fn();
 vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   render: (...args: unknown[]) => renderMock(...args),
   setSelection: (...args: unknown[]) => setSelectionMock(...args),
@@ -65,6 +67,7 @@ vi.mock("@/lib/graph/d3-graph-vendor.js", () => ({
   toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
   setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
   setPageTitles: (...args: unknown[]) => setPageTitlesMock(...args),
+  setInputProfile: (...args: unknown[]) => setInputProfileMock(...args),
 }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -137,6 +140,7 @@ afterEach(() => {
   toggleNoiseMock.mockClear();
   setFilterDimMock.mockClear();
   setPageTitlesMock.mockClear();
+  setInputProfileMock.mockClear();
   // ThemeProvider (wave 8) persists the picked variant to localStorage --
   // clear between tests so one test's setVariant() call can't seed the
   // next test's initial readStoredVariant() read (same convention
@@ -412,6 +416,7 @@ describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion
       recolor: (...args: unknown[]) => recolorMock(...args),
       toggleNoise: (...args: unknown[]) => toggleNoiseMock(...args),
       setPageTitles: (...args: unknown[]) => setPageTitlesMock(...args),
+      setInputProfile: (...args: unknown[]) => setInputProfileMock(...args),
       setFilterDim: (...args: unknown[]) => setFilterDimMock(...args),
     }));
   });
@@ -436,6 +441,7 @@ describe("GraphCanvas Part 1 fix 2: mount .then reads fresh payload/graphVersion
         recolor: vi.fn(),
         toggleNoise: vi.fn(),
         setPageTitles: vi.fn(),
+        setInputProfile: vi.fn(),
         setFilterDim: vi.fn(),
       };
     });
@@ -2063,5 +2069,72 @@ describe("GraphCanvas page titles (header comment delta #41)", () => {
 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     expect(setPageTitlesMock).toHaveBeenCalledWith(false);
+  });
+});
+
+function InputProfileProbe() {
+  const { profile, setProfile, detected } = useInputProfile();
+  return (
+    <>
+      <span data-testid="input-profile">{profile}</span>
+      <span data-testid="input-detected">{String(detected)}</span>
+      <button onClick={() => setProfile("trackpad")}>pick-trackpad</button>
+    </>
+  );
+}
+
+function renderCanvasWithInputProfile() {
+  mockApiFetch(SIGNED_OUT, 401);
+  return render(
+    <SessionProvider>
+      <ThemeProvider>
+        <InputProfileProvider>
+          <TimeWindowProvider>
+            <NavProvider>
+              <GraphCanvas />
+              <InputProfileProbe />
+            </NavProvider>
+          </TimeWindowProvider>
+        </InputProfileProvider>
+      </ThemeProvider>
+    </SessionProvider>
+  );
+}
+
+describe("GraphCanvas input profile (header comment delta #42)", () => {
+  afterEach(() => {
+    localStorage.removeItem(INPUT_PROFILE_STORAGE_KEY);
+  });
+
+  it("seeds setInputProfile('auto') strictly BEFORE the first render() by default", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvas();
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(setInputProfileMock).toHaveBeenCalledWith("auto");
+    expect(setInputProfileMock.mock.invocationCallOrder[0]).toBeLessThan(renderMock.mock.invocationCallOrder[0]);
+  });
+
+  it("picking a profile later pushes it to the live graph without a second render()", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvasWithInputProfile();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => screen.getByText("pick-trackpad").click());
+
+    await waitFor(() => expect(setInputProfileMock).toHaveBeenLastCalledWith("trackpad"));
+    expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("the vendor's onInputDetected callback reaches the provider's detected value", async () => {
+    vi.spyOn(api, "fetchGraph").mockResolvedValue(ONE_NODE_PAYLOAD);
+    renderCanvasWithInputProfile();
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("input-detected")).toHaveTextContent("null");
+
+    const opts = renderMock.mock.calls[0][2] as { onInputDetected: (k: "mouse" | "trackpad") => void };
+    act(() => opts.onInputDetected("trackpad"));
+
+    expect(screen.getByTestId("input-detected")).toHaveTextContent("trackpad");
   });
 });

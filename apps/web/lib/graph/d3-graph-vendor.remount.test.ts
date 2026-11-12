@@ -1057,11 +1057,13 @@ describe("d3-graph-vendor render() onViewChange (header comment delta #34)", () 
 });
 
 // Graph interaction follow-ups, Batch C (decision: user, 2026-09-13; header
-// comment delta #35): plain wheel pans, Ctrl/Cmd+wheel zooms. Real jsdom
-// WheelEvent dispatches on the rendered <svg> -- exercises zoomBehavior's
-// own `.filter()` AND the new `svg.on('wheel.pan', ...)` listener exactly as
-// a browser would deliver them, not a direct function call into either.
-describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", () => {
+// comment delta #35), superseded for the plain wheel by the input profiles
+// (delta #42, decision: owner, 2026-11-12): every test below states the
+// profile it exercises. Real jsdom WheelEvent dispatches on the rendered
+// <svg> -- exercises zoomBehavior's own `.filter()` AND the
+// `svg.on('wheel.pan', ...)` listener exactly as a browser would deliver
+// them, not a direct function call into either.
+describe("d3-graph-vendor render() wheel mapping (header comment deltas #35, #42)", () => {
   beforeEach(() => {
     document.documentElement.style.setProperty("--galaxy-0", "#4e79a7");
     (
@@ -1070,8 +1072,10 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
       ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }) as DOMMatrix;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSettleChunks();
+    const { setInputProfile } = await import("@/lib/graph/d3-graph-vendor.js");
+    setInputProfile("auto");
     document.documentElement.style.removeProperty("--galaxy-0");
     delete (SVGElement.prototype as unknown as { getScreenCTM?: unknown })
       .getScreenCTM;
@@ -1098,50 +1102,141 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
     };
   }
 
-  it("a plain wheel pans y by exactly the dispatched deltaY, x and k unchanged", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
+  type Profile = "auto" | "mouse" | "trackpad";
+  type OnDetected = (kind: "mouse" | "trackpad") => void;
+
+  async function mountWith(profile: Profile, opts: { onInputDetected?: OnDetected } = {}) {
+    const { render, setInputProfile } = await import("@/lib/graph/d3-graph-vendor.js");
+    setInputProfile(profile);
     const container = document.createElement("div");
     sizeContainer(container, 1100, 850);
     document.body.appendChild(container);
-
-    render(container, ONE_NODE_PAYLOAD, {});
+    render(container, ONE_NODE_PAYLOAD, opts);
     flushSettleChunks();
-    const before = rootTransform(container);
+    return { container, svgEl: container.querySelector("svg")!, before: rootTransform(container) };
+  }
 
-    const svgEl = container.querySelector("svg")!;
-    svgEl.dispatchEvent(
-      new WheelEvent("wheel", { deltaX: 0, deltaY: 100, bubbles: true, cancelable: true }),
-    );
+  // A notched mouse wheel (Chromium on Windows shape) versus a precision
+  // touchpad's two-finger scroll (small pixel deltas, wheelDeltaY = -3 x
+  // deltaY). jsdom's WheelEvent has no wheelDeltaY, so it is attached.
+  function wheel(init: WheelEventInit & { wheelDeltaY?: number }): WheelEvent {
+    const { wheelDeltaY, ...rest } = init;
+    const e = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...rest });
+    if (wheelDeltaY !== undefined) Object.defineProperty(e, "wheelDeltaY", { value: wheelDeltaY });
+    return e;
+  }
+  const mouseNotch = (deltaY = -100) => wheel({ deltaY, wheelDeltaY: -deltaY * 1.2 });
+  const touchpadScroll = (deltaX: number, deltaY: number) =>
+    wheel({ deltaX, deltaY, wheelDeltaY: -3 * deltaY });
+
+  it("trackpad profile: a plain wheel pans y by exactly the dispatched deltaY, x and k unchanged", async () => {
+    const { svgEl, container, before } = await mountWith("trackpad");
+
+    const ev = wheel({ deltaX: 0, deltaY: 100 });
+    svgEl.dispatchEvent(ev);
 
     const after = rootTransform(container);
-    // Fix review minor: exact assertions -- the 1100x850 fixture has
-    // plenty of clamp slack (d3-graph-vendor.sc-separation.test.ts's own
-    // rationale for that size), so the wheel.pan listener's
-    // `-event.deltaY * mult / t.k` (mult=1 at deltaMode 0, t.k unchanged)
-    // lands on EXACTLY -100 screen px of y-translate, not merely "some
-    // change".
+    // Exact: the 1100x850 fixture has plenty of clamp slack, so the
+    // wheel.pan listener's `-event.deltaY * mult / t.k` (mult=1 at
+    // deltaMode 0, t.k unchanged) lands on EXACTLY -100 screen px.
     expect(after.y).toBeCloseTo(before.y - 100, 6);
     expect(after.x).toBeCloseTo(before.x, 6);
     expect(after.k).toBeCloseTo(before.k, 6);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("a Ctrl+wheel zooms (k changes) instead of panning", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    const container = document.createElement("div");
-    sizeContainer(container, 1100, 850);
-    document.body.appendChild(container);
-
-    render(container, ONE_NODE_PAYLOAD, {});
-    flushSettleChunks();
-    const before = rootTransform(container);
-
-    const svgEl = container.querySelector("svg")!;
-    svgEl.dispatchEvent(
-      new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }),
-    );
-
+  it("trackpad profile: a mouse notch also pans, it never zooms", async () => {
+    const { svgEl, container, before } = await mountWith("trackpad");
+    svgEl.dispatchEvent(mouseNotch(100));
     const after = rootTransform(container);
-    expect(after.k).not.toBeCloseTo(before.k);
+    expect(after.k).toBeCloseTo(before.k, 6);
+    expect(after.y).toBeCloseTo(before.y - 100, 6);
+  });
+
+  it("mouse profile: a notch zooms in/out about the cursor by about 15% (2^0.2), no pan drift of k", async () => {
+    const { svgEl, container, before } = await mountWith("mouse");
+
+    const up = mouseNotch(-100);
+    svgEl.dispatchEvent(up);
+    const zoomedIn = rootTransform(container);
+    expect(zoomedIn.k).toBeCloseTo(before.k * Math.pow(2, 0.2), 4);
+    expect(up.defaultPrevented).toBe(true);
+
+    svgEl.dispatchEvent(mouseNotch(100));
+    expect(rootTransform(container).k).toBeCloseTo(before.k, 4);
+  });
+
+  it("mouse profile: a touchpad-shaped scroll zooms too (the profile ignores the device)", async () => {
+    const { svgEl, container, before } = await mountWith("mouse");
+    svgEl.dispatchEvent(touchpadScroll(0, -5));
+    expect(rootTransform(container).k).toBeGreaterThan(before.k);
+  });
+
+  it("auto profile: a mouse notch zooms", async () => {
+    const { svgEl, container, before } = await mountWith("auto");
+    const ev = mouseNotch(-100);
+    svgEl.dispatchEvent(ev);
+    const after = rootTransform(container);
+    expect(after.k).toBeGreaterThan(before.k);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("auto profile: a touchpad scroll pans and does not zoom", async () => {
+    const { svgEl, container, before } = await mountWith("auto");
+    const ev = touchpadScroll(4, 10);
+    svgEl.dispatchEvent(ev);
+    const after = rootTransform(container);
+    expect(after.k).toBeCloseTo(before.k, 6);
+    expect(after.x).toBeCloseTo(before.x - 4, 6);
+    expect(after.y).toBeCloseTo(before.y - 10, 6);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("auto profile: one gesture is never both a pan and a zoom (a big-delta tail stays a pan)", async () => {
+    const { svgEl, container, before } = await mountWith("auto");
+    svgEl.dispatchEvent(touchpadScroll(0, 10));
+    svgEl.dispatchEvent(wheel({ deltaY: 120 })); // same gesture, notch-sized delta
+    const after = rootTransform(container);
+    expect(after.k).toBeCloseTo(before.k, 6);
+    expect(after.y).toBeCloseTo(before.y - 130, 6);
+  });
+
+  it("auto profile: onInputDetected fires on a change of classification only", async () => {
+    const calls: string[] = [];
+    const { svgEl } = await mountWith("auto", { onInputDetected: (k) => calls.push(k) });
+    svgEl.dispatchEvent(touchpadScroll(0, 10));
+    svgEl.dispatchEvent(touchpadScroll(0, 10));
+    expect(calls).toEqual(["trackpad"]);
+  });
+
+  it("explicit profiles never classify, so onInputDetected stays silent", async () => {
+    const calls: string[] = [];
+    const { svgEl } = await mountWith("mouse", { onInputDetected: (k) => calls.push(k) });
+    svgEl.dispatchEvent(mouseNotch(-100));
+    expect(calls).toEqual([]);
+  });
+
+  it("a Ctrl+wheel zooms (k changes) instead of panning, in every profile", async () => {
+    for (const profile of ["mouse", "trackpad", "auto"] as const) {
+      const { container, svgEl, before } = await mountWith(profile);
+      const ev = wheel({ deltaY: -100, ctrlKey: true });
+      svgEl.dispatchEvent(ev);
+      const after = rootTransform(container);
+      expect(after.k, profile).not.toBeCloseTo(before.k);
+      expect(ev.defaultPrevented, profile).toBe(true);
+      container.remove();
+    }
+  });
+
+  it("Shift+wheel pans as delivered and never zooms, in every profile", async () => {
+    for (const profile of ["mouse", "trackpad", "auto"] as const) {
+      const { container, svgEl, before } = await mountWith(profile);
+      svgEl.dispatchEvent(wheel({ deltaX: 100, deltaY: 0, shiftKey: true }));
+      const after = rootTransform(container);
+      expect(after.k, profile).toBeCloseTo(before.k, 6);
+      expect(after.x, profile).toBeCloseTo(before.x - 100, 6);
+      container.remove();
+    }
   });
 
   // Fix review C2: d3-zoom's own default wheelDelta multiplies a ctrlKey
@@ -1150,48 +1245,106 @@ describe("d3-graph-vendor render() wheel mapping (header comment delta #35)", ()
   // the SAME magnitude a plain wheel pan tick delivers) zoomed ~4x
   // (2^2) in one notch. The vendor's own .wheelDelta() override caps a
   // single event's exponent to [-0.5, 0.5], bounding one notch to at most
-  // ~1.41x (2^0.5). Negative deltaY (zoom IN) matches this file's own
-  // existing Ctrl+wheel convention above and d3-zoom's default formula
-  // (`-event.deltaY * ... * 10`, verified against the installed d3-zoom
-  // source) -- a negative deltaY produces a positive wheelDelta exponent,
-  // i.e. `k` increases.
+  // ~1.41x (2^0.5). Negative deltaY (zoom IN) matches d3-zoom's default
+  // formula (`-event.deltaY * ... * 10`, verified against the installed
+  // d3-zoom source) -- a negative deltaY produces a positive wheelDelta
+  // exponent, i.e. `k` increases.
   it("a single Ctrl+wheel notch zooms in by at most ~1.41x (2^0.5), not the uncapped ~4x", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    const container = document.createElement("div");
-    sizeContainer(container, 1100, 850);
-    document.body.appendChild(container);
-
-    render(container, ONE_NODE_PAYLOAD, {});
-    flushSettleChunks();
-    const before = rootTransform(container);
-
-    const svgEl = container.querySelector("svg")!;
-    svgEl.dispatchEvent(
-      new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }),
-    );
-
+    const { container, svgEl, before } = await mountWith("trackpad");
+    svgEl.dispatchEvent(wheel({ deltaY: -100, ctrlKey: true }));
     const after = rootTransform(container);
     expect(after.k).toBeGreaterThan(before.k);
     expect(after.k).toBeLessThanOrEqual(before.k * 1.5);
   });
 
   it("a Cmd (metaKey)+wheel also zooms", async () => {
-    const { render } = await import("@/lib/graph/d3-graph-vendor.js");
-    const container = document.createElement("div");
-    sizeContainer(container, 1100, 850);
-    document.body.appendChild(container);
+    const { container, svgEl, before } = await mountWith("trackpad");
+    svgEl.dispatchEvent(wheel({ deltaY: -100, metaKey: true }));
+    expect(rootTransform(container).k).not.toBeCloseTo(before.k);
+  });
 
-    render(container, ONE_NODE_PAYLOAD, {});
-    flushSettleChunks();
-    const before = rootTransform(container);
+  it("every wheel event over the svg is defaultPrevented (no page scroll), in every profile", async () => {
+    for (const profile of ["mouse", "trackpad", "auto"] as const) {
+      const { container, svgEl } = await mountWith(profile);
+      for (const init of [
+        { deltaY: 100 },
+        { deltaX: 3, deltaY: 5 },
+        { deltaY: -3, deltaMode: 1 },
+        { deltaY: -2.5, ctrlKey: true },
+        { deltaX: 40, shiftKey: true },
+      ]) {
+        const ev = wheel(init);
+        svgEl.dispatchEvent(ev);
+        expect(ev.defaultPrevented, `${profile} ${JSON.stringify(init)}`).toBe(true);
+      }
+      container.remove();
+    }
+  });
 
-    const svgEl = container.querySelector("svg")!;
-    svgEl.dispatchEvent(
-      new WheelEvent("wheel", { deltaY: -100, metaKey: true, bubbles: true, cancelable: true }),
-    );
+  it("a zoom-intent wheel at the zoom limit is still defaultPrevented", async () => {
+    const { svgEl } = await mountWith("mouse");
+    // Far more zoom-out notches than the extent allows; the last ones hit
+    // the limit, where d3-zoom itself would skip preventDefault.
+    let last: WheelEvent | null = null;
+    for (let i = 0; i < 40; i++) {
+      last = mouseNotch(100);
+      svgEl.dispatchEvent(last);
+    }
+    expect(last!.defaultPrevented).toBe(true);
+  });
 
-    const after = rootTransform(container);
-    expect(after.k).not.toBeCloseTo(before.k);
+  describe("drag and context menu", () => {
+    async function dragFrom(svgEl: SVGElement, button: number, dx: number, dy: number): Promise<void> {
+      // MouseEventInit's `view` rejects vitest's global window (cross-realm),
+      // so attach it afterwards: d3-zoom listens for move/up on event.view
+      // and calls view.document on mouseup.
+      const win = window;
+      const buttons = button === 2 ? 2 : 1;
+      const mk = (type: string, x: number, y: number) => {
+        const e = new MouseEvent(type, { bubbles: true, cancelable: true, button, buttons, clientX: x, clientY: y });
+        Object.defineProperty(e, "view", { value: win });
+        return e;
+      };
+      svgEl.dispatchEvent(mk("mousedown", 300, 300));
+      win.dispatchEvent(mk("mousemove", 300 + dx, 300 + dy));
+      win.dispatchEvent(mk("mouseup", 300 + dx, 300 + dy));
+      // d3-zoom's yesdrag() swallows the next click via a capture listener
+      // it removes in a setTimeout(0); let that run so it can't eat a click
+      // in a later test.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    it("a left-button drag pans", async () => {
+      const { container, svgEl, before } = await mountWith("auto");
+      await dragFrom(svgEl, 0, 40, 25);
+      const after = rootTransform(container);
+      expect(after.x).toBeCloseTo(before.x + 40, 4);
+      expect(after.y).toBeCloseTo(before.y + 25, 4);
+      expect(after.k).toBeCloseTo(before.k, 6);
+    });
+
+    it("a right-button drag pans too", async () => {
+      const { container, svgEl, before } = await mountWith("auto");
+      await dragFrom(svgEl, 2, -30, 15);
+      const after = rootTransform(container);
+      expect(after.x).toBeCloseTo(before.x - 30, 4);
+      expect(after.y).toBeCloseTo(before.y + 15, 4);
+    });
+
+    it("a middle-button drag does not pan", async () => {
+      const { container, svgEl, before } = await mountWith("auto");
+      await dragFrom(svgEl, 1, 40, 25);
+      const after = rootTransform(container);
+      expect(after.x).toBeCloseTo(before.x, 6);
+      expect(after.y).toBeCloseTo(before.y, 6);
+    });
+
+    it("contextmenu on the svg is always defaultPrevented", async () => {
+      const { svgEl } = await mountWith("auto");
+      const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+      svgEl.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    });
   });
 });
 

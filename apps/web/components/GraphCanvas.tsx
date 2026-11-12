@@ -22,6 +22,7 @@ import { GRAPH_DEFAULTS, type GraphDefaults } from "@/lib/graph/constants";
 import { resolveTunerSnapshot } from "@/lib/graph/tuner-snapshot";
 import { publishView } from "@/lib/graph/view-bus";
 import { useOptionalPageTitles } from "./PageTitlesProvider";
+import { useOptionalInputProfile } from "./InputProfileProvider";
 
 // Type-only handle onto the vendor module's own shape (lib/graph/vendor.d.ts)
 // -- used below to type renderRef, which holds the raw render() binding
@@ -299,6 +300,22 @@ export default function GraphCanvas() {
   const showPageTitles = useOptionalPageTitles()?.show ?? false;
   const showPageTitlesRef = useRef(showPageTitles);
   showPageTitlesRef.current = showPageTitles;
+  // The vendor's setInputProfile(profile) setter (header comment delta #42),
+  // captured at mount like setPageTitlesRef. `profile` comes from
+  // InputProfileProvider (per-machine localStorage; "auto" outside a
+  // provider, the vendor's own default). `reportDetected` feeds the
+  // "Detected:" line in SettingsMenu; a ref so the vendor's opts callback
+  // (captured once per render() call) always reaches the current context.
+  const setInputProfileRef = useRef<((profile: "auto" | "mouse" | "trackpad") => void) | null>(null);
+  const inputProfileCtx = useOptionalInputProfile();
+  const inputProfile = inputProfileCtx?.profile ?? "auto";
+  const inputProfileRef = useRef(inputProfile);
+  inputProfileRef.current = inputProfile;
+  const setDetectedRef = useRef(inputProfileCtx?.setDetected);
+  setDetectedRef.current = inputProfileCtx?.setDetected;
+  const handleInputDetected = useCallback((kind: "mouse" | "trackpad") => {
+    setDetectedRef.current?.(kind);
+  }, []);
   // Task A1-3 (Step 5): the vendor's setFilterDim(nodeIds) setter -- the
   // independent dimming layer (vendor header comment delta #15) that
   // composes with setSelection's own highlight set instead of clobbering
@@ -531,6 +548,7 @@ export default function GraphCanvas() {
       recolorRef.current = vendor.recolor;
       toggleNoiseRef.current = vendor.toggleNoise;
       setPageTitlesRef.current = vendor.setPageTitles;
+      setInputProfileRef.current = vendor.setInputProfile;
       setFilterDimRef.current = vendor.setFilterDim;
       // Task group B, Part 1 fix 1 (carried A1-3 correction,
       // task-B-brief.md): apply the noise state BEFORE the first render()
@@ -550,6 +568,8 @@ export default function GraphCanvas() {
       // Same pre-render seeding as toggleNoise above (delta #41): the first
       // render() then draws titles or not in a single pass.
       vendor.setPageTitles(showPageTitlesRef.current);
+      // Delta #42: the per-machine input profile, seeded the same way.
+      vendor.setInputProfile(inputProfileRef.current);
       disposeRef.current = vendor.render(containerRef.current, payloadRef.current, {
         icons: iconData.icons,
         // Step 4: outbound wiring. selectFromCanvas resolves (kind, id) via
@@ -585,6 +605,7 @@ export default function GraphCanvas() {
         // starfield mount at a parallax factor -- see that module's own
         // comment for why this is a plain pub/sub, not React state.
         onViewChange: publishView,
+        onInputDetected: handleInputDetected,
         // Task group W (batch 03 Web Worker force sim), W3 step: render()
         // itself is synchronous (it starts the worker and returns), but
         // "started" no longer means "painted" now that the force layout
@@ -675,6 +696,7 @@ export default function GraphCanvas() {
       recolorRef.current = null;
       toggleNoiseRef.current = null;
       setPageTitlesRef.current = null;
+      setInputProfileRef.current = null;
       setFilterDimRef.current = null;
       // Item 3c: a disposed mount can never reach a later onSettleEnd for
       // whatever cycle was in flight -- drop the veil and its failsafe
@@ -819,6 +841,7 @@ export default function GraphCanvas() {
       // must be re-passed here as well or panning after a window switch/
       // recluster would silently stop updating the starfield.
       onViewChange: publishView,
+      onInputDetected: handleInputDetected,
       // Task V1 fix (vision-review fix loop, F1): re-apply selection AND
       // filter dim from onFirstPaint, NOT synchronously right after this
       // renderRef.current() call returns (the previous site, and the
@@ -852,7 +875,7 @@ export default function GraphCanvas() {
       },
     });
     lastRenderedVersionRef.current = graphVersion;
-  }, [graphVersion, payload, selectFromCanvas, handleSettleVeilRaise, handleSettleVeilDrop]);
+  }, [graphVersion, payload, selectFromCanvas, handleSettleVeilRaise, handleSettleVeilDrop, handleInputDetected]);
 
   // Step 4b / Step 6: canvas Esc is a BUBBLE-phase (no `true` capture
   // flag) document listener dispatching the nav layer's reserved
@@ -892,6 +915,12 @@ export default function GraphCanvas() {
   useEffect(() => {
     setPageTitlesRef.current?.(showPageTitles);
   }, [showPageTitles]);
+
+  // GRAPH CONTROLS pills (SettingsMenu) -> live graph, effective on the next
+  // wheel event; no re-render. The mount effect seeds the current value.
+  useEffect(() => {
+    setInputProfileRef.current?.(inputProfile);
+  }, [inputProfile]);
 
   // Step 5: inbound wiring. Subscribes to NavProvider's selection state and
   // applies it via the vendor's __d3SetSelection semantics (setSelection

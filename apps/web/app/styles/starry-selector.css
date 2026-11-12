@@ -38,6 +38,17 @@
     padding: 6px 14px 16px;
 }
 
+/* One quiet line under a pill row (GRAPH CONTROLS "Detected: ..."). The
+   pill row above keeps its own bottom padding, so pull the line up into it. */
+.picker-meta-line {
+    margin-top: -10px;
+    padding: 0 14px 14px;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--on-primary);
+    opacity: 0.6;
+}
+
 /* ── Pill button ──────────────────────────────────────────────────── */
 
 .starry-sky-selector-pill {
