@@ -32,6 +32,7 @@ def seeded(monkeypatch):
     source on; the model proposes one topic over clusters 0-2."""
     monkeypatch.setattr(settings, "label_first_enabled", False)
     monkeypatch.setattr(settings, "supercluster_suggestion_source", "proposed")
+    monkeypatch.setattr(settings, "supercluster_proposal_shape", "topics")
     user = _make_user()
     run_id = _seed_completed_run(user["id"], [6, 6, 6, 6, 6])
     clusters = cluster_repo.get_clusters_for_user(user["id"], run_id)
@@ -168,3 +169,25 @@ def test_accepting_a_proposal_whose_members_already_belong_to_a_group(seeded, mo
     finally:
         app.dependency_overrides.pop(verify_api_key, None)
         app.dependency_overrides.pop(verify_not_plain_demo, None)
+
+
+def test_default_fields_shape_stores_grouped_proposals(seeded, monkeypatch):
+    """The default shape: the model names a field per cluster, identical names
+    group, and the stored row carries the grouped member ids."""
+    import backend.services.llm_service as ls
+
+    user, run_id, ids = seeded
+    monkeypatch.setattr(settings, "supercluster_proposal_shape", "fields")
+    answer = {"fields": [{"id": ids[0], "field": "Birdwatching"}, {"id": ids[1], "field": "birdwatching"},
+                         {"id": ids[2], "field": "Birdwatching."}, {"id": ids[3], "field": "Kites"},
+                         {"id": ids[4], "field": None}]}
+
+    async def complete(**kw):
+        return SimpleNamespace(content=json.dumps(answer), cost_usd=0.0002)
+
+    monkeypatch.setattr(ls, "LLMService", lambda: SimpleNamespace(complete=complete))
+    out = asyncio.run(tp.store_proposals_for_run(user["id"], run_id))
+    assert out["proposed"] == 1  # Kites is a singleton, the null cluster is left out
+    (g,) = cluster_repo.get_groups_for_user(user["id"], include_proposed=True)
+    assert g["label"] == "Birdwatching" and g["cluster_ids"] == ids[:3]
+    assert g["member_count"] == 3 and g["page_count"] == 18

@@ -78,7 +78,11 @@ def test_model_rows_equal_their_constants():
     assert rows["supercluster_grouping"]["model"] == super_cluster_service.ASSIGNMENT_MODEL
     assert rows["supercluster_proposals"]["model"] == settings.supercluster_proposal_model
     assert rows["supercluster_proposals"]["source"] == "settings.supercluster_proposal_model"
-    assert rows["supercluster_proposals"]["prompt"] == "supercluster_proposal_v1"
+    expected_task = (
+        "supercluster_fields_v1" if settings.supercluster_proposal_shape == "fields"
+        else "supercluster_proposal_v1"
+    )
+    assert rows["supercluster_proposals"]["prompt"] == expected_task
     assert rows["supercluster_icons"]["model"] == super_cluster_service.ICON_MODEL
     assert rows["agent"]["model"] == agent.AGENT_MODEL
     assert rows["default_inference"]["model"] == settings.default_inference_model
@@ -160,3 +164,20 @@ def test_payloads_never_carry_secret_settings():
         value = getattr(settings, field, None)
         if isinstance(value, str) and len(value) >= 6:
             assert value not in blob, field
+
+
+def test_only_the_prompt_of_the_chosen_proposal_shape_is_live(monkeypatch):
+    for shape, live_task, other_task, live_name in (
+        ("fields", "supercluster_fields", "supercluster_proposal", "supercluster_fields_v1"),
+        ("topics", "supercluster_proposal", "supercluster_fields", "supercluster_proposal_v1"),
+    ):
+        monkeypatch.setattr(settings, "supercluster_proposal_shape", shape)
+        live = pv.live_prompts()
+        assert live[live_task] == {"name": live_name, "selector": "settings.supercluster_proposal_shape"}
+        assert other_task not in live
+        tasks = {t["task"]: t for t in pv.build_tasks({})}
+        assert tasks[live_task]["live"] == live_name
+        assert tasks[live_task]["selector"] == "settings.supercluster_proposal_shape"
+        assert tasks[other_task]["live"] is None
+        flags = {p["name"]: p["live"] for p in tasks[live_task]["prompts"]}
+        assert flags == {live_name: True}

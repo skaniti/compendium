@@ -3722,11 +3722,14 @@ async def accept_topic_suggestion(
         raise HTTPException(400, "Keyword must be non-empty")
 
     topics: list[dict] = prefs.get("topic_interests", [])
-    existing = next((t["keyword"] for t in topics if t["keyword"].lower() == keyword.lower()), None)
-    if existing is not None:
+    existing_entry = next((t for t in topics if t["keyword"].lower() == keyword.lower()), None)
+    if existing_entry is not None:
         # Accepting under a case variant of an existing keyword: use that
-        # entry's exact spelling and add nothing.
-        keyword = existing
+        # entry's exact spelling and add no entry. A label-first category
+        # still gets remembered on it, so the category stays declared.
+        keyword = existing_entry["keyword"]
+        if group["source"] == "taxonomy" and group.get("topic"):
+            existing_entry.setdefault("category", group["topic"])
     else:
         icon_id = await select_icon_for_topic(keyword)
         entry = {"keyword": keyword, "icon_id": icon_id}

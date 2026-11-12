@@ -747,3 +747,19 @@ class TestSuperClusterProposalPrompt:
             clusters_json='[{"id": 1, "name": "A", "pages": 4}]',
         )
         assert rendered == self.EXPECTED
+
+
+class TestSuperClusterFieldsPrompt:
+    """supercluster_fields_v1 (topic_proposals, shape "fields"), pinned byte
+    for byte so a wording change is a deliberate, reviewed edit."""
+
+    EXPECTED = 'Below are web-page clusters from one person\'s browsing that are not yet filed under any of their superclusters. For EVERY cluster, give the single broad field it would be filed under.\n\nRules:\n- A field is a shelf-level name of 1-2 words (3 at most), title case, at the breadth of this person\'s existing superclusters, which are short and broad:\n- science\n- zoology\n- REUSE the identical field name for every cluster that belongs on the same shelf. The goal is that related clusters end up with exactly the same name: several clusters about novels, poetry and authors all get "Literature", never "Novels", "Poetry" and "Authors".\n- Never use an existing supercluster name or reword one, and never use any of these names the person already dismissed:\n- Origami Folding\n- Use null for a cluster that is a genuine one-off (a single product, person or event) or fits no shelf with the others.\n- No vague umbrellas: never \'Diverse Topics\', \'Miscellaneous\', \'General Knowledge\' or a catch-all for clusters that have nothing in common.\n\nExample. Clusters: [{"id": 1, "name": "Bread Proofing Tips", "pages": 9}, {"id": 2, "name": "Pickling Jars", "pages": 7}, {"id": 3, "name": "Canoe Portage Maps", "pages": 6}, {"id": 4, "name": "Hiking Boot Waxing", "pages": 8}, {"id": 5, "name": "Invoice Template Fixes", "pages": 5}]\nAnswer: {"fields": [{"id": 1, "field": "Cooking"}, {"id": 2, "field": "Cooking"}, {"id": 3, "field": "Outdoors"}, {"id": 4, "field": "Outdoors"}, {"id": 5, "field": null}]} -- cluster 5 is a one-off.\n\nCLUSTERS (JSON):\n[{"id": 1, "name": "A", "pages": 4}]\n\nReturn JSON ONLY in this exact shape, with one entry per cluster:\n{"fields": [{"id": <cluster id>, "field": "<field or null>"}, ...]}'
+
+    def test_pinned(self):
+        rendered = get_prompt_raw(
+            "supercluster_fields_v1",
+            existing_topics_block="- science\n- zoology",
+            dismissed_block="- Origami Folding",
+            clusters_json='[{"id": 1, "name": "A", "pages": 4}]',
+        )
+        assert rendered == self.EXPECTED

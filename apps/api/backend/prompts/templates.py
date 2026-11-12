@@ -868,6 +868,53 @@ Out of scope: some questions are outside what you can do -- general knowledge, c
             "objects). Rendered via get_prompt_raw()."
         ),
     },
+    "supercluster_fields_v1": {
+        "template": (
+            "Below are web-page clusters from one person's browsing that are "
+            "not yet filed under any of their superclusters. For EVERY "
+            "cluster, give the single broad field it would be filed under.\n\n"
+            "Rules:\n"
+            "- A field is a shelf-level name of 1-2 words (3 at most), title "
+            "case, at the breadth of this person's existing superclusters, "
+            "which are short and broad:\n{existing_topics_block}\n"
+            "- REUSE the identical field name for every cluster that belongs "
+            "on the same shelf. The goal is that related clusters end up with "
+            "exactly the same name: several clusters about novels, poetry and "
+            "authors all get \"Literature\", never \"Novels\", \"Poetry\" "
+            "and \"Authors\".\n"
+            "- Never use an existing supercluster name or reword one, and "
+            "never use any of these names the person already dismissed:\n"
+            "{dismissed_block}\n"
+            "- Use null for a cluster that is a genuine one-off (a single "
+            "product, person or event) or fits no shelf with the others.\n"
+            "- No vague umbrellas: never 'Diverse Topics', 'Miscellaneous', "
+            "'General Knowledge' or a catch-all for clusters that have "
+            "nothing in common.\n\n"
+            "Example. Clusters: [{{\"id\": 1, \"name\": \"Bread Proofing Tips\", "
+            "\"pages\": 9}}, {{\"id\": 2, \"name\": \"Pickling Jars\", "
+            "\"pages\": 7}}, {{\"id\": 3, \"name\": \"Canoe Portage Maps\", "
+            "\"pages\": 6}}, {{\"id\": 4, \"name\": \"Hiking Boot Waxing\", "
+            "\"pages\": 8}}, {{\"id\": 5, \"name\": \"Invoice Template Fixes\", "
+            "\"pages\": 5}}]\n"
+            "Answer: {{\"fields\": [{{\"id\": 1, \"field\": \"Cooking\"}}, "
+            "{{\"id\": 2, \"field\": \"Cooking\"}}, {{\"id\": 3, \"field\": "
+            "\"Outdoors\"}}, {{\"id\": 4, \"field\": \"Outdoors\"}}, "
+            "{{\"id\": 5, \"field\": null}}]}} -- cluster 5 is a one-off.\n\n"
+            "CLUSTERS (JSON):\n{clusters_json}\n\n"
+            "Return JSON ONLY in this exact shape, with one entry per "
+            "cluster:\n"
+            '{{"fields": [{{"id": <cluster id>, "field": "<field or null>"}}, ...]}}'
+        ),
+        "techniques": ["instruction", "json_mode", "style_anchoring", "few_shot", "abstention"],
+        "description": (
+            "Field-per-cluster variant of supercluster_proposal_v1 "
+            "(topic_proposals, supercluster_proposal_shape='fields'): the "
+            "model names one field per candidate cluster and the server "
+            "groups clusters by identical field name, then applies the same "
+            "validation and offer rule. Placeholders: existing_topics_block, "
+            "dismissed_block, clusters_json. Rendered via get_prompt_raw()."
+        ),
+    },
     "supercluster_label_v1b": {
         "template": (
             "Each entry below is a GROUP of related web-page clusters from one "

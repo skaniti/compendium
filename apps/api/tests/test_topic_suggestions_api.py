@@ -317,3 +317,15 @@ def test_dismiss_a_row_that_is_not_offered_is_409_but_an_already_dismissed_one_s
     resp = c.post("/api/topics/suggestions/7/dismiss")
     assert resp.status_code == 200
     assert len(prefs["dismissed_topics"]) == 1  # no duplicate entry
+
+
+def test_accept_taxonomy_group_under_a_case_variant_tags_the_existing_entry(client, monkeypatch):
+    from backend.config.settings import settings
+
+    c, prefs = client
+    monkeypatch.setattr(settings, "label_first_enabled", True)
+    prefs["topic_interests"].append({"keyword": "Tabletop", "icon_id": "dice"})
+    monkeypatch.setattr(cluster_repo, "update_group_acceptance", lambda uid, gid, kw: [18])
+    resp = c.post("/api/topics/suggestions/12/accept", json={"keyword": "TABLETOP"})
+    assert resp.status_code == 200 and resp.json()["topic"]["keyword"] == "Tabletop"
+    assert prefs["topic_interests"] == [{"keyword": "Tabletop", "icon_id": "dice", "category": "games"}]

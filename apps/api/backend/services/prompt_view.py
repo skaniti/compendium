@@ -22,6 +22,7 @@ TASK_ORDER = [
     "cluster_naming",
     "supercluster_label",
     "supercluster_proposal",
+    "supercluster_fields",
     "agent_system",
     "page_annotation",
     "shelf_same",
@@ -36,6 +37,7 @@ TASK_LABELS = {
     "cluster_naming": "Cluster naming",
     "supercluster_label": "Supercluster labels",
     "supercluster_proposal": "Supercluster proposals",
+    "supercluster_fields": "Supercluster proposals (field per cluster)",
     "agent_system": "Chat agent",
     "page_annotation": "Page labelling",
     "shelf_same": "Shelf match check",
@@ -94,7 +96,7 @@ def live_prompts() -> dict[str, dict]:
     from backend.config.settings import settings
     from backend.services import agent
 
-    return {
+    live = {
         "skip_gate": {
             "name": _registered(main.SKIP_GATE_PROMPT),
             "selector": "backend.api.main.SKIP_GATE_PROMPT",
@@ -111,10 +113,6 @@ def live_prompts() -> dict[str, dict]:
             "name": _registered(f"supercluster_label_{settings.supercluster_label_prompt_version}"),
             "selector": "settings.supercluster_label_prompt_version",
         },
-        "supercluster_proposal": {
-            "name": _registered("supercluster_proposal_v1"),
-            "selector": "topic_proposals (fixed v1)",
-        },
         "agent_system": {
             "name": _registered(agent._system_prompt_name()),
             "selector": "settings.agent_system_prompt_version",
@@ -130,6 +128,19 @@ def live_prompts() -> dict[str, dict]:
             "selector": "shelf_service (fixed v1)",
         },
     }
+    # Only the prompt the proposal call actually uses is live: it follows the
+    # shape setting.
+    if settings.supercluster_proposal_shape == "fields":
+        live["supercluster_fields"] = {
+            "name": _registered("supercluster_fields_v1"),
+            "selector": "settings.supercluster_proposal_shape",
+        }
+    else:
+        live["supercluster_proposal"] = {
+            "name": _registered("supercluster_proposal_v1"),
+            "selector": "settings.supercluster_proposal_shape",
+        }
+    return live
 
 
 def _safe_model(value) -> str:
@@ -192,7 +203,9 @@ def _model_sources() -> list[tuple[str, str, str, object, str, str | None]]:
             "Proposes the suggested superclusters shown in the widget.",
             settings.supercluster_proposal_model,
             "settings.supercluster_proposal_model",
-            "supercluster_proposal",
+            "supercluster_fields"
+            if settings.supercluster_proposal_shape == "fields"
+            else "supercluster_proposal",
         ),
         (
             "supercluster_icons",

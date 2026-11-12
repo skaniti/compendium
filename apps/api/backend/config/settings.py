@@ -529,6 +529,19 @@ class Settings(BaseSettings):
     """Cap on topics kept from one proposal call. Env var
     ``SUPERCLUSTER_SUGGESTION_MAX_TOPICS``."""
 
+    supercluster_proposal_shape: Literal["topics", "fields"] = "fields"
+    """Prompt shape of the proposal call. "topics": the model returns topics
+    with member cluster ids. "fields": the model names one field per
+    candidate cluster and the server groups clusters by identical field name
+    (``topic_proposals.group_fields``). Env var
+    ``SUPERCLUSTER_PROPOSAL_SHAPE``."""
+
+    supercluster_proposal_max_candidates: int = 120
+    """At most this many candidate clusters go to the proposal call (the
+    largest by page count); the reply, one entry per cluster in the "fields"
+    shape, grows with the number sent. Env var
+    ``SUPERCLUSTER_PROPOSAL_MAX_CANDIDATES``."""
+
     supercluster_proposal_timeout_seconds: float = 30.0
     """Upper bound on the proposal call; on timeout nothing is proposed, a
     warning is logged and the recluster completes. Env var

@@ -583,35 +583,49 @@ class ClusteringService:
         # one flag that defaults off; with it off the module is never
         # imported and the HDBSCAN path below runs unchanged.
         if settings.label_first_enabled:
-            from backend.services.label_first_clustering import recluster_label_first
+            # The import and the call are covered here too (the label-first
+            # function has its own handler for errors inside its body, but its
+            # imports run before that handler); fail_run is idempotent.
+            try:
+                from backend.services.label_first_clustering import recluster_label_first
 
-            return await recluster_label_first(self, user_id, run_id, t0)
+                return await recluster_label_first(self, user_id, run_id, t0)
+            except Exception:
+                recluster_repo.fail_run(run_id)
+                raise
 
-        # Step 1: Load all active pages from DB
-        all_pages = self._load_all_pages(user_id)
-        logger.info(f"Loaded {len(all_pages)} active pages for user {user_id}")
+        # Steps 1-1b run inside the failure handling too: an exception while
+        # loading pages must fail the run, not leave it 'running' (which
+        # would skip every later recluster until the stale window passes).
+        try:
+            # Step 1: Load all active pages from DB
+            all_pages = self._load_all_pages(user_id)
+            logger.info(f"Loaded {len(all_pages)} active pages for user {user_id}")
 
-        # Step 1b: Pre-clustering quality filter
-        pages, filter_stats = self._filter_clusterable_pages(all_pages)
-        if len(pages) < HDBSCAN_MIN_CLUSTER_SIZE:
-            logger.warning(
-                f"Only {len(pages)} clusterable pages after filtering "
-                f"(from {len(all_pages)} total) — too few to cluster"
-            )
-            recluster_repo.complete_run(
-                run_id,
-                cluster_count=0,
-                noise_count=len(all_pages),
-                naming_cost=0.0,
-                elapsed_seconds=round(time.perf_counter() - t0, 2),
-            )
-            return {
-                "cluster_count": 0,
-                "noise_count": len(all_pages),
-                "naming_cost": 0.0,
-                "elapsed_seconds": 0.0,
-                "filter_stats": filter_stats,
-            }
+            # Step 1b: Pre-clustering quality filter
+            pages, filter_stats = self._filter_clusterable_pages(all_pages)
+            if len(pages) < HDBSCAN_MIN_CLUSTER_SIZE:
+                logger.warning(
+                    f"Only {len(pages)} clusterable pages after filtering "
+                    f"(from {len(all_pages)} total) — too few to cluster"
+                )
+                recluster_repo.complete_run(
+                    run_id,
+                    cluster_count=0,
+                    noise_count=len(all_pages),
+                    naming_cost=0.0,
+                    elapsed_seconds=round(time.perf_counter() - t0, 2),
+                )
+                return {
+                    "cluster_count": 0,
+                    "noise_count": len(all_pages),
+                    "naming_cost": 0.0,
+                    "elapsed_seconds": 0.0,
+                    "filter_stats": filter_stats,
+                }
+        except Exception:
+            recluster_repo.fail_run(run_id)
+            raise
 
         try:
             # Step 2: Compute embeddings (with disk cache)

@@ -25,7 +25,7 @@ def _fit(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
-async def _run_proposed(user_id: int, model: str | None) -> int:
+async def _run_proposed(user_id: int, model: str | None, shape: str | None) -> int:
     from backend.config.settings import settings
     from backend.db import auth_repo, cluster_repo, recluster_repo
     from backend.db.connection import set_current_user_id
@@ -45,8 +45,8 @@ async def _run_proposed(user_id: int, model: str | None) -> int:
     model = model or settings.supercluster_proposal_model
     print(f"[preview] user {user_id}, run #{run['id']}: {len(clusters)} clusters, "
           f"{len(candidates)} not in a declared supercluster ({len(existing)} existing names, "
-          f"{len(dismissed)} dismissed); model {model}")
-    topics, cost = await tp.propose_topics(candidates, existing, dismissed, model=model)
+          f"{len(dismissed)} dismissed); model {model}, shape {shape or settings.supercluster_proposal_shape}")
+    topics, cost = await tp.propose_topics(candidates, existing, dismissed, model=model, shape=shape)
     rows = tp.build_rows(topics, candidates, existing, tp.visit_evidence_for_clusters(user_id, clusters))
     names = {c["id"]: c["name"] for c in candidates}
     dismissed_lower = {d.lower() for d in dismissed}
@@ -159,16 +159,21 @@ async def _run(user_id: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(
+        description="Read-only preview of the SUPERCLUSTERS widget's suggestions "
+        "(proposed topics, or the v2 labelling of suggested groups) for one user."
+    )
     ap.add_argument("--user-id", type=int, required=True)
     ap.add_argument("--source", choices=("proposed", "groups"), default=None)
+    ap.add_argument("--shape", choices=("topics", "fields"), default=None,
+                    help="proposal prompt shape override (proposed source)")
     ap.add_argument("--model", default=None, help="proposal model override (proposed source)")
     args = ap.parse_args(argv)
     from backend.config.settings import settings
 
     source = args.source or settings.supercluster_suggestion_source
     if source == "proposed":
-        return asyncio.run(_run_proposed(args.user_id, args.model))
+        return asyncio.run(_run_proposed(args.user_id, args.model, args.shape))
     return asyncio.run(_run(args.user_id))
 
 

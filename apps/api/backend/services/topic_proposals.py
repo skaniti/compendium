@@ -48,63 +48,157 @@ def collect_candidates(clusters: list[dict], declared_keywords: list[str]) -> li
 
 MAX_LABEL_WORDS = 4
 MAX_LABEL_CHARS = 60
+MIN_LABEL_LETTERS = 2
 UMBRELLA_SHARE = 0.6
 UMBRELLA_MIN_CANDIDATES = 6
 FORBIDDEN_LABELS = frozenset({
     "null", "none", "n/a", "diverse topics", "miscellaneous", "general knowledge",
-    "various", "other", "mixed",
+    "various", "other", "mixed", "misc", "uncategorized", "unknown", "general",
+    "others", "random", "stuff", "everything else",
 })
+TOKENS_PER_CANDIDATE = 30
+MIN_MAX_TOKENS = 2000
 
 
-def validate_topics(raw, candidate_ids: set[int], max_topics: int) -> list[dict]:
+def label_key(label: str) -> str:
+    """Grouping key for a label: casefold, "&" read as "and", every
+    non-alphanumeric character removed (so "Health & Fitness" and "Health and
+    Fitness", "Sci-Fi" and "Sci Fi", "Cooking" and "Cooking." coincide).
+    Same squashing ``covering_keyword`` uses for equality."""
+    from backend.services.suggestion_offers import _squashed
+
+    return _squashed(label.replace("&", " and "))
+
+
+def _label_ok(label: str) -> bool:
+    plain = label.casefold().strip(" .!?:;,")
+    return (
+        bool(label)
+        and plain not in FORBIDDEN_LABELS
+        and len(label) <= MAX_LABEL_CHARS
+        and len(label.split()) <= MAX_LABEL_WORDS
+        and sum(ch.isalpha() for ch in label) >= MIN_LABEL_LETTERS
+    )
+
+
+def validate_topics(raw, candidate_ids: set[int], max_topics: int | None = None) -> list[dict]:
     """Clean the model's ``{"topics": [...]}`` into ``[{label, cluster_ids}]``.
 
-    Per topic: trims the label; drops it when empty, longer than 4 words or
-    60 characters, or one of the literal/forbidden labels ("null", "none",
-    "n/a", "Diverse Topics", "Miscellaneous", "General Knowledge", "Various",
-    "Other", "Mixed"; case-insensitive); drops it as an umbrella when it
-    claims more than 60 percent of the candidates (with at least 6
-    candidates). Unknown cluster ids are dropped, a cluster claimed twice
-    goes to the first topic that claimed it, topics whose labels are equal
-    ignoring case merge (union of members, first spelling wins), topics left
-    with fewer than 2 clusters are dropped and the result is capped at
-    *max_topics*."""
+    Per entry: trims the label; drops it when it is too long (more than 4
+    words or 60 characters), has fewer than 2 letters, or is a
+    literal/catch-all label ("null", "none", "n/a", "Diverse Topics",
+    "Miscellaneous", "General Knowledge", "Various", "Other", "Mixed", "Misc",
+    "Uncategorized", "Unknown", "General", "Others", "Random", "Stuff",
+    "Everything Else"; case-insensitive). Entries whose labels have the same
+    ``label_key`` merge (union of members, first spelling wins). After the
+    merge, a topic claiming more than 60 percent of the candidates (with at
+    least 6 candidates) is dropped as an umbrella. Unknown cluster ids are
+    dropped, a cluster claimed twice goes to the first topic that claimed it,
+    and topics left with fewer than 2 clusters are dropped. With
+    *max_topics* the result is cut in model-output order; callers that can
+    rank use ``rank_and_cap`` instead."""
     topics = raw.get("topics") if isinstance(raw, dict) else None
     if not isinstance(topics, list):
         return []
-    claimed: dict[int, str] = {}
-    by_key: dict[str, dict] = {}
+    merged: dict[str, dict] = {}
     for t in topics:
         if not isinstance(t, dict):
             continue
         label = t.get("label")
         label = " ".join(label.split()) if isinstance(label, str) else ""
         ids = t.get("cluster_ids")
-        if not label or not isinstance(ids, list):
+        if not _label_ok(label) or not isinstance(ids, list):
             continue
-        key = label.casefold()
-        if (
-            key in FORBIDDEN_LABELS
-            or len(label) > MAX_LABEL_CHARS
-            or len(label.split()) > MAX_LABEL_WORDS
-        ):
-            continue
-        valid = {
-            i for i in ids
-            if isinstance(i, int) and not isinstance(i, bool) and i in candidate_ids
-        }
+        entry = merged.setdefault(label_key(label), {"label": label, "ids": []})
+        for i in ids:
+            if (
+                isinstance(i, int) and not isinstance(i, bool)
+                and i in candidate_ids and i not in entry["ids"]
+            ):
+                entry["ids"].append(i)
+    claimed: set[int] = set()
+    out: list[dict] = []
+    for entry in merged.values():
         if (
             len(candidate_ids) >= UMBRELLA_MIN_CANDIDATES
-            and len(valid) > UMBRELLA_SHARE * len(candidate_ids)
+            and len(entry["ids"]) > UMBRELLA_SHARE * len(candidate_ids)
         ):
             continue
-        entry = by_key.setdefault(key, {"label": label, "cluster_ids": []})
-        for i in ids:
-            if i in valid and claimed.get(i, key) == key and i not in entry["cluster_ids"]:
-                claimed[i] = key
-                entry["cluster_ids"].append(i)
-    out = [t for t in by_key.values() if len(t["cluster_ids"]) >= MIN_TOPIC_CLUSTERS]
-    return out[:max_topics]
+        kept = [i for i in entry["ids"] if i not in claimed]
+        if len(kept) < MIN_TOPIC_CLUSTERS:
+            continue
+        claimed.update(kept)
+        out.append({"label": entry["label"], "cluster_ids": kept})
+    return out if max_topics is None else out[:max_topics]
+
+
+def rank_and_cap(
+    topics: list[dict],
+    candidates: list[dict],
+    existing_topics: list[str],
+    dismissed_labels: list[str],
+    max_topics: int,
+    *,
+    min_clusters: int,
+    min_pages: int,
+) -> list[dict]:
+    """Keep the topics worth a slot: drop those that cannot be offered right
+    now (under the cluster or page floor, covered by an existing keyword,
+    dismissed), sort the rest by page total descending (ties by cluster
+    count descending, then label) and only then cap at *max_topics*."""
+    from backend.services.suggestion_offers import covering_keyword
+
+    pages_of = {c["id"]: c["pages"] for c in candidates}
+    dismissed = {d.casefold() for d in dismissed_labels}
+    scored = []
+    for t in topics:
+        pages = sum(pages_of.get(i, 0) for i in t["cluster_ids"])
+        if (
+            len(t["cluster_ids"]) < min_clusters
+            or pages < min_pages
+            or covering_keyword(t["label"], existing_topics) is not None
+            or t["label"].casefold() in dismissed
+        ):
+            continue
+        scored.append((-pages, -len(t["cluster_ids"]), t["label"].casefold(), t))
+    scored.sort(key=lambda x: x[:3])
+    return [x[3] for x in scored[:max_topics]]
+
+
+def parse_fields(raw, candidate_ids: set[int]) -> dict[int, str]:
+    """``{"fields": [{"id", "field"}]}`` -> {cluster id: field}.
+
+    Drops unknown or non-integer ids, non-string, empty or literal "null"
+    fields; when an id appears more than once the first entry wins (even if
+    that first entry was unusable)."""
+    entries = raw.get("fields") if isinstance(raw, dict) else None
+    if not isinstance(entries, list):
+        return {}
+    seen: set[int] = set()
+    out: dict[int, str] = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        i = e.get("id")
+        if isinstance(i, bool) or not isinstance(i, int) or i not in candidate_ids or i in seen:
+            continue
+        seen.add(i)
+        field = e.get("field")
+        field = " ".join(field.split()) if isinstance(field, str) else ""
+        if field and field.casefold() not in ("null", "none"):
+            out[i] = field
+    return out
+
+
+def group_fields(fields: dict[int, str]) -> dict:
+    """Group clusters by ``label_key`` of the field (first spelling wins) into
+    the ``{"topics": [...]}`` shape ``validate_topics`` takes. Singletons are
+    left to validation, which drops topics with fewer than 2 clusters."""
+    groups: dict[str, dict] = {}
+    for i, field in fields.items():
+        g = groups.setdefault(label_key(field), {"label": field, "cluster_ids": []})
+        g["cluster_ids"].append(i)
+    return {"topics": list(groups.values())}
 
 
 async def propose_topics(
@@ -114,6 +208,7 @@ async def propose_topics(
     *,
     model: str | None = None,
     max_topics: int | None = None,
+    shape: str | None = None,
 ) -> tuple[list[dict], float]:
     """One model call; returns (validated topics, cost_usd).
 
@@ -121,9 +216,19 @@ async def propose_topics(
     malformed call logs a warning and returns ([], cost)."""
     from backend.config.settings import settings
 
+    if len(candidates) > settings.supercluster_proposal_max_candidates:
+        # keep the largest clusters: the reply grows with the candidate count
+        keep = sorted(candidates, key=lambda c: (-c["pages"], c["id"]))
+        keep = keep[: settings.supercluster_proposal_max_candidates]
+        logger.info(
+            f"Topic proposals: {len(candidates) - len(keep)} of {len(candidates)} "
+            f"candidate clusters left out (cap {settings.supercluster_proposal_max_candidates})"
+        )
+        candidates = keep
     if len(candidates) < MIN_CANDIDATES:
         return [], 0.0
     model = model or settings.supercluster_proposal_model
+    shape = shape or settings.supercluster_proposal_shape
     max_topics = max_topics or settings.supercluster_suggestion_max_topics
     cost = 0.0
     try:
@@ -136,7 +241,7 @@ async def propose_topics(
         # of the JSON payload the model reads. Cluster names are stripped of
         # control characters and length-capped in collect_candidates instead.
         prompt = get_prompt_raw(
-            "supercluster_proposal_v1",
+            "supercluster_fields_v1" if shape == "fields" else "supercluster_proposal_v1",
             max_topics=max_topics,
             existing_topics_block=(
                 "\n".join(f"- {t}" for t in sorted(set(existing_topics), key=str.lower))
@@ -153,7 +258,7 @@ async def propose_topics(
                 prompt=prompt,
                 model=model,
                 temperature=0.0,
-                max_tokens=2000,
+                max_tokens=max(MIN_MAX_TOKENS, TOKENS_PER_CANDIDATE * len(candidates) + 500),
                 seed=ASSIGNMENT_SEED,
                 response_format="json_object",
             ),
@@ -170,7 +275,15 @@ async def propose_topics(
     except Exception as e:
         logger.warning(f"Topic proposal call failed (proposing nothing): {e}")
         return [], cost
-    return validate_topics(raw, {c["id"] for c in candidates}, max_topics), cost
+    ids = {c["id"] for c in candidates}
+    if shape == "fields":
+        raw = group_fields(parse_fields(raw, ids))
+    topics = validate_topics(raw, ids, None)
+    return rank_and_cap(
+        topics, candidates, existing_topics, dismissed_labels, max_topics,
+        min_clusters=settings.supercluster_suggestion_min_clusters,
+        min_pages=settings.supercluster_suggestion_min_pages,
+    ), cost
 
 
 def build_rows(
