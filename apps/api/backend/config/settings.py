@@ -5,7 +5,7 @@ import os
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -515,6 +515,42 @@ class Settings(BaseSettings):
     0.0 disables the pass entirely (no merges). Env var
     ``SUPERCLUSTER_SINGLETON_MERGE_THRESHOLD``."""
 
+    supercluster_suggestion_source: Literal["proposed", "groups"] = "proposed"
+    """Where the SUPERCLUSTERS widget's suggestions come from (not label-first
+    mode, which always offers undeclared taxonomy categories). "proposed"
+    (default): at the end of every recluster ONE model call proposes broad
+    topics over the clusters not in a declared supercluster
+    (``backend.services.topic_proposals``), stored as ``source='proposed'``
+    rows that own no clusters. "groups": the embedding-discovered
+    ``source='suggested'`` groups of hybrid mode, named by the label prompt.
+    Env var ``SUPERCLUSTER_SUGGESTION_SOURCE``."""
+
+    supercluster_suggestion_max_topics: int = 8
+    """Cap on topics kept from one proposal call. Env var
+    ``SUPERCLUSTER_SUGGESTION_MAX_TOPICS``."""
+
+    supercluster_proposal_timeout_seconds: float = 30.0
+    """Upper bound on the proposal call; on timeout nothing is proposed, a
+    warning is logged and the recluster completes. Env var
+    ``SUPERCLUSTER_PROPOSAL_TIMEOUT_SECONDS``."""
+
+    supercluster_proposal_model: str = "gpt-4o-mini"
+    """Model for the proposal call (see ``supercluster_suggestion_source``).
+    Env var ``SUPERCLUSTER_PROPOSAL_MODEL``."""
+
+    supercluster_suggestion_min_clusters: int = 2
+    """A suggested group is offered to the owner (SUPERCLUSTERS widget,
+    ``GET /api/topics/suggestions``, the CLUSTERING card's "N suggested") only
+    with at least this many clusters, so a one-cluster group named after its
+    one cluster is never offered. Groups below the floor stay on the graph.
+    Shared rule: ``backend.services.suggestion_offers``. Env var
+    ``SUPERCLUSTER_SUGGESTION_MIN_CLUSTERS``."""
+
+    supercluster_suggestion_min_pages: int = 15
+    """Page floor for the same offer rule (see
+    ``supercluster_suggestion_min_clusters``). Env var
+    ``SUPERCLUSTER_SUGGESTION_MIN_PAGES``."""
+
     supercluster_label_prompt_version: str = "v1a"
     """Selects the registry entry ``supercluster_label_{version}`` in
     ``backend/prompts/templates.py`` for
@@ -522,12 +558,15 @@ class Settings(BaseSettings):
     backlog, 2026-08-14 -- registry migration of the prompt that was
     previously an inline string). "v1a" is byte-identical to the
     pre-migration prompt (2-4 word title-case label, no further
-    constraints). "v1b" forbids bare one-word discipline labels ('Zoology',
-    'Technology', 'Science') and brand-only labels, and requires
-    distinctiveness against the run's other group labels. Stays v1a until
-    evidence supports a flip -- no dedicated supercluster_label fixture set
-    exists yet (only cluster_naming has one, under
-    ``evaluation/fixtures/cluster_naming/``). Env var
+    constraints). "v1b" forbids bare one-word
+    discipline labels ('Zoology', 'Technology', 'Science') and brand-only
+    labels, and requires distinctiveness against the run's other group
+    labels. "v2" (suggested-superclusters-in-widget work, 2026-11-12) names the
+    broad 1-3 word field the owner would file a group's clusters under,
+    matching the style of the owner's existing superclusters, and may answer
+    null when no single field covers the group; it only matters with
+    ``supercluster_suggestion_source="groups"`` and stays opt-in so group
+    labels on the graph are unchanged. Env var
     ``SUPERCLUSTER_LABEL_PROMPT_VERSION``."""
 
     featured_singletons_visible_pct: float = 0.40

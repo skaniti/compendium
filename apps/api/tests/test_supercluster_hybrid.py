@@ -75,7 +75,7 @@ def test_hybrid_assignment_end_to_end(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Fiber Crafts" for g in unlabeled}, 0.001
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -170,7 +170,7 @@ def test_sibling_labels_computed_from_real_call_site(monkeypatch):
 
     captured = {}
 
-    async def capturing_fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def capturing_fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         captured["sibling_labels"] = sibling_labels
         return {g["group_index"]: "Fiber Crafts" for g in unlabeled}, 0.001
 
@@ -227,7 +227,7 @@ def test_hybrid_works_with_zero_keywords(monkeypatch):
         scs.cluster_repo, "update_cluster_groups", lambda uid, a: None
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {}, 0.0  # LLM failed → fallback label path
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -350,7 +350,7 @@ def test_dismissed_suggestion_not_painted(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {
             g["group_index"]: (
                 "Fiber Crafts"
@@ -445,7 +445,7 @@ def test_verifier_demotes_rejected_match(monkeypatch):
                    if 1 in members_by_group[g["group_index"]])
         return {bad}, 0.0
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Ergonomic Input Devices" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_verify_topic_matches", fake_verify)
@@ -512,7 +512,7 @@ def test_accepted_split_subdivides_umbrella(monkeypatch):
         scs.cluster_repo, "update_cluster_groups", lambda uid, a: None
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Suggested" for g in unlabeled}, 0.0
 
     async def fake_verify(matched, members_by_group, names):
@@ -587,7 +587,7 @@ def test_strong_matches_audited_and_rescued_by_carve(monkeypatch):
 
     monkeypatch.setattr(scs, "_verify_topic_matches", reject_all)
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -687,7 +687,7 @@ def _carve_fixture(monkeypatch, saved, verify_impl):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -777,7 +777,7 @@ def test_carve_out_reverts_when_verifier_rejects(monkeypatch):
         lambda uid, a: saved_holder.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names_, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names_, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -892,7 +892,7 @@ def test_expansion_terms_rescue_umbrella_keyword(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names_, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names_, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -1028,7 +1028,7 @@ def test_carve_audit_is_per_member_not_group_max(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -1113,7 +1113,7 @@ def _support_gate_fixture(monkeypatch, saved, support_min):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -1226,7 +1226,7 @@ def test_support_gate_drops_keyword_group_with_zero_support(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -1329,7 +1329,7 @@ def test_member_exclusion_moves_excluded_cluster_to_residual(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Misc" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)

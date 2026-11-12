@@ -69,6 +69,15 @@ from backend.db.connection import get_conn
 
 
 @pytest.fixture(autouse=True)
+def _groups_source(monkeypatch):
+    """These tests cover the embedding-groups candidate source; the default
+    source is "proposed" (see test_topic_proposals.py)."""
+    from backend.config.settings import settings
+
+    monkeypatch.setattr(settings, "supercluster_suggestion_source", "groups")
+
+
+@pytest.fixture(autouse=True)
 def _clean_tables():
     """Truncate all tables before each test for isolation.
 
@@ -254,15 +263,15 @@ class TestClusteringStatusStats:
                     "source": "suggested",
                     "interest_tier": "casual",
                     "member_count": 2,
-                    "page_count": 2,
+                    "page_count": 20,
                 },
                 {
                     "group_index": 1,
                     "label": "Cooking",
                     "source": "suggested",
                     "interest_tier": "casual",
-                    "member_count": 1,
-                    "page_count": 1,
+                    "member_count": 3,
+                    "page_count": 40,
                 },
             ],
         )
@@ -271,6 +280,55 @@ class TestClusteringStatusStats:
         assert resp.status_code == 200
         body = resp.json()
         assert body["stats_line1"] == "2 clusters · 1 topics · 2 suggested"
+
+    def test_suggested_count_uses_the_widgets_offer_rule(self, client):
+        """Groups the widget would not offer (one cluster, too few pages, no
+        single field, covered by an existing supercluster, dismissed) are
+        left out of the card's count, which equals len(GET /api/topics/
+        suggestions)."""
+        tc, user = client
+        auth_repo.update_preferences(
+            user["id"],
+            {
+                "topic_interests": [{"keyword": "astro"}],
+                "dismissed_topics": [{"label": "Hidden", "dismissed_at": "2026-11-01"}],
+            },
+        )
+        run_id = _seed_completed_run(user["id"], [1, 1])
+
+        def grp(i, label, clusters=3, pages=40, evidence=None):
+            return {
+                "group_index": i, "label": label, "source": "suggested",
+                "interest_tier": "casual", "member_count": clusters,
+                "page_count": pages, "evidence": evidence or {},
+            }
+
+        cluster_repo.save_super_cluster_groups(
+            user["id"], run_id,
+            [
+                grp(0, "Offered"),
+                grp(1, "Single Cluster", clusters=1),
+                grp(2, "Small", pages=14),
+                grp(3, "Grab Bag", evidence={"no_single_field": True}),
+                grp(4, "Astro Things", evidence={"covered_by": "astro"}),
+                grp(5, "Hidden"),
+            ],
+        )
+
+        body = tc.get("/api/clustering/status").json()
+        assert body["stats_line1"] == "2 clusters · 1 topics · 1 suggested"
+        listed = tc.get("/api/topics/suggestions").json()["suggestions"]
+        assert [s["label"] for s in listed] == ["Offered"]
+
+    def test_all_groups_filtered_omits_the_suggested_segment(self, client):
+        tc, user = client
+        run_id = _seed_completed_run(user["id"], [1])
+        cluster_repo.save_super_cluster_groups(
+            user["id"], run_id,
+            [{"group_index": 0, "label": "Lonely", "source": "suggested",
+              "interest_tier": "casual", "member_count": 1, "page_count": 99}],
+        )
+        assert "suggested" not in tc.get("/api/clustering/status").json()["stats_line1"]
 
     def test_completed_run_with_zero_topics_omits_suggested_when_none(self, client):
         tc, user = client

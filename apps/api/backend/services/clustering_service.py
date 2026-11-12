@@ -847,6 +847,13 @@ class ClusteringService:
                         batch_mode=batch_mode,
                     )
 
+            # Step 5c: widget suggestions. One model call proposes topics over
+            # the clusters outside every declared supercluster (both modes).
+            # Never raises: a failure just means no proposals this run.
+            from backend.services.topic_proposals import store_proposals_for_run
+
+            await store_proposals_for_run(user_id, run_id)
+
             elapsed = time.perf_counter() - t0
 
             # Complete the run

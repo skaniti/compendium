@@ -594,19 +594,72 @@ class TestSuperClusterLabelRegistryParity:
         )
         assert new == old
 
-    def test_v1a_matches_pre_migration_via_settings_default(self):
-        from backend.config.settings import settings
-
-        assert settings.supercluster_label_prompt_version == "v1a"
+    def test_v1a_matches_pre_migration_when_selected(self):
+        """v1a is the default again (graph group labels unchanged); v2 is
+        opt-in, see TestSuperClusterLabelV2."""
         payload = [{"group_id": 1, "clusters": ["A"]}]
         groups_json = json.dumps(payload, ensure_ascii=False)
         old = self._old_inline_prompt(groups_json)
         new = get_prompt_raw(
-            f"supercluster_label_{settings.supercluster_label_prompt_version}",
+            "supercluster_label_v1a",
             groups_json=groups_json,
             sibling_labels_block="(none yet -- infer distinctiveness only from the other GROUPS above)",
         )
         assert new == old
+
+
+class TestSuperClusterLabelV2:
+    """supercluster_label_v2 (opt-in via env): broad 1-3 word field names,
+    anchored on the owner's existing superclusters, null allowed. Pinned
+    byte for byte so a wording change is a deliberate, reviewed edit."""
+
+    EXPECTED = (
+        "Each entry below is a GROUP of related web-page clusters from one "
+        "person's browsing, with the number of pages in each cluster. For "
+        "each group, name the broad field a person would file ALL of that "
+        "group's clusters under: 1-3 words, title case.\n\n"
+        "Rules:\n"
+        "- Match the style and breadth of this person's existing "
+        "superclusters, which are short and broad:\n- science\n- zoology\n"
+        "- The label must be clearly different from every one of those "
+        "names and from the labels you give the other groups -- never a "
+        "rewording of one of them.\n"
+        "- Name the field, not a cluster: do not simply reuse one "
+        "cluster's name, a product, a franchise or a single event.\n"
+        "- The field must cover EVERY cluster listed, not just the "
+        "largest ones. If even one sizeable cluster would not be filed "
+        "under it, or the clusters have nothing in common (a grab-bag), "
+        "return the JSON value null as the label (not the string "
+        "\"null\"). Do not invent a vague umbrella such as 'Diverse "
+        "Topics' or 'Miscellaneous'.\n\n"
+        'GROUPS (JSON):\n[{"group_id": 1, "clusters": [{"name": "A", "pages": 4}]}]\n\n'
+        "Return JSON ONLY in this exact shape:\n"
+        '{"labels": [{"group_id": <id>, "label": "<label or null>"}, ...]}'
+    )
+
+    def test_v2_pinned(self):
+        groups_json = json.dumps(
+            [{"group_id": 1, "clusters": [{"name": "A", "pages": 4}]}],
+            ensure_ascii=False,
+        )
+        rendered = get_prompt_raw(
+            "supercluster_label_v2",
+            groups_json=groups_json,
+            existing_topics_block="- science\n- zoology",
+            sibling_labels_block="unused by v2",
+        )
+        assert rendered == self.EXPECTED
+
+    def test_v1a_is_the_default_so_graph_group_labels_are_unchanged(self):
+        from backend.config.settings import settings
+
+        assert settings.supercluster_label_prompt_version == "v1a"
+
+    def test_v1a_and_v1b_still_registered(self):
+        from backend.prompts.templates import PROMPTS
+
+        assert "supercluster_label_v1a" in PROMPTS
+        assert "supercluster_label_v1b" in PROMPTS
 
 
 class TestNamingVariantSmoke:
@@ -677,3 +730,20 @@ class TestShelfPrompts:
         assert "Shelf A: A" in merge and "Shelf B: B" in merge
         split = get_prompt_raw("shelf_split_name_v1", shelf_name="N", category="c", subtopics="- s")
         assert "'N'" in split and "ONLY the name" in split
+
+
+class TestSuperClusterProposalPrompt:
+    """supercluster_proposal_v1 (topic_proposals.propose_topics), pinned byte
+    for byte so a wording change is a deliberate, reviewed edit."""
+
+    EXPECTED = 'Below are web-page clusters from one person\'s browsing that are not yet filed under any of their superclusters. Propose up to 8 new superclusters: broad fields this person would actually file things under.\n\nRules:\n- Each topic is a field name of 1-2 words (3 at most), title case, at the breadth of this person\'s existing superclusters, which are short and broad:\n- science\n- zoology\n- Each topic groups at least 2 clusters; a cluster belongs to at most one topic.\n- Propose a topic whenever two or more clusters would sit together on the same shelf of a library (for example several clusters about books and stories are \'Literature\'). Leave a cluster out only when no proposed topic honestly fits it; a cluster that is really a one-off (a single product, person or event) is left out rather than stretched into a topic.\n- No vague umbrellas: never \'Diverse Topics\', \'Miscellaneous\', \'General Knowledge\' or a catch-all such as \'Cultural Studies\' for clusters that have nothing in common.\n- Never repeat or reword an existing supercluster, and never propose any of these names the person already dismissed:\n- Origami Folding\n\nExample. Clusters: [{"id": 1, "name": "Bread Proofing Tips", "pages": 9}, {"id": 2, "name": "Pickling Jars", "pages": 7}, {"id": 3, "name": "Canoe Portage Maps", "pages": 6}, {"id": 4, "name": "Hiking Boot Waxing", "pages": 8}, {"id": 5, "name": "Invoice Template Fixes", "pages": 5}, {"id": 6, "name": "Chainmail Rings", "pages": 4}]\nAnswer: {"topics": [{"label": "Cooking", "cluster_ids": [1, 2]}, {"label": "Outdoors", "cluster_ids": [3, 4]}]} -- clusters 5 and 6 fit no topic and are left out.\n\nCLUSTERS (JSON):\n[{"id": 1, "name": "A", "pages": 4}]\n\nReturn JSON ONLY in this exact shape:\n{"topics": [{"label": "<field>", "cluster_ids": [<id>, ...]}, ...]}'
+
+    def test_pinned(self):
+        rendered = get_prompt_raw(
+            "supercluster_proposal_v1",
+            max_topics=8,
+            existing_topics_block="- science\n- zoology",
+            dismissed_block="- Origami Folding",
+            clusters_json='[{"id": 1, "name": "A", "pages": 4}]',
+        )
+        assert rendered == self.EXPECTED

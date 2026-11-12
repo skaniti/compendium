@@ -212,7 +212,7 @@ _SUGGESTED_GROUP = [
         "interest_tier": "recurrent",
         "evidence": {"n_weeks": 3},
         "member_count": 2,
-        "page_count": 12,
+        "page_count": 40,
         "cluster_ids": [11],
         "cluster_names": ["Crochet"],
     }
@@ -220,12 +220,15 @@ _SUGGESTED_GROUP = [
 
 
 def _mock_groups(monkeypatch, groups):
+    from backend.config.settings import settings
     from backend.db import cluster_repo
+
+    monkeypatch.setattr(settings, "supercluster_suggestion_source", "groups")
 
     monkeypatch.setattr(
         cluster_repo,
         "get_groups_for_user",
-        lambda user_id, recluster_run_id=None, source=None: groups,
+        lambda user_id, recluster_run_id=None, source=None, include_proposed=False: groups,
     )
 
 

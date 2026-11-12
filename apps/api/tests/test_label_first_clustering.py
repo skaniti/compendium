@@ -473,3 +473,46 @@ async def test_shelf_catchup_runs_off_the_event_loop_thread(fake_world):
     )
     await lf.recluster_label_first(svc, 7, 42, 0.0)
     assert seen and seen[0] != threading.get_ident()
+
+
+# --- declared categories with the REAL preference shape ({keyword, icon_id, ...}) ---
+
+def test_declared_keyword_reads_dict_entries_and_the_category_field():
+    from backend.services import label_first_clustering as lf
+
+    entries = [{"keyword": "science & nature", "icon_id": "x"}]
+    assert lf._declared_keyword("science_nature", entries) == "science & nature"
+    assert lf._declared_keyword("games", entries) is None
+    # a renamed keyword declares the category through its `category` field
+    renamed = [{"keyword": "tabletop", "icon_id": "x", "category": "games"}]
+    assert lf._declared_keyword("games", renamed) == "tabletop"
+    assert lf._declared_keyword("science_nature", renamed) is None
+    # junk entries are skipped
+    assert lf._declared_keyword("games", [{"icon_id": "x"}, {"keyword": None}, None]) is None
+
+
+def _taxonomy_row(declared_kw):
+    """What assign_category_superclusters stores for the 'games' category."""
+    return {"id": 12, "label": "Games", "source": "taxonomy",
+            "topic": declared_kw or "games",
+            "topic_similarity": 1.0 if declared_kw else None,
+            "interest_tier": "declared" if declared_kw else "casual", "evidence": {},
+            "member_count": 3, "page_count": 44, "cluster_ids": [18], "cluster_names": ["x"]}
+
+
+@pytest.mark.parametrize("entries,expect_declared", [
+    ([], False),
+    ([{"keyword": "Games", "icon_id": "x"}], True),                    # accepted under the default text
+    ([{"keyword": "tabletop", "icon_id": "x", "category": "games"}], True),  # accepted, renamed
+])
+def test_declared_categories_are_not_offered_after_a_recluster(monkeypatch, entries, expect_declared):
+    from backend.config.settings import settings
+    from backend.services import label_first_clustering as lf
+    from backend.services.suggestion_offers import offered_suggestions
+
+    monkeypatch.setattr(settings, "label_first_enabled", True)
+    kw = lf._declared_keyword("games", entries)
+    assert (kw is not None) is expect_declared
+    row = _taxonomy_row(kw)  # the recluster's output given these preferences
+    offered = offered_suggestions([row], {"topic_interests": entries})
+    assert (offered == []) is expect_declared

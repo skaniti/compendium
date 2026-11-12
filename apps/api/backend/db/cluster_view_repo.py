@@ -144,8 +144,11 @@ def get_group_counts(user_id: int, run_id: int | None) -> dict:
         return {"superclusters": 0, "topics": len(topics), "suggested": 0}
     sc_map = cluster_repo.get_super_cluster_map(user_id, run_id)
     with get_conn() as conn, conn.cursor() as cur:
-        # Distinct labels: the header card's "N suggested" rule
-        # (cluster_repo.get_suggested_group_count).
+        # Suggested groups on the graph (distinct labels). Deliberately NOT
+        # the offer rule behind the CLUSTERING card's "N suggested" and the
+        # widget (suggestion_offers.offered_suggestions): groups too small,
+        # unnamed or already covered stay painted on the graph but are not
+        # offered, so this count can be higher than the offered count.
         cur.execute(
             """
             SELECT COUNT(DISTINCT label) FROM super_cluster_groups

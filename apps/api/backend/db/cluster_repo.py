@@ -178,14 +178,29 @@ def update_group_acceptance(
             return [r[0] for r in cur.fetchall()]
 
 
+PROPOSED_SOURCE = "proposed"
+"""``super_cluster_groups.source`` of model-proposed topics
+(``topic_proposals``). These rows do NOT own clusters (no
+``clusters.group_id`` points at them; members live in
+``evidence.cluster_db_ids``) and are never painted on the graph, so every
+reader that assumes a group owns clusters must go through
+``get_groups_for_user`` WITHOUT ``include_proposed``."""
+
+
 def get_groups_for_user(
     user_id: int,
     recluster_run_id: int | None = None,
     source: str | None = None,
+    include_proposed: bool = False,
 ) -> list[dict]:
     """Discovered groups for a run (latest completed when run id is None),
     optionally filtered by source ('keyword' | 'suggested'). Includes member
-    cluster ids/names for display."""
+    cluster ids/names for display.
+
+    Rows with source 'proposed' are left out unless *include_proposed* (or
+    ``source='proposed'``): they own no clusters and must not reach the graph
+    payload or any consumer that assumes a group is painted. For them the
+    member lists are resolved from ``evidence.cluster_db_ids``."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             if recluster_run_id is None:
@@ -214,12 +229,14 @@ def get_groups_for_user(
                 LEFT JOIN clusters c ON c.group_id = g.id
                 WHERE g.user_id = %s AND g.recluster_run = %s
                   AND (%s::TEXT IS NULL OR g.source = %s)
+                  AND (%s OR g.source <> 'proposed')
                 GROUP BY g.id
                 ORDER BY g.page_count DESC
                 """,
-                (user_id, recluster_run_id, source, source),
+                (user_id, recluster_run_id, source, source,
+                 include_proposed or source == PROPOSED_SOURCE),
             )
-            return [
+            groups = [
                 {
                     "id": r[0],
                     "label": r[1],
@@ -237,6 +254,67 @@ def get_groups_for_user(
                 }
                 for r in cur.fetchall()
             ]
+            _resolve_proposed_members(cur, user_id, groups)
+            return groups
+
+
+def _resolve_proposed_members(cur, user_id: int, groups: list[dict]) -> None:
+    """Fill cluster_ids / cluster_names / cluster_slugs of 'proposed' rows
+    from ``evidence.cluster_db_ids`` (they own no clusters via group_id)."""
+    proposed = [g for g in groups if g["source"] == PROPOSED_SOURCE]
+    wanted = sorted({
+        int(c) for g in proposed for c in (g["evidence"].get("cluster_db_ids") or [])
+    })
+    if not wanted:
+        return
+    cur.execute(
+        "SELECT id, cluster_name, cluster_slug FROM clusters "
+        "WHERE user_id = %s AND id = ANY(%s)",
+        (user_id, wanted),
+    )
+    by_id = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+    for g in proposed:
+        ids = [int(c) for c in g["evidence"].get("cluster_db_ids") or [] if int(c) in by_id]
+        g["cluster_ids"] = ids
+        g["cluster_names"] = [by_id[c][0] for c in ids]
+        g["cluster_slugs"] = [by_id[c][1] for c in ids]
+
+
+def update_proposed_acceptance(
+    user_id: int, group_id: int, keyword: str, cluster_ids: list[int]
+) -> list[int]:
+    """Accept a 'proposed' row under *keyword*.
+
+    The row keeps source 'proposed' (so it can never be mistaken for a group
+    that owns clusters) and gets ``evidence.accepted_as`` -- the offer rule
+    stops offering it. The member clusters' ``super_cluster`` is set to the
+    keyword at once so the graph reflects the acceptance; ``clusters.group_id``
+    is left as it was (the old suggested group, or none). The next recluster
+    recomputes membership through normal keyword matching. Returns the ids of
+    the clusters relabeled."""
+    import json as _json
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE super_cluster_groups
+                SET evidence = COALESCE(evidence, '{}'::jsonb) || %s::jsonb
+                WHERE id = %s AND user_id = %s AND source = 'proposed'
+                """,
+                (_json.dumps({"accepted_as": keyword}), group_id, user_id),
+            )
+            if not cluster_ids:
+                return []
+            cur.execute(
+                """
+                UPDATE clusters SET super_cluster = %s
+                WHERE user_id = %s AND id = ANY(%s)
+                RETURNING id
+                """,
+                (keyword, user_id, list(cluster_ids)),
+            )
+            return [r[0] for r in cur.fetchall()]
 
 
 def save_page_clusters(page_cluster_pairs: list[tuple[int, int]]) -> None:
@@ -417,23 +495,24 @@ def get_noise_stats(user_id: int, recluster_run_id: int) -> tuple[int, int]:
     return noise or 0, total or 0
 
 
-def get_suggested_group_count(user_id: int, recluster_run_id: int) -> int:
-    """COUNT(DISTINCT label) of ``source='suggested'`` super_cluster_groups
-    for a run -- mirrors the "M suggested" segment of
-    ``update_hbar_cluster_stats`` (frontend/dash/callbacks/graph.py:265-273).
-    """
+def get_cluster_page_counts(user_id: int, cluster_ids: list[int]) -> dict[int, int]:
+    """{cluster id: page count} for the caller's clusters among *cluster_ids*
+    (read-only)."""
+    if not cluster_ids:
+        return {}
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COUNT(DISTINCT label)
-                FROM super_cluster_groups
-                WHERE user_id = %s AND recluster_run = %s
-                  AND source = 'suggested'
+                SELECT pc.cluster_id, COUNT(*)
+                FROM page_clusters pc
+                JOIN clusters c ON c.id = pc.cluster_id
+                WHERE c.user_id = %s AND pc.cluster_id = ANY(%s)
+                GROUP BY pc.cluster_id
                 """,
-                (user_id, recluster_run_id),
+                (user_id, list(cluster_ids)),
             )
-            return cur.fetchone()[0] or 0
+            return {r[0]: r[1] for r in cur.fetchall()}
 
 
 def get_edge_weight_stats(user_id: int) -> dict:

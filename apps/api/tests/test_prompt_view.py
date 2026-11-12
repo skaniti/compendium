@@ -76,6 +76,9 @@ def test_model_rows_equal_their_constants():
     assert rows["learning_gate"]["model"] == main.LEARNING_GATE_MODEL
     assert rows["cluster_naming"]["model"] == clustering_service.NAMING_MODEL
     assert rows["supercluster_grouping"]["model"] == super_cluster_service.ASSIGNMENT_MODEL
+    assert rows["supercluster_proposals"]["model"] == settings.supercluster_proposal_model
+    assert rows["supercluster_proposals"]["source"] == "settings.supercluster_proposal_model"
+    assert rows["supercluster_proposals"]["prompt"] == "supercluster_proposal_v1"
     assert rows["supercluster_icons"]["model"] == super_cluster_service.ICON_MODEL
     assert rows["agent"]["model"] == agent.AGENT_MODEL
     assert rows["default_inference"]["model"] == settings.default_inference_model

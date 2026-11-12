@@ -214,12 +214,24 @@ def category_groups(
     return dict(groups)
 
 
-def _declared_keyword(category: str, topic_interests: list[str]) -> str | None:
-    """The owner's declared keyword that names this category, if any."""
+def _declared_keyword(category: str, topic_interests: list) -> str | None:
+    """The owner's declared keyword that names this category, if any.
+
+    *topic_interests* entries are the stored ``{keyword, icon_id, ...}`` dicts
+    (bare strings are accepted too). An entry declares the category when its
+    ``category`` field equals the category id (set when a suggestion for the
+    category is accepted, whatever the keyword text is), or when its keyword
+    equals the category id or display label ignoring case."""
     wanted = {category.lower(), CATEGORY_LABELS.get(category, "").lower()}
     wanted.discard("")
-    for kw in topic_interests:
-        if isinstance(kw, str) and kw.strip().lower() in wanted:
+    for entry in topic_interests:
+        if isinstance(entry, dict):
+            kw, tagged = entry.get("keyword"), entry.get("category")
+        else:
+            kw, tagged = entry, None
+        if not isinstance(kw, str):
+            continue
+        if tagged == category or kw.strip().lower() in wanted:
             return kw
     return None
 

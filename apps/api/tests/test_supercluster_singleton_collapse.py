@@ -422,7 +422,7 @@ def test_hybrid_pipeline_applies_default_collapse_threshold(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Gadget Trivia" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -509,7 +509,7 @@ def test_hybrid_pipeline_singleton_survives_when_threshold_zero(monkeypatch):
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         return {g["group_index"]: "Gadget Trivia" for g in unlabeled}, 0.0
 
     monkeypatch.setattr(scs, "_suggest_group_labels", fake_suggest)
@@ -623,7 +623,7 @@ def test_hybrid_pipeline_support_gate_prune_blocked_from_rejoining_donor(monkeyp
         lambda uid, a: saved.update(group_fks=a),
     )
 
-    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None):
+    async def fake_suggest(unlabeled, members_by_group, names, sibling_labels=None, **_):
         # D/E's group is the real alt target; the pruned residual (before
         # collapse) is the other unlabeled group.
         return {

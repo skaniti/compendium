@@ -2371,6 +2371,7 @@ async def get_clustering_status(user_id: int = Depends(verify_api_key)):
     from datetime import timezone
 
     from backend.db import auth_repo, cluster_repo, graph_repo, recluster_repo
+    from backend.services.suggestion_offers import offered_suggestions
 
     run = recluster_repo.get_latest_run(user_id)
 
@@ -2389,8 +2390,15 @@ async def get_clustering_status(user_id: int = Depends(verify_api_key)):
         title = f"CLUSTERING (RUN #{run_number})"
 
         noise, total = cluster_repo.get_noise_stats(user_id, run_number)
-        suggested_count = cluster_repo.get_suggested_group_count(user_id, run_number)
-        topic_count = len(auth_repo.get_preferences(user_id).get("topic_interests", []))
+        prefs = auth_repo.get_preferences(user_id)
+        # Same offer rule as GET /api/topics/suggestions, so the card and the
+        # SUPERCLUSTERS widget always agree on how many are suggested.
+        suggested_count = len(
+            offered_suggestions(
+                cluster_repo.get_groups_for_user(user_id, run_number, include_proposed=True), prefs
+            )
+        )
+        topic_count = len(prefs.get("topic_interests", []))
 
         stats_line1 = f"{run['cluster_count']} clusters · {topic_count} topics"
         if suggested_count:
@@ -3650,25 +3658,23 @@ async def rename_topic(
 
 @app.get("/api/topics/suggestions", tags=["Topics"])
 async def list_topic_suggestions(user_id: int = Depends(verify_api_key)):
-    """Suggested topics = discovered groups no keyword matched (hybrid mode).
+    """Suggested topics = model-proposed topics over clusters outside every
+    declared supercluster (``supercluster_suggestion_source="proposed"``, the
+    default), or discovered groups no keyword matched (``"groups"``, hybrid
+    mode), or undeclared taxonomy categories (label-first mode), that pass the shared
+    offer rule (``suggestion_offers``): at least the configured cluster and
+    page floors, a name the model could stand behind, not already covered by
+    an existing supercluster, not dismissed.
 
     Sourced from the latest completed recluster run, ranked by interest tier
-    then size; dismissed labels are filtered out (case-insensitive).
+    then size. Groups that are not offered stay on the graph.
     """
     from backend.db import auth_repo as ar, cluster_repo
-    from backend.services.supercluster_discovery import TIER_ORDER
+    from backend.services.suggestion_offers import offered_suggestions
 
     prefs = ar.get_preferences(user_id)
-    dismissed = {
-        d["label"].lower() for d in prefs.get("dismissed_topics", [])
-    }
-    groups = cluster_repo.get_groups_for_user(user_id)
-    tier_rank = {t: i for i, t in enumerate(TIER_ORDER)}
-    suggestions = sorted(
-        (g for g in groups
-         if g["source"] == "suggested" and g["label"].lower() not in dismissed),
-        key=lambda g: (tier_rank.get(g["interest_tier"], 99), -g["page_count"]),
-    )
+    groups = cluster_repo.get_groups_for_user(user_id, include_proposed=True)
+    suggestions = offered_suggestions(groups, prefs)
     # Split proposals (batch C C2): declared umbrellas spanning >=2 fine
     # subgroups. Display-only until the accept-semantics decision lands.
     splits = [
@@ -3691,25 +3697,44 @@ async def accept_topic_suggestion(
     The keyword defaults to the group's suggested label (pass ``keyword`` to
     rename on accept). Adds it to topic_interests (LLM icon), marks the group
     accepted, and relabels its member clusters immediately — the graph
-    reflects the acceptance without waiting for the next recluster.
+    reflects the acceptance without waiting for the next recluster. A
+    proposed topic (``source='proposed'``) is marked via its evidence instead
+    and its listed member clusters are relabeled directly.
     """
     from backend.db import auth_repo as ar, cluster_repo
     from backend.services.super_cluster_service import select_icon_for_topic
+    from backend.services.suggestion_offers import offer_reason
 
-    groups = cluster_repo.get_groups_for_user(user_id)
+    groups = cluster_repo.get_groups_for_user(user_id, include_proposed=True)
     group = next((g for g in groups if g["id"] == group_id), None)
     if group is None:
         raise HTTPException(404, f"Suggested group {group_id} not found")
+
+    prefs = ar.get_preferences(user_id)
+    reason = offer_reason(group, prefs)
+    if reason is not None:
+        raise HTTPException(
+            409, f"This suggestion is no longer available ({reason}). Refresh to see the current list."
+        )
 
     keyword = (body.keyword or group["label"]).strip()
     if not keyword:
         raise HTTPException(400, "Keyword must be non-empty")
 
-    prefs = ar.get_preferences(user_id)
     topics: list[dict] = prefs.get("topic_interests", [])
-    if not any(t["keyword"].lower() == keyword.lower() for t in topics):
+    existing = next((t["keyword"] for t in topics if t["keyword"].lower() == keyword.lower()), None)
+    if existing is not None:
+        # Accepting under a case variant of an existing keyword: use that
+        # entry's exact spelling and add nothing.
+        keyword = existing
+    else:
         icon_id = await select_icon_for_topic(keyword)
-        topics.append({"keyword": keyword, "icon_id": icon_id})
+        entry = {"keyword": keyword, "icon_id": icon_id}
+        if group["source"] == "taxonomy" and group.get("topic"):
+            # Label-first: remember which category this keyword declares, so
+            # the next recluster marks it declared whatever the text is.
+            entry["category"] = group["topic"]
+        topics.append(entry)
 
     # Un-dismiss if it was previously dismissed under this label
     dismissed = [
@@ -3720,7 +3745,17 @@ async def accept_topic_suggestion(
         user_id, {"topic_interests": topics, "dismissed_topics": dismissed}
     )
 
-    relabeled = cluster_repo.update_group_acceptance(user_id, group_id, keyword)
+    if group["source"] == "proposed":
+        # A proposed topic owns no clusters: relabel its member clusters
+        # directly. The next recluster re-derives membership through normal
+        # keyword matching, so it can differ from the proposal.
+        # clusters.group_id is deliberately left as is (the old suggested
+        # group, or none) until the next recluster rebuilds membership.
+        relabeled = cluster_repo.update_proposed_acceptance(
+            user_id, group_id, keyword, group["cluster_ids"]
+        )
+    else:
+        relabeled = cluster_repo.update_group_acceptance(user_id, group_id, keyword)
     return {
         "topic": {"keyword": keyword},
         "topics": topics,
@@ -3739,15 +3774,25 @@ async def dismiss_topic_suggestion(
     from datetime import datetime as _dt
 
     from backend.db import auth_repo as ar, cluster_repo
+    from backend.services.suggestion_offers import offer_reason
 
-    groups = cluster_repo.get_groups_for_user(user_id)
+    groups = cluster_repo.get_groups_for_user(user_id, include_proposed=True)
     group = next((g for g in groups if g["id"] == group_id), None)
     if group is None:
         raise HTTPException(404, f"Suggested group {group_id} not found")
 
     prefs = ar.get_preferences(user_id)
     dismissed: list[dict] = prefs.get("dismissed_topics", [])
-    if not any(d["label"].lower() == group["label"].lower() for d in dismissed):
+    already = any(d["label"].lower() == group["label"].lower() for d in dismissed)
+    reason = offer_reason(group, prefs)
+    if reason is not None and not already:
+        raise HTTPException(
+            409, f"This suggestion is no longer available ({reason}). Refresh to see the current list."
+        )
+    # The dismissed label is matched by name: it also stops an embedding group
+    # with exactly this label from being painted at the next recluster (that
+    # is what dismissing a topic means), not only this suggestion row.
+    if not already:
         dismissed.append(
             {
                 "label": group["label"],

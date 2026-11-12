@@ -135,11 +135,11 @@ class TestSuperClusterServiceReadsRegistry:
     def _names(self):
         return {10: "Cricut Iron-On Techniques", 11: "3D Printed Organizers", 12: "Volcanic Eruptions"}
 
-    def test_default_version_is_v1a_byte_identical(self, monkeypatch):
+    def test_v1a_byte_identical_when_selected(self, monkeypatch):
         import backend.services.super_cluster_service as scs
         from backend.prompts.templates import get_prompt_raw
 
-        assert settings.supercluster_label_prompt_version == "v1a"
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v1a")
         stub = _LLMStub('{"labels": [{"group_id": 1, "label": "Craft Techniques"}, '
                          '{"group_id": 2, "label": "Volcanic Eruptions"}]}')
         monkeypatch.setattr(scs, "LLMService", lambda: stub)
@@ -167,6 +167,7 @@ class TestSuperClusterServiceReadsRegistry:
         stub = _LLMStub('{"labels": [{"group_id": 1, "label": "Craft Techniques"}]}')
         monkeypatch.setattr(scs, "LLMService", lambda: stub)
 
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v1a")
         asyncio.run(
             scs._suggest_group_labels(self._unlabeled(), self._members(), self._names())
         )
@@ -213,6 +214,62 @@ class TestSuperClusterServiceReadsRegistry:
             )
         )
         assert "none yet" in stub.last_prompt
+
+    def test_v2_prompt_carries_topics_and_page_counts(self, monkeypatch):
+        import backend.services.super_cluster_service as scs
+
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v2")
+        stub = _LLMStub('{"labels": [{"group_id": 1, "label": "Crafts"}]}')
+        monkeypatch.setattr(scs, "LLMService", lambda: stub)
+
+        names = {10: "Kite Making Basics", 11: "Lantern Crafts", 12: "Tide Tables"}
+        asyncio.run(
+            scs._suggest_group_labels(
+                self._unlabeled(), self._members(), names,
+                existing_topics=["zoology", "Science"],
+                cluster_page_counts={10: 7, 11: 3, 12: 40},
+            )
+        )
+        assert "- Science\n- zoology" in stub.last_prompt
+        assert '{"name": "Kite Making Basics", "pages": 7}' in stub.last_prompt
+        assert '{"name": "Tide Tables", "pages": 40}' in stub.last_prompt
+
+    def test_v2_null_label_maps_to_none_and_missing_stays_missing(self, monkeypatch):
+        import backend.services.super_cluster_service as scs
+
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v2")
+        stub = _LLMStub('{"labels": [{"group_id": 1, "label": null}]}')
+        monkeypatch.setattr(scs, "LLMService", lambda: stub)
+
+        result, _ = asyncio.run(
+            scs._suggest_group_labels(self._unlabeled(), self._members(), self._names())
+        )
+        assert result == {1: None}  # group 2 was skipped by the model: absent
+
+    def test_v2_string_null_counts_as_null(self, monkeypatch):
+        import backend.services.super_cluster_service as scs
+
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v2")
+        stub = _LLMStub('{"labels": [{"group_id": 1, "label": "null"}, '
+                        '{"group_id": 2, "label": " None "}]}')
+        monkeypatch.setattr(scs, "LLMService", lambda: stub)
+
+        result, _ = asyncio.run(
+            scs._suggest_group_labels(self._unlabeled(), self._members(), self._names())
+        )
+        assert result == {1: None, 2: None}
+
+    def test_v1_null_label_is_still_dropped(self, monkeypatch):
+        import backend.services.super_cluster_service as scs
+
+        monkeypatch.setattr(settings, "supercluster_label_prompt_version", "v1a")
+        stub = _LLMStub('{"labels": [{"group_id": 1, "label": null}]}')
+        monkeypatch.setattr(scs, "LLMService", lambda: stub)
+
+        result, _ = asyncio.run(
+            scs._suggest_group_labels(self._unlabeled(), self._members(), self._names())
+        )
+        assert result == {}
 
     def test_v1a_ignores_sibling_labels(self, monkeypatch):
         """v1a's template has no sibling_labels_block placeholder -- passing

@@ -685,6 +685,11 @@ def _collapse_singleton_groups(
         evidence, page_count = _evidence_for(
             members_by_group[best_gid], labels, pages, history
         )
+        # Offer markers (_mark_offer_evidence) describe the target's label,
+        # which the absorb keeps, so they survive the evidence recompute.
+        for flag in OFFER_EVIDENCE_FLAGS:
+            if flag in (target.get("evidence") or {}):
+                evidence[flag] = target["evidence"][flag]
         target["evidence"] = evidence
         target["member_count"] = len(members_by_group[best_gid])
         target["page_count"] = page_count
@@ -1074,13 +1079,27 @@ async def assign_super_clusters_hybrid(
         # consumed by supercluster_label_v1b's distinctiveness rule; see
         # _suggest_group_labels's docstring.
         sibling_labels = sorted({g["label"] for g in groups if g.get("label")})
+        cluster_page_counts = {
+            cid: int((labels == cid).sum())
+            for cid in {c for g in unlabeled for c in members_by_group[g["group_index"]]}
+        }
         suggested, naming_cost = await _suggest_group_labels(
             unlabeled, members_by_group, cluster_names,
             sibling_labels=sibling_labels,
+            existing_topics=keywords,
+            cluster_page_counts=cluster_page_counts,
         )
         for g in unlabeled:
             g["label"] = suggested.get(g["group_index"]) or _fallback_group_label(
                 members_by_group[g["group_index"]], cluster_names, labels
+            )
+            _mark_offer_evidence(
+                g,
+                no_single_field=(
+                    g["group_index"] in suggested
+                    and suggested[g["group_index"]] is None
+                ),
+                keywords=keywords,
             )
         try:
             from backend.db import trends_repo
@@ -1291,6 +1310,31 @@ def _compute_split_proposals(
         )
 
 
+OFFER_EVIDENCE_FLAGS = ("no_single_field", "covered_by")
+"""Evidence keys written by ``_mark_offer_evidence``."""
+
+
+def _mark_offer_evidence(
+    group: dict, *, no_single_field: bool, keywords: list[str]
+) -> None:
+    """Record on a freshly labeled suggested group why it may not be offered.
+
+    ``no_single_field``: the v2 labeller answered null (the stored label is
+    the fallback, only there because the column is NOT NULL). ``covered_by``:
+    the label near-duplicates an existing supercluster keyword. Both live in
+    the group's ``evidence`` JSON (no migration) and are read by
+    ``suggestion_offers.skip_reason``; the group itself stays on the graph."""
+    from backend.services.suggestion_offers import covering_keyword
+
+    evidence = dict(group.get("evidence") or {})
+    if no_single_field:
+        evidence["no_single_field"] = True
+    covered_by = covering_keyword(group["label"], keywords)
+    if covered_by is not None:
+        evidence["covered_by"] = covered_by
+    group["evidence"] = evidence
+
+
 def _fallback_group_label(
     member_cids: list[int], cluster_names: dict[int, str], labels
 ) -> str:
@@ -1462,7 +1506,9 @@ async def _suggest_group_labels(
     members_by_group: dict[int, list[int]],
     cluster_names: dict[int, str],
     sibling_labels: list[str] | None = None,
-) -> tuple[dict[int, str], float]:
+    existing_topics: list[str] | None = None,
+    cluster_page_counts: dict[int, int] | None = None,
+) -> tuple[dict[int, str | None], float]:
     """One batched gpt-4o-mini call labeling all unmatched groups.
 
     JSON mode (4c) makes malformed output structurally unlikely; any missing
@@ -1470,7 +1516,7 @@ async def _suggest_group_labels(
     cost_usd).
 
     Renders from the versioned prompt registry (``backend.prompts.templates``,
-    entries ``supercluster_label_v1a`` / ``supercluster_label_v1b``) -- moved
+    entries ``supercluster_label_v1a`` / ``_v1b`` / ``_v2``) -- moved
     out of an inline prompt string by the clustering-quality backlog
     (2026-08-14). Version selected by
     ``settings.supercluster_label_prompt_version`` (default v1a, byte-
@@ -1478,17 +1524,50 @@ async def _suggest_group_labels(
     already-known labels of OTHER groups in this run (declared/keyword-
     matched groups that didn't need LLM naming) -- is only consumed by
     v1b's distinctiveness rule; v1a's template has no placeholder for it,
-    so it is silently ignored when v1a is active."""
-    payload = [
-        {
-            "group_id": g["group_index"],
-            "clusters": [
-                cluster_names.get(cid, f"cluster {cid}")
-                for cid in members_by_group[g["group_index"]]
-            ],
-        }
-        for g in unlabeled
-    ]
+    so it is silently ignored when v1a is active.
+
+    ``supercluster_label_v2`` (opt-in via the setting) additionally consumes
+    ``existing_topics`` (the owner's supercluster keywords, as the style and
+    breadth to match) and ``cluster_page_counts`` ({cluster id: pages}, shown
+    next to each cluster name), and may answer ``null`` for a group no single
+    field covers: that group maps to ``None`` in the result (distinct from a
+    group missing from it, which means the model skipped it). v1a/v1b never
+    produce ``None`` entries."""
+    from backend.config.settings import settings
+
+    use_v2 = settings.supercluster_label_prompt_version == "v2"
+    if use_v2:
+        counts = cluster_page_counts or {}
+        payload = [
+            {
+                "group_id": g["group_index"],
+                "clusters": [
+                    {
+                        "name": cluster_names.get(cid, f"cluster {cid}"),
+                        "pages": counts.get(cid, 0),
+                    }
+                    for cid in members_by_group[g["group_index"]]
+                ],
+            }
+            for g in unlabeled
+        ]
+    else:
+        payload = [
+            {
+                "group_id": g["group_index"],
+                "clusters": [
+                    cluster_names.get(cid, f"cluster {cid}")
+                    for cid in members_by_group[g["group_index"]]
+                ],
+            }
+            for g in unlabeled
+        ]
+    if existing_topics:
+        existing_topics_block = "\n".join(
+            f"- {t}" for t in sorted(set(existing_topics), key=str.lower)
+        )
+    else:
+        existing_topics_block = "(none yet -- use short, broad field names)"
     if sibling_labels:
         sibling_labels_block = "\n".join(
             f"- {label}" for label in sorted(set(sibling_labels))
@@ -1513,13 +1592,13 @@ async def _suggest_group_labels(
         # that raise is about protecting persisted cluster rows; a bad
         # supercluster label version has no such persistence risk, so
         # fail-open is the right degrade here.
-        from backend.config.settings import settings
         from backend.prompts.templates import get_prompt_raw
 
         prompt = get_prompt_raw(
             f"supercluster_label_{settings.supercluster_label_prompt_version}",
             groups_json=json.dumps(payload, ensure_ascii=False),
             sibling_labels_block=sibling_labels_block,
+            existing_topics_block=existing_topics_block,
         )
         response = await llm.complete(
             prompt=prompt,
@@ -1534,12 +1613,18 @@ async def _suggest_group_labels(
         return {}, 0.0
 
     known = {g["group_index"] for g in unlabeled}
-    result: dict[int, str] = {}
+    result: dict[int, str | None] = {}
     try:
         for entry in json.loads(response.content).get("labels", []):
-            gid, label = entry.get("group_id"), (entry.get("label") or "").strip()
-            if gid in known and label:
+            gid = entry.get("group_id")
+            raw = entry.get("label")
+            label = raw.strip() if isinstance(raw, str) else ""
+            if gid in known and use_v2 and label.lower() in ("null", "none"):
+                result[gid] = None  # the model wrote the word instead of null
+            elif gid in known and label:
                 result[gid] = label
+            elif gid in known and use_v2 and raw is None:
+                result[gid] = None  # explicit "no single field"
     except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"Suggested-group naming parse failed despite JSON mode: {e}")
     return result, response.cost_usd

@@ -21,6 +21,7 @@ TASK_ORDER = [
     "learning_gate",
     "cluster_naming",
     "supercluster_label",
+    "supercluster_proposal",
     "agent_system",
     "page_annotation",
     "shelf_same",
@@ -34,6 +35,7 @@ TASK_LABELS = {
     "learning_gate": "Learning gate",
     "cluster_naming": "Cluster naming",
     "supercluster_label": "Supercluster labels",
+    "supercluster_proposal": "Supercluster proposals",
     "agent_system": "Chat agent",
     "page_annotation": "Page labelling",
     "shelf_same": "Shelf match check",
@@ -47,6 +49,7 @@ MODEL_IDS = (
     "learning_gate",
     "cluster_naming",
     "supercluster_grouping",
+    "supercluster_proposals",
     "supercluster_icons",
     "agent",
     "default_inference",
@@ -107,6 +110,10 @@ def live_prompts() -> dict[str, dict]:
         "supercluster_label": {
             "name": _registered(f"supercluster_label_{settings.supercluster_label_prompt_version}"),
             "selector": "settings.supercluster_label_prompt_version",
+        },
+        "supercluster_proposal": {
+            "name": _registered("supercluster_proposal_v1"),
+            "selector": "topic_proposals (fixed v1)",
         },
         "agent_system": {
             "name": _registered(agent._system_prompt_name()),
@@ -178,6 +185,14 @@ def _model_sources() -> list[tuple[str, str, str, object, str, str | None]]:
             super_cluster_service.ASSIGNMENT_MODEL,
             "backend.services.super_cluster_service.ASSIGNMENT_MODEL",
             "supercluster_label",
+        ),
+        (
+            "supercluster_proposals",
+            "Supercluster proposals",
+            "Proposes the suggested superclusters shown in the widget.",
+            settings.supercluster_proposal_model,
+            "settings.supercluster_proposal_model",
+            "supercluster_proposal",
         ),
         (
             "supercluster_icons",
