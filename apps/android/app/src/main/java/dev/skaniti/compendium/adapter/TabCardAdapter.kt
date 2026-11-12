@@ -21,6 +21,11 @@ class TabCardAdapter(
     private val onPinToggled: (Int) -> Unit,
 ) : RecyclerView.Adapter<TabCardAdapter.CardHolder>() {
 
+    private companion object {
+        const val PAYLOAD_PIN = "pin"
+        const val PAYLOAD_ACTIVE = "active"
+    }
+
     private var tabs: List<TabManager.Tab> = emptyList()
     private var activeTabId = -1
 
@@ -33,6 +38,28 @@ class TabCardAdapter(
         notifyDataSetChanged()
     }
 
+    /** Drop one card so its neighbours slide into the gap. */
+    fun removeAt(position: Int) {
+        tabs = tabs.toMutableList().apply { removeAt(position) }
+        notifyItemRemoved(position)
+    }
+
+    /** Refresh only the pin badge of [tabId]'s card, leaving its preview untouched. */
+    fun pinChanged(tabId: Int) {
+        val position = positionOf(tabId)
+        if (position >= 0) notifyItemChanged(position, PAYLOAD_PIN)
+    }
+
+    /** Move the current-tab outline without rebinding previews. */
+    fun activeChanged(newActiveId: Int) {
+        val old = positionOf(activeTabId)
+        activeTabId = newActiveId
+        if (old >= 0) notifyItemChanged(old, PAYLOAD_ACTIVE)
+        positionOf(newActiveId).takeIf { it >= 0 }?.let { notifyItemChanged(it, PAYLOAD_ACTIVE) }
+    }
+
+    fun tabIds(): List<Int> = tabs.map { it.id }
+
     fun tabIdAt(position: Int): Int? = tabs.getOrNull(position)?.id
     fun positionOf(tabId: Int): Int = tabs.indexOfFirst { it.id == tabId }
 
@@ -43,6 +70,13 @@ class TabCardAdapter(
 
     override fun onBindViewHolder(holder: CardHolder, position: Int) =
         holder.bind(tabs[position], tabs[position].id == activeTabId)
+
+    override fun onBindViewHolder(holder: CardHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isEmpty()) return onBindViewHolder(holder, position)
+        val tab = tabs[position]
+        if (PAYLOAD_PIN in payloads) holder.bindPin(tab)
+        if (PAYLOAD_ACTIVE in payloads) holder.bindActive(tab.id == activeTabId)
+    }
 
     /** The switcher scales and fades cards; a recycled card starts plain. */
     override fun onViewRecycled(holder: CardHolder) {
@@ -82,7 +116,7 @@ class TabCardAdapter(
         fun bind(tab: TabManager.Tab, isActive: Boolean) {
             itemView.layoutParams = itemView.layoutParams.apply { width = cardWidth }
             host.text = try { Uri.parse(tab.url).host } catch (_: Exception) { null } ?: tab.url
-            pin.visibility = if (tab.pinned) View.VISIBLE else View.GONE
+            bindPin(tab)
 
             title.text = tab.title.ifEmpty { "New Tab" }
             url.text = tab.url
@@ -93,9 +127,7 @@ class TabCardAdapter(
                 if (itemView.tag == tab.id) showPreview(shot)
             }
 
-            // The current tab gets an outline in the theme's primary colour.
-            card.strokeWidth = if (isActive) dp(2) else 0
-            card.strokeColor = themeColor(androidx.appcompat.R.attr.colorPrimary)
+            bindActive(isActive)
 
             card.setOnClickListener { onTabSelected(tab.id) }
             card.setOnLongClickListener {
@@ -103,6 +135,16 @@ class TabCardAdapter(
                 onPinToggled(tab.id)
                 true
             }
+        }
+
+        fun bindPin(tab: TabManager.Tab) {
+            pin.visibility = if (tab.pinned) View.VISIBLE else View.GONE
+        }
+
+        /** The current tab gets an outline in the theme's primary colour. */
+        fun bindActive(isActive: Boolean) {
+            card.strokeWidth = if (isActive) dp(2) else 0
+            card.strokeColor = themeColor(androidx.appcompat.R.attr.colorPrimary)
         }
 
         private fun dp(v: Int) = TypedValue.applyDimension(

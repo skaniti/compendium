@@ -73,7 +73,8 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
             },
             onPinToggled = { id ->
                 listener?.onTabPinToggled(id)
-                refresh()
+                adapter.pinChanged(id)
+                updateCount()
             },
         )
         cards.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
@@ -105,14 +106,29 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
         }
     }
 
+    private fun updateCount() {
+        val tabs = listener?.getTabManager()?.allTabs ?: return
+        val pinned = tabs.count { it.pinned }
+        val tabWord = if (tabs.size == 1) "tab" else "tabs"
+        countLabel.text = if (pinned > 0) "${tabs.size} $tabWord · $pinned pinned" else "${tabs.size} $tabWord"
+    }
+
+    /** Settle on the nearest card once the list stops moving (after a removal). */
+    private fun snapWhenSettled() {
+        cards.itemAnimator?.isRunning {
+            val lm = cards.layoutManager ?: return@isRunning
+            val target = snapHelper.findSnapView(lm) ?: return@isRunning
+            val (dx, dy) = snapHelper.calculateDistanceToFinalSnap(lm, target) ?: return@isRunning
+            if (dx != 0 || dy != 0) cards.smoothScrollBy(dx, dy)
+        }
+    }
+
     /** Rebind from the tab manager; [centreOn] re-centres on that position after a removal. */
     private fun refresh(centreOn: Int? = null) {
         val manager = listener?.getTabManager() ?: return
         val tabs = manager.allTabs
         adapter.submit(tabs, manager.activeTabId)
-        val pinned = tabs.count { it.pinned }
-        val tabWord = if (tabs.size == 1) "tab" else "tabs"
-        countLabel.text = if (pinned > 0) "${tabs.size} $tabWord · $pinned pinned" else "${tabs.size} $tabWord"
+        updateCount()
         if (centreOn != null && tabs.isNotEmpty()) {
             // A data-set change does not snap by itself; land squarely on a card.
             (cards.layoutManager as LinearLayoutManager)
@@ -167,26 +183,45 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
     private inner class SwipeUpToClose : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.UP) {
         override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder) = false
 
-        override fun getSwipeThreshold(vh: RecyclerView.ViewHolder) = 0.3f
+        override fun getSwipeThreshold(vh: RecyclerView.ViewHolder) = 0.25f
 
         override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {
             val position = vh.bindingAdapterPosition
             val id = adapter.tabIdAt(position) ?: return
+            val manager = listener?.getTabManager() ?: return
             listener?.onTabClosed(id)
-            refresh(centreOn = position)
+            val expected = adapter.tabIds() - id
+            if (manager.allTabs.map { it.id } == expected) {
+                // The usual case: drop just this card so the neighbours slide into its place.
+                adapter.removeAt(position)
+                adapter.activeChanged(manager.activeTabId)
+                updateCount()
+                snapWhenSettled()
+            } else {
+                // Closing the last tab opened a fresh one: rebuild the list.
+                refresh(centreOn = position)
+            }
         }
 
         override fun onChildDraw(
             c: Canvas, rv: RecyclerView, vh: RecyclerView.ViewHolder,
             dX: Float, dY: Float, actionState: Int, isCurrentlyActive: Boolean,
         ) {
+            // The card follows the finger (super translates it) and, as it rises, shrinks a
+            // little and fades only gently, the way Android's recents cards fly off.
             super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive)
-            vh.itemView.alpha = 1f - min(1f, abs(dY) / vh.itemView.height.coerceAtLeast(1))
+            val progress = min(1f, abs(dY) / vh.itemView.height.coerceAtLeast(1))
+            val scale = 1f - 0.1f * progress
+            vh.itemView.scaleX = scale
+            vh.itemView.scaleY = scale
+            vh.itemView.alpha = 1f - 0.5f * progress
         }
 
         override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
             super.clearView(rv, vh)
             vh.itemView.alpha = 1f
+            vh.itemView.scaleX = 1f
+            vh.itemView.scaleY = 1f
             shrinkSideCards()
         }
     }
