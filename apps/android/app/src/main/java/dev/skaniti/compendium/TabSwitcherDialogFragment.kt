@@ -20,7 +20,8 @@ import kotlin.math.min
 /**
  * Full-screen tab switcher in the style of Android's recent apps: cards side by side,
  * swipe left and right to move between them, swipe a card up to close its tab, press
- * and hold to pin or unpin. Close all spares pinned tabs and offers Undo.
+ * and hold to pin or unpin. Pinned tabs cannot be swiped away or closed by Close all,
+ * which offers Undo.
  * Tab actions go back to MainActivity through [TabSwitcherListener].
  */
 class TabSwitcherDialogFragment : AppCompatDialogFragment() {
@@ -50,6 +51,7 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
     private lateinit var countLabel: TextView
     private val snapHelper = PagerSnapHelper()
     private var undoBar: Snackbar? = null
+    private var hintBar: Snackbar? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +77,12 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
                 listener?.onTabPinToggled(id)
                 adapter.pinChanged(id)
                 updateCount()
+            },
+            onPinnedSwipeAttempt = {
+                if (hintBar?.isShown != true && undoBar?.isShown != true) {
+                    hintBar = Snackbar.make(requireView(), "Pinned · hold to unpin", Snackbar.LENGTH_SHORT)
+                        .also { it.show() }
+                }
             },
         )
         cards.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
@@ -184,6 +192,10 @@ class TabSwitcherDialogFragment : AppCompatDialogFragment() {
         override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder) = false
 
         override fun getSwipeThreshold(vh: RecyclerView.ViewHolder) = 0.25f
+
+        // A pinned tab cannot be swiped away; unpin it first.
+        override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder) =
+            if (adapter.isPinnedAt(vh.bindingAdapterPosition)) 0 else super.getSwipeDirs(rv, vh)
 
         override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {
             val position = vh.bindingAdapterPosition

@@ -5,7 +5,9 @@ import android.net.Uri
 import android.util.TypedValue
 import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
@@ -14,11 +16,14 @@ import com.google.android.material.card.MaterialCardView
 import dev.skaniti.compendium.R
 import dev.skaniti.compendium.TabManager
 import dev.skaniti.compendium.gecko.TabThumbnails
+import kotlin.math.abs
 
 /** One full-height card per tab: a page preview when there is one, else a title card. */
 class TabCardAdapter(
     private val onTabSelected: (Int) -> Unit,
     private val onPinToggled: (Int) -> Unit,
+    /** A swipe up was tried on a pinned card, which cannot be swiped away. */
+    private val onPinnedSwipeAttempt: () -> Unit,
 ) : RecyclerView.Adapter<TabCardAdapter.CardHolder>() {
 
     private companion object {
@@ -61,6 +66,7 @@ class TabCardAdapter(
     fun tabIds(): List<Int> = tabs.map { it.id }
 
     fun tabIdAt(position: Int): Int? = tabs.getOrNull(position)?.id
+    fun isPinnedAt(position: Int): Boolean = tabs.getOrNull(position)?.pinned == true
     fun positionOf(tabId: Int): Int = tabs.indexOfFirst { it.id == tabId }
 
     override fun getItemCount() = tabs.size
@@ -94,8 +100,31 @@ class TabCardAdapter(
         private val title: TextView = view.findViewById(R.id.cardTitle)
         private val url: TextView = view.findViewById(R.id.cardUrl)
 
+        private val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
+        private var downX = 0f
+        private var downY = 0f
+        private var hinted = false
+
         init {
             preview.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitWidthFromTop() }
+            // A view keeps a long-press alive while the finger stays inside it, so a swipe
+            // on a pinned card (which the switcher refuses) would turn into a pin toggle and
+            // unpin it mid-gesture. Any movement past the touch slop cancels the long-press.
+            card.setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; hinted = false }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = e.x - downX
+                        val dy = e.y - downY
+                        if (abs(dx) > touchSlop || abs(dy) > touchSlop) v.cancelLongPress()
+                        if (!hinted && -dy > touchSlop * 3 && abs(dy) > abs(dx) && isPinnedAt(bindingAdapterPosition)) {
+                            hinted = true
+                            onPinnedSwipeAttempt()
+                        }
+                    }
+                }
+                false
+            }
         }
 
         /** Scale the preview to the card's width, anchored at the top of the page. */
