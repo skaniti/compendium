@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useGraph } from "@/hooks/useGraph";
 import { fetchClusteringStatus, fetchTopics, postRecluster } from "@/lib/api";
+import { formatRunDateTime } from "@/lib/clusters";
 import { TopicIcon } from "@/lib/icons";
 import { useHoverTooltip } from "./charts/HoverTooltip";
 import ScPopover from "./ScPopover";
@@ -36,6 +37,7 @@ const INITIAL_STATUS: ClusteringStatus = {
   stats_line2: "",
   freshness_label: "",
   freshness_color: "",
+  last_run_at: null,
 };
 
 // app.py:357 -- label/value pairs for the DATE RANGE pills, in DOM order.
@@ -175,6 +177,10 @@ export default function HeaderCards() {
     ? { color: status.freshness_color }
     : { color: "var(--on-primary)", opacity: 0.5 };
 
+  // formatRunDateTime answers "—" for a null/unparseable stamp; the line is
+  // omitted then (no placeholder dash).
+  const lastRun = formatRunDateTime(status.last_run_at);
+
   return (
     <div className="hbar-cards-row">
       <div className="hbar-card">
@@ -213,6 +219,11 @@ export default function HeaderCards() {
             <div id="hbar-cluster-stats-line2" className="hbar-stat-line">
               {status.stats_line2}
             </div>
+            {lastRun !== "—" && (
+              <div id="hbar-cluster-last-run" className="hbar-stat-line">
+                Last run {lastRun}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -27,6 +27,7 @@ const NO_RUNS_STATUS: ClusteringStatus = {
   stats_line2: "",
   freshness_label: "No cache",
   freshness_color: "",
+  last_run_at: null,
 };
 
 function makeStatus(overrides: Partial<ClusteringStatus> = {}): ClusteringStatus {
@@ -145,6 +146,39 @@ describe("HeaderCards", () => {
     expect(badge).toHaveTextContent("2h ago");
     expect(badge.style.color).toBe("rgb(74, 222, 128)");
     expect(badge.style.opacity).toBe("");
+  });
+
+  it("renders the last completed run's date and time as a third meta line in the viewer's zone", async () => {
+    mockDefaults();
+    // Local-time constructor so the expectation holds in any timezone; the
+    // year is the current one, so formatRunDateTime leaves it off.
+    const ran = new Date(new Date().getFullYear(), 10, 10, 14, 5);
+    vi.spyOn(apiModule, "fetchClusteringStatus").mockResolvedValue(
+      makeStatus({ run_number: 3, title: "CLUSTERING (RUN #3)", last_run_at: ran.toISOString() })
+    );
+    renderHeaderCards();
+
+    await screen.findByText("CLUSTERING (RUN #3)");
+    const line = document.getElementById("hbar-cluster-last-run") as HTMLElement;
+    expect(line).toHaveTextContent("Last run Nov 10, 14:05");
+    expect(line.className).toBe("hbar-stat-line");
+    expect(line).not.toHaveAttribute("title");
+  });
+
+  it("renders no last-run line when last_run_at is null or unparseable", async () => {
+    mockDefaults();
+    const spy = vi
+      .spyOn(apiModule, "fetchClusteringStatus")
+      .mockResolvedValue(makeStatus({ run_number: 3, title: "CLUSTERING (RUN #3)", last_run_at: null }));
+    const { unmount } = renderHeaderCards();
+    await screen.findByText("CLUSTERING (RUN #3)");
+    expect(document.getElementById("hbar-cluster-last-run")).toBeNull();
+    unmount();
+
+    spy.mockResolvedValue(makeStatus({ run_number: 4, title: "CLUSTERING (RUN #4)", last_run_at: "garbage" }));
+    renderHeaderCards();
+    await screen.findByText("CLUSTERING (RUN #4)");
+    expect(document.getElementById("hbar-cluster-last-run")).toBeNull();
   });
 
   it('renders the "No cache" branch styling when freshness_color is empty (recluster.py:113-118 parity)', async () => {

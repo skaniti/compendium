@@ -308,6 +308,7 @@ describe("GET /api/clustering/status", () => {
     const body = await res.json();
     expect(body.run_number).toBe(141);
     expect(typeof body.title).toBe("string");
+    expect(Number.isNaN(Date.parse(body.last_run_at))).toBe(false);
   });
 });
 
@@ -935,6 +936,21 @@ describe("mutation endpoints (Task 6): POST /api/recluster", () => {
       expect(after.freshness_color).toBe(before.freshness_color);
       expect(after.stats_line1).toBe(before.stats_line1);
     });
+  });
+
+  it("sets last_run_at to the stub's (injectable) clock when a recluster completes", async () => {
+    const clock = "2026-11-12T09:30:00.000Z";
+    await withServer(
+      async (base) => {
+        const before = await (await req(base, "GET", "/api/clustering/status")).json();
+        expect(before.last_run_at).not.toBe(clock);
+        const res = await req(base, "POST", "/api/recluster", undefined, adminToken());
+        expect(res.status).toBe(200);
+        const after = await (await req(base, "GET", "/api/clustering/status")).json();
+        expect(after.last_run_at).toBe(clock);
+      },
+      { now: () => Date.parse(clock) }
+    );
   });
 
   it("delay is injectable via reclusterDelayMs -- a near-zero delay keeps the test fast", async () => {

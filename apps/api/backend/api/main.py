@@ -2357,7 +2357,10 @@ async def get_clustering_status(user_id: int = Depends(verify_api_key)):
     Presentation-ready strings ARE the contract -- the Next.js client
     renders stats_line1/stats_line2/freshness_label verbatim, so their
     exact formats (unit letters, punctuation, the "· suggested" conditional)
-    must match Dash's. ``naming_cost`` is intentionally dropped from the
+    must match Dash's. ``last_run_at`` is the one exception: the latest
+    completed run's ``completed_at`` as a timezone-aware ISO 8601 string
+    (null with no completed run), formatted client-side so it renders in the
+    viewer's zone. ``naming_cost`` is intentionally dropped from the
     response -- dev telemetry only (design audit §4.7), never user-facing.
 
     When no completed run exists, this byte-mirrors
@@ -2376,8 +2379,13 @@ async def get_clustering_status(user_id: int = Depends(verify_api_key)):
         title = "CLUSTERING (NO RUNS YET)"
         stats_line1 = "no recluster yet"
         stats_line2 = ""
+        last_run_at = None
     else:
         run_number = run["id"]
+        completed_at = run["completed_at"]
+        if completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
+        last_run_at = completed_at.isoformat()
         title = f"CLUSTERING (RUN #{run_number})"
 
         noise, total = cluster_repo.get_noise_stats(user_id, run_number)
@@ -2431,6 +2439,7 @@ async def get_clustering_status(user_id: int = Depends(verify_api_key)):
         "stats_line2": stats_line2,
         "freshness_label": freshness_label,
         "freshness_color": freshness_color,
+        "last_run_at": last_run_at,
     }
 
 

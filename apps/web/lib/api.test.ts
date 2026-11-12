@@ -525,6 +525,7 @@ describe("fetchClusteringStatus", () => {
       stats_line2: "8% noise",
       freshness_label: "3h ago",
       freshness_color: "#facc15",
+      last_run_at: "2026-11-10T14:05:00+00:00",
     };
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(status), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

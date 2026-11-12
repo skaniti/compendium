@@ -671,7 +671,8 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
     // POST /api/recluster (no body) -- ~2s delay (injectable via startServer's
     // reclusterDelayMs, default 2000; tests pass small/zero so the suite
     // doesn't pay the real delay), bumps run_number, updates the status
-    // title's embedded run number, leaves every other status string as-is.
+    // title's embedded run number and stamps last_run_at from the injectable
+    // clock, leaves every other status string as-is.
     // Response values are awaited but never rendered (endpoints.md) -- any
     // plausible numbers satisfy the contract. Stricter than `gated`: like the
     // real backend, it refuses every demo identity, an admin viewing as demo
@@ -683,6 +684,7 @@ function buildRoutes(fixtures, state, { reclusterDelayMs, chatTokenDelayMs, role
         if (isDemoIdentity(req)) return sendJson(res, 403, { detail: "forbidden" });
         await new Promise((resolve) => setTimeout(resolve, reclusterDelayMs));
         state.clusteringStatus.run_number += 1;
+        state.clusteringStatus.last_run_at = getNow().toISOString();
         state.clusteringStatus.title = state.clusteringStatus.title.replace(
           /RUN #\d+/,
           `RUN #${state.clusteringStatus.run_number}`

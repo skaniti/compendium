@@ -209,6 +209,8 @@ export interface ClusteringStatus {
   stats_line2: string;
   freshness_label: string;
   freshness_color: string;
+  /** Latest completed run's completed_at (ISO 8601 with offset), null with no completed run. */
+  last_run_at: string | null;
 }
 
 // POST /api/recluster -- the endpoint returns

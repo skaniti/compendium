@@ -198,6 +198,7 @@ class TestClusteringStatusNoRuns:
             "stats_line2": "",
             "freshness_label": "No cache",
             "freshness_color": "",
+            "last_run_at": None,
         }
 
 
@@ -219,6 +220,24 @@ class TestClusteringStatusStats:
         assert body["title"] == f"CLUSTERING (RUN #{run_id})"
         assert body["stats_line1"] == "3 clusters · 2 topics"
         assert body["stats_line2"] == "50% noise"
+
+    def test_last_run_at_is_the_latest_completed_runs_timezone_aware_iso_timestamp(self, client):
+        tc, user = client
+        before = datetime.now(timezone.utc)
+        _seed_completed_run(user["id"], [2, 1])
+        after = datetime.now(timezone.utc)
+
+        body = tc.get("/api/clustering/status").json()
+        last_run_at = datetime.fromisoformat(body["last_run_at"])
+        assert last_run_at.tzinfo is not None
+        assert before <= last_run_at <= after
+
+    def test_last_run_at_ignores_an_unfinished_run(self, client):
+        tc, user = client
+        recluster_repo.start_run(user["id"])  # status 'running': no completed run exists
+        body = tc.get("/api/clustering/status").json()
+        assert body["run_number"] is None
+        assert body["last_run_at"] is None
 
     def test_completed_run_with_suggested_groups_appends_suggested_count(self, client):
         tc, user = client

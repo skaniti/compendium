@@ -6,6 +6,7 @@ import TimeWindowProvider from "./TimeWindowProvider";
 import * as api from "@/lib/api";
 import * as ThemeProviderModule from "./ThemeProvider";
 import * as StarfieldProviderModule from "./StarfieldProvider";
+import * as PageTitlesProviderModule from "./PageTitlesProvider";
 
 // D4/D5 (batch 04 auth/session parity): useSession() context, hydrated from
 // GET /api/auth/me via apiFetch (established mock convention -- see
@@ -411,6 +412,7 @@ describe("Header + session wiring (via SessionProvider)", () => {
   beforeEach(() => {
     vi.spyOn(ThemeProviderModule, "useTheme").mockReturnValue({ variant: "Green", setVariant: vi.fn() });
     vi.spyOn(StarfieldProviderModule, "useStarfield").mockReturnValue({ variant: "twinkle", setVariant: vi.fn() });
+    vi.spyOn(PageTitlesProviderModule, "usePageTitles").mockReturnValue({ show: false, setShow: vi.fn() });
     vi.spyOn(api, "fetchGraph").mockResolvedValue({
       nodes: [],
       links: [],
@@ -425,6 +427,7 @@ describe("Header + session wiring (via SessionProvider)", () => {
       stats_line2: "",
       freshness_label: "",
       freshness_color: "",
+      last_run_at: null,
     });
     vi.spyOn(api, "fetchTopics").mockResolvedValue([]);
   });
