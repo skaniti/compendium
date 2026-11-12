@@ -28,6 +28,24 @@ class TabsStoreTest {
     }
 
     @Test
+    fun pinnedRoundTrips() {
+        val snap = TabsStore.TabsSnapshot(
+            activeTabId = 1,
+            tabs = listOf(
+                TabsStore.TabSnapshot(1, "Wiki", "https://en.wikipedia.org/", pinned = true),
+                TabsStore.TabSnapshot(2, "DDG", "https://duckduckgo.com/"),
+            ),
+        )
+        assertEquals(listOf(true, false), TabsStore.decode(TabsStore.encode(snap)).tabs.map { it.pinned })
+    }
+
+    @Test
+    fun fileWrittenBeforePinsReadsAsUnpinned() {
+        val decoded = TabsStore.decode("""{"activeTabId":1,"tabs":[{"id":1,"title":"t","url":"u"}]}""")
+        assertEquals(false, decoded.tabs.single().pinned)
+    }
+
+    @Test
     fun zeroTabSnapshotIsNeverPersisted() {
         val empty = TabsStore.TabsSnapshot(activeTabId = -1, tabs = emptyList())
         val one = TabsStore.TabsSnapshot(

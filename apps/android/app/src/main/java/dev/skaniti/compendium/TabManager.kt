@@ -19,6 +19,21 @@ internal fun idleTabsToSuspend(live: List<LiveTab>, activeId: Int, maxLive: Int)
     return live.map { it.id }.filter { it !in keep }
 }
 
+/** Tabs Close all closes: every tab not pinned, in tab order. [pins] is (tab id, pinned). */
+internal fun unpinnedTabIds(pins: List<Pair<Int, Boolean>>): List<Int> =
+    pins.filter { !it.second }.map { it.first }
+
+/**
+ * Put closed items back at their old positions. [closed] holds (index before closing,
+ * item); inserting in ascending index order lands each one where it was, and an index
+ * past the end appends.
+ */
+internal fun <T> reinsertAt(remaining: List<T>, closed: List<Pair<Int, T>>): List<T> {
+    val out = remaining.toMutableList()
+    for ((index, item) in closed.sortedBy { it.first }) out.add(index.coerceAtMost(out.size), item)
+    return out
+}
+
 /**
  * Manages tab lifecycle: create, switch, close, update info.
  * Each tab owns a GeckoSession; one shared GeckoView renders the active one.
@@ -52,6 +67,8 @@ class TabManager {
         var stateUrl: String? = null,
         var mediaActive: Boolean = false,
         var downloadsInFlight: Int = 0,
+        /** Pinned tabs survive Close all. */
+        var pinned: Boolean = false,
     )
 
     private val tabs = mutableListOf<Tab>()
@@ -81,16 +98,36 @@ class TabManager {
         title: String,
         url: String,
         stateString: String?,
+        pinned: Boolean = false,
     ): Tab {
-        val tab = Tab(
-            id = id, session = session, title = title, url = url,
-            stateString = stateString,
-            // A tab saved before its first state push still reloads its URL.
-            pendingRestore = stateString != null || url.isNotEmpty(),
-        )
+        val tab = restoredTab(id, session, title, url, stateString, pinned)
         tabs.add(tab)
         if (id >= nextId) nextId = id + 1
         return tab
+    }
+
+    /** A tab rebuilt from saved state, not yet in the list. */
+    fun restoredTab(
+        id: Int,
+        session: GeckoSession,
+        title: String,
+        url: String,
+        stateString: String?,
+        pinned: Boolean = false,
+    ) = Tab(
+        id = id, session = session, title = title, url = url,
+        stateString = stateString,
+        // A tab saved before its first state push still reloads its URL.
+        pendingRestore = stateString != null || url.isNotEmpty(),
+        pinned = pinned,
+    )
+
+    /** Put tabs closed by Close all back at their old positions (Undo). */
+    fun reinsertTabs(closed: List<Pair<Int, Tab>>) {
+        val merged = reinsertAt(tabs.toList(), closed)
+        tabs.clear()
+        tabs.addAll(merged)
+        closed.forEach { (_, tab) -> if (tab.id >= nextId) nextId = tab.id + 1 }
     }
 
     fun switchTo(tabId: Int): Tab? {

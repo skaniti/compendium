@@ -31,6 +31,7 @@ import dev.skaniti.compendium.gecko.DownloadHelper
 import dev.skaniti.compendium.gecko.GeckoEngine
 import dev.skaniti.compendium.gecko.GeckoTransitionMapper
 import dev.skaniti.compendium.gecko.PullRefreshGeckoView
+import dev.skaniti.compendium.gecko.TabThumbnails
 import dev.skaniti.compendium.gecko.TabsStore
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
@@ -41,7 +42,7 @@ import org.mozilla.geckoview.WebResponse
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener, ImagePicker {
+class MainActivity : AppCompatActivity(), TabSwitcherDialogFragment.TabSwitcherListener, ImagePicker {
 
     companion object {
         private const val TAG = "MainActivity"
@@ -49,6 +50,11 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         // Session-state pushes arrive on every navigation of every live tab; coalesce the
         // whole-snapshot rewrite of tabs.json instead of writing on each one.
         private const val TABS_SAVE_DELAY_MS = 1_000L
+        // Close all keeps the closed tabs' previews until its Undo snackbar is dismissed;
+        // this backstop covers a switcher that goes away first.
+        private const val CLOSE_ALL_UNDO_BACKSTOP_MS = 60_000L
+        // The switcher opens after the visible tab's preview is captured, or after this long.
+        private const val PREVIEW_CAPTURE_WAIT_MS = 500L
         // Start page for the launch tab, the close-last-tab fallback, and every new tab (dev-note N1).
         private const val DEFAULT_URL = "https://en.wikipedia.org/"
     }
@@ -272,7 +278,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         if (snapshot != null) {
             for (t in snapshot.tabs) {
                 val session = GeckoSession()
-                val tab = tabManager.addRestoredTab(t.id, session, t.title, t.url, t.state)
+                val tab = tabManager.addRestoredTab(t.id, session, t.title, t.url, t.state, t.pinned)
                 wireSessionDelegates(tab)
             }
             val activeId = snapshot.tabs.find { it.id == snapshot.activeTabId }?.id
@@ -285,6 +291,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         } else {
             createNewTab(intentUrl ?: DEFAULT_URL, isTyped = true)
         }
+        TabThumbnails.prune(this, tabManager.allTabs.map { it.id }.toSet())
 
         handler.postDelayed(inactivityChecker, INACTIVITY_CHECK_INTERVAL_MS)
 
@@ -309,6 +316,12 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         restoreActiveIfClosed()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Keep the visible tab's switcher preview current.
+        captureActivePreview()
+    }
+
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(inactivityChecker)
@@ -331,6 +344,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
 
     override fun onDestroy() {
         handler.removeCallbacks(inactivityChecker)
+        handler.removeCallbacks(finalizeCloseAll)
         // Last write while the tab list is still whole; afterwards tornDown blocks all saves.
         flushTabs()
         tornDown = true
@@ -634,8 +648,10 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
     }
 
     fun closeTab(tabId: Int) {
+        if (tabManager.tabById(tabId) == null) return
         sessionManager.recordEvent("tab_closed", tabId = tabId)
         mappers.remove(tabId)
+        TabThumbnails.delete(this, tabId)
 
         val nextTab = tabManager.closeTab(tabId)
         if (nextTab != null) {
@@ -646,18 +662,170 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         saveTabsNow()
     }
 
-    private fun showTabGrid() {
-        TabGridDialogFragment().show(supportFragmentManager, "tab_grid")
+    /** True from a Tabs tap until its switcher shows, so a second tap cannot open another. */
+    private var switcherOpening = false
+
+    private fun showTabSwitcher() {
+        if (switcherOpening || supportFragmentManager.findFragmentByTag("tab_switcher") != null) return
+        switcherOpening = true
+        captureActivePreview {
+            switcherOpening = false
+            if (!isFinishing && !supportFragmentManager.isStateSaved &&
+                supportFragmentManager.findFragmentByTag("tab_switcher") == null
+            ) {
+                TabSwitcherDialogFragment().show(supportFragmentManager, "tab_switcher")
+            }
+        }
+    }
+
+    /**
+     * Capture the visible tab as its switcher preview, then run [then]. A capture that
+     * fails or takes longer than PREVIEW_CAPTURE_WAIT_MS never holds [then] back.
+     */
+    private fun captureActivePreview(then: () -> Unit = {}) {
+        val tab = tabManager.activeTab()
+        if (tab == null || !tab.session.isOpen) {
+            then()
+            return
+        }
+        var done = false
+        val finish = {
+            if (!done) {
+                done = true
+                then()
+            }
+        }
+        handler.postDelayed({ finish() }, PREVIEW_CAPTURE_WAIT_MS)
+        try {
+            geckoView.capturePixels().accept({ bitmap ->
+                // A late capture for a tab closed meanwhile must not leave a preview behind.
+                if (bitmap != null && !tornDown && tabManager.tabById(tab.id) != null) {
+                    TabThumbnails.save(this, tab.id, bitmap)
+                }
+                finish()
+            }, { finish() })
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Preview capture failed", e)
+            finish()
+        }
     }
 
     // -------------------------------------------------------------------------
-    // TabGridListener implementation
+    // TabSwitcherListener implementation
     // -------------------------------------------------------------------------
 
     override fun onTabSelected(tabId: Int) = switchToTab(tabId)
     override fun onTabClosed(tabId: Int) = closeTab(tabId)
     override fun onNewTabRequested() = createNewTab(DEFAULT_URL, isTyped = true)
     override fun getTabManager(): TabManager = tabManager
+
+    override fun onTabPinToggled(tabId: Int) {
+        val tab = tabManager.tabById(tabId) ?: return
+        tab.pinned = !tab.pinned
+        saveTabsNow()
+    }
+
+    /**
+     * Close all batches Undo can still bring back, oldest first; each holds (index in
+     * the tab list at the time, tab). Undo replays them newest first, so every index
+     * refers to the list it was taken from.
+     */
+    private val closeAllBatches = mutableListOf<List<Pair<Int, TabsStore.TabSnapshot>>>()
+
+    /** Start-page tabs Close all opened because nothing was left; Undo drops them if untouched. */
+    private val closeAllFallbackIds = mutableSetOf<Int>()
+
+    /** Undo can no longer happen: drop the closed tabs' previews. */
+    private val finalizeCloseAll = Runnable {
+        closeAllBatches.flatten().forEach { (_, snap) -> TabThumbnails.delete(this, snap.id) }
+        closeAllBatches.clear()
+        closeAllFallbackIds.clear()
+    }
+
+    override fun onCloseUnpinned(): Int {
+        val tabs = tabManager.allTabs
+        val ids = unpinnedTabIds(tabs.map { it.id to it.pinned }).toSet()
+        if (ids.isEmpty()) return 0
+
+        // A state that trails the page (a push still in flight) would reopen the older
+        // page; restore those from the URL instead.
+        closeAllBatches += tabs.withIndex()
+            .filter { it.value.id in ids }
+            .map { (index, t) ->
+                val state = if (t.stateUrl == null || t.stateUrl == t.url) t.stateString else null
+                index to TabsStore.TabSnapshot(t.id, t.title, t.url, state)
+            }
+        val activeBefore = tabManager.activeTabId
+        for (id in ids) {
+            sessionManager.recordEvent("tab_closed", tabId = id)
+            mappers.remove(id)
+            tabManager.closeTab(id)
+        }
+        val active = tabManager.activeTab()
+        when {
+            active == null -> {
+                createNewTab(DEFAULT_URL, isTyped = true)
+                tabManager.activeTab()?.let { closeAllFallbackIds += it.id }
+            }
+            active.id != activeBefore -> switchToTab(active.id, recordSwitch = false)
+        }
+        saveTabsNow()
+        // Backstop for when the switcher goes away before its Undo snackbar is dismissed.
+        handler.removeCallbacks(finalizeCloseAll)
+        handler.postDelayed(finalizeCloseAll, CLOSE_ALL_UNDO_BACKSTOP_MS)
+        return ids.size
+    }
+
+    override fun onUndoCloseAll(): Int {
+        handler.removeCallbacks(finalizeCloseAll)
+        // Start-page tabs Close all opened go once the closed tabs are back, unless used meanwhile.
+        val fallbacks = closeAllFallbackIds.mapNotNull { tabManager.tabById(it) }.filter { !it.canGoBack }
+        closeAllFallbackIds.clear()
+
+        var room = (TabManager.MAX_TABS - tabManager.tabCount + fallbacks.size).coerceAtLeast(0)
+        var reopened = 0
+        var lost = 0
+        for (batch in closeAllBatches.asReversed()) {
+            val sorted = batch.sortedBy { it.first }
+            val restored = sorted.take(room).map { (index, snap) ->
+                val tab = tabManager.restoredTab(snap.id, GeckoSession(), snap.title, snap.url, snap.state)
+                wireSessionDelegates(tab)
+                sessionManager.recordEvent("tab_reopened", tabId = tab.id)
+                index to tab
+            }
+            sorted.drop(room).forEach { (_, snap) -> TabThumbnails.delete(this, snap.id) }
+            tabManager.reinsertTabs(restored)
+            room -= restored.size
+            reopened += restored.size
+            lost += batch.size - restored.size
+        }
+        closeAllBatches.clear()
+
+        for (tab in fallbacks) {
+            if (tabManager.tabCount <= 1) break
+            sessionManager.recordEvent("tab_closed", tabId = tab.id)
+            mappers.remove(tab.id)
+            tabManager.closeTab(tab.id)
+            TabThumbnails.delete(this, tab.id)
+        }
+        // Keep the view on an open session of the active tab (closing a fallback moves it).
+        val active = tabManager.activeTab() ?: tabManager.allTabs.firstOrNull()
+        if (active != null && (active.id != tabManager.activeTabId || !active.session.isOpen ||
+                geckoView.session !== active.session)
+        ) {
+            switchToTab(active.id, recordSwitch = false)
+        }
+        saveTabsNow()
+        if (lost > 0) {
+            Toast.makeText(this, "Reopened $reopened tabs; $lost over the ${TabManager.MAX_TABS}-tab limit", Toast.LENGTH_LONG).show()
+        }
+        return reopened
+    }
+
+    override fun onCloseAllUndoExpired() {
+        handler.removeCallbacks(finalizeCloseAll)
+        finalizeCloseAll.run()
+    }
 
     // -------------------------------------------------------------------------
     // Navigation buttons
@@ -683,7 +851,7 @@ class MainActivity : AppCompatActivity(), TabGridDialogFragment.TabGridListener,
         findViewById<ImageButton>(R.id.btnReload).setOnClickListener { reloadActiveTab() }
 
         findViewById<ImageButton>(R.id.btnNewTab).setOnClickListener { createNewTab(DEFAULT_URL, isTyped = true) }
-        findViewById<ImageButton>(R.id.btnTabs).setOnClickListener { showTabGrid() }
+        findViewById<ImageButton>(R.id.btnTabs).setOnClickListener { showTabSwitcher() }
         findViewById<ImageButton>(R.id.btnHub).setOnClickListener { launchAnalysisHub() }
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))

@@ -26,6 +26,7 @@ object TabsStore {
         val title: String,
         val url: String,
         val state: String? = null,
+        val pinned: Boolean = false,
     )
 
     @Serializable
@@ -40,7 +41,7 @@ object TabsStore {
         TabsSnapshot(
             activeTabId = manager.activeTabId,
             tabs = manager.allTabs.map {
-                TabSnapshot(it.id, it.title, it.url, it.stateString)
+                TabSnapshot(it.id, it.title, it.url, it.stateString, it.pinned)
             },
         )
 
